@@ -14,6 +14,9 @@ import {
   App as AntApp,
   Popconfirm,
   Descriptions,
+  Drawer,
+  Collapse,
+  Timeline,
 } from "antd";
 import {
   PlusOutlined,
@@ -22,6 +25,7 @@ import {
   MinusCircleOutlined,
   EditOutlined,
   DownloadOutlined,
+  HistoryOutlined,
 } from "@ant-design/icons";
 import { api } from "../api/client";
 import type { Circuit, Device, Offering, Tenant } from "../api/types";
@@ -54,6 +58,9 @@ export default function Circuits() {
   const [form] = Form.useForm();
   const [modifyForm] = Form.useForm();
   const [modifyTarget, setModifyTarget] = useState<Circuit | null>(null);
+  const [historyCircuit, setHistoryCircuit] = useState<Circuit | null>(null);
+  const [history, setHistory] = useState<any>(null);
+  const [diffText, setDiffText] = useState<Record<number, string>>({});
 
   async function load() {
     setLoading(true);
@@ -162,6 +169,20 @@ export default function Circuits() {
     } catch (e: any) {
       message.error(e?.response?.data?.detail || "变更失败");
     }
+  }
+
+  async function openHistory(c: Circuit) {
+    setHistoryCircuit(c);
+    setDiffText({});
+    const { data } = await api.get(`/circuits/${c.id}/config-history`);
+    setHistory(data);
+  }
+
+  async function loadDiff(circuitId: number, deviceId: number) {
+    const { data } = await api.get(
+      `/circuits/${circuitId}/config-diff?device_id=${deviceId}`
+    );
+    setDiffText((prev) => ({ ...prev, [deviceId]: data.diff }));
   }
 
   async function preview(c: Circuit) {
@@ -285,6 +306,9 @@ export default function Circuits() {
                 <Tooltip title="预览各厂商配置">
                   <Button size="small" icon={<EyeOutlined />} onClick={() => preview(r)} />
                 </Tooltip>
+                <Tooltip title="配置历史与版本对比">
+                  <Button size="small" icon={<HistoryOutlined />} onClick={() => openHistory(r)} />
+                </Tooltip>
                 <Popconfirm title="确认拆除该专线?" onConfirm={() => decommission(r)}>
                   <Button size="small" danger icon={<MinusCircleOutlined />} />
                 </Popconfirm>
@@ -322,6 +346,82 @@ export default function Circuits() {
           </div>
         </Form>
       </Modal>
+
+      <Drawer
+        title={`配置历史 · ${historyCircuit?.code || ""}`}
+        width={760}
+        open={!!historyCircuit}
+        onClose={() => setHistoryCircuit(null)}
+      >
+        {history && (
+          <Collapse
+            items={(history.devices || []).map((d: any) => ({
+              key: d.device_id,
+              label: (
+                <span>
+                  <b>{d.device}</b>{" "}
+                  <Tag>{d.versions.length} 个版本</Tag>
+                </span>
+              ),
+              children: (
+                <>
+                  <Button
+                    size="small"
+                    type="primary"
+                    ghost
+                    style={{ marginBottom: 8 }}
+                    onClick={() => loadDiff(historyCircuit!.id, d.device_id)}
+                  >
+                    对比最近两个版本
+                  </Button>
+                  {diffText[d.device_id] && (
+                    <pre className="config-pre">
+                      {diffText[d.device_id].split("\n").map((line, i) => (
+                        <div
+                          key={i}
+                          style={{
+                            color: line.startsWith("+")
+                              ? "#52c41a"
+                              : line.startsWith("-")
+                              ? "#ff7875"
+                              : line.startsWith("@@")
+                              ? "#1677ff"
+                              : undefined,
+                          }}
+                        >
+                          {line}
+                        </div>
+                      ))}
+                    </pre>
+                  )}
+                  <Timeline
+                    style={{ marginTop: 12 }}
+                    items={d.versions
+                      .slice()
+                      .reverse()
+                      .map((v: any) => ({
+                        color: v.status.includes("fail") ? "red" : "blue",
+                        children: (
+                          <div>
+                            <Tag>{v.work_order}</Tag>
+                            <Tag color="geekblue">{v.operation}</Tag>
+                            <Tag>{v.status}</Tag>
+                            <span style={{ color: "#888", fontSize: 12 }}>
+                              {v.created_at?.replace("T", " ").slice(0, 19)}
+                            </span>
+                            <pre className="config-pre" style={{ maxHeight: 180 }}>
+                              {v.rendered_config}
+                            </pre>
+                          </div>
+                        ),
+                      }))}
+                  />
+                </>
+              ),
+            }))}
+          />
+        )}
+      </Drawer>
     </Card>
   );
 }
