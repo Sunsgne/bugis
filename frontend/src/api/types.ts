@@ -154,3 +154,74 @@ export interface TelemetrySample {
   packet_loss_pct: number;
   created_at?: string;
 }
+
+export interface Alarm {
+  id: number;
+  severity: string;
+  status: string;
+  kind: string;
+  title: string;
+  detail?: string;
+  circuit_id?: number;
+  device_id?: number;
+  acknowledged_by?: string;
+  created_at?: string;
+}
+
+export interface AlarmSummary {
+  active: number;
+  by_severity: Record<string, number>;
+}
+
+export interface Link {
+  id: number;
+  name: string;
+  type: string;
+  device_a_id: number;
+  device_z_id: number;
+  capacity_mbps: number;
+  reserved_mbps: number;
+}
+
+export interface SiteCapacity {
+  site_id: number;
+  site: string;
+  code: string;
+  devices: number;
+  capacity_mbps: number;
+  used_mbps: number;
+  utilization_pct: number;
+}
+
+export interface LinkUsage {
+  link_id: number;
+  name: string;
+  type: string;
+  device_a: string;
+  device_z: string;
+  capacity_mbps: number;
+  reserved_mbps: number;
+  utilization_pct: number;
+}
+
+export interface Topology {
+  sites: { id: number; name: string; code: string }[];
+  nodes: {
+    id: number;
+    name: string;
+    vendor: string;
+    role: string;
+    overlay_tech: string;
+    site_id?: number;
+    status: string;
+  }[];
+  edges: {
+    id: number;
+    name: string;
+    type: string;
+    source: number;
+    target: number;
+    capacity_mbps: number;
+    reserved_mbps: number;
+  }[];
+}

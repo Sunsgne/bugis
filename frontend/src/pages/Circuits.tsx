@@ -15,7 +15,13 @@ import {
   Popconfirm,
   Descriptions,
 } from "antd";
-import { PlusOutlined, ThunderboltOutlined, EyeOutlined, MinusCircleOutlined } from "@ant-design/icons";
+import {
+  PlusOutlined,
+  ThunderboltOutlined,
+  EyeOutlined,
+  MinusCircleOutlined,
+  EditOutlined,
+} from "@ant-design/icons";
 import { api } from "../api/client";
 import type { Circuit, Device, Tenant } from "../api/types";
 
@@ -44,6 +50,8 @@ export default function Circuits() {
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [form] = Form.useForm();
+  const [modifyForm] = Form.useForm();
+  const [modifyTarget, setModifyTarget] = useState<Circuit | null>(null);
 
   async function load() {
     setLoading(true);
@@ -99,6 +107,22 @@ export default function Circuits() {
       load();
     } catch (e: any) {
       message.error(e?.response?.data?.detail || "拆除失败");
+    }
+  }
+
+  async function doModify() {
+    if (!modifyTarget) return;
+    const v = await modifyForm.validateFields();
+    try {
+      await api.patch(`/circuits/${modifyTarget.id}`, { bandwidth_mbps: v.bandwidth_mbps });
+      const { data } = await api.post(
+        `/work-orders/provision/${modifyTarget.id}?wo_type=modify`
+      );
+      message.success(`变更工单 ${data.code}: ${data.status}`);
+      setModifyTarget(null);
+      load();
+    } catch (e: any) {
+      message.error(e?.response?.data?.detail || "变更失败");
     }
   }
 
@@ -191,6 +215,16 @@ export default function Circuits() {
                     开通
                   </Button>
                 </Tooltip>
+                <Tooltip title="变更带宽">
+                  <Button
+                    size="small"
+                    icon={<EditOutlined />}
+                    onClick={() => {
+                      setModifyTarget(r);
+                      modifyForm.setFieldsValue({ bandwidth_mbps: r.bandwidth_mbps });
+                    }}
+                  />
+                </Tooltip>
                 <Tooltip title="预览各厂商配置">
                   <Button size="small" icon={<EyeOutlined />} onClick={() => preview(r)} />
                 </Tooltip>
@@ -210,6 +244,26 @@ export default function Circuits() {
         onOk={onCreate}
         onCancel={() => setOpen(false)}
       />
+      <Modal
+        title={`变更带宽 · ${modifyTarget?.code || ""}`}
+        open={!!modifyTarget}
+        onOk={doModify}
+        onCancel={() => setModifyTarget(null)}
+        okText="提交变更并下发"
+      >
+        <Form form={modifyForm} layout="vertical">
+          <Form.Item
+            name="bandwidth_mbps"
+            label="新带宽 (Mbps)"
+            rules={[{ required: true }]}
+          >
+            <InputNumber min={1} style={{ width: "100%" }} />
+          </Form.Item>
+          <div style={{ color: "#888", fontSize: 12 }}>
+            变更将创建 MODIFY 工单并重新下发各厂商 QoS / 限速配置。
+          </div>
+        </Form>
+      </Modal>
     </Card>
   );
 }

@@ -1,5 +1,5 @@
 import { Navigate, Route, Routes, useNavigate, useLocation } from "react-router-dom";
-import { Layout, Menu, Spin, Dropdown, Avatar, Tag } from "antd";
+import { Layout, Menu, Spin, Dropdown, Avatar, Tag, Badge, Space } from "antd";
 import {
   DashboardOutlined,
   TeamOutlined,
@@ -10,8 +10,13 @@ import {
   EnvironmentOutlined,
   UserOutlined,
   LogoutOutlined,
+  AlertOutlined,
+  DeploymentUnitOutlined,
+  PartitionOutlined,
 } from "@ant-design/icons";
+import { useEffect, useState } from "react";
 import { useAuth } from "./auth";
+import { api } from "./api/client";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Tenants from "./pages/Tenants";
@@ -20,6 +25,9 @@ import Devices from "./pages/Devices";
 import Circuits from "./pages/Circuits";
 import WorkOrders from "./pages/WorkOrders";
 import Monitoring from "./pages/Monitoring";
+import Alarms from "./pages/Alarms";
+import Capacity from "./pages/Capacity";
+import Topology from "./pages/Topology";
 
 const { Header, Sider, Content } = Layout;
 
@@ -30,8 +38,36 @@ const MENU = [
   { key: "/devices", icon: <ClusterOutlined />, label: "设备管理" },
   { key: "/circuits", icon: <ApiOutlined />, label: "专线管理" },
   { key: "/work-orders", icon: <ProfileOutlined />, label: "工单流转" },
+  { key: "/topology", icon: <PartitionOutlined />, label: "网络拓扑" },
+  { key: "/capacity", icon: <DeploymentUnitOutlined />, label: "容量管理" },
   { key: "/monitoring", icon: <LineChartOutlined />, label: "监控大屏" },
+  { key: "/alarms", icon: <AlertOutlined />, label: "告警中心" },
 ];
+
+function AlarmBell({ onClick }: { onClick: () => void }) {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    async function load() {
+      try {
+        const { data } = await api.get("/alarms/summary");
+        setCount(data.active || 0);
+      } catch {
+        /* ignore */
+      }
+    }
+    load();
+    const t = setInterval(load, 8000);
+    return () => clearInterval(t);
+  }, []);
+  return (
+    <Badge count={count} size="small" offset={[-2, 2]}>
+      <AlertOutlined
+        style={{ fontSize: 20, cursor: "pointer", color: count ? "#cf1322" : undefined }}
+        onClick={onClick}
+      />
+    </Badge>
+  );
+}
 
 function Shell() {
   const nav = useNavigate();
@@ -69,6 +105,8 @@ function Shell() {
           <div style={{ fontSize: 18, fontWeight: 600 }}>
             DCI / EVPN 专线开通与运营平台
           </div>
+          <Space size="large">
+          <AlarmBell onClick={() => nav("/alarms")} />
           <Dropdown
             menu={{
               items: [
@@ -82,6 +120,7 @@ function Shell() {
               <Tag color="blue">{user?.role}</Tag>
             </span>
           </Dropdown>
+          </Space>
         </Header>
         <Content style={{ margin: 16, overflow: "auto" }}>
           <Routes>
@@ -91,7 +130,10 @@ function Shell() {
             <Route path="/devices" element={<Devices />} />
             <Route path="/circuits" element={<Circuits />} />
             <Route path="/work-orders" element={<WorkOrders />} />
+            <Route path="/topology" element={<Topology />} />
+            <Route path="/capacity" element={<Capacity />} />
             <Route path="/monitoring" element={<Monitoring />} />
+            <Route path="/alarms" element={<Alarms />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Content>
