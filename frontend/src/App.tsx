@@ -18,6 +18,7 @@ import {
   SafetyOutlined,
   AppstoreOutlined,
   CloudServerOutlined,
+  BellOutlined,
 } from "@ant-design/icons";
 import { useEffect, useState } from "react";
 import { useAuth } from "./auth";
@@ -38,6 +39,7 @@ import Audit from "./pages/Audit";
 import Users from "./pages/Users";
 import Catalog from "./pages/Catalog";
 import Controllers from "./pages/Controllers";
+import Notifications from "./pages/Notifications";
 
 const { Header, Sider, Content } = Layout;
 
@@ -54,6 +56,7 @@ const MENU = [
   { key: "/capacity", icon: <DeploymentUnitOutlined />, label: "容量管理" },
   { key: "/monitoring", icon: <LineChartOutlined />, label: "监控大屏" },
   { key: "/alarms", icon: <AlertOutlined />, label: "告警中心" },
+  { key: "/notifications", icon: <BellOutlined />, label: "通知渠道" },
   { key: "/integrations", icon: <IntegrationIcon />, label: "集成中心" },
   { key: "/audit", icon: <AuditOutlined />, label: "操作审计" },
   { key: "/users", icon: <SafetyOutlined />, label: "用户权限" },
@@ -181,6 +184,7 @@ function Shell() {
             <Route path="/capacity" element={<Capacity />} />
             <Route path="/monitoring" element={<Monitoring />} />
             <Route path="/alarms" element={<Alarms />} />
+            <Route path="/notifications" element={<Notifications />} />
             <Route path="/integrations" element={<Integrations />} />
             <Route path="/audit" element={<Audit />} />
             <Route path="/users" element={<Users />} />
