@@ -339,15 +339,20 @@ export default function Circuits() {
             width: 240,
             render: (_, r) => (
               <Space>
-                <Tooltip title="一键开通（下发配置, dry-run）">
+                <Tooltip
+                  title={
+                    r.status === "active"
+                      ? "重新下发配置 (re-apply, dry-run)"
+                      : "一键开通 (下发配置, dry-run)"
+                  }
+                >
                   <Button
                     size="small"
                     type="primary"
                     icon={<ThunderboltOutlined />}
                     onClick={() => provision(r)}
-                    disabled={r.status === "active"}
                   >
-                    开通
+                    {r.status === "active" ? "重新下发" : "开通"}
                   </Button>
                 </Tooltip>
                 <Tooltip title="变更带宽">
