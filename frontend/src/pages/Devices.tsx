@@ -79,6 +79,16 @@ export default function Devices() {
     load();
   }
 
+  async function check(id: number) {
+    const { data } = await api.post(`/devices/${id}/check`);
+    if (data.reachable) {
+      message.success(`${data.device} 可达, 时延 ${data.latency_ms}ms`);
+    } else {
+      message.error(`${data.device} 不可达 (${data.mgmt_ip})`);
+    }
+    load();
+  }
+
   const siteName = (id?: number) => sites.find((s) => s.id === id)?.code || "-";
 
   return (
@@ -124,9 +134,12 @@ export default function Devices() {
           {
             title: "操作",
             render: (_, r) => (
-              <Popconfirm title="确认删除?" onConfirm={() => remove(r.id)}>
-                <a style={{ color: "#cf1322" }}>删除</a>
-              </Popconfirm>
+              <Space>
+                <a onClick={() => check(r.id)}>检测</a>
+                <Popconfirm title="确认删除?" onConfirm={() => remove(r.id)}>
+                  <a style={{ color: "#cf1322" }}>删除</a>
+                </Popconfirm>
+              </Space>
             ),
           },
         ]}

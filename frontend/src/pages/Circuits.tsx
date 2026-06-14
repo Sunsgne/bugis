@@ -88,14 +88,48 @@ export default function Circuits() {
     }
   }
 
-  async function provision(c: Circuit) {
+  async function runProvision(c: Circuit) {
     try {
       const { data } = await api.post(`/work-orders/provision/${c.id}`);
-      message.success(`开通工单 ${data.code}: ${data.status}`);
+      if (data.status === "failed") {
+        message.error(`开通工单 ${data.code} 失败（预检未通过）`);
+      } else {
+        message.success(`开通工单 ${data.code}: ${data.status}`);
+      }
       load();
     } catch (e: any) {
       message.error(e?.response?.data?.detail || "开通失败");
     }
+  }
+
+  async function provision(c: Circuit) {
+    // Pre-flight compliance check before provisioning.
+    const { data: v } = await api.get(`/circuits/${c.id}/validate`);
+    if (!v.ok) {
+      modal.confirm({
+        title: `预检发现 ${v.errors} 个错误 / ${v.warnings} 个告警`,
+        width: 560,
+        content: (
+          <div style={{ maxHeight: 320, overflow: "auto" }}>
+            {v.issues.map((i: any, idx: number) => (
+              <div key={idx} style={{ marginBottom: 4 }}>
+                <Tag color={i.level === "error" ? "red" : "orange"}>{i.level}</Tag>
+                <span>{i.message}</span>
+              </div>
+            ))}
+            {v.errors > 0 && (
+              <div style={{ color: "#cf1322", marginTop: 8 }}>
+                存在错误，下发将被编排引擎阻断。
+              </div>
+            )}
+          </div>
+        ),
+        okText: v.errors > 0 ? "仍尝试开通" : "继续开通",
+        onOk: () => runProvision(c),
+      });
+      return;
+    }
+    runProvision(c);
   }
 
   async function decommission(c: Circuit) {
