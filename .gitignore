@@ -16,6 +16,10 @@ frontend/dist/
 frontend/.vite/
 *.local
 
+# Local-only deployment/SSH helpers (may contain credentials) - never commit
+deploy/_remote*.py
+deploy/remote.py
+
 # Editor / OS
 .DS_Store
 .idea/
