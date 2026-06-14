@@ -13,6 +13,8 @@ import {
   AlertOutlined,
   DeploymentUnitOutlined,
   PartitionOutlined,
+  ApiOutlined as IntegrationIcon,
+  AuditOutlined,
 } from "@ant-design/icons";
 import { useEffect, useState } from "react";
 import { useAuth } from "./auth";
@@ -28,6 +30,8 @@ import Monitoring from "./pages/Monitoring";
 import Alarms from "./pages/Alarms";
 import Capacity from "./pages/Capacity";
 import Topology from "./pages/Topology";
+import Integrations from "./pages/Integrations";
+import Audit from "./pages/Audit";
 
 const { Header, Sider, Content } = Layout;
 
@@ -42,6 +46,8 @@ const MENU = [
   { key: "/capacity", icon: <DeploymentUnitOutlined />, label: "容量管理" },
   { key: "/monitoring", icon: <LineChartOutlined />, label: "监控大屏" },
   { key: "/alarms", icon: <AlertOutlined />, label: "告警中心" },
+  { key: "/integrations", icon: <IntegrationIcon />, label: "集成中心" },
+  { key: "/audit", icon: <AuditOutlined />, label: "操作审计" },
 ];
 
 function AlarmBell({ onClick }: { onClick: () => void }) {
@@ -134,6 +140,8 @@ function Shell() {
             <Route path="/capacity" element={<Capacity />} />
             <Route path="/monitoring" element={<Monitoring />} />
             <Route path="/alarms" element={<Alarms />} />
+            <Route path="/integrations" element={<Integrations />} />
+            <Route path="/audit" element={<Audit />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Content>

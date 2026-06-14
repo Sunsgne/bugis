@@ -204,6 +204,16 @@ export interface LinkUsage {
   utilization_pct: number;
 }
 
+export interface AuditEntry {
+  id: number;
+  actor: string;
+  method: string;
+  path: string;
+  status_code: number;
+  source_ip?: string;
+  created_at?: string;
+}
+
 export interface Topology {
   sites: { id: number; name: string; code: string }[];
   nodes: {
