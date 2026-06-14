@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Card, Col, Row, Statistic, Spin, Tag, Empty } from "antd";
+import { Card, Col, Row, Statistic, Spin, Tag, Empty, Badge } from "antd";
 import {
   TeamOutlined,
   ClusterOutlined,
@@ -40,10 +40,15 @@ const STATUS_COLORS: Record<string, string> = {
 
 export default function Dashboard() {
   const [data, setData] = useState<DashboardData | null>(null);
+  const [scheduler, setScheduler] = useState<any>(null);
 
   async function load() {
-    const { data } = await api.get<DashboardData>("/telemetry/dashboard");
-    setData(data);
+    const [d, s] = await Promise.all([
+      api.get<DashboardData>("/telemetry/dashboard"),
+      api.get("/system/info").catch(() => ({ data: null })),
+    ]);
+    setData(d.data);
+    setScheduler(s.data?.scheduler);
   }
   useEffect(() => {
     load();
@@ -153,10 +158,22 @@ export default function Dashboard() {
       </Row>
 
       <Card size="small">
-        <Tag color="blue">EVPN VXLAN: 华三 / 华为</Tag>
+        <Tag color="blue">EVPN VXLAN: 华三 / 华为 / FRR</Tag>
         <Tag color="purple">SR-MPLS EVPN: Juniper / Arista / Cisco</Tag>
         <Tag color="green">DCI 数据中心互联</Tag>
         <Tag color="orange">多租户混合云接入</Tag>
+        {scheduler && (
+          <span style={{ float: "right" }}>
+            <Badge
+              status={scheduler.running ? "processing" : "default"}
+              text={
+                scheduler.running
+                  ? `自动巡检运行中 · 已执行 ${scheduler.ticks} 次 · 间隔 ${scheduler.interval}s`
+                  : "自动巡检未运行"
+              }
+            />
+          </span>
+        )}
       </Card>
     </div>
   );
