@@ -11,10 +11,11 @@ import {
   Switch,
   Table,
   Tag,
+  Upload,
   App as AntApp,
   Popconfirm,
 } from "antd";
-import { PlusOutlined } from "@ant-design/icons";
+import { PlusOutlined, DownloadOutlined, UploadOutlined } from "@ant-design/icons";
 import { api } from "../api/client";
 import type { Device, Site } from "../api/types";
 
@@ -80,6 +81,31 @@ export default function Devices() {
     load();
   }
 
+  async function exportCsv() {
+    const { data } = await api.get("/bulk/devices/export", { responseType: "text" });
+    const blob = new Blob([data], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "devices.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function importCsv(file: File) {
+    const fd = new FormData();
+    fd.append("file", file);
+    try {
+      const { data } = await api.post("/bulk/devices/import", fd);
+      message.success(`导入完成: 新增 ${data.created}, 跳过 ${data.skipped}`);
+      if (data.errors?.length) message.warning(`${data.errors.length} 行有误`);
+      load();
+    } catch (e: any) {
+      message.error(e?.response?.data?.detail || "导入失败");
+    }
+    return false;
+  }
+
   async function check(id: number) {
     const { data } = await api.post(`/devices/${id}/check`);
     if (data.reachable) {
@@ -96,9 +122,17 @@ export default function Devices() {
     <Card
       title="设备管理"
       extra={
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>
-          添加设备
-        </Button>
+        <Space>
+          <Button icon={<DownloadOutlined />} onClick={exportCsv}>
+            导出 CSV
+          </Button>
+          <Upload accept=".csv" showUploadList={false} beforeUpload={importCsv}>
+            <Button icon={<UploadOutlined />}>导入 CSV</Button>
+          </Upload>
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>
+            添加设备
+          </Button>
+        </Space>
       }
     >
       <Table

@@ -20,7 +20,7 @@ import {
 } from "@ant-design/icons";
 import { useEffect, useState } from "react";
 import { useAuth } from "./auth";
-import { api } from "./api/client";
+import { api, getToken } from "./api/client";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Tenants from "./pages/Tenants";
@@ -58,8 +58,14 @@ const MENU = [
 
 function AlarmBell({ onClick }: { onClick: () => void }) {
   const [count, setCount] = useState(0);
+  const [live, setLive] = useState(false);
+
   useEffect(() => {
-    async function load() {
+    const token = getToken();
+    let es: EventSource | null = null;
+    let poll: ReturnType<typeof setInterval> | null = null;
+
+    async function loadOnce() {
       try {
         const { data } = await api.get("/alarms/summary");
         setCount(data.active || 0);
@@ -67,12 +73,36 @@ function AlarmBell({ onClick }: { onClick: () => void }) {
         /* ignore */
       }
     }
-    load();
-    const t = setInterval(load, 8000);
-    return () => clearInterval(t);
+
+    if (token && "EventSource" in window) {
+      es = new EventSource(`/api/v1/stream/events?token=${encodeURIComponent(token)}`);
+      es.addEventListener("snapshot", (e: MessageEvent) => {
+        try {
+          const d = JSON.parse(e.data);
+          setCount(d.active_alarms || 0);
+          setLive(true);
+        } catch {
+          /* ignore */
+        }
+      });
+      es.onerror = () => {
+        // Fall back to polling if the stream drops.
+        setLive(false);
+        if (!poll) poll = setInterval(loadOnce, 8000);
+      };
+    } else {
+      loadOnce();
+      poll = setInterval(loadOnce, 8000);
+    }
+
+    return () => {
+      es?.close();
+      if (poll) clearInterval(poll);
+    };
   }, []);
+
   return (
-    <Badge count={count} size="small" offset={[-2, 2]}>
+    <Badge count={count} size="small" offset={[-2, 2]} title={live ? "实时" : "轮询"}>
       <AlertOutlined
         style={{ fontSize: 20, cursor: "pointer", color: count ? "#cf1322" : undefined }}
         onClick={onClick}

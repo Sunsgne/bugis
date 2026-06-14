@@ -21,6 +21,7 @@ import {
   EyeOutlined,
   MinusCircleOutlined,
   EditOutlined,
+  DownloadOutlined,
 } from "@ant-design/icons";
 import { api } from "../api/client";
 import type { Circuit, Device, Offering, Tenant } from "../api/types";
@@ -187,9 +188,28 @@ export default function Circuits() {
     <Card
       title="专线管理"
       extra={
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>
-          新建专线
-        </Button>
+        <Space>
+          <Button
+            icon={<DownloadOutlined />}
+            onClick={async () => {
+              const { data } = await api.get("/bulk/circuits/export", {
+                responseType: "text",
+              });
+              const blob = new Blob([data], { type: "text/csv" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = "circuits.csv";
+              a.click();
+              URL.revokeObjectURL(url);
+            }}
+          >
+            导出 CSV
+          </Button>
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>
+            新建专线
+          </Button>
+        </Space>
       }
     >
       <Table
