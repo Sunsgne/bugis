@@ -29,7 +29,7 @@ import {
   RadarChartOutlined,
 } from "@ant-design/icons";
 import { api } from "../api/client";
-import type { Circuit, Device, Offering, Tenant } from "../api/types";
+import type { Circuit, Device, DeviceInterface, Offering, Tenant } from "../api/types";
 
 const SERVICE_LABEL: Record<string, string> = {
   l2vpn_evpn: "EVPN L2VPN",
@@ -390,6 +390,7 @@ export default function Circuits() {
         offerings={offerings}
         onOk={onCreate}
         onCancel={() => setOpen(false)}
+        message={message}
       />
       <Modal
         title={`变更带宽 · ${modifyTarget?.code || ""}`}
@@ -491,7 +492,37 @@ export default function Circuits() {
   );
 }
 
-function CreateModal({ open, form, tenants, devices, offerings, onOk, onCancel }: any) {
+function CreateModal({ open, form, tenants, devices, offerings, onOk, onCancel, message }: any) {
+  const [ifaceByDevice, setIfaceByDevice] = useState<Record<number, DeviceInterface[]>>({});
+
+  async function loadIfaces(deviceId: number, autoDiscover = true) {
+    if (!deviceId) return;
+    let { data } = await api.get<DeviceInterface[]>(`/devices/${deviceId}/interfaces`);
+    if ((!data || data.length === 0) && autoDiscover) {
+      const r = await api.post<DeviceInterface[]>(
+        `/devices/${deviceId}/discover-interfaces`
+      );
+      data = r.data;
+    }
+    setIfaceByDevice((p) => ({ ...p, [deviceId]: data }));
+  }
+
+  async function discover(deviceId: number) {
+    if (!deviceId) return message.warning("请先选择设备");
+    const { data } = await api.post<DeviceInterface[]>(
+      `/devices/${deviceId}/discover-interfaces`
+    );
+    setIfaceByDevice((p) => ({ ...p, [deviceId]: data }));
+    message.success(`已发现 ${data.length} 个接口`);
+  }
+
+  function ifaceOptions(deviceId: number) {
+    return (ifaceByDevice[deviceId] || []).map((i) => ({
+      value: i.name,
+      label: `${i.name}${i.speed_mbps ? ` (${i.speed_mbps >= 1000 ? i.speed_mbps / 1000 + "G" : i.speed_mbps + "M"})` : ""}${i.oper_status ? ` · ${i.oper_status}` : ""}`,
+    }));
+  }
+
   function applyOffering(id: number) {
     const o = offerings.find((x: Offering) => x.id === id);
     if (!o) return;
@@ -568,14 +599,50 @@ function CreateModal({ open, form, tenants, devices, offerings, onOk, onCancel }
                     <Select
                       style={{ width: 200 }}
                       placeholder="选择设备"
+                      onChange={(v) => {
+                        form.setFieldValue(["endpoints", field.name, "interface_name"], undefined);
+                        loadIfaces(v);
+                      }}
                       options={devices.map((d: Device) => ({
                         value: d.id,
                         label: `${d.name} (${d.vendor})`,
                       }))}
                     />
                   </Form.Item>
-                  <Form.Item name={[field.name, "interface_name"]} rules={[{ required: true }]}>
-                    <Input placeholder="接口 GE1/0/1" style={{ width: 120 }} />
+                  <Form.Item
+                    noStyle
+                    shouldUpdate={(p, c) =>
+                      p.endpoints?.[field.name]?.device_id !==
+                      c.endpoints?.[field.name]?.device_id
+                    }
+                  >
+                    {({ getFieldValue }) => {
+                      const did = getFieldValue(["endpoints", field.name, "device_id"]);
+                      return (
+                        <Space.Compact>
+                          <Form.Item
+                            name={[field.name, "interface_name"]}
+                            rules={[{ required: true }]}
+                            noStyle
+                          >
+                            <Select
+                              style={{ width: 180 }}
+                              placeholder="选择接口(SNMP)"
+                              showSearch
+                              disabled={!did}
+                              notFoundContent="无接口,点🔍发现"
+                              options={ifaceOptions(did)}
+                            />
+                          </Form.Item>
+                          <Button
+                            icon={<RadarChartOutlined />}
+                            disabled={!did}
+                            onClick={() => discover(did)}
+                            title="SNMP 发现接口"
+                          />
+                        </Space.Compact>
+                      );
+                    }}
                   </Form.Item>
                   <Form.Item name={[field.name, "access_mode"]} initialValue="dot1q">
                     <Select

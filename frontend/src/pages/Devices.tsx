@@ -15,9 +15,9 @@ import {
   App as AntApp,
   Popconfirm,
 } from "antd";
-import { PlusOutlined, DownloadOutlined, UploadOutlined } from "@ant-design/icons";
+import { PlusOutlined, DownloadOutlined, UploadOutlined, ApiOutlined } from "@ant-design/icons";
 import { api } from "../api/client";
-import type { Device, Site } from "../api/types";
+import type { Device, DeviceInterface, Site } from "../api/types";
 
 const VENDOR_COLOR: Record<string, string> = {
   h3c: "blue",
@@ -44,6 +44,27 @@ export default function Devices() {
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [form] = Form.useForm();
+  const [ifaces, setIfaces] = useState<Record<number, DeviceInterface[]>>({});
+
+  async function loadIfaces(deviceId: number) {
+    const { data } = await api.get<DeviceInterface[]>(`/devices/${deviceId}/interfaces`);
+    setIfaces((p) => ({ ...p, [deviceId]: data }));
+  }
+
+  async function discover(deviceId: number) {
+    const hide = message.loading("SNMP 接口发现中...", 0);
+    try {
+      const { data } = await api.post<DeviceInterface[]>(
+        `/devices/${deviceId}/discover-interfaces`
+      );
+      hide();
+      message.success(`已发现 ${data.length} 个接口`);
+      setIfaces((p) => ({ ...p, [deviceId]: data }));
+    } catch (e: any) {
+      hide();
+      message.error(e?.response?.data?.detail || "发现失败");
+    }
+  }
 
   async function load() {
     setLoading(true);
@@ -139,6 +160,48 @@ export default function Devices() {
         rowKey="id"
         loading={loading}
         dataSource={rows}
+        expandable={{
+          onExpand: (expanded, r) => {
+            if (expanded && !ifaces[r.id]) loadIfaces(r.id);
+          },
+          expandedRowRender: (r) => {
+            const list = ifaces[r.id] || [];
+            return list.length ? (
+              <Table
+                size="small"
+                rowKey="id"
+                pagination={false}
+                dataSource={list}
+                columns={[
+                  { title: "接口", dataIndex: "name" },
+                  {
+                    title: "速率",
+                    dataIndex: "speed_mbps",
+                    render: (s) => (s ? `${s >= 1000 ? s / 1000 + "G" : s + "M"}` : "-"),
+                  },
+                  {
+                    title: "Oper",
+                    dataIndex: "oper_status",
+                    render: (s) => <Tag color={s === "up" ? "green" : "default"}>{s || "-"}</Tag>,
+                  },
+                  { title: "ifIndex", dataIndex: "ifindex" },
+                  {
+                    title: "发现方式",
+                    dataIndex: "discovered_via",
+                    render: (d) => d && <Tag>{d}</Tag>,
+                  },
+                  {
+                    title: "占用",
+                    dataIndex: "allocated",
+                    render: (a) => (a ? <Tag color="orange">已占用</Tag> : "-"),
+                  },
+                ]}
+              />
+            ) : (
+              <span style={{ color: "#888" }}>暂无接口，点击「SNMP 发现」</span>
+            );
+          },
+        }}
         columns={[
           { title: "名称", dataIndex: "name" },
           {
@@ -171,6 +234,9 @@ export default function Devices() {
             render: (_, r) => (
               <Space>
                 <a onClick={() => check(r.id)}>检测</a>
+                <a onClick={() => discover(r.id)}>
+                  <ApiOutlined /> SNMP发现
+                </a>
                 <Popconfirm title="确认删除?" onConfirm={() => remove(r.id)}>
                   <a style={{ color: "#cf1322" }}>删除</a>
                 </Popconfirm>

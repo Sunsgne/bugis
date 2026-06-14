@@ -41,6 +41,9 @@ export interface DeviceInterface {
   speed_mbps?: number;
   admin_up: boolean;
   allocated: boolean;
+  ifindex?: number;
+  oper_status?: string;
+  discovered_via?: string;
 }
 
 export interface Device {
