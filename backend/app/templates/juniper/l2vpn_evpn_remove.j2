@@ -1,0 +1,4 @@
+## Juniper Junos - remove EVPN-MPLS L2  circuit {{ circuit.code }}
+delete routing-instances EVI_{{ circuit.code }}
+delete interfaces {{ endpoint.interface_name }} unit 0
+delete class-of-service interfaces {{ endpoint.interface_name }}

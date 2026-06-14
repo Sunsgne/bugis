@@ -1,0 +1,9 @@
+#
+# Huawei VRP - remove EVPN VXLAN L3VPN  circuit {{ circuit.code }}
+#
+undo interface Vbdif{{ circuit.vni }}
+undo interface {{ endpoint.interface_name }}.{{ endpoint.vlan_id or circuit.vlan_id }}
+undo bridge-domain {{ circuit.vni }}
+undo ip vpn-instance {{ circuit.vrf_name }}
+#
+return

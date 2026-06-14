@@ -1,0 +1,32 @@
+! Cisco IOS-XR - EVPN IRB L3 (Type-5) over SR-MPLS  circuit {{ circuit.code }}
+! device {{ device.name }} vrf={{ circuit.vrf_name }}
+vrf {{ circuit.vrf_name }}
+ address-family ipv4 unicast
+  import route-target {{ circuit.route_target }}
+  export route-target {{ circuit.route_target }}
+!
+interface BVI{{ circuit.vni }}
+ vrf {{ circuit.vrf_name }}
+ ipv4 address {{ endpoint.gateway_ip }} 255.255.255.0
+ mtu {{ circuit.mtu }}
+!
+l2vpn
+ bridge group BG_{{ circuit.code }}
+  bridge-domain BD_{{ circuit.code }}
+   interface {{ endpoint.interface_name }}
+   routed interface BVI{{ circuit.vni }}
+   evi {{ circuit.vni }}
+!
+router bgp {{ device.bgp_asn }}
+ vrf {{ circuit.vrf_name }}
+  rd {{ circuit.route_distinguisher }}
+  address-family ipv4 unicast
+   redistribute connected
+!
+evpn
+ evi {{ circuit.vni }}
+  bgp
+   rd {{ circuit.route_distinguisher }}
+   route-target import {{ circuit.route_target }}
+   route-target export {{ circuit.route_target }}
+!

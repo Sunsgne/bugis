@@ -1,0 +1,26 @@
+#
+# H3C Comware7 - EVPN VXLAN L2VPN (E-LAN)  circuit {{ circuit.code }}
+#
+l2vpn enable
+#
+vsi vsi_{{ circuit.code }}
+ description {{ circuit.name }} ({{ circuit.tenant_id }})
+ vxlan {{ circuit.vni }}
+ evpn encapsulation vxlan
+  route-distinguisher {{ circuit.route_distinguisher }}
+  vpn-target {{ circuit.route_target }} import-extcommunity
+  vpn-target {{ circuit.route_target }} export-extcommunity
+#
+interface {{ endpoint.interface_name }}
+ port link-mode bridge
+ description CUST_{{ circuit.tenant_id }}_{{ circuit.code }}
+ service-instance {{ circuit.vlan_id or endpoint.vlan_id }}
+  encapsulation s-vid {{ endpoint.vlan_id or circuit.vlan_id }}
+  xconnect vsi vsi_{{ circuit.code }}
+#
+{% if circuit.bandwidth_mbps %}
+qos car inbound any cir {{ circuit.bandwidth_mbps * 1000 }}
+qos car outbound any cir {{ circuit.bandwidth_mbps * 1000 }}
+{% endif %}
+#
+return

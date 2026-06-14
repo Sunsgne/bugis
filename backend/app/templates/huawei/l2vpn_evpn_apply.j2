@@ -1,0 +1,26 @@
+#
+# Huawei VRP (Datacom) - EVPN VXLAN L2VPN  circuit {{ circuit.code }}
+#
+bridge-domain {{ circuit.vni }}
+ vxlan vni {{ circuit.vni }}
+ evpn
+  route-distinguisher {{ circuit.route_distinguisher }}
+  vpn-target {{ circuit.route_target }} export-extcommunity
+  vpn-target {{ circuit.route_target }} import-extcommunity
+#
+interface {{ endpoint.interface_name }}.{{ endpoint.vlan_id or circuit.vlan_id }} mode l2
+ description CUST_{{ circuit.tenant_id }}_{{ circuit.code }}
+ encapsulation dot1q vid {{ endpoint.vlan_id or circuit.vlan_id }}
+ rewrite pop single
+ bridge-domain {{ circuit.vni }}
+#
+interface Nve1
+ vni {{ circuit.vni }} head-end peer-list protocol bgp
+#
+{% if circuit.bandwidth_mbps %}
+qos
+ traffic policy CUST_{{ circuit.code }} inbound cir {{ circuit.bandwidth_mbps }} mbps
+ traffic policy CUST_{{ circuit.code }} outbound cir {{ circuit.bandwidth_mbps }} mbps
+{% endif %}
+#
+return

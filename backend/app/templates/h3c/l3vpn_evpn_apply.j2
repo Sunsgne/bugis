@@ -1,0 +1,32 @@
+#
+# H3C Comware7 - EVPN VXLAN L3VPN (distributed IRB)  circuit {{ circuit.code }}
+#
+ip vpn-instance {{ circuit.vrf_name }}
+ route-distinguisher {{ circuit.route_distinguisher }}
+ address-family ipv4
+  vpn-target {{ circuit.route_target }} import-extcommunity
+  vpn-target {{ circuit.route_target }} export-extcommunity
+ address-family evpn
+  vpn-target {{ circuit.route_target }} import-extcommunity
+  vpn-target {{ circuit.route_target }} export-extcommunity
+#
+l2vpn enable
+vsi vsi_{{ circuit.code }}
+ vxlan {{ circuit.vni }}
+ evpn encapsulation vxlan
+  route-distinguisher {{ circuit.route_distinguisher }}
+  vpn-target {{ circuit.route_target }} both
+#
+interface Vsi-interface{{ circuit.vni }}
+ ip binding vpn-instance {{ circuit.vrf_name }}
+ ip address {{ endpoint.gateway_ip }} 255.255.255.0
+ distributed-gateway local
+ mac-address evpn-anycast
+#
+interface {{ endpoint.interface_name }}
+ port link-mode bridge
+ service-instance {{ circuit.vlan_id or endpoint.vlan_id }}
+  encapsulation s-vid {{ endpoint.vlan_id or circuit.vlan_id }}
+  xconnect vsi vsi_{{ circuit.code }}
+#
+return

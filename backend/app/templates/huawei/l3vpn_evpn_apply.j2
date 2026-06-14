@@ -1,0 +1,27 @@
+#
+# Huawei VRP - EVPN VXLAN L3VPN (distributed gateway)  circuit {{ circuit.code }}
+#
+ip vpn-instance {{ circuit.vrf_name }}
+ ipv4-family
+  route-distinguisher {{ circuit.route_distinguisher }}
+  vpn-target {{ circuit.route_target }} export-extcommunity evpn
+  vpn-target {{ circuit.route_target }} import-extcommunity evpn
+ vxlan vni {{ circuit.vni }}
+#
+bridge-domain {{ circuit.vni }}
+ vxlan vni {{ circuit.vni }}
+ evpn
+  route-distinguisher {{ circuit.route_distinguisher }}
+  vpn-target {{ circuit.route_target }} both
+#
+interface Vbdif{{ circuit.vni }}
+ ip binding vpn-instance {{ circuit.vrf_name }}
+ ip address {{ endpoint.gateway_ip }} 255.255.255.0
+ arp distribute-gateway enable
+ arp collect host enable
+#
+interface {{ endpoint.interface_name }}.{{ endpoint.vlan_id or circuit.vlan_id }} mode l2
+ encapsulation dot1q vid {{ endpoint.vlan_id or circuit.vlan_id }}
+ bridge-domain {{ circuit.vni }}
+#
+return

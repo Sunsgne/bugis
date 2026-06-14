@@ -1,0 +1,7 @@
+! ===== GENERIC EVPN L2VPN (E-LINE/E-LAN) intent =====
+! circuit={{ circuit.code }} tenant={{ circuit.tenant_id }} device={{ device.name }}
+! service-type=l2vpn_evpn overlay={{ overlay_tech }}
+! vni={{ circuit.vni }} vlan={{ endpoint.vlan_id or circuit.vlan_id }} bw={{ circuit.bandwidth_mbps }}Mbps mtu={{ circuit.mtu }}
+! rd={{ circuit.route_distinguisher }} rt={{ circuit.route_target }} esi={{ circuit.esi }}
+! attach interface={{ endpoint.interface_name }} on {{ device.name }} ({{ device.loopback_ip }})
+! NOTE: generic placeholder - vendor template not found for {{ vendor }}

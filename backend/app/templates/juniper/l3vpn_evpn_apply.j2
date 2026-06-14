@@ -1,0 +1,12 @@
+## Juniper Junos - EVPN Type-5 L3VPN over SR-MPLS  circuit {{ circuit.code }}
+## device {{ device.name }} vrf={{ circuit.vrf_name }}
+set routing-instances {{ circuit.vrf_name }} instance-type vrf
+set routing-instances {{ circuit.vrf_name }} route-distinguisher {{ circuit.route_distinguisher }}
+set routing-instances {{ circuit.vrf_name }} vrf-target target:{{ circuit.route_target }}
+set routing-instances {{ circuit.vrf_name }} protocols evpn ip-prefix-routes advertise direct-nexthop
+set routing-instances {{ circuit.vrf_name }} protocols evpn ip-prefix-routes encapsulation mpls
+set routing-instances {{ circuit.vrf_name }} interface irb.{{ circuit.vni }}
+set interfaces irb unit {{ circuit.vni }} family inet address {{ endpoint.gateway_ip }}/24
+set interfaces irb unit {{ circuit.vni }} mtu {{ circuit.mtu }}
+set routing-instances {{ circuit.vrf_name }} interface {{ endpoint.interface_name }}
+set interfaces {{ endpoint.interface_name }} unit 0 family inet

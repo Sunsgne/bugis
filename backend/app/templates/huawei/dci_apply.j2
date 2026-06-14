@@ -1,0 +1,18 @@
+#
+# Huawei VRP - DCI EVPN VXLAN gateway  circuit {{ circuit.code }}
+# role={{ device.role }} loopback={{ device.loopback_ip }} asn={{ device.bgp_asn }}
+#
+bridge-domain {{ circuit.vni }}
+ vxlan vni {{ circuit.vni }}
+ evpn
+  route-distinguisher {{ circuit.route_distinguisher }}
+  vpn-target {{ circuit.route_target }} both
+#
+bgp {{ device.bgp_asn }}
+ l2vpn-family evpn
+  # DCI: stitch fabrics, re-originate routes towards remote DC
+  peer DCI-GW enable
+  peer DCI-GW reflect-client
+  peer DCI-GW import reoriginate
+#
+return

@@ -1,0 +1,23 @@
+"""ORM models package. Import all models so SQLAlchemy metadata is complete."""
+from app.models.user import User  # noqa: F401
+from app.models.tenant import Tenant  # noqa: F401
+from app.models.site import Site  # noqa: F401
+from app.models.device import Device, DeviceInterface  # noqa: F401
+from app.models.circuit import Circuit, CircuitEndpoint  # noqa: F401
+from app.models.workorder import WorkOrder, WorkOrderEvent  # noqa: F401
+from app.models.config_job import ConfigJob  # noqa: F401
+from app.models.telemetry import TelemetrySample  # noqa: F401
+
+__all__ = [
+    "User",
+    "Tenant",
+    "Site",
+    "Device",
+    "DeviceInterface",
+    "Circuit",
+    "CircuitEndpoint",
+    "WorkOrder",
+    "WorkOrderEvent",
+    "ConfigJob",
+    "TelemetrySample",
+]

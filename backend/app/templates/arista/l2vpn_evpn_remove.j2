@@ -1,0 +1,6 @@
+! Arista EOS - remove EVPN-MPLS L2  circuit {{ circuit.code }}
+router bgp {{ device.bgp_asn }}
+   no vlan {{ endpoint.vlan_id or circuit.vlan_id }}
+!
+no interface {{ endpoint.interface_name }}
+no vlan {{ endpoint.vlan_id or circuit.vlan_id }}

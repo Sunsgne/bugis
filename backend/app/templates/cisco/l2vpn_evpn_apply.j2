@@ -1,0 +1,35 @@
+! Cisco IOS-XR - EVPN-MPLS L2 (E-LAN) over Segment Routing  circuit {{ circuit.code }}
+! device {{ device.name }} lo0={{ device.loopback_ip }} node-sid={{ device.sr_node_sid }}
+router isis CORE
+ address-family ipv4 unicast
+  segment-routing mpls
+ interface Loopback0
+  address-family ipv4 unicast
+   prefix-sid index {{ device.sr_node_sid or 0 }}
+!
+interface {{ endpoint.interface_name }}
+ description CUST_{{ circuit.tenant_id }}_{{ circuit.code }}
+ mtu {{ circuit.mtu }}
+ l2transport
+  encapsulation dot1q {{ endpoint.vlan_id or circuit.vlan_id }}
+  rewrite ingress tag pop 1 symmetric
+!
+l2vpn
+ bridge group BG_{{ circuit.code }}
+  bridge-domain BD_{{ circuit.code }}
+   interface {{ endpoint.interface_name }}
+   evi {{ circuit.vni }}
+!
+evpn
+ evi {{ circuit.vni }}
+  bgp
+   rd {{ circuit.route_distinguisher }}
+   route-target import {{ circuit.route_target }}
+   route-target export {{ circuit.route_target }}
+  advertise-mac
+{% if circuit.esi %}
+ interface {{ endpoint.interface_name }}
+  ethernet-segment
+   identifier type 0 {{ circuit.esi }}
+{% endif %}
+!

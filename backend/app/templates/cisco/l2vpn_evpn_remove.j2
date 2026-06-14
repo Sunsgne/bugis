@@ -1,0 +1,4 @@
+! Cisco IOS-XR - remove EVPN-MPLS L2  circuit {{ circuit.code }}
+no l2vpn bridge group BG_{{ circuit.code }}
+no evpn evi {{ circuit.vni }}
+no interface {{ endpoint.interface_name }} l2transport

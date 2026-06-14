@@ -1,0 +1,8 @@
+## Juniper Junos - DCI EVPN-MPLS gateway (Inter-AS / stitching)  circuit {{ circuit.code }}
+## role={{ device.role }} lo0={{ device.loopback_ip }} asn={{ device.bgp_asn }}
+set protocols bgp group DCI-EVPN type external
+set protocols bgp group DCI-EVPN family evpn signaling
+set protocols bgp group DCI-EVPN local-as {{ device.bgp_asn }}
+set routing-instances EVI_{{ circuit.code }} protocols evpn interconnect vrf-target target:{{ circuit.route_target }}
+set routing-instances EVI_{{ circuit.code }} protocols evpn interconnect route-distinguisher {{ circuit.route_distinguisher }}
+set routing-instances EVI_{{ circuit.code }} protocols evpn interconnect esi {{ circuit.esi or '00:11:22:33:44:55:66:77:88:99' }}

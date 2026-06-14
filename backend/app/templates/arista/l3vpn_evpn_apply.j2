@@ -1,0 +1,20 @@
+! Arista EOS - EVPN L3 (IRB / Type-5) over SR-MPLS  circuit {{ circuit.code }}
+! device {{ device.name }} vrf={{ circuit.vrf_name }}
+vrf instance {{ circuit.vrf_name }}
+!
+ip routing vrf {{ circuit.vrf_name }}
+!
+interface Vlan{{ endpoint.vlan_id or circuit.vlan_id }}
+   vrf {{ circuit.vrf_name }}
+   ip address {{ endpoint.gateway_ip }}/24
+   mtu {{ circuit.mtu }}
+!
+router bgp {{ device.bgp_asn }}
+   vrf {{ circuit.vrf_name }}
+      rd {{ circuit.route_distinguisher }}
+      route-target import evpn {{ circuit.route_target }}
+      route-target export evpn {{ circuit.route_target }}
+      redistribute connected
+!
+interface {{ endpoint.interface_name }}
+   switchport access vlan {{ endpoint.vlan_id or circuit.vlan_id }}

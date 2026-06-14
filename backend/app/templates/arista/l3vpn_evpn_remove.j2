@@ -1,0 +1,6 @@
+! Arista EOS - remove EVPN L3VPN  circuit {{ circuit.code }}
+router bgp {{ device.bgp_asn }}
+   no vrf {{ circuit.vrf_name }}
+!
+no interface Vlan{{ endpoint.vlan_id or circuit.vlan_id }}
+no vrf instance {{ circuit.vrf_name }}

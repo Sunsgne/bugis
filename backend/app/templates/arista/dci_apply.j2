@@ -1,0 +1,12 @@
+! Arista EOS - DCI EVPN gateway (gateway / domain stitching)  circuit {{ circuit.code }}
+! role={{ device.role }} lo0={{ device.loopback_ip }} asn={{ device.bgp_asn }}
+router bgp {{ device.bgp_asn }}
+   neighbor DCI-EVPN peer group
+   neighbor DCI-EVPN remote-as external
+   address-family evpn
+      neighbor DCI-EVPN activate
+      neighbor DCI-EVPN domain remote
+      neighbor default next-hop-self received-evpn-routes route-type ip-prefix inter-domain
+!
+router general
+   segment-routing mpls

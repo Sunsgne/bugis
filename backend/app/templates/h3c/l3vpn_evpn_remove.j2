@@ -1,0 +1,11 @@
+#
+# H3C Comware7 - remove EVPN VXLAN L3VPN  circuit {{ circuit.code }}
+#
+undo interface Vsi-interface{{ circuit.vni }}
+interface {{ endpoint.interface_name }}
+ undo service-instance {{ circuit.vlan_id or endpoint.vlan_id }}
+#
+undo vsi vsi_{{ circuit.code }}
+undo ip vpn-instance {{ circuit.vrf_name }}
+#
+return

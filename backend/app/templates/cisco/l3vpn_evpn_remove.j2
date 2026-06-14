@@ -1,0 +1,6 @@
+! Cisco IOS-XR - remove EVPN IRB L3VPN  circuit {{ circuit.code }}
+no l2vpn bridge group BG_{{ circuit.code }}
+no evpn evi {{ circuit.vni }}
+no interface BVI{{ circuit.vni }}
+no router bgp {{ device.bgp_asn }} vrf {{ circuit.vrf_name }}
+no vrf {{ circuit.vrf_name }}

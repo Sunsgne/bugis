@@ -1,0 +1,3 @@
+## Juniper Junos - remove EVPN Type-5 L3VPN  circuit {{ circuit.code }}
+delete routing-instances {{ circuit.vrf_name }}
+delete interfaces irb unit {{ circuit.vni }}

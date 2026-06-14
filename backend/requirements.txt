@@ -1,0 +1,28 @@
+# Web framework
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+python-multipart==0.0.20
+
+# Data / ORM
+SQLAlchemy==2.0.36
+pydantic==2.10.4
+pydantic-settings==2.7.1
+
+# Templating (vendor config rendering)
+Jinja2==3.1.5
+
+# Auth & security
+passlib[bcrypt]==1.7.4
+python-jose[cryptography]==3.3.0
+
+# Telemetry
+prometheus-client==0.21.1
+
+# Optional southbound device drivers (real device interaction).
+# Kept optional so the platform runs in dry-run mode without them.
+# netmiko==4.5.0
+# ncclient==0.6.16
+
+# Testing
+pytest==8.3.4
+httpx==0.28.1

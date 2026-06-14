@@ -1,0 +1,11 @@
+#
+# Huawei VRP - remove EVPN VXLAN L2VPN  circuit {{ circuit.code }}
+#
+undo interface {{ endpoint.interface_name }}.{{ endpoint.vlan_id or circuit.vlan_id }}
+#
+interface Nve1
+ undo vni {{ circuit.vni }} head-end peer-list protocol bgp
+#
+undo bridge-domain {{ circuit.vni }}
+#
+return

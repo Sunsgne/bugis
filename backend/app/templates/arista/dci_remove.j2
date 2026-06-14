@@ -1,0 +1,3 @@
+! Arista EOS - remove DCI EVPN gateway  circuit {{ circuit.code }}
+router bgp {{ device.bgp_asn }}
+   no neighbor DCI-EVPN peer group
