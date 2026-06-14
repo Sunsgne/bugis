@@ -26,6 +26,7 @@ import {
   EditOutlined,
   DownloadOutlined,
   HistoryOutlined,
+  RadarChartOutlined,
 } from "@ant-design/icons";
 import { api } from "../api/client";
 import type { Circuit, Device, Offering, Tenant } from "../api/types";
@@ -171,6 +172,59 @@ export default function Circuits() {
     }
   }
 
+  async function probe(c: Circuit) {
+    const hide = message.loading(`正在拨测 ${c.code} ...`, 0);
+    try {
+      const { data } = await api.post(`/circuits/${c.id}/probe`);
+      hide();
+      modal.info({
+        title: `拨测结果 · ${data.circuit}`,
+        width: 640,
+        content: (
+          <div>
+            <div style={{ marginBottom: 8 }}>
+              <Tag color={data.reachable ? "green" : "red"}>
+                {data.reachable ? "可达" : "不可达"}
+              </Tag>
+              {data.rtt_ms != null && <Tag>RTT {data.rtt_ms} ms</Tag>}
+              <Tag>抖动 {data.jitter_ms} ms</Tag>
+              <Tag color={data.packet_loss_pct > 1 ? "red" : undefined}>
+                丢包 {data.packet_loss_pct}%
+              </Tag>
+            </div>
+            <Table
+              size="small"
+              rowKey="hop"
+              pagination={false}
+              dataSource={data.hops}
+              columns={[
+                { title: "跳", dataIndex: "hop", width: 50 },
+                { title: "设备", dataIndex: "device" },
+                { title: "厂商", dataIndex: "vendor", render: (v) => <Tag>{v}</Tag> },
+                { title: "IP", dataIndex: "ip" },
+                {
+                  title: "RTT(ms)",
+                  dataIndex: "rtt_ms",
+                  render: (v) => (v == null ? "*" : v),
+                },
+                {
+                  title: "状态",
+                  dataIndex: "status",
+                  render: (s) => (
+                    <Tag color={s === "up" ? "green" : "red"}>{s}</Tag>
+                  ),
+                },
+              ]}
+            />
+          </div>
+        ),
+      });
+    } catch (e: any) {
+      hide();
+      message.error(e?.response?.data?.detail || "拨测失败");
+    }
+  }
+
   async function openHistory(c: Circuit) {
     setHistoryCircuit(c);
     setDiffText({});
@@ -305,6 +359,14 @@ export default function Circuits() {
                 </Tooltip>
                 <Tooltip title="预览各厂商配置">
                   <Button size="small" icon={<EyeOutlined />} onClick={() => preview(r)} />
+                </Tooltip>
+                <Tooltip title="端到端拨测">
+                  <Button
+                    size="small"
+                    icon={<RadarChartOutlined />}
+                    onClick={() => probe(r)}
+                    disabled={r.status !== "active"}
+                  />
                 </Tooltip>
                 <Tooltip title="配置历史与版本对比">
                   <Button size="small" icon={<HistoryOutlined />} onClick={() => openHistory(r)} />
