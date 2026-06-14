@@ -57,6 +57,9 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+from app.middleware import AuditMiddleware  # noqa: E402
+
+app.add_middleware(AuditMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,

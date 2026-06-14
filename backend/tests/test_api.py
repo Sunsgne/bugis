@@ -156,6 +156,61 @@ def test_capacity_and_topology(client, auth_headers):
     assert len(topo["nodes"]) >= 2
 
 
+def test_webhook_provision_and_ansible(client, auth_headers):
+    _, tenant, dev_a, dev_z = _bootstrap_topology(client, auth_headers)
+    # Webhook intake (StackStorm-style) with shared token.
+    r = client.post(
+        "/api/v1/integrations/webhook/provision",
+        headers={"X-Webhook-Token": "bugis-webhook-token"},
+        json={
+            "tenant_code": tenant["code"],
+            "name": "WH circuit",
+            "service_type": "l2vpn_evpn",
+            "bandwidth_mbps": 200,
+            "endpoints": [
+                {"label": "A", "device_name": dev_a["name"], "interface_name": "GE1/0/7"},
+                {"label": "Z", "device_name": dev_z["name"], "interface_name": "GE1/0/7"},
+            ],
+        },
+    )
+    assert r.status_code == 201, r.text
+    wo = r.json()
+    assert wo["status"] == "completed"
+
+    # Ansible export for the work order.
+    exp = client.get(f"/api/v1/work-orders/{wo['id']}/ansible", headers=auth_headers)
+    assert exp.status_code == 200
+    data = exp.json()
+    assert "h3c.comware" in data["inventory"]
+    assert "tasks:" in data["playbook"]
+
+    # Wrong webhook token (with valid body) is rejected.
+    bad = client.post(
+        "/api/v1/integrations/webhook/provision",
+        headers={"X-Webhook-Token": "nope"},
+        json={
+            "tenant_code": tenant["code"], "name": "x",
+            "endpoints": [
+                {"label": "A", "device_name": dev_a["name"], "interface_name": "GE1/0/8"}
+            ],
+        },
+    )
+    assert bad.status_code == 401
+
+
+def test_audit_log_records_mutations(client, auth_headers):
+    # A create call should be captured in the audit log.
+    client.post(
+        "/api/v1/tenants",
+        headers=auth_headers,
+        json={"name": "Audit Tenant", "code": "AUDIT1", "type": "internal"},
+    )
+    logs = client.get("/api/v1/audit?limit=50", headers=auth_headers).json()
+    assert any(
+        l["path"] == "/api/v1/tenants" and l["method"] == "POST" for l in logs
+    )
+
+
 def test_telemetry_and_health(client, auth_headers):
     _, tenant, dev_a, dev_z = _bootstrap_topology(client, auth_headers)
     circuit = client.post(

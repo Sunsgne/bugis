@@ -56,6 +56,10 @@ class Settings(BaseSettings):
     first_superuser: str = "admin"
     first_superuser_password: str = "admin123"
 
+    # --- Northbound integration ---
+    # Shared token for StackStorm-style webhook intake (X-Webhook-Token header).
+    webhook_token: str = "bugis-webhook-token"
+
 
 @lru_cache
 def get_settings() -> Settings:

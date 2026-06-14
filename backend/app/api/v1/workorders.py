@@ -17,7 +17,7 @@ from app.schemas.workorder import (
     WorkOrderCreate,
     WorkOrderOut,
 )
-from app.services import orchestrator
+from app.services import ansible_export, orchestrator
 
 router = APIRouter()
 
@@ -174,3 +174,19 @@ def preview_work_order(
             }
         )
     return {"work_order": wo.code, "operation": operation, "previews": previews}
+
+
+@router.get("/{wo_id}/ansible")
+def export_ansible(
+    wo_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_user)
+):
+    """Export this work order's config as Ansible inventory + playbook."""
+    wo = db.get(WorkOrder, wo_id)
+    if not wo:
+        raise HTTPException(status_code=404, detail="work order not found")
+    if not wo.config_jobs:
+        raise HTTPException(
+            status_code=400,
+            detail="work order has no rendered config jobs (execute it first)",
+        )
+    return ansible_export.export_work_order(db, wo)

@@ -3,11 +3,13 @@ from fastapi import APIRouter
 
 from app.api.v1 import (
     alarms,
+    audit,
     auth,
     capacity,
     circuits,
     devices,
     drivers,
+    integrations,
     sites,
     telemetry,
     tenants,
@@ -26,4 +28,8 @@ api_router.include_router(
 api_router.include_router(telemetry.router, prefix="/telemetry", tags=["telemetry"])
 api_router.include_router(alarms.router, prefix="/alarms", tags=["alarms"])
 api_router.include_router(capacity.router, prefix="/capacity", tags=["capacity"])
+api_router.include_router(
+    integrations.router, prefix="/integrations", tags=["integrations"]
+)
+api_router.include_router(audit.router, prefix="/audit", tags=["audit"])
 api_router.include_router(drivers.router, prefix="/drivers", tags=["drivers"])

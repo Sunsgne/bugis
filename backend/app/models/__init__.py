@@ -9,6 +9,7 @@ from app.models.config_job import ConfigJob  # noqa: F401
 from app.models.telemetry import TelemetrySample  # noqa: F401
 from app.models.alarm import Alarm  # noqa: F401
 from app.models.link import Link  # noqa: F401
+from app.models.audit import AuditLog  # noqa: F401
 
 __all__ = [
     "User",
@@ -24,4 +25,5 @@ __all__ = [
     "TelemetrySample",
     "Alarm",
     "Link",
+    "AuditLog",
 ]
