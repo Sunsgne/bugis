@@ -23,7 +23,7 @@ from app.schemas.circuit import (
     CircuitOut,
     CircuitUpdate,
 )
-from app.services import allocation, validation
+from app.services import allocation, probe, validation
 
 router = APIRouter()
 
@@ -129,6 +129,21 @@ def _circuit_jobs(db: Session, circuit_id: int) -> list[tuple[ConfigJob, str]]:
         .order_by(ConfigJob.id)
     ).all()
     return [(row[0], row[1]) for row in rows]
+
+
+@router.post("/{circuit_id}/probe")
+def probe_circuit(
+    circuit_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
+    """Run an on-demand end-to-end path probe (records a telemetry sample)."""
+    circuit = db.get(Circuit, circuit_id)
+    if not circuit:
+        raise HTTPException(status_code=404, detail="circuit not found")
+    result = probe.probe_circuit(db, circuit)
+    db.commit()
+    return result
 
 
 @router.get("/{circuit_id}/config-history")

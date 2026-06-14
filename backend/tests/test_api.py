@@ -255,6 +255,30 @@ def test_offering_prefill(client, auth_headers):
     assert circuit["sla_target"] == "99.99"
 
 
+def test_circuit_probe(client, auth_headers):
+    _, tenant, dev_a, dev_z = _bootstrap_topology(client, auth_headers)
+    circuit = client.post(
+        "/api/v1/circuits", headers=auth_headers,
+        json={"name": "Probe", "tenant_id": tenant["id"],
+              "service_type": "l2vpn_evpn", "bandwidth_mbps": 100,
+              "endpoints": [
+                  {"label": "A", "device_id": dev_a["id"], "interface_name": "GE1/0/1"},
+                  {"label": "Z", "device_id": dev_z["id"], "interface_name": "GE1/0/1"},
+              ]},
+    ).json()
+    client.post(f"/api/v1/work-orders/provision/{circuit['id']}", headers=auth_headers)
+    r = client.post(f"/api/v1/circuits/{circuit['id']}/probe", headers=auth_headers)
+    assert r.status_code == 200
+    body = r.json()
+    assert "reachable" in body
+    assert body["hop_count"] == len(body["hops"]) >= 2
+    # Probe recorded a telemetry sample.
+    samples = client.get(
+        f"/api/v1/telemetry/circuits/{circuit['id']}/samples", headers=auth_headers
+    ).json()
+    assert len(samples) >= 1
+
+
 def test_config_history_and_diff(client, auth_headers):
     _, tenant, dev_a, _ = _bootstrap_topology(client, auth_headers)
     circuit = client.post(
