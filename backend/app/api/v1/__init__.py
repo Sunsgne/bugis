@@ -10,6 +10,7 @@ from app.api.v1 import (
     devices,
     drivers,
     integrations,
+    offerings,
     sites,
     telemetry,
     tenants,
@@ -21,6 +22,9 @@ api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
 api_router.include_router(sites.router, prefix="/sites", tags=["sites"])
 api_router.include_router(tenants.router, prefix="/tenants", tags=["tenants"])
 api_router.include_router(devices.router, prefix="/devices", tags=["devices"])
+api_router.include_router(
+    offerings.router, prefix="/offerings", tags=["offerings"]
+)
 api_router.include_router(circuits.router, prefix="/circuits", tags=["circuits"])
 api_router.include_router(
     workorders.router, prefix="/work-orders", tags=["work-orders"]

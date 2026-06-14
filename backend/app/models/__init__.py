@@ -10,6 +10,7 @@ from app.models.telemetry import TelemetrySample  # noqa: F401
 from app.models.alarm import Alarm  # noqa: F401
 from app.models.link import Link  # noqa: F401
 from app.models.audit import AuditLog  # noqa: F401
+from app.models.offering import ServiceOffering  # noqa: F401
 
 __all__ = [
     "User",
@@ -26,4 +27,5 @@ __all__ = [
     "Alarm",
     "Link",
     "AuditLog",
+    "ServiceOffering",
 ]

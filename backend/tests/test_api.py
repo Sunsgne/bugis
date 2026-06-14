@@ -229,6 +229,32 @@ def test_validation_blocks_collision(client, auth_headers):
     assert wo["status"] == "failed"
 
 
+def test_offering_prefill(client, auth_headers):
+    _, tenant, dev_a, _ = _bootstrap_topology(client, auth_headers)
+    n = next(_seq)
+    offering = client.post(
+        "/api/v1/offerings",
+        headers=auth_headers,
+        json={"name": "Gold", "code": f"GOLD-{n}", "service_type": "l3vpn_evpn",
+              "bandwidth_mbps": 5000, "sla_target": "99.99", "cos": "ef", "tier": "gold"},
+    ).json()
+    circuit = client.post(
+        "/api/v1/circuits",
+        headers=auth_headers,
+        json={
+            "name": "From offering", "tenant_id": tenant["id"],
+            "offering_id": offering["id"],
+            "endpoints": [
+                {"label": "A", "device_id": dev_a["id"], "interface_name": "GE1/0/6",
+                 "gateway_ip": "192.168.5.1"},
+            ],
+        },
+    ).json()
+    assert circuit["service_type"] == "l3vpn_evpn"
+    assert circuit["bandwidth_mbps"] == 5000
+    assert circuit["sla_target"] == "99.99"
+
+
 def test_device_check(client, auth_headers):
     _, _, dev_a, _ = _bootstrap_topology(client, auth_headers)
     r = client.post(f"/api/v1/devices/{dev_a['id']}/check", headers=auth_headers)

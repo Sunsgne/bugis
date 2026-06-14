@@ -24,6 +24,7 @@ from app.models.enums import (  # noqa: E402
     Vendor,
 )
 from app.models.link import Link  # noqa: E402
+from app.models.offering import ServiceOffering  # noqa: E402
 from app.models.site import Site  # noqa: E402
 from app.models.tenant import Tenant  # noqa: E402
 from app.services import allocation  # noqa: E402
@@ -96,6 +97,27 @@ def run() -> None:
             for i in range(1, 5):
                 db.add(DeviceInterface(
                     device_id=d.id, name=f"GE1/0/{i}", speed_mbps=10000))
+        db.flush()
+
+        # --- Service offerings (套餐) ---
+        db.add_all([
+            ServiceOffering(name="金牌混合云接入", code="GOLD-HC",
+                            service_type=ServiceType.L3VPN_EVPN, bandwidth_mbps=2000,
+                            sla_target="99.99", cos="ef", tier="gold",
+                            description="2Gbps L3VPN 混合云接入，最高优先级"),
+            ServiceOffering(name="银牌企业专线", code="SILVER-L2",
+                            service_type=ServiceType.L2VPN_EVPN, bandwidth_mbps=1000,
+                            sla_target="99.95", cos="af31", tier="silver",
+                            description="1Gbps L2VPN 企业互联"),
+            ServiceOffering(name="铜牌基础专线", code="BRONZE-L2",
+                            service_type=ServiceType.L2VPN_EVPN, bandwidth_mbps=200,
+                            sla_target="99.9", cos="af11", tier="bronze",
+                            description="200Mbps 基础二层专线"),
+            ServiceOffering(name="DCI 大带宽互联", code="DCI-XL",
+                            service_type=ServiceType.DCI, bandwidth_mbps=10000,
+                            sla_target="99.99", cos="ef", tier="gold",
+                            description="10Gbps 数据中心互联"),
+        ])
         db.flush()
 
         # --- Tenants ---

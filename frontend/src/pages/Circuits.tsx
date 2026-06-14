@@ -23,7 +23,7 @@ import {
   EditOutlined,
 } from "@ant-design/icons";
 import { api } from "../api/client";
-import type { Circuit, Device, Tenant } from "../api/types";
+import type { Circuit, Device, Offering, Tenant } from "../api/types";
 
 const SERVICE_LABEL: Record<string, string> = {
   l2vpn_evpn: "EVPN L2VPN",
@@ -47,6 +47,7 @@ export default function Circuits() {
   const [rows, setRows] = useState<Circuit[]>([]);
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [devices, setDevices] = useState<Device[]>([]);
+  const [offerings, setOfferings] = useState<Offering[]>([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [form] = Form.useForm();
@@ -56,14 +57,16 @@ export default function Circuits() {
   async function load() {
     setLoading(true);
     try {
-      const [c, t, d] = await Promise.all([
+      const [c, t, d, o] = await Promise.all([
         api.get<Circuit[]>("/circuits"),
         api.get<Tenant[]>("/tenants"),
         api.get<Device[]>("/devices"),
+        api.get<Offering[]>("/offerings?active=true"),
       ]);
       setRows(c.data);
       setTenants(t.data);
       setDevices(d.data);
+      setOfferings(o.data);
     } finally {
       setLoading(false);
     }
@@ -275,6 +278,7 @@ export default function Circuits() {
         form={form}
         tenants={tenants}
         devices={devices}
+        offerings={offerings}
         onOk={onCreate}
         onCancel={() => setOpen(false)}
       />
@@ -302,7 +306,16 @@ export default function Circuits() {
   );
 }
 
-function CreateModal({ open, form, tenants, devices, onOk, onCancel }: any) {
+function CreateModal({ open, form, tenants, devices, offerings, onOk, onCancel }: any) {
+  function applyOffering(id: number) {
+    const o = offerings.find((x: Offering) => x.id === id);
+    if (!o) return;
+    form.setFieldsValue({
+      service_type: o.service_type,
+      bandwidth_mbps: o.bandwidth_mbps,
+      sla_target: o.sla_target,
+    });
+  }
   return (
     <Modal title="新建专线" open={open} onOk={onOk} onCancel={onCancel} width={680}>
       <Form
@@ -310,6 +323,17 @@ function CreateModal({ open, form, tenants, devices, onOk, onCancel }: any) {
         layout="vertical"
         initialValues={{ service_type: "l2vpn_evpn", bandwidth_mbps: 100, mtu: 9000, endpoints: [{ label: "A" }, { label: "Z" }] }}
       >
+        <Form.Item name="offering_id" label="选择套餐 (可选, 自动预填参数)">
+          <Select
+            allowClear
+            placeholder="不使用套餐则手动填写下方参数"
+            onChange={(v) => v && applyOffering(v)}
+            options={offerings.map((o: Offering) => ({
+              value: o.id,
+              label: `${o.tier ? `[${o.tier}] ` : ""}${o.name} · ${o.bandwidth_mbps}Mbps`,
+            }))}
+          />
+        </Form.Item>
         <Space size="middle" style={{ display: "flex" }}>
           <Form.Item name="name" label="名称" rules={[{ required: true }]} style={{ flex: 1 }}>
             <Input placeholder="例如 银行北京-上海二层专线" />

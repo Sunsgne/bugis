@@ -9,6 +9,7 @@ from app.api.deps import get_current_user, require_operator
 from app.core.database import get_db
 from app.models.circuit import Circuit, CircuitEndpoint
 from app.models.device import Device
+from app.models.offering import ServiceOffering
 from app.models.tenant import Tenant
 from app.models.user import User
 from app.schemas.circuit import (
@@ -54,7 +55,21 @@ def create_circuit(
     if not db.get(Tenant, payload.tenant_id):
         raise HTTPException(status_code=404, detail="tenant not found")
 
-    data = payload.model_dump(exclude={"endpoints", "code"})
+    data = payload.model_dump(exclude={"endpoints", "code", "offering_id"})
+
+    # Apply offering defaults (only where the request left fields at default).
+    if payload.offering_id:
+        offering = db.get(ServiceOffering, payload.offering_id)
+        if not offering:
+            raise HTTPException(status_code=404, detail="offering not found")
+        data["service_type"] = offering.service_type
+        data["bandwidth_mbps"] = offering.bandwidth_mbps
+        data["mtu"] = offering.mtu
+        if offering.sla_target:
+            data["sla_target"] = offering.sla_target
+        if offering.cos:
+            data["cos"] = offering.cos
+
     circuit = Circuit(**data)
     circuit.code = payload.code or allocation.next_circuit_code(db)
     db.add(circuit)

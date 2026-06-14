@@ -204,6 +204,20 @@ export interface LinkUsage {
   utilization_pct: number;
 }
 
+export interface Offering {
+  id: number;
+  name: string;
+  code: string;
+  service_type: string;
+  bandwidth_mbps: number;
+  sla_target?: string;
+  cos?: string;
+  mtu: number;
+  tier?: string;
+  active: boolean;
+  description?: string;
+}
+
 export interface AuditEntry {
   id: number;
   actor: string;
