@@ -1,0 +1,23 @@
+# Self-contained demo stack: SQLite backend + nginx frontend on port 3300.
+services:
+  backend:
+    build: ./backend
+    environment:
+      BUGIS_SECRET_KEY: ${BUGIS_SECRET_KEY:-demo-change-me}
+      BUGIS_DRY_RUN: "true"
+      BUGIS_DATABASE_URL: sqlite:////data/bugis.db
+      BUGIS_SCHEDULER_INTERVAL_SECONDS: "20"
+    volumes:
+      - bugis_data:/data
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    depends_on:
+      - backend
+    ports:
+      - "3300:80"
+    restart: unless-stopped
+
+volumes:
+  bugis_data:
