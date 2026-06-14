@@ -53,7 +53,11 @@ async def lifespan(app: FastAPI):
         ensure_superuser(db)
     finally:
         db.close()
+    from app import scheduler
+
+    scheduler.start()
     yield
+    await scheduler.stop()
 
 
 app = FastAPI(

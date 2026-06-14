@@ -389,6 +389,16 @@ def test_sse_requires_valid_token(client):
     assert r.status_code == 401
 
 
+def test_system_info_and_scheduler_tick(client, auth_headers):
+    info = client.get("/api/v1/system/info", headers=auth_headers)
+    assert info.status_code == 200
+    assert "scheduler" in info.json()
+    # Manual scheduler tick runs telemetry + alarm evaluation.
+    tick = client.post("/api/v1/system/scheduler/tick", headers=auth_headers)
+    assert tick.status_code == 200
+    assert "generated" in tick.json()
+
+
 def test_telemetry_and_health(client, auth_headers):
     _, tenant, dev_a, dev_z = _bootstrap_topology(client, auth_headers)
     circuit = client.post(

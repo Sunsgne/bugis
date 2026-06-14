@@ -44,6 +44,10 @@ class Settings(BaseSettings):
     # --- Telemetry ---
     enable_metrics: bool = True
 
+    # --- Background scheduler (auto telemetry + alarm evaluation) ---
+    scheduler_enabled: bool = True
+    scheduler_interval_seconds: int = 30
+
     # --- Alarm thresholds (SLA / capacity) ---
     threshold_packet_loss_pct: float = 0.5
     threshold_latency_ms: float = 50.0

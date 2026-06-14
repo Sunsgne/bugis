@@ -15,6 +15,7 @@ from app.api.v1 import (
     offerings,
     sites,
     stream,
+    system,
     telemetry,
     tenants,
     workorders,
@@ -44,4 +45,5 @@ api_router.include_router(
 api_router.include_router(audit.router, prefix="/audit", tags=["audit"])
 api_router.include_router(bulk.router, prefix="/bulk", tags=["bulk"])
 api_router.include_router(stream.router, prefix="/stream", tags=["stream"])
+api_router.include_router(system.router, prefix="/system", tags=["system"])
 api_router.include_router(drivers.router, prefix="/drivers", tags=["drivers"])
