@@ -7,8 +7,9 @@ from sqlalchemy import Enum, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
-from app.models.enums import CircuitStatus, ServiceType
+from app.models.enums import AccessMode, CircuitStatus, ServiceType
 from app.models.mixins import TimestampMixin
+from sqlalchemy import Enum as SAEnum
 
 if TYPE_CHECKING:
     from app.models.device import Device
@@ -76,7 +77,12 @@ class CircuitEndpoint(Base, TimestampMixin):
     # Logical label such as "A" / "Z" / "spoke-1"
     label: Mapped[str] = mapped_column(String(32), default="A")
     interface_name: Mapped[str] = mapped_column(String(64))
-    vlan_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Customer access (attachment circuit) encapsulation.
+    access_mode: Mapped[AccessMode] = mapped_column(
+        SAEnum(AccessMode), default=AccessMode.DOT1Q
+    )
+    vlan_id: Mapped[int | None] = mapped_column(Integer, nullable=True)  # S-VID / access VLAN
+    inner_vlan_id: Mapped[int | None] = mapped_column(Integer, nullable=True)  # C-VID (QinQ)
     # Customer-facing IP (for L3VPN IRB gateway)
     ip_address: Mapped[str | None] = mapped_column(String(64), nullable=True)
     gateway_ip: Mapped[str | None] = mapped_column(String(64), nullable=True)

@@ -1,5 +1,10 @@
+{% set mode = endpoint.access_mode.value if endpoint.access_mode else 'dot1q' %}
+{% set svid = endpoint.vlan_id or circuit.vlan_id %}
+{% set cvid = endpoint.inner_vlan_id %}
 ! Cisco IOS-XR - EVPN IRB L3 (Type-5) over SR-MPLS  circuit {{ circuit.code }}
 ! device {{ device.name }} vrf={{ circuit.vrf_name }}
+! access-mode={{ mode }} s-vid={{ svid }}{% if cvid %} c-vid={{ cvid }}{% endif %}
+
 vrf {{ circuit.vrf_name }}
  address-family ipv4 unicast
   import route-target {{ circuit.route_target }}
@@ -9,6 +14,18 @@ interface BVI{{ circuit.vni }}
  vrf {{ circuit.vrf_name }}
  ipv4 address {{ endpoint.gateway_ip }} 255.255.255.0
  mtu {{ circuit.mtu }}
+!
+interface {{ endpoint.interface_name }}
+ l2transport
+{% if mode == 'access' %}
+  encapsulation untagged
+{% elif mode == 'qinq' %}
+  encapsulation dot1q {{ svid }} second-dot1q {{ cvid }}
+  rewrite ingress tag pop 2 symmetric
+{% else %}
+  encapsulation dot1q {{ svid }}
+  rewrite ingress tag pop 1 symmetric
+{% endif %}
 !
 l2vpn
  bridge group BG_{{ circuit.code }}

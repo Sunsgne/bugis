@@ -58,6 +58,14 @@ class TenantStatus(str, enum.Enum):
     TERMINATED = "terminated"
 
 
+class AccessMode(str, enum.Enum):
+    """Customer access (attachment circuit) encapsulation mode."""
+
+    ACCESS = "access"  # untagged / port-based
+    DOT1Q = "dot1q"  # single VLAN tag (S-VID)
+    QINQ = "qinq"  # double tag (S-VID + C-VID)
+
+
 class ServiceType(str, enum.Enum):
     """Type of L2/L3 service the circuit delivers."""
 

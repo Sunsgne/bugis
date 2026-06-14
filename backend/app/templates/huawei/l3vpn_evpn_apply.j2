@@ -1,5 +1,11 @@
+{% set mode = endpoint.access_mode.value if endpoint.access_mode else 'dot1q' %}
+{% set svid = endpoint.vlan_id or circuit.vlan_id %}
+{% set cvid = endpoint.inner_vlan_id %}
+{% set subif = svid or 1 %}
 #
 # Huawei VRP - EVPN VXLAN L3VPN (distributed gateway)  circuit {{ circuit.code }}
+# access-mode={{ mode }} s-vid={{ svid }}{% if cvid %} ce-vid={{ cvid }}{% endif %}
+
 #
 ip vpn-instance {{ circuit.vrf_name }}
  ipv4-family
@@ -20,8 +26,15 @@ interface Vbdif{{ circuit.vni }}
  arp distribute-gateway enable
  arp collect host enable
 #
-interface {{ endpoint.interface_name }}.{{ endpoint.vlan_id or circuit.vlan_id }} mode l2
- encapsulation dot1q vid {{ endpoint.vlan_id or circuit.vlan_id }}
+interface {{ endpoint.interface_name }}.{{ subif }} mode l2
+{% if mode == 'access' %}
+ encapsulation untag
+{% elif mode == 'qinq' %}
+ encapsulation qinq vid {{ svid }} ce-vid {{ cvid }}
+{% else %}
+ encapsulation dot1q vid {{ svid }}
+ rewrite pop single
+{% endif %}
  bridge-domain {{ circuit.vni }}
 #
 return

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from app.models.enums import CircuitStatus, ServiceType
+from app.models.enums import AccessMode, CircuitStatus, ServiceType
 from app.schemas.common import TimestampedSchema
 
 
@@ -11,7 +11,9 @@ class CircuitEndpointBase(BaseModel):
     device_id: int
     label: str = "A"
     interface_name: str
+    access_mode: AccessMode = AccessMode.DOT1Q
     vlan_id: int | None = None
+    inner_vlan_id: int | None = None
     ip_address: str | None = None
     gateway_ip: str | None = None
 

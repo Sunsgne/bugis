@@ -1,20 +1,34 @@
+{% set mode = endpoint.access_mode.value if endpoint.access_mode else 'dot1q' %}
+{% set svid = endpoint.vlan_id or circuit.vlan_id %}
+{% set cvid = endpoint.inner_vlan_id %}
 ## Juniper Junos - EVPN-MPLS L2 (E-LAN) over Segment Routing  circuit {{ circuit.code }}
 ## device {{ device.name }} lo0={{ device.loopback_ip }} node-sid={{ device.sr_node_sid }}
+## access-mode={{ mode }} s-vid={{ svid }}{% if cvid %} c-vid={{ cvid }}{% endif %}
+
 set protocols isis source-packet-routing node-segment ipv4-index {{ device.sr_node_sid or 0 }}
 set protocols mpls interface all
 set routing-instances EVI_{{ circuit.code }} instance-type evpn
 set routing-instances EVI_{{ circuit.code }} protocols evpn interface {{ endpoint.interface_name }}
-set routing-instances EVI_{{ circuit.code }} vlan-id {{ endpoint.vlan_id or circuit.vlan_id }}
-set routing-instances EVI_{{ circuit.code }} interface {{ endpoint.interface_name }}
 set routing-instances EVI_{{ circuit.code }} route-distinguisher {{ circuit.route_distinguisher }}
 set routing-instances EVI_{{ circuit.code }} vrf-target target:{{ circuit.route_target }}
+set routing-instances EVI_{{ circuit.code }} interface {{ endpoint.interface_name }}
+set interfaces {{ endpoint.interface_name }} encapsulation flexible-ethernet-services
+set interfaces {{ endpoint.interface_name }} mtu {{ circuit.mtu }}
+{% if mode == 'access' %}
+set interfaces {{ endpoint.interface_name }} unit 0 family bridge interface-mode access
+set routing-instances EVI_{{ circuit.code }} vlan-id none
+{% elif mode == 'qinq' %}
+set interfaces {{ endpoint.interface_name }} flexible-vlan-tagging
+set interfaces {{ endpoint.interface_name }} unit 0 vlan-tags outer {{ svid }} inner {{ cvid }}
+set interfaces {{ endpoint.interface_name }} unit 0 family bridge interface-mode trunk
+{% else %}
+set interfaces {{ endpoint.interface_name }} unit 0 vlan-id {{ svid }}
+set interfaces {{ endpoint.interface_name }} unit 0 family bridge interface-mode trunk
+{% endif %}
 {% if circuit.esi %}
 set interfaces {{ endpoint.interface_name }} esi {{ circuit.esi }}
 set interfaces {{ endpoint.interface_name }} esi all-active
 {% endif %}
-set interfaces {{ endpoint.interface_name }} encapsulation flexible-ethernet-services
-set interfaces {{ endpoint.interface_name }} unit 0 family bridge interface-mode trunk
-set interfaces {{ endpoint.interface_name }} mtu {{ circuit.mtu }}
 {% if circuit.bandwidth_mbps %}
 set class-of-service interfaces {{ endpoint.interface_name }} shaping-rate {{ circuit.bandwidth_mbps }}m
 {% endif %}

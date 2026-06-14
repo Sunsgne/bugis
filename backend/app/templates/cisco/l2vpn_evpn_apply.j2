@@ -1,5 +1,10 @@
+{% set mode = endpoint.access_mode.value if endpoint.access_mode else 'dot1q' %}
+{% set svid = endpoint.vlan_id or circuit.vlan_id %}
+{% set cvid = endpoint.inner_vlan_id %}
 ! Cisco IOS-XR - EVPN-MPLS L2 (E-LAN) over Segment Routing  circuit {{ circuit.code }}
 ! device {{ device.name }} lo0={{ device.loopback_ip }} node-sid={{ device.sr_node_sid }}
+! access-mode={{ mode }} s-vid={{ svid }}{% if cvid %} c-vid={{ cvid }}{% endif %}
+
 router isis CORE
  address-family ipv4 unicast
   segment-routing mpls
@@ -11,8 +16,15 @@ interface {{ endpoint.interface_name }}
  description CUST_{{ circuit.tenant_id }}_{{ circuit.code }}
  mtu {{ circuit.mtu }}
  l2transport
-  encapsulation dot1q {{ endpoint.vlan_id or circuit.vlan_id }}
+{% if mode == 'access' %}
+  encapsulation untagged
+{% elif mode == 'qinq' %}
+  encapsulation dot1q {{ svid }} second-dot1q {{ cvid }}
+  rewrite ingress tag pop 2 symmetric
+{% else %}
+  encapsulation dot1q {{ svid }}
   rewrite ingress tag pop 1 symmetric
+{% endif %}
 !
 l2vpn
  bridge group BG_{{ circuit.code }}

@@ -1,5 +1,10 @@
+{% set mode = endpoint.access_mode.value if endpoint.access_mode else 'dot1q' %}
+{% set svid = endpoint.vlan_id or circuit.vlan_id %}
+{% set cvid = endpoint.inner_vlan_id %}
 #
 # H3C Comware7 - EVPN VXLAN L3VPN (distributed IRB)  circuit {{ circuit.code }}
+# access-mode={{ mode }} s-vid={{ svid }}{% if cvid %} c-vid={{ cvid }}{% endif %}
+
 #
 ip vpn-instance {{ circuit.vrf_name }}
  route-distinguisher {{ circuit.route_distinguisher }}
@@ -25,8 +30,14 @@ interface Vsi-interface{{ circuit.vni }}
 #
 interface {{ endpoint.interface_name }}
  port link-mode bridge
- service-instance {{ circuit.vlan_id or endpoint.vlan_id }}
-  encapsulation s-vid {{ endpoint.vlan_id or circuit.vlan_id }}
+ service-instance {{ svid or 1 }}
+{% if mode == 'access' %}
+  encapsulation untagged
+{% elif mode == 'qinq' %}
+  encapsulation s-vid {{ svid }} c-vid {{ cvid }}
+{% else %}
+  encapsulation s-vid {{ svid }}
+{% endif %}
   xconnect vsi vsi_{{ circuit.code }}
 #
 return

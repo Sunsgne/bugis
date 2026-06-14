@@ -1,8 +1,9 @@
+{% set svid = endpoint.vlan_id or circuit.vlan_id %}
 #
 # H3C Comware7 - remove EVPN VXLAN L2VPN  circuit {{ circuit.code }}
 #
 interface {{ endpoint.interface_name }}
- undo service-instance {{ circuit.vlan_id or endpoint.vlan_id }}
+ undo service-instance {{ svid or 1 }}
 #
 undo vsi vsi_{{ circuit.code }}
 #

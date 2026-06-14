@@ -532,6 +532,62 @@ def test_system_info_and_scheduler_tick(client, auth_headers):
     assert "generated" in tick.json()
 
 
+def test_access_encapsulation_modes(client, auth_headers):
+    site, tenant, dev_h3c, dev_hw = _bootstrap_topology(client, auth_headers)
+    # dev_h3c is H3C, dev_hw is Cisco in the helper; add a real Huawei device.
+    huawei = client.post(
+        "/api/v1/devices", headers=auth_headers,
+        json={"name": f"HW-{next(_seq)}", "vendor": "huawei", "role": "leaf",
+              "overlay_tech": "vxlan_evpn", "status": "online",
+              "mgmt_ip": "10.77.0.1", "bgp_asn": 65010, "site_id": site["id"]},
+    ).json()
+
+    # QinQ on H3C + untagged(access) on Huawei.
+    circuit = client.post(
+        "/api/v1/circuits", headers=auth_headers,
+        json={"name": "AC modes", "tenant_id": tenant["id"],
+              "service_type": "l2vpn_evpn", "bandwidth_mbps": 100,
+              "endpoints": [
+                  {"label": "A", "device_id": dev_h3c["id"], "interface_name": "GE1/0/1",
+                   "access_mode": "qinq", "vlan_id": 100, "inner_vlan_id": 200},
+                  {"label": "Z", "device_id": huawei["id"], "interface_name": "GE1/0/1",
+                   "access_mode": "access"},
+              ]},
+    ).json()
+    wo = client.post(
+        f"/api/v1/work-orders/provision/{circuit['id']}", headers=auth_headers
+    ).json()
+    cfgs = {j["device_id"]: j["rendered_config"] for j in wo["config_jobs"]}
+    h3c_cfg = cfgs[dev_h3c["id"]]
+    hw_cfg = cfgs[huawei["id"]]
+    # H3C QinQ -> service-instance with s-vid + c-vid
+    assert "service-instance" in h3c_cfg
+    assert "encapsulation s-vid 100 c-vid 200" in h3c_cfg
+    # Huawei access (untagged) -> sub-interface mode l2 + encapsulation untag
+    assert ".mode l2" not in hw_cfg  # subif uses "<if>.<id> mode l2"
+    assert "mode l2" in hw_cfg
+    assert "encapsulation untag" in hw_cfg
+
+
+def test_dot1q_default_encapsulation(client, auth_headers):
+    site, tenant, dev_h3c, _ = _bootstrap_topology(client, auth_headers)
+    circuit = client.post(
+        "/api/v1/circuits", headers=auth_headers,
+        json={"name": "dot1q", "tenant_id": tenant["id"],
+              "service_type": "l2vpn_evpn", "bandwidth_mbps": 100,
+              "endpoints": [
+                  {"label": "A", "device_id": dev_h3c["id"], "interface_name": "GE1/0/2",
+                   "vlan_id": 300},
+              ]},
+    ).json()
+    wo = client.post(
+        f"/api/v1/work-orders/provision/{circuit['id']}", headers=auth_headers
+    ).json()
+    cfg = wo["config_jobs"][0]["rendered_config"]
+    assert "encapsulation s-vid 300" in cfg
+    assert "c-vid" not in cfg  # single-tag dot1q has no inner tag
+
+
 def test_telemetry_and_health(client, auth_headers):
     _, tenant, dev_a, dev_z = _bootstrap_topology(client, auth_headers)
     circuit = client.post(

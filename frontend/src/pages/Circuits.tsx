@@ -304,6 +304,9 @@ export default function Circuits() {
                 {r.endpoints.map((e) => (
                   <Tag key={e.id}>
                     {e.label}: {deviceName(e.device_id)} / {e.interface_name}
+                    {e.access_mode ? ` · ${e.access_mode}` : ""}
+                    {e.vlan_id ? ` vlan ${e.vlan_id}` : ""}
+                    {e.inner_vlan_id ? `/${e.inner_vlan_id}` : ""}
                   </Tag>
                 ))}
               </Descriptions.Item>
@@ -545,13 +548,25 @@ function CreateModal({ open, form, tenants, devices, offerings, onOk, onCancel }
           {(fields, { add, remove }) => (
             <>
               {fields.map((field) => (
-                <Space key={field.key} align="baseline" style={{ display: "flex" }}>
+                <div
+                  key={field.key}
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: 8,
+                    alignItems: "baseline",
+                    border: "1px dashed #eee",
+                    borderRadius: 8,
+                    padding: "8px 8px 0",
+                    marginBottom: 8,
+                  }}
+                >
                   <Form.Item name={[field.name, "label"]} rules={[{ required: true }]}>
-                    <Input placeholder="标签 A/Z" style={{ width: 80 }} />
+                    <Input placeholder="标签 A/Z" style={{ width: 70 }} />
                   </Form.Item>
                   <Form.Item name={[field.name, "device_id"]} rules={[{ required: true }]}>
                     <Select
-                      style={{ width: 240 }}
+                      style={{ width: 200 }}
                       placeholder="选择设备"
                       options={devices.map((d: Device) => ({
                         value: d.id,
@@ -560,12 +575,45 @@ function CreateModal({ open, form, tenants, devices, offerings, onOk, onCancel }
                     />
                   </Form.Item>
                   <Form.Item name={[field.name, "interface_name"]} rules={[{ required: true }]}>
-                    <Input placeholder="接口 GE1/0/1" style={{ width: 140 }} />
+                    <Input placeholder="接口 GE1/0/1" style={{ width: 120 }} />
+                  </Form.Item>
+                  <Form.Item name={[field.name, "access_mode"]} initialValue="dot1q">
+                    <Select
+                      style={{ width: 130 }}
+                      options={[
+                        { value: "access", label: "Access(不带标签)" },
+                        { value: "dot1q", label: "Dot1Q(单标签)" },
+                        { value: "qinq", label: "QinQ(双标签)" },
+                      ]}
+                    />
+                  </Form.Item>
+                  <Form.Item name={[field.name, "vlan_id"]} tooltip="S-VID / 接入 VLAN">
+                    <InputNumber placeholder="S-VID" style={{ width: 90 }} min={1} max={4094} />
+                  </Form.Item>
+                  <Form.Item
+                    noStyle
+                    shouldUpdate={(p, c) =>
+                      p.endpoints?.[field.name]?.access_mode !==
+                      c.endpoints?.[field.name]?.access_mode
+                    }
+                  >
+                    {({ getFieldValue }) =>
+                      getFieldValue(["endpoints", field.name, "access_mode"]) === "qinq" ? (
+                        <Form.Item name={[field.name, "inner_vlan_id"]} tooltip="C-VID (内层)">
+                          <InputNumber placeholder="C-VID" style={{ width: 90 }} min={1} max={4094} />
+                        </Form.Item>
+                      ) : null
+                    }
                   </Form.Item>
                   <MinusCircleOutlined onClick={() => remove(field.name)} />
-                </Space>
+                </div>
               ))}
-              <Button type="dashed" block icon={<PlusOutlined />} onClick={() => add({ label: "" })}>
+              <Button
+                type="dashed"
+                block
+                icon={<PlusOutlined />}
+                onClick={() => add({ label: "", access_mode: "dot1q" })}
+              >
                 添加端点
               </Button>
             </>

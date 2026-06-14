@@ -1,21 +1,34 @@
+{% set mode = endpoint.access_mode.value if endpoint.access_mode else 'dot1q' %}
+{% set svid = endpoint.vlan_id or circuit.vlan_id %}
+{% set cvid = endpoint.inner_vlan_id %}
 ! Arista EOS - EVPN-MPLS L2 over Segment Routing  circuit {{ circuit.code }}
 ! device {{ device.name }} lo0={{ device.loopback_ip }} node-sid={{ device.sr_node_sid }}
+! access-mode={{ mode }} s-vid={{ svid }}{% if cvid %} c-vid={{ cvid }}{% endif %}
+
 mpls ip
 !
 router general
    segment-routing mpls
 !
-vlan {{ endpoint.vlan_id or circuit.vlan_id }}
+vlan {{ svid }}
    name CUST_{{ circuit.code }}
 !
 interface {{ endpoint.interface_name }}
    description CUST_{{ circuit.tenant_id }}_{{ circuit.code }}
-   switchport
-   switchport access vlan {{ endpoint.vlan_id or circuit.vlan_id }}
    mtu {{ circuit.mtu }}
+{% if mode == 'access' %}
+   switchport access vlan {{ svid }}
+{% elif mode == 'qinq' %}
+   switchport dot1q-tunnel allowed vlan {{ svid }}
+   switchport mode dot1q-tunnel
+   switchport access vlan {{ svid }}
+{% else %}
+   switchport trunk allowed vlan {{ svid }}
+   switchport mode trunk
+{% endif %}
 !
 router bgp {{ device.bgp_asn }}
-   vlan {{ endpoint.vlan_id or circuit.vlan_id }}
+   vlan {{ svid }}
       rd {{ circuit.route_distinguisher }}
       route-target both {{ circuit.route_target }}
       redistribute learned

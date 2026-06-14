@@ -68,7 +68,9 @@ export interface CircuitEndpoint {
   device_id: number;
   label: string;
   interface_name: string;
+  access_mode?: string;
   vlan_id?: number;
+  inner_vlan_id?: number;
   ip_address?: string;
   gateway_ip?: string;
 }

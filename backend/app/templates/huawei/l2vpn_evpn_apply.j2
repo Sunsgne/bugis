@@ -1,5 +1,11 @@
+{% set mode = endpoint.access_mode.value if endpoint.access_mode else 'dot1q' %}
+{% set svid = endpoint.vlan_id or circuit.vlan_id %}
+{% set cvid = endpoint.inner_vlan_id %}
+{% set subif = svid or 1 %}
 #
 # Huawei VRP (Datacom) - EVPN VXLAN L2VPN  circuit {{ circuit.code }}
+# access-mode={{ mode }} s-vid={{ svid }}{% if cvid %} ce-vid={{ cvid }}{% endif %}
+
 #
 bridge-domain {{ circuit.vni }}
  vxlan vni {{ circuit.vni }}
@@ -8,19 +14,25 @@ bridge-domain {{ circuit.vni }}
   vpn-target {{ circuit.route_target }} export-extcommunity
   vpn-target {{ circuit.route_target }} import-extcommunity
 #
-interface {{ endpoint.interface_name }}.{{ endpoint.vlan_id or circuit.vlan_id }} mode l2
+interface {{ endpoint.interface_name }}.{{ subif }} mode l2
  description CUST_{{ circuit.tenant_id }}_{{ circuit.code }}
- encapsulation dot1q vid {{ endpoint.vlan_id or circuit.vlan_id }}
+{% if mode == 'access' %}
+ encapsulation untag
+{% elif mode == 'qinq' %}
+ encapsulation qinq vid {{ svid }} ce-vid {{ cvid }}
+{% else %}
+ encapsulation dot1q vid {{ svid }}
  rewrite pop single
+{% endif %}
  bridge-domain {{ circuit.vni }}
 #
 interface Nve1
  vni {{ circuit.vni }} head-end peer-list protocol bgp
 #
 {% if circuit.bandwidth_mbps %}
-qos
- traffic policy CUST_{{ circuit.code }} inbound cir {{ circuit.bandwidth_mbps }} mbps
- traffic policy CUST_{{ circuit.code }} outbound cir {{ circuit.bandwidth_mbps }} mbps
+ qos
+  traffic policy CUST_{{ circuit.code }} inbound cir {{ circuit.bandwidth_mbps }} mbps
+  traffic policy CUST_{{ circuit.code }} outbound cir {{ circuit.bandwidth_mbps }} mbps
 {% endif %}
 #
 return

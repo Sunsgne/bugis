@@ -24,6 +24,7 @@ from app.models.device import Device
 from app.controller import controller as bugis_controller
 from app.models.controller import Controller
 from app.models.enums import (
+    AccessMode,
     CircuitStatus,
     ConfigJobStatus,
     ControllerType,
@@ -358,6 +359,7 @@ def _render_and_push(
         device_id=device.id,
         label="GW",
         interface_name="-",
+        access_mode=AccessMode.DOT1Q,
         vlan_id=circuit.vlan_id,
         gateway_ip=None,
     )

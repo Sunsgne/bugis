@@ -1,7 +1,9 @@
+{% set svid = endpoint.vlan_id or circuit.vlan_id %}
+{% set subif = svid or 1 %}
 #
 # Huawei VRP - remove EVPN VXLAN L2VPN  circuit {{ circuit.code }}
 #
-undo interface {{ endpoint.interface_name }}.{{ endpoint.vlan_id or circuit.vlan_id }}
+undo interface {{ endpoint.interface_name }}.{{ subif }}
 #
 interface Nve1
  undo vni {{ circuit.vni }} head-end peer-list protocol bgp
