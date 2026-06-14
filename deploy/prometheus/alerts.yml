@@ -1,0 +1,38 @@
+groups:
+  - name: bugis-platform
+    rules:
+      - alert: BugisActiveAlarms
+        expr: bugis_active_alarms > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "存在活跃告警 / Active platform alarms"
+          description: "Bugis 平台有 {{ $value }} 条活跃告警。"
+
+      - alert: BugisCriticalAlarms
+        expr: bugis_alarms_by_severity{severity="critical"} > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "存在严重告警 / Critical alarms present"
+          description: "{{ $value }} 条 critical 级别告警，请立即处理。"
+
+      - alert: BugisCircuitsFailed
+        expr: bugis_circuits_by_status{status="failed"} > 0
+        for: 1m
+        labels:
+          severity: major
+        annotations:
+          summary: "存在开通失败专线 / Failed circuits"
+          description: "{{ $value }} 条专线处于 failed 状态。"
+
+      - alert: BugisBackendDown
+        expr: up{job="bugis-platform"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Bugis 后端不可达 / Backend down"
+          description: "Prometheus 无法抓取 Bugis 后端 /metrics。"

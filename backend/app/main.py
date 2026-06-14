@@ -34,6 +34,15 @@ ACTIVE_BANDWIDTH = Gauge(
     "bugis_active_bandwidth_mbps", "Sum of active circuit bandwidth (Mbps)"
 )
 ACTIVE_ALARMS = Gauge("bugis_active_alarms", "Number of active (uncleared) alarms")
+CIRCUITS_BY_STATUS = Gauge(
+    "bugis_circuits_by_status", "Circuits grouped by status", ["status"]
+)
+DEVICES_BY_VENDOR = Gauge(
+    "bugis_devices_by_vendor", "Devices grouped by vendor", ["vendor"]
+)
+ALARMS_BY_SEVERITY = Gauge(
+    "bugis_alarms_by_severity", "Active alarms grouped by severity", ["severity"]
+)
 
 
 @asynccontextmanager
@@ -109,6 +118,38 @@ def metrics():
                 select(func.count(Alarm.id)).where(Alarm.status != AlarmStatus.CLEARED)
             ) or 0
         )
+        from app.models.enums import AlarmSeverity, Vendor
+
+        status_counts = {
+            row[0].value: row[1]
+            for row in db.execute(
+                select(Circuit.status, func.count(Circuit.id)).group_by(Circuit.status)
+            ).all()
+        }
+        for st in CircuitStatus:
+            CIRCUITS_BY_STATUS.labels(status=st.value).set(
+                status_counts.get(st.value, 0)
+            )
+
+        vendor_counts = {
+            row[0].value: row[1]
+            for row in db.execute(
+                select(Device.vendor, func.count(Device.id)).group_by(Device.vendor)
+            ).all()
+        }
+        for v in Vendor:
+            DEVICES_BY_VENDOR.labels(vendor=v.value).set(vendor_counts.get(v.value, 0))
+
+        sev_counts = {
+            row[0].value: row[1]
+            for row in db.execute(
+                select(Alarm.severity, func.count(Alarm.id))
+                .where(Alarm.status != AlarmStatus.CLEARED)
+                .group_by(Alarm.severity)
+            ).all()
+        }
+        for s in AlarmSeverity:
+            ALARMS_BY_SEVERITY.labels(severity=s.value).set(sev_counts.get(s.value, 0))
     finally:
         db.close()
     return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)

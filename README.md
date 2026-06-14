@@ -89,6 +89,8 @@ docker compose up --build
 
 默认登录：`admin` / `admin123`
 
+**可观测性开箱即用**：Prometheus 自动抓取后端 `/metrics` 并加载告警规则（`deploy/prometheus/alerts.yml`）；Grafana 自动装载数据源与「Bugis · DCI/EVPN 运营总览」仪表盘（`deploy/grafana/provisioning/`）。指标包含 `bugis_circuits_by_status`、`bugis_devices_by_vendor`、`bugis_alarms_by_severity` 等带标签时序。
+
 ## 🔌 主要 API / Key endpoints
 
 | 方法 | 路径 | 说明 |
