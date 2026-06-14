@@ -146,11 +146,11 @@ function Shell() {
       <Layout>
         <Header
           style={{
-            background: "#fff",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
             paddingInline: 24,
+            borderBottom: "1px solid #1e293b",
           }}
         >
           <div style={{ fontSize: 18, fontWeight: 600 }}>

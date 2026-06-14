@@ -7,8 +7,25 @@ body,
   margin: 0;
   padding: 0;
   height: 100%;
+  background: #0a0e17;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
     "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+}
+
+/* Refined dark scrollbars */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: #243149;
+  border-radius: 6px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #34507a;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
 }
 .app-logo {
   display: flex;
@@ -41,6 +58,25 @@ body,
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 16px;
 }
+/* Recharts readability on dark theme */
+.recharts-cartesian-axis-tick text,
+.recharts-label,
+.recharts-pie-label-text {
+  fill: #94a3b8 !important;
+}
+.recharts-default-tooltip {
+  background: #16203a !important;
+  border: 1px solid #243149 !important;
+  border-radius: 8px;
+}
+.recharts-tooltip-item,
+.recharts-tooltip-label {
+  color: #e2e8f0 !important;
+}
+.recharts-cartesian-grid line {
+  stroke: #1e293b !important;
+}
+
 .config-pre {
   background: #0b1021;
   color: #d6e2ff;
