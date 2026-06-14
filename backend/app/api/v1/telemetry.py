@@ -85,6 +85,12 @@ def simulate(
     return {"generated": count}
 
 
+@router.get("/overview")
+def overview(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+    """Aggregate traffic trend across all circuits (per-minute buckets)."""
+    return telemetry_service.overview_traffic(db)
+
+
 @router.get("/dashboard")
 def dashboard(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
     """Aggregate KPIs for the operations overview screen."""

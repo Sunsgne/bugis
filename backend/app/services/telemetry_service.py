@@ -48,6 +48,43 @@ def simulate_circuit_sample(db: Session, circuit: Circuit) -> TelemetrySample:
     )
 
 
+def overview_traffic(db: Session, sample_limit: int = 800) -> list[dict]:
+    """Aggregate recent telemetry samples into a per-minute traffic trend.
+
+    DB-agnostic: buckets the most recent samples by minute in Python.
+    """
+    rows = db.execute(
+        select(TelemetrySample)
+        .order_by(TelemetrySample.id.desc())
+        .limit(sample_limit)
+    ).scalars().all()
+    buckets: dict[str, dict] = {}
+    for s in rows:
+        if not s.created_at:
+            continue
+        key = s.created_at.strftime("%H:%M")
+        b = buckets.setdefault(
+            key, {"t": key, "rx": 0.0, "tx": 0.0, "lat": 0.0, "loss": 0.0, "n": 0}
+        )
+        b["rx"] += s.rx_mbps
+        b["tx"] += s.tx_mbps
+        b["lat"] += s.latency_ms
+        b["loss"] += s.packet_loss_pct
+        b["n"] += 1
+    out = []
+    for b in buckets.values():
+        n = max(b["n"], 1)
+        out.append({
+            "t": b["t"],
+            "rx": round(b["rx"], 1),
+            "tx": round(b["tx"], 1),
+            "latency": round(b["lat"] / n, 2),
+            "loss": round(b["loss"] / n, 3),
+        })
+    out.sort(key=lambda x: x["t"])
+    return out[-40:]
+
+
 def compute_health(db: Session, circuit: Circuit, limit: int = 100) -> CircuitHealth:
     samples = db.execute(
         select(TelemetrySample)
