@@ -124,6 +124,16 @@ docker compose up --build
 - `BUGIS_WEBHOOK_TOKEN` — 北向 Webhook 共享令牌（StackStorm/ITSM 对接）
 - `BUGIS_THRESHOLD_*` — 告警阈值（丢包 / 时延 / 利用率 / 健康分）
 
+## 🗄️ 数据库迁移 / Migrations
+
+生产环境使用 Alembic 进行版本化表结构迁移（本地 SQLite 开发仍可用启动时 `create_all` 便捷建表）：
+
+```bash
+cd backend
+alembic upgrade head                              # 应用最新迁移
+alembic revision --autogenerate -m "描述变更"     # 模型变更后生成新迁移
+```
+
 ## 🧪 测试 / Tests
 
 ```bash
