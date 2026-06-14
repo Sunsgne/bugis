@@ -9,6 +9,7 @@ const VENDOR_COLOR: Record<string, string> = {
   juniper: "#52c41a",
   arista: "#fa8c16",
   cisco: "#722ed1",
+  frr: "#13c2c2",
 };
 const EDGE_COLOR: Record<string, string> = {
   dci: "#cf1322",

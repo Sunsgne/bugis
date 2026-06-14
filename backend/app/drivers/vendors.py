@@ -43,3 +43,12 @@ class CiscoDriver(BaseDriver):
     overlay_tech = OverlayTech.SRMPLS_EVPN
     template_dir = "cisco"
     transport = "netconf"
+
+
+class FRRDriver(BaseDriver):
+    """FRRouting on whitebox / SONiC - open-source BGP EVPN VXLAN via vtysh."""
+
+    vendor = Vendor.FRR
+    overlay_tech = OverlayTech.VXLAN_EVPN
+    template_dir = "frr"
+    transport = "cli"

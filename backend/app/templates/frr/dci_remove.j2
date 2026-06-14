@@ -1,0 +1,8 @@
+! FRRouting (vtysh) - remove DCI EVPN gateway  circuit {{ circuit.code }}
+configure terminal
+router bgp {{ device.bgp_asn }}
+ address-family l2vpn evpn
+  no neighbor DCI route-reflector-client
+ exit-address-family
+exit
+end

@@ -5,6 +5,7 @@ from app.drivers.base import BaseDriver
 from app.drivers.vendors import (
     AristaDriver,
     CiscoDriver,
+    FRRDriver,
     H3CDriver,
     HuaweiDriver,
     JuniperDriver,
@@ -17,6 +18,7 @@ _DRIVERS: dict[Vendor, BaseDriver] = {
     Vendor.JUNIPER: JuniperDriver(),
     Vendor.ARISTA: AristaDriver(),
     Vendor.CISCO: CiscoDriver(),
+    Vendor.FRR: FRRDriver(),
 }
 
 

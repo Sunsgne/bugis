@@ -1,0 +1,6 @@
+! FRRouting (vtysh) - remove BGP EVPN VXLAN L3VPN  circuit {{ circuit.code }}
+configure terminal
+no router bgp {{ device.bgp_asn }} vrf {{ circuit.vrf_name }}
+no interface irb{{ circuit.vni }}
+no vrf {{ circuit.vrf_name }}
+end

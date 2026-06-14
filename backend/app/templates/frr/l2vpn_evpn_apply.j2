@@ -1,0 +1,22 @@
+! FRRouting (vtysh) - BGP EVPN VXLAN L2 (E-LAN)  circuit {{ circuit.code }}
+! device {{ device.name }} lo={{ device.loopback_ip }} asn={{ device.bgp_asn }}
+configure terminal
+vrf default
+ vni {{ circuit.vni }}
+exit-vrf
+!
+interface vxlan{{ circuit.vni }}
+ description CUST_{{ circuit.tenant_id }}_{{ circuit.code }}
+ ip address {{ device.loopback_ip }}/32
+!
+router bgp {{ device.bgp_asn }}
+ address-family l2vpn evpn
+  advertise-all-vni
+  vni {{ circuit.vni }}
+   rd {{ circuit.route_distinguisher }}
+   route-target import {{ circuit.route_target }}
+   route-target export {{ circuit.route_target }}
+  exit-vni
+ exit-address-family
+exit
+end

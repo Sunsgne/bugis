@@ -1,0 +1,12 @@
+! FRRouting (vtysh) - remove BGP EVPN VXLAN L2  circuit {{ circuit.code }}
+configure terminal
+router bgp {{ device.bgp_asn }}
+ address-family l2vpn evpn
+  no vni {{ circuit.vni }}
+ exit-address-family
+exit
+no interface vxlan{{ circuit.vni }}
+vrf default
+ no vni {{ circuit.vni }}
+exit-vrf
+end

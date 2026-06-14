@@ -20,9 +20,45 @@ def test_drivers_catalog(client, auth_headers):
     r = client.get("/api/v1/drivers", headers=auth_headers)
     assert r.status_code == 200
     data = r.json()
-    assert set(data["vendors"]) == {"h3c", "huawei", "juniper", "arista", "cisco"}
+    assert set(data["vendors"]) == {
+        "h3c", "huawei", "juniper", "arista", "cisco", "frr"
+    }
     assert "vxlan_evpn" in data["overlay_tech"]
     assert "srmpls_evpn" in data["overlay_tech"]
+
+
+def test_frr_provisioning(client, auth_headers):
+    site = client.post(
+        "/api/v1/sites", headers=auth_headers,
+        json={"name": "FRR DC", "code": "FRR-DC", "bgp_asn": 65099},
+    ).json()
+    tenant = client.post(
+        "/api/v1/tenants", headers=auth_headers,
+        json={"name": "FRR Tenant", "code": "FRR-TEN", "type": "internal"},
+    ).json()
+    dev = client.post(
+        "/api/v1/devices", headers=auth_headers,
+        json={"name": "WB-FRR-1", "vendor": "frr", "role": "leaf",
+              "overlay_tech": "vxlan_evpn", "status": "online",
+              "mgmt_ip": "10.9.0.1", "bgp_asn": 65099, "site_id": site["id"]},
+    ).json()
+    circuit = client.post(
+        "/api/v1/circuits", headers=auth_headers,
+        json={"name": "FRR L2", "tenant_id": tenant["id"],
+              "service_type": "l2vpn_evpn", "bandwidth_mbps": 100,
+              "endpoints": [
+                  {"label": "A", "device_id": dev["id"], "interface_name": "swp1"}
+              ]},
+    ).json()
+    wo = client.post(
+        f"/api/v1/work-orders/provision/{circuit['id']}", headers=auth_headers
+    ).json()
+    assert wo["status"] == "completed"
+    cfg = wo["config_jobs"][0]["rendered_config"]
+    assert "advertise-all-vni" in cfg and "l2vpn evpn" in cfg
+    # Ansible export uses vtysh for FRR.
+    exp = client.get(f"/api/v1/work-orders/{wo['id']}/ansible", headers=auth_headers).json()
+    assert "vtysh" in exp["playbook"]
 
 
 def _bootstrap_topology(client, auth_headers):

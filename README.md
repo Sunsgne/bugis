@@ -17,6 +17,7 @@ orchestration, work-order workflow, and bandwidth/SLA telemetry.
 - **多厂商南向驱动** — 每个厂商一套 Jinja2 配置模板，统一意图模型驱动渲染
   - 华三 H3C (Comware7) · 华为 Huawei (VRP/Datacom) → **BGP EVPN VXLAN** (NETCONF)
   - Juniper (Junos) · Arista (EOS) · Cisco (IOS-XR) → **SR-MPLS EVPN** (NETCONF / CLI)
+  - FRRouting (SONiC + FRR 白盒/开源) → **BGP EVPN VXLAN** (vtysh / CLI)
 - **专线业务编排** — L2VPN(E-LAN/E-LINE)、L3VPN(IRB/Type-5)、EVPN-VPWS、**DCI 数据中心互联**
 - **工单流转** — `draft → submitted → approved → running → completed/failed`，全程审计事件
 - **资源自动分配** — VNI / VLAN / RD / RT / VRF / 专线编码自动编排，避免冲突

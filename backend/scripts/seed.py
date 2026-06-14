@@ -83,6 +83,10 @@ def run() -> None:
                    status=DeviceStatus.ONLINE, mgmt_ip="10.3.0.11",
                    loopback_ip="10.3.255.11", bgp_asn=65003, sr_node_sid=111,
                    site_id=gz.id),
+            Device(name="GZ-WHITEBOX-01", vendor=Vendor.FRR, model="SONiC+FRR",
+                   role=DeviceRole.LEAF, overlay_tech=OverlayTech.VXLAN_EVPN,
+                   status=DeviceStatus.ONLINE, mgmt_ip="10.3.0.31",
+                   loopback_ip="10.3.255.31", bgp_asn=65003, site_id=gz.id),
         ]
         db.add_all(devices)
         db.flush()

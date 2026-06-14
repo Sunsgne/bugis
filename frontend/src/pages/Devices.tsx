@@ -24,6 +24,7 @@ const VENDOR_COLOR: Record<string, string> = {
   juniper: "green",
   arista: "orange",
   cisco: "purple",
+  frr: "cyan",
 };
 const STATUS_COLOR: Record<string, string> = {
   online: "green",
@@ -33,7 +34,7 @@ const STATUS_COLOR: Record<string, string> = {
 };
 const ROLES = ["spine", "leaf", "border_leaf", "vtep", "pe", "p", "rr", "dci_gw", "cpe"];
 const OVERLAYS = ["vxlan_evpn", "srmpls_evpn"];
-const VENDORS = ["h3c", "huawei", "juniper", "arista", "cisco"];
+const VENDORS = ["h3c", "huawei", "juniper", "arista", "cisco", "frr"];
 
 export default function Devices() {
   const { message } = AntApp.useApp();

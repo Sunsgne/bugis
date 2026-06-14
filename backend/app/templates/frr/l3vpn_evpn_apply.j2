@@ -1,0 +1,23 @@
+! FRRouting (vtysh) - BGP EVPN VXLAN L3 (symmetric IRB)  circuit {{ circuit.code }}
+! device {{ device.name }} vrf={{ circuit.vrf_name }}
+configure terminal
+vrf {{ circuit.vrf_name }}
+ vni {{ circuit.vni }}
+exit-vrf
+!
+interface irb{{ circuit.vni }}
+ ip address {{ endpoint.gateway_ip }}/24
+ vrf {{ circuit.vrf_name }}
+!
+router bgp {{ device.bgp_asn }} vrf {{ circuit.vrf_name }}
+ address-family ipv4 unicast
+  redistribute connected
+ exit-address-family
+ address-family l2vpn evpn
+  rd {{ circuit.route_distinguisher }}
+  route-target import {{ circuit.route_target }}
+  route-target export {{ circuit.route_target }}
+  advertise ipv4 unicast
+ exit-address-family
+exit
+end

@@ -24,6 +24,8 @@ VENDOR_ANSIBLE = {
         "junipernetworks.junos.junos_config",
     ),
     Vendor.ARISTA: ("arista.eos.eos", "network_cli", "arista.eos.eos_config"),
+    # FRRouting has no universal config module; apply via vtysh over shell.
+    Vendor.FRR: ("frr", "ssh", "ansible.builtin.shell"),
 }
 
 
@@ -67,6 +69,20 @@ def build_playbook(jobs: list[tuple[Device, str, str]]) -> str:
         _, _, module = VENDOR_ANSIBLE[device.vendor]
         out.append(f"    - name: {operation} config on {device.name}")
         out.append(f"      when: inventory_hostname == '{device.name}'")
+
+        if device.vendor == Vendor.FRR:
+            # Apply via vtysh: pipe config lines into the FRR shell.
+            cmds = []
+            for line in config.splitlines():
+                s = line.rstrip()
+                if not s or s.startswith(("!", "#")):
+                    continue
+                cmds.append(f"-c '{s}'")
+            out.append(f"      {module}: |")
+            out.append(f"        vtysh {' '.join(cmds)}")
+            out.append("")
+            continue
+
         out.append(f"      {module}:")
         out.append("        lines:")
         for line in config.splitlines():

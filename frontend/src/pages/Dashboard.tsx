@@ -27,6 +27,7 @@ const VENDOR_COLORS: Record<string, string> = {
   juniper: "#52c41a",
   arista: "#fa8c16",
   cisco: "#722ed1",
+  frr: "#13c2c2",
 };
 const STATUS_COLORS: Record<string, string> = {
   active: "#52c41a",

@@ -12,6 +12,7 @@ class Vendor(str, enum.Enum):
     JUNIPER = "juniper"
     ARISTA = "arista"
     CISCO = "cisco"
+    FRR = "frr"  # FRRouting (开源 / 白盒 SONiC 演进)
 
 
 class OverlayTech(str, enum.Enum):
