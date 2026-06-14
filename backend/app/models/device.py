@@ -75,5 +75,9 @@ class DeviceInterface(Base, TimestampMixin):
     admin_up: Mapped[bool] = mapped_column(Boolean, default=True)
     # Whether the port is currently allocated to a circuit endpoint.
     allocated: Mapped[bool] = mapped_column(Boolean, default=False)
+    # SNMP-discovered attributes (IF-MIB).
+    ifindex: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    oper_status: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    discovered_via: Mapped[str | None] = mapped_column(String(16), nullable=True)
 
     device: Mapped["Device"] = relationship(back_populates="interfaces")

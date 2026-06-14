@@ -313,6 +313,32 @@ def test_config_history_and_diff(client, auth_headers):
     assert "500" in diff["diff"]  # new bandwidth appears in the diff
 
 
+def test_snmp_interface_discovery(client, auth_headers):
+    site, _, _, _ = _bootstrap_topology(client, auth_headers)
+    n = next(_seq)
+    dev = client.post(
+        "/api/v1/devices", headers=auth_headers,
+        json={"name": f"DISC-{n}", "vendor": "huawei", "role": "leaf",
+              "overlay_tech": "vxlan_evpn", "status": "online",
+              "mgmt_ip": f"10.55.{n}.1", "site_id": site["id"]},
+    ).json()
+    # Discover interfaces via SNMP (simulated in dry-run).
+    r = client.post(
+        f"/api/v1/devices/{dev['id']}/discover-interfaces", headers=auth_headers
+    )
+    assert r.status_code == 200
+    ifaces = r.json()
+    assert len(ifaces) > 0
+    # Huawei naming convention discovered
+    assert any(i["name"].startswith("GE1/0/") for i in ifaces)
+    assert all(i["discovered_via"] for i in ifaces)
+    # Listing returns the same set
+    listed = client.get(
+        f"/api/v1/devices/{dev['id']}/interfaces", headers=auth_headers
+    ).json()
+    assert len(listed) == len(ifaces)
+
+
 def test_device_check(client, auth_headers):
     _, _, dev_a, _ = _bootstrap_topology(client, auth_headers)
     r = client.post(f"/api/v1/devices/{dev_a['id']}/check", headers=auth_headers)

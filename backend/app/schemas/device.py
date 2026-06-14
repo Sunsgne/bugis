@@ -13,6 +13,9 @@ class DeviceInterfaceBase(BaseModel):
     speed_mbps: int | None = None
     admin_up: bool = True
     allocated: bool = False
+    ifindex: int | None = None
+    oper_status: str | None = None
+    discovered_via: str | None = None
 
 
 class DeviceInterfaceCreate(DeviceInterfaceBase):

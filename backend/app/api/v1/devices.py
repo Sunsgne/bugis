@@ -20,6 +20,7 @@ from app.schemas.device import (
     DeviceOut,
     DeviceUpdate,
 )
+from app.services import snmp
 
 router = APIRouter()
 
@@ -155,3 +156,18 @@ def list_interfaces(
     return db.execute(
         select(DeviceInterface).where(DeviceInterface.device_id == device_id)
     ).scalars().all()
+
+
+@router.post("/{device_id}/discover-interfaces", response_model=list[DeviceInterfaceOut])
+def discover_interfaces(
+    device_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
+    """Discover the device's interfaces via SNMP (IF-MIB) and persist them."""
+    device = db.get(Device, device_id)
+    if not device:
+        raise HTTPException(status_code=404, detail="device not found")
+    ifaces = snmp.discover_interfaces(db, device)
+    db.commit()
+    return sorted(ifaces, key=lambda i: (i.ifindex or 0))
