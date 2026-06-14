@@ -7,11 +7,15 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, require_operator
 from app.core.database import get_db
+import difflib
+
 from app.models.circuit import Circuit, CircuitEndpoint
+from app.models.config_job import ConfigJob
 from app.models.device import Device
 from app.models.offering import ServiceOffering
 from app.models.tenant import Tenant
 from app.models.user import User
+from app.models.workorder import WorkOrder
 from app.schemas.circuit import (
     CircuitCreate,
     CircuitEndpointCreate,
@@ -115,6 +119,97 @@ def validate_circuit(
     if not circuit:
         raise HTTPException(status_code=404, detail="circuit not found")
     return validation.summarize(validation.validate_circuit(db, circuit))
+
+
+def _circuit_jobs(db: Session, circuit_id: int) -> list[tuple[ConfigJob, str]]:
+    rows = db.execute(
+        select(ConfigJob, WorkOrder.code)
+        .join(WorkOrder, WorkOrder.id == ConfigJob.work_order_id)
+        .where(WorkOrder.circuit_id == circuit_id)
+        .order_by(ConfigJob.id)
+    ).all()
+    return [(row[0], row[1]) for row in rows]
+
+
+@router.get("/{circuit_id}/config-history")
+def config_history(
+    circuit_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    """Per-device timeline of rendered configuration versions."""
+    circuit = db.get(Circuit, circuit_id)
+    if not circuit:
+        raise HTTPException(status_code=404, detail="circuit not found")
+    device_names = {d.id: d.name for d in db.execute(select(Device)).scalars().all()}
+    history: dict[int, dict] = {}
+    for job, wo_code in _circuit_jobs(db, circuit_id):
+        entry = history.setdefault(
+            job.device_id,
+            {"device_id": job.device_id,
+             "device": device_names.get(job.device_id, job.device_id),
+             "versions": []},
+        )
+        entry["versions"].append({
+            "job_id": job.id,
+            "work_order": wo_code,
+            "operation": job.operation,
+            "status": job.status.value,
+            "transport": job.transport,
+            "created_at": job.created_at.isoformat() if job.created_at else None,
+            "rendered_config": job.rendered_config,
+        })
+    return {"circuit": circuit.code, "devices": list(history.values())}
+
+
+@router.get("/{circuit_id}/config-diff")
+def config_diff(
+    circuit_id: int,
+    device_id: int,
+    a: int | None = None,
+    b: int | None = None,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    """Unified diff between two config versions of a device on this circuit.
+
+    Defaults to the two most recent versions when a/b are not given.
+    """
+    if not db.get(Circuit, circuit_id):
+        raise HTTPException(status_code=404, detail="circuit not found")
+    jobs = [j for j, _wo in _circuit_jobs(db, circuit_id) if j.device_id == device_id]
+    if len(jobs) < 1:
+        raise HTTPException(status_code=404, detail="no config versions for device")
+
+    def _by_id(jid: int) -> ConfigJob | None:
+        return next((j for j in jobs if j.id == jid), None)
+
+    if a and b:
+        job_a, job_b = _by_id(a), _by_id(b)
+    elif len(jobs) >= 2:
+        job_a, job_b = jobs[-2], jobs[-1]
+    else:
+        job_a, job_b = None, jobs[-1]
+    if not job_b:
+        raise HTTPException(status_code=404, detail="version not found")
+
+    left = (job_a.rendered_config or "") if job_a else ""
+    right = job_b.rendered_config or ""
+    diff = "\n".join(
+        difflib.unified_diff(
+            left.splitlines(), right.splitlines(),
+            fromfile=f"job-{job_a.id}" if job_a else "empty",
+            tofile=f"job-{job_b.id}",
+            lineterm="",
+        )
+    )
+    return {
+        "device_id": device_id,
+        "from_job": job_a.id if job_a else None,
+        "to_job": job_b.id,
+        "changed": left != right,
+        "diff": diff or "(无差异 / no changes)",
+    }
 
 
 @router.patch("/{circuit_id}", response_model=CircuitOut)

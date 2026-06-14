@@ -255,6 +255,40 @@ def test_offering_prefill(client, auth_headers):
     assert circuit["sla_target"] == "99.99"
 
 
+def test_config_history_and_diff(client, auth_headers):
+    _, tenant, dev_a, _ = _bootstrap_topology(client, auth_headers)
+    circuit = client.post(
+        "/api/v1/circuits", headers=auth_headers,
+        json={"name": "Hist", "tenant_id": tenant["id"],
+              "service_type": "l2vpn_evpn", "bandwidth_mbps": 100,
+              "endpoints": [
+                  {"label": "A", "device_id": dev_a["id"], "interface_name": "GE1/0/4"}
+              ]},
+    ).json()
+    # First provision.
+    client.post(f"/api/v1/work-orders/provision/{circuit['id']}", headers=auth_headers)
+    # Change bandwidth and re-provision (MODIFY) -> second version.
+    client.patch(f"/api/v1/circuits/{circuit['id']}", headers=auth_headers,
+                 json={"bandwidth_mbps": 500})
+    client.post(
+        f"/api/v1/work-orders/provision/{circuit['id']}?wo_type=modify",
+        headers=auth_headers,
+    )
+
+    hist = client.get(
+        f"/api/v1/circuits/{circuit['id']}/config-history", headers=auth_headers
+    ).json()
+    dev_hist = next(d for d in hist["devices"] if d["device_id"] == dev_a["id"])
+    assert len(dev_hist["versions"]) >= 2
+
+    diff = client.get(
+        f"/api/v1/circuits/{circuit['id']}/config-diff?device_id={dev_a['id']}",
+        headers=auth_headers,
+    ).json()
+    assert diff["changed"] is True
+    assert "500" in diff["diff"]  # new bandwidth appears in the diff
+
+
 def test_device_check(client, auth_headers):
     _, _, dev_a, _ = _bootstrap_topology(client, auth_headers)
     r = client.post(f"/api/v1/devices/{dev_a['id']}/check", headers=auth_headers)
