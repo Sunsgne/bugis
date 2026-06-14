@@ -23,6 +23,11 @@ orchestration, work-order workflow, and bandwidth/SLA telemetry.
 - **多租户 / 混合云接入** — 企业专线、混合云、公有云接入等租户类型
 - **设备与站点管理** — 数据中心(DC)、设备角色(spine/leaf/border/pe/rr/dci-gw)、接口资源
 - **遥测与 SLA 可视化** — 健康评分、流量 / 时延 / 抖动 / 丢包曲线，Prometheus `/metrics`
+- **告警中心** — SLA / 容量 / 隧道状态阈值检测，告警去重 / 确认 / 清除，顶栏实时徽标
+- **容量管理与拓扑** — 数据中心 / 设备 / 链路带宽分配率，SVG 网络拓扑可视化
+- **带宽变更** — MODIFY 工单一键调整带宽并重新下发各厂商 QoS
+- **北向自动化** — StackStorm 风格 Webhook 一键开通；**Ansible** inventory/playbook 导出（厂商官方 Collection）
+- **操作审计** — 全量写操作审计日志（操作人 / 路径 / 状态 / 来源 IP）
 - **Dry-run 安全模式** — 默认仅渲染配置不下发，无需实验设备即可端到端演示
 - **现代化运营门户** — React + Ant Design 大屏与管理界面
 
@@ -92,9 +97,15 @@ docker compose up --build
 | CRUD | `/api/v1/sites` `/tenants` `/devices` `/circuits` | 资源管理 |
 | POST | `/api/v1/work-orders/provision/{circuit_id}` | 一键开通（建单→审批→执行） |
 | GET  | `/api/v1/work-orders/{id}/preview` | 多厂商配置预览（dry-run 渲染） |
-| POST | `/api/v1/telemetry/simulate` | 生成模拟遥测采样 |
+| GET  | `/api/v1/work-orders/{id}/ansible` | 导出 Ansible inventory + playbook |
+| POST | `/api/v1/integrations/webhook/provision` | 北向 Webhook 一键开通（`X-Webhook-Token`） |
+| GET  | `/api/v1/integrations/ansible/inventory` | 全量 Ansible inventory |
+| POST | `/api/v1/telemetry/simulate` | 生成模拟遥测采样（并评估告警） |
 | GET  | `/api/v1/telemetry/circuits/{id}/health` | 专线 SLA 健康评分 |
 | GET  | `/api/v1/telemetry/dashboard` | 运营大屏聚合 KPI |
+| GET/POST | `/api/v1/alarms` `/alarms/evaluate` `/alarms/{id}/ack` | 告警中心 |
+| GET  | `/api/v1/capacity/sites` `/capacity/links/usage` `/capacity/topology` | 容量与拓扑 |
+| GET  | `/api/v1/audit` | 操作审计日志 |
 | GET  | `/metrics` | Prometheus 指标 |
 
 ## ⚙️ 配置 / Configuration
@@ -105,6 +116,8 @@ docker compose up --build
 - `BUGIS_DATABASE_URL` — 数据库连接串（默认 SQLite）
 - `BUGIS_DRY_RUN` — `true` 仅渲染配置不下发；`false` 真实下发（需安装 `ncclient` / `netmiko`）
 - `BUGIS_SECRET_KEY` — JWT 签名密钥（生产务必修改）
+- `BUGIS_WEBHOOK_TOKEN` — 北向 Webhook 共享令牌（StackStorm/ITSM 对接）
+- `BUGIS_THRESHOLD_*` — 告警阈值（丢包 / 时延 / 利用率 / 健康分）
 
 ## 🧪 测试 / Tests
 
