@@ -99,48 +99,57 @@ export default function Monitoring() {
 
       {health ? (
         <>
-          <Row gutter={16}>
+          <Row gutter={[16, 16]} align="stretch">
             <Col xs={24} md={6}>
-              <Card>
-                <div style={{ textAlign: "center" }}>
-                  <Progress
-                    type="dashboard"
-                    percent={health.health_score}
-                    strokeColor={scoreColor(health.health_score)}
-                    format={(p) => `${p}`}
-                  />
-                  <div>健康评分</div>
-                </div>
-              </Card>
-            </Col>
-            <Col xs={12} md={4}>
-              <Card>
-                <Statistic title="平均时延" value={health.avg_latency_ms} suffix="ms" />
-              </Card>
-            </Col>
-            <Col xs={12} md={4}>
-              <Card>
-                <Statistic title="抖动" value={health.avg_jitter_ms} suffix="ms" />
-              </Card>
-            </Col>
-            <Col xs={12} md={4}>
-              <Card>
-                <Statistic
-                  title="丢包率"
-                  value={health.avg_packet_loss_pct}
-                  suffix="%"
-                  valueStyle={{ color: health.avg_packet_loss_pct > 0.2 ? "#cf1322" : undefined }}
+              <Card
+                style={{ height: "100%" }}
+                styles={{
+                  body: {
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    height: "100%",
+                  },
+                }}
+              >
+                <Progress
+                  type="dashboard"
+                  size={120}
+                  percent={health.health_score}
+                  strokeColor={scoreColor(health.health_score)}
+                  format={(p) => `${p}`}
                 />
+                <div style={{ marginTop: 8, color: "#888" }}>健康评分</div>
               </Card>
             </Col>
-            <Col xs={12} md={6}>
-              <Card>
+            {[
+              { t: "平均时延", v: health.avg_latency_ms, s: "ms" },
+              { t: "抖动", v: health.avg_jitter_ms, s: "ms" },
+              { t: "丢包率", v: health.avg_packet_loss_pct, s: "%",
+                color: health.avg_packet_loss_pct > 0.2 ? "#cf1322" : undefined },
+            ].map((m) => (
+              <Col xs={12} md={4} key={m.t}>
+                <Card
+                  style={{ height: "100%" }}
+                  styles={{ body: { display: "flex", alignItems: "center", height: "100%" } }}
+                >
+                  <Statistic title={m.t} value={m.v} suffix={m.s}
+                    valueStyle={m.color ? { color: m.color } : undefined} />
+                </Card>
+              </Col>
+            ))}
+            <Col xs={24} md={6}>
+              <Card
+                style={{ height: "100%" }}
+                styles={{ body: { display: "flex", flexDirection: "column", justifyContent: "center", height: "100%" } }}
+              >
                 <Statistic
                   title="峰值利用率"
                   value={health.peak_utilization_pct}
                   suffix={`% / ${health.bandwidth_mbps}Mbps`}
                 />
-                <div style={{ marginTop: 6 }}>
+                <div style={{ marginTop: 8 }}>
                   状态 <Tag color={health.status === "active" ? "green" : "default"}>{health.status}</Tag>
                   {health.sla_target && <Tag>SLA {health.sla_target}%</Tag>}
                 </div>
