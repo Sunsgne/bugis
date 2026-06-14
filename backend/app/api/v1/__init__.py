@@ -5,6 +5,7 @@ from app.api.v1 import (
     alarms,
     audit,
     auth,
+    bulk,
     capacity,
     circuits,
     devices,
@@ -12,6 +13,7 @@ from app.api.v1 import (
     integrations,
     offerings,
     sites,
+    stream,
     telemetry,
     tenants,
     workorders,
@@ -36,4 +38,6 @@ api_router.include_router(
     integrations.router, prefix="/integrations", tags=["integrations"]
 )
 api_router.include_router(audit.router, prefix="/audit", tags=["audit"])
+api_router.include_router(bulk.router, prefix="/bulk", tags=["bulk"])
+api_router.include_router(stream.router, prefix="/stream", tags=["stream"])
 api_router.include_router(drivers.router, prefix="/drivers", tags=["drivers"])

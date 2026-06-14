@@ -318,6 +318,34 @@ def test_audit_log_records_mutations(client, auth_headers):
     )
 
 
+def test_bulk_csv_devices(client, auth_headers):
+    site, _, _, _ = _bootstrap_topology(client, auth_headers)
+    n = next(_seq)
+    csv_text = (
+        "name,vendor,model,role,overlay_tech,status,mgmt_ip,loopback_ip,"
+        "bgp_asn,sr_node_sid,site_code\n"
+        f"BULK-{n},frr,SONiC,leaf,vxlan_evpn,online,10.20.{n}.1,10.20.{n}.1,"
+        f"65020,,{site['code']}\n"
+    )
+    r = client.post(
+        "/api/v1/bulk/devices/import",
+        headers=auth_headers,
+        files={"file": ("d.csv", csv_text, "text/csv")},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["created"] == 1
+
+    exp = client.get("/api/v1/bulk/devices/export", headers=auth_headers)
+    assert exp.status_code == 200
+    assert f"BULK-{n}" in exp.text
+    assert exp.headers["content-type"].startswith("text/csv")
+
+
+def test_sse_requires_valid_token(client):
+    r = client.get("/api/v1/stream/events?token=invalid")
+    assert r.status_code == 401
+
+
 def test_telemetry_and_health(client, auth_headers):
     _, tenant, dev_a, dev_z = _bootstrap_topology(client, auth_headers)
     circuit = client.post(
