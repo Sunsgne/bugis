@@ -138,12 +138,28 @@ class LinkType(str, enum.Enum):
 
 
 class ControllerType(str, enum.Enum):
-    """SDN / vendor fabric controller for northbound delegation."""
+    """SDN / fabric controller used to program the network."""
 
+    BUGIS = "bugis"  # 内置自研 Bugis SDN 控制器（EVPN 控制平面 + 南向编排）
     NCE_FABRIC = "nce_fabric"  # 华为 iMaster NCE-Fabric
     SEERENGINE = "seerengine"  # 华三 AD-DC SeerEngine
     OPENDAYLIGHT = "opendaylight"  # OpenDaylight (RESTCONF/BGPCEP)
     ONOS = "onos"  # ONOS
+
+
+class EvpnRouteType(str, enum.Enum):
+    """BGP EVPN route types maintained by the controller's RIB."""
+
+    IMET = "type3_imet"  # Type-3 Inclusive Multicast (VTEP membership / BUM)
+    MAC_IP = "type2_mac_ip"  # Type-2 MAC/IP advertisement
+    IP_PREFIX = "type5_ip_prefix"  # Type-5 IP prefix (L3)
+    ETHERNET_SEGMENT = "type4_es"  # Type-4 Ethernet Segment (multi-homing)
+
+
+class VtepStatus(str, enum.Enum):
+    UP = "up"
+    DOWN = "down"
+    INIT = "init"
 
 
 class DeliveryMode(str, enum.Enum):

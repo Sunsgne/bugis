@@ -376,6 +376,64 @@ def test_audit_log_records_mutations(client, auth_headers):
     )
 
 
+def test_bugis_sdn_controller(client, auth_headers):
+    # Site managed by the built-in Bugis SDN controller.
+    ctrl = client.post(
+        "/api/v1/controllers", headers=auth_headers,
+        json={"name": "Bugis", "type": "bugis", "base_url": "internal://bugis"},
+    ).json()
+    n = next(_seq)
+    site = client.post(
+        "/api/v1/sites", headers=auth_headers,
+        json={"name": "SDN DC", "code": f"SDN-DC{n}", "bgp_asn": 65040,
+              "delivery_mode": "controller", "controller_id": ctrl["id"]},
+    ).json()
+    tenant = client.post(
+        "/api/v1/tenants", headers=auth_headers,
+        json={"name": "SDN Tenant", "code": f"SDN-TEN{n}", "type": "internal"},
+    ).json()
+    da = client.post(
+        "/api/v1/devices", headers=auth_headers,
+        json={"name": f"SDN-VTEP-A{n}", "vendor": "frr", "role": "vtep",
+              "overlay_tech": "vxlan_evpn", "status": "online",
+              "mgmt_ip": f"10.40.{n}.1", "loopback_ip": f"10.40.{n}.1",
+              "bgp_asn": 65040, "site_id": site["id"]},
+    ).json()
+    dz = client.post(
+        "/api/v1/devices", headers=auth_headers,
+        json={"name": f"SDN-VTEP-Z{n}", "vendor": "frr", "role": "vtep",
+              "overlay_tech": "vxlan_evpn", "status": "online",
+              "mgmt_ip": f"10.40.{n}.2", "loopback_ip": f"10.40.{n}.2",
+              "bgp_asn": 65040, "site_id": site["id"]},
+    ).json()
+    circuit = client.post(
+        "/api/v1/circuits", headers=auth_headers,
+        json={"name": "SDN L2", "tenant_id": tenant["id"],
+              "service_type": "l2vpn_evpn", "bandwidth_mbps": 100,
+              "endpoints": [
+                  {"label": "A", "device_id": da["id"], "interface_name": "swp1"},
+                  {"label": "Z", "device_id": dz["id"], "interface_name": "swp1"},
+              ]},
+    ).json()
+    wo = client.post(
+        f"/api/v1/work-orders/provision/{circuit['id']}", headers=auth_headers
+    ).json()
+    assert wo["status"] == "completed"
+    # Controller produced a control-plane job + per-device data-plane jobs.
+    assert any(j["transport"] == "controller:bugis" for j in wo["config_jobs"])
+
+    # Control plane now has VTEPs and EVPN routes for this VNI.
+    vteps = client.get("/api/v1/controller/vteps", headers=auth_headers).json()
+    assert any(v["device_id"] == da["id"] for v in vteps)
+    routes = client.get(
+        f"/api/v1/controller/routes?vni={circuit['vni']}", headers=auth_headers
+    ).json()
+    types = {r["type"] for r in routes}
+    assert "type3_imet" in types and "type2_mac_ip" in types
+    status = client.get("/api/v1/controller/status", headers=auth_headers).json()
+    assert status["route_count"] >= len(routes)
+
+
 def test_controller_delegation(client, auth_headers):
     # Controller-managed site delegates provisioning to the controller NB API.
     ctrl = client.post(

@@ -21,10 +21,12 @@ from app.drivers import get_driver
 from app.models.circuit import Circuit, CircuitEndpoint
 from app.models.config_job import ConfigJob
 from app.models.device import Device
+from app.controller import controller as bugis_controller
 from app.models.controller import Controller
 from app.models.enums import (
     CircuitStatus,
     ConfigJobStatus,
+    ControllerType,
     DeliveryMode,
     DeviceRole,
     ServiceType,
@@ -188,10 +190,17 @@ def execute(db: Session, wo: WorkOrder, actor: str | None = None) -> WorkOrder:
 
     failed = False
 
-    # Controller-delegated delivery (one job per controller group).
+    # Controller-managed delivery.
     for controller_id, eps in controller_groups.items():
-        ok = _deliver_via_controller(db, wo, circuit, controller_id, eps,
-                                     operation, actor)
+        controller = db.get(Controller, controller_id)
+        if controller and controller.type == ControllerType.BUGIS:
+            # Built-in Bugis SDN controller: compute EVPN control plane, then
+            # program the data plane on each endpoint device via vendor drivers.
+            ok = _deliver_via_bugis(db, wo, circuit, controller, eps,
+                                    service_type, operation, actor)
+        else:
+            ok = _deliver_via_controller(db, wo, circuit, controller_id, eps,
+                                         operation, actor)
         failed = failed or not ok
 
     for endpoint, device in direct_targets:
@@ -217,6 +226,55 @@ def execute(db: Session, wo: WorkOrder, actor: str | None = None) -> WorkOrder:
             circuit.status = CircuitStatus.ACTIVE
         _log(db, wo, "Execution completed successfully", actor=actor)
     return wo
+
+
+def _deliver_via_bugis(
+    db: Session,
+    wo: WorkOrder,
+    circuit: Circuit,
+    controller: Controller,
+    endpoints: list[CircuitEndpoint],
+    service_type: ServiceType,
+    operation: str,
+    actor: str | None,
+) -> bool:
+    """Built-in Bugis SDN controller: control-plane + data-plane programming."""
+    # 1) Control plane: compute/withdraw EVPN routes in the controller RIB.
+    job = ConfigJob(
+        work_order_id=wo.id,
+        device_id=endpoints[0].device_id,
+        operation=operation,
+        transport="controller:bugis",
+        status=ConfigJobStatus.PENDING,
+    )
+    db.add(job)
+    db.flush()
+    try:
+        if operation == "remove":
+            result = bugis_controller.withdraw_circuit(db, circuit, endpoints)
+        else:
+            result = bugis_controller.install_circuit(db, circuit, endpoints)
+        job.rendered_config = result["summary"]
+        job.status = ConfigJobStatus.SUCCEEDED
+        _log(
+            db, wo,
+            f"[Bugis SDN] {operation} VNI {circuit.vni}: "
+            f"{result.get('routes_installed', result.get('routes_withdrawn', 0))} 条 EVPN 路由",
+            actor=actor,
+        )
+    except Exception as exc:  # noqa: BLE001
+        job.status = ConfigJobStatus.FAILED
+        job.output = f"bugis controller error: {exc}"
+        _log(db, wo, f"Bugis 控制器错误: {exc}", level="error", actor=actor)
+        return False
+
+    # 2) Data plane: the controller programs each endpoint device via drivers.
+    ok = True
+    for ep in endpoints:
+        if ep.device:
+            ok = _render_and_push(db, wo, circuit, ep, ep.device, service_type,
+                                  operation, actor) and ok
+    return ok
 
 
 def _deliver_via_controller(

@@ -42,11 +42,13 @@ def run() -> None:
             print("Data already seeded; skipping.")
             return
 
-        # --- Controllers (北向 SDN/厂商控制器) ---
-        nce = Controller(name="华为 iMaster NCE-Fabric", type=ControllerType.NCE_FABRIC,
-                         base_url="https://nce.example.com", username="api",
-                         description="广州 Fabric 由 NCE-Fabric 北向托管")
-        db.add(nce)
+        # --- Controllers ---
+        # Built-in self-developed Bugis SDN controller (no market dependency).
+        bugis_ctrl = Controller(
+            name="Bugis SDN 控制器", type=ControllerType.BUGIS,
+            base_url="internal://bugis", username="-",
+            description="内置自研 EVPN 控制平面 + 南向编排，托管广州 Fabric")
+        db.add(bugis_ctrl)
         db.flush()
 
         # --- Sites / DCs ---
@@ -56,7 +58,7 @@ def run() -> None:
                   bgp_asn=65002, underlay_prefix="10.2.0.0/16")
         gz = Site(name="广州数据中心", code="GZ-DC1", region="华南",
                   bgp_asn=65003, underlay_prefix="10.3.0.0/16",
-                  delivery_mode=DeliveryMode.CONTROLLER, controller_id=nce.id)
+                  delivery_mode=DeliveryMode.CONTROLLER, controller_id=bugis_ctrl.id)
         db.add_all([bj, sh, gz])
         db.flush()
 

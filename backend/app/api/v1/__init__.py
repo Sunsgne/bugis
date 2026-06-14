@@ -9,6 +9,7 @@ from app.api.v1 import (
     capacity,
     circuits,
     controllers,
+    controlplane,
     devices,
     drivers,
     integrations,
@@ -29,6 +30,9 @@ api_router.include_router(tenants.router, prefix="/tenants", tags=["tenants"])
 api_router.include_router(devices.router, prefix="/devices", tags=["devices"])
 api_router.include_router(
     controllers.router, prefix="/controllers", tags=["controllers"]
+)
+api_router.include_router(
+    controlplane.router, prefix="/controller", tags=["sdn-controller"]
 )
 api_router.include_router(
     offerings.router, prefix="/offerings", tags=["offerings"]
