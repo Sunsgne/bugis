@@ -135,3 +135,19 @@ class LinkType(str, enum.Enum):
     DCI = "dci"  # 跨 DC 互联
     ACCESS = "access"  # 接入侧
     UPLINK = "uplink"  # 上联
+
+
+class ControllerType(str, enum.Enum):
+    """SDN / vendor fabric controller for northbound delegation."""
+
+    NCE_FABRIC = "nce_fabric"  # 华为 iMaster NCE-Fabric
+    SEERENGINE = "seerengine"  # 华三 AD-DC SeerEngine
+    OPENDAYLIGHT = "opendaylight"  # OpenDaylight (RESTCONF/BGPCEP)
+    ONOS = "onos"  # ONOS
+
+
+class DeliveryMode(str, enum.Enum):
+    """How configuration reaches the network for a site."""
+
+    DIRECT = "direct"  # 平台直连设备下发 (NETCONF/CLI)
+    CONTROLLER = "controller"  # 委托给厂商/SDN 控制器北向下发

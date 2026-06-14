@@ -318,6 +318,49 @@ def test_audit_log_records_mutations(client, auth_headers):
     )
 
 
+def test_controller_delegation(client, auth_headers):
+    # Controller-managed site delegates provisioning to the controller NB API.
+    ctrl = client.post(
+        "/api/v1/controllers",
+        headers=auth_headers,
+        json={"name": "NCE", "type": "nce_fabric",
+              "base_url": "https://nce.test"},
+    ).json()
+    n = next(_seq)
+    site = client.post(
+        "/api/v1/sites", headers=auth_headers,
+        json={"name": "Ctrl DC", "code": f"CTRL-DC{n}", "bgp_asn": 65030,
+              "delivery_mode": "controller", "controller_id": ctrl["id"]},
+    ).json()
+    assert site["delivery_mode"] == "controller"
+    tenant = client.post(
+        "/api/v1/tenants", headers=auth_headers,
+        json={"name": "Ctrl Tenant", "code": f"CTRL-TEN{n}", "type": "internal"},
+    ).json()
+    dev = client.post(
+        "/api/v1/devices", headers=auth_headers,
+        json={"name": f"CTRL-LEAF-{n}", "vendor": "huawei", "role": "leaf",
+              "overlay_tech": "vxlan_evpn", "status": "online",
+              "mgmt_ip": f"10.30.{n}.1", "bgp_asn": 65030, "site_id": site["id"]},
+    ).json()
+    circuit = client.post(
+        "/api/v1/circuits", headers=auth_headers,
+        json={"name": "Ctrl L2", "tenant_id": tenant["id"],
+              "service_type": "l2vpn_evpn", "bandwidth_mbps": 100,
+              "endpoints": [
+                  {"label": "A", "device_id": dev["id"], "interface_name": "GE1/0/1"}
+              ]},
+    ).json()
+    wo = client.post(
+        f"/api/v1/work-orders/provision/{circuit['id']}", headers=auth_headers
+    ).json()
+    assert wo["status"] == "completed"
+    jobs = wo["config_jobs"]
+    assert any(j["transport"].startswith("controller") for j in jobs)
+    ctrl_job = next(j for j in jobs if j["transport"].startswith("controller"))
+    assert "huawei-nce-fabric" in ctrl_job["rendered_config"]
+
+
 def test_bulk_csv_devices(client, auth_headers):
     site, _, _, _ = _bootstrap_topology(client, auth_headers)
     n = next(_seq)

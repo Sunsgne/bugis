@@ -12,9 +12,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app.bootstrap import ensure_superuser  # noqa: E402
 from app.core.database import SessionLocal, init_db  # noqa: E402
 from app.models.circuit import Circuit, CircuitEndpoint  # noqa: E402
+from app.models.controller import Controller  # noqa: E402
 from app.models.device import Device, DeviceInterface  # noqa: E402
 from app.models.enums import (  # noqa: E402
     CircuitStatus,
+    ControllerType,
+    DeliveryMode,
     DeviceRole,
     DeviceStatus,
     LinkType,
@@ -39,13 +42,21 @@ def run() -> None:
             print("Data already seeded; skipping.")
             return
 
+        # --- Controllers (北向 SDN/厂商控制器) ---
+        nce = Controller(name="华为 iMaster NCE-Fabric", type=ControllerType.NCE_FABRIC,
+                         base_url="https://nce.example.com", username="api",
+                         description="广州 Fabric 由 NCE-Fabric 北向托管")
+        db.add(nce)
+        db.flush()
+
         # --- Sites / DCs ---
         bj = Site(name="北京数据中心", code="BJ-DC1", region="华北",
                   bgp_asn=65001, underlay_prefix="10.1.0.0/16")
         sh = Site(name="上海数据中心", code="SH-DC1", region="华东",
                   bgp_asn=65002, underlay_prefix="10.2.0.0/16")
         gz = Site(name="广州数据中心", code="GZ-DC1", region="华南",
-                  bgp_asn=65003, underlay_prefix="10.3.0.0/16")
+                  bgp_asn=65003, underlay_prefix="10.3.0.0/16",
+                  delivery_mode=DeliveryMode.CONTROLLER, controller_id=nce.id)
         db.add_all([bj, sh, gz])
         db.flush()
 

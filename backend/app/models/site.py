@@ -3,11 +3,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Integer, String
+from sqlalchemy import ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+from app.models.enums import DeliveryMode
 from app.models.mixins import TimestampMixin
+from sqlalchemy import Enum as SAEnum
 
 if TYPE_CHECKING:
     from app.models.device import Device
@@ -28,6 +30,14 @@ class Site(Base, TimestampMixin):
     # Loopback / underlay prefix summary for documentation.
     underlay_prefix: Mapped[str | None] = mapped_column(String(64), nullable=True)
     description: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    # Delivery: direct device push, or delegate to a fabric controller.
+    delivery_mode: Mapped[DeliveryMode] = mapped_column(
+        SAEnum(DeliveryMode), default=DeliveryMode.DIRECT
+    )
+    controller_id: Mapped[int | None] = mapped_column(
+        ForeignKey("controllers.id", ondelete="SET NULL"), nullable=True
+    )
 
     devices: Mapped[list["Device"]] = relationship(
         back_populates="site", cascade="all, delete-orphan"

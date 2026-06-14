@@ -8,6 +8,7 @@ from app.api.v1 import (
     bulk,
     capacity,
     circuits,
+    controllers,
     devices,
     drivers,
     integrations,
@@ -24,6 +25,9 @@ api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
 api_router.include_router(sites.router, prefix="/sites", tags=["sites"])
 api_router.include_router(tenants.router, prefix="/tenants", tags=["tenants"])
 api_router.include_router(devices.router, prefix="/devices", tags=["devices"])
+api_router.include_router(
+    controllers.router, prefix="/controllers", tags=["controllers"]
+)
 api_router.include_router(
     offerings.router, prefix="/offerings", tags=["offerings"]
 )

@@ -21,9 +21,11 @@ from app.drivers import get_driver
 from app.models.circuit import Circuit, CircuitEndpoint
 from app.models.config_job import ConfigJob
 from app.models.device import Device
+from app.models.controller import Controller
 from app.models.enums import (
     CircuitStatus,
     ConfigJobStatus,
+    DeliveryMode,
     DeviceRole,
     ServiceType,
     WorkOrderStatus,
@@ -31,7 +33,7 @@ from app.models.enums import (
 )
 from app.models.site import Site
 from app.models.workorder import WorkOrder, WorkOrderEvent
-from app.services import validation
+from app.services import controller_client, validation
 
 
 def _log(db: Session, wo: WorkOrder, message: str, level: str = "info",
@@ -164,18 +166,35 @@ def execute(db: Session, wo: WorkOrder, actor: str | None = None) -> WorkOrder:
     service_type: ServiceType = circuit.service_type
     _log(db, wo, f"Execution started: {operation} {service_type.value}", actor=actor)
 
-    targets: list[tuple[CircuitEndpoint | None, Device]] = []
+    # Split endpoints into controller-delegated (by site) and direct device push.
+    controller_groups: dict[int, list[CircuitEndpoint]] = {}
+    direct_targets: list[tuple[CircuitEndpoint | None, Device]] = []
     for ep in circuit.endpoints:
-        if ep.device:
-            targets.append((ep, ep.device))
+        if not ep.device:
+            continue
+        site = ep.device.site
+        if site and site.delivery_mode == DeliveryMode.CONTROLLER and site.controller_id:
+            controller_groups.setdefault(site.controller_id, []).append(ep)
+        else:
+            direct_targets.append((ep, ep.device))
 
-    # For DCI services, also program the DCI gateways.
+    # For DCI services, also program the DCI gateways (direct-mode only).
     gateway_devices: list[Device] = []
     if service_type == ServiceType.DCI or wo.type == WorkOrderType.PROVISION:
-        gateway_devices = _dci_gateways(db, circuit)
+        for gw in _dci_gateways(db, circuit):
+            if gw.site and gw.site.delivery_mode == DeliveryMode.CONTROLLER:
+                continue
+            gateway_devices.append(gw)
 
     failed = False
-    for endpoint, device in targets:
+
+    # Controller-delegated delivery (one job per controller group).
+    for controller_id, eps in controller_groups.items():
+        ok = _deliver_via_controller(db, wo, circuit, controller_id, eps,
+                                     operation, actor)
+        failed = failed or not ok
+
+    for endpoint, device in direct_targets:
         ok = _render_and_push(db, wo, circuit, endpoint, device, service_type,
                               operation, actor)
         failed = failed or not ok
@@ -198,6 +217,68 @@ def execute(db: Session, wo: WorkOrder, actor: str | None = None) -> WorkOrder:
             circuit.status = CircuitStatus.ACTIVE
         _log(db, wo, "Execution completed successfully", actor=actor)
     return wo
+
+
+def _deliver_via_controller(
+    db: Session,
+    wo: WorkOrder,
+    circuit: Circuit,
+    controller_id: int,
+    endpoints: list[CircuitEndpoint],
+    operation: str,
+    actor: str | None,
+) -> bool:
+    controller = db.get(Controller, controller_id)
+    if not controller:
+        _log(db, wo, f"控制器 {controller_id} 不存在", level="error", actor=actor)
+        return False
+
+    devices = {ep.device_id: (ep.device.name if ep.device else ep.device_id)
+               for ep in endpoints}
+    # Represent the controller delivery against the first endpoint's device.
+    job = ConfigJob(
+        work_order_id=wo.id,
+        device_id=endpoints[0].device_id,
+        operation=operation,
+        transport=f"controller:{controller.type.value}",
+        status=ConfigJobStatus.PENDING,
+    )
+    db.add(job)
+    db.flush()
+
+    try:
+        req = controller_client.build_request(
+            controller, circuit, endpoints, devices, operation
+        )
+        job.rendered_config = req.render()
+        job.status = ConfigJobStatus.RENDERED
+        inverse = "remove" if operation == "apply" else "apply"
+        try:
+            job.rollback_config = controller_client.build_request(
+                controller, circuit, endpoints, devices, inverse
+            ).render()
+        except Exception:
+            job.rollback_config = None
+
+        result = controller_client.deliver(controller, req, dry_run=settings.dry_run)
+        job.output = result["output"]
+        job.status = (
+            ConfigJobStatus.DRY_RUN if result.get("dry_run") and result["success"]
+            else ConfigJobStatus.SUCCEEDED if result["success"]
+            else ConfigJobStatus.FAILED
+        )
+        _log(
+            db, wo,
+            f"[控制器] {controller.type.value} {controller.name}: {operation} "
+            f"{circuit.service_type.value} -> {job.status.value}",
+            level="info" if result["success"] else "error", actor=actor,
+        )
+        return result["success"]
+    except Exception as exc:  # noqa: BLE001
+        job.status = ConfigJobStatus.FAILED
+        job.output = f"controller delivery error: {exc}"
+        _log(db, wo, f"控制器下发错误: {exc}", level="error", actor=actor)
+        return False
 
 
 def _render_and_push(
