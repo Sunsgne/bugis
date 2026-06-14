@@ -31,6 +31,7 @@ from app.models.enums import (
 )
 from app.models.site import Site
 from app.models.workorder import WorkOrder, WorkOrderEvent
+from app.services import validation
 
 
 def _log(db: Session, wo: WorkOrder, message: str, level: str = "info",
@@ -141,8 +142,23 @@ def execute(db: Session, wo: WorkOrder, actor: str | None = None) -> WorkOrder:
     if wo.status not in (WorkOrderStatus.APPROVED, WorkOrderStatus.SCHEDULED):
         raise ValueError("work order must be approved before execution")
 
-    wo.status = WorkOrderStatus.RUNNING
     circuit = wo.circuit
+
+    # Pre-flight compliance validation (skip for decommission).
+    if wo.type != WorkOrderType.DECOMMISSION:
+        issues = validation.validate_circuit(db, circuit)
+        errors = [i for i in issues if i.level == "error"]
+        for i in issues:
+            _log(db, wo, f"预检[{i.level}] {i.code}: {i.message}",
+                 level="warning" if i.level != "error" else "error", actor=actor)
+        if errors:
+            wo.status = WorkOrderStatus.FAILED
+            circuit.status = CircuitStatus.FAILED
+            _log(db, wo, f"预检未通过，存在 {len(errors)} 个错误，已阻断下发",
+                 level="error", actor=actor)
+            return wo
+
+    wo.status = WorkOrderStatus.RUNNING
     circuit.status = CircuitStatus.PROVISIONING
     operation = _operation_for(wo.type)
     service_type: ServiceType = circuit.service_type

@@ -5,10 +5,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+import random
+
 from app.api.deps import get_current_user, require_operator
+from app.core.config import settings
 from app.core.database import get_db
 from app.models.device import Device, DeviceInterface
-from app.models.enums import Vendor
+from app.models.enums import DeviceStatus, Vendor
 from app.models.user import User
 from app.schemas.device import (
     DeviceCreate,
@@ -87,6 +90,45 @@ def delete_device(
         raise HTTPException(status_code=404, detail="device not found")
     db.delete(device)
     db.commit()
+
+
+@router.post("/{device_id}/check")
+def check_device(
+    device_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
+    """Probe device reachability (NETCONF/SSH hello). Simulated in dry-run."""
+    device = db.get(Device, device_id)
+    if not device:
+        raise HTTPException(status_code=404, detail="device not found")
+
+    if settings.dry_run:
+        reachable = random.random() > 0.1
+        latency = round(random.uniform(0.5, 12.0), 2)
+    else:  # pragma: no cover - requires live device
+        import socket
+        reachable = False
+        latency = 0.0
+        try:
+            with socket.create_connection(
+                (device.mgmt_ip, device.netconf_port), timeout=3
+            ):
+                reachable = True
+        except OSError:
+            reachable = False
+
+    device.status = DeviceStatus.ONLINE if reachable else DeviceStatus.OFFLINE
+    db.commit()
+    return {
+        "device": device.name,
+        "mgmt_ip": device.mgmt_ip,
+        "transport": "netconf",
+        "reachable": reachable,
+        "latency_ms": latency,
+        "status": device.status.value,
+        "dry_run": settings.dry_run,
+    }
 
 
 @router.post("/{device_id}/interfaces", response_model=DeviceInterfaceOut, status_code=201)

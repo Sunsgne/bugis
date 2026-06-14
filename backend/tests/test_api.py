@@ -156,6 +156,51 @@ def test_capacity_and_topology(client, auth_headers):
     assert len(topo["nodes"]) >= 2
 
 
+def test_validation_blocks_collision(client, auth_headers):
+    _, tenant, dev_a, dev_z = _bootstrap_topology(client, auth_headers)
+    base = client.post(
+        "/api/v1/circuits",
+        headers=auth_headers,
+        json={
+            "name": "VNI base", "tenant_id": tenant["id"],
+            "service_type": "l2vpn_evpn", "bandwidth_mbps": 100,
+            "endpoints": [
+                {"label": "A", "device_id": dev_a["id"], "interface_name": "GE1/0/3"},
+            ],
+        },
+    ).json()
+    # Second circuit forced onto the same VNI -> collision.
+    dup = client.post(
+        "/api/v1/circuits",
+        headers=auth_headers,
+        json={
+            "name": "VNI dup", "tenant_id": tenant["id"],
+            "service_type": "l2vpn_evpn", "bandwidth_mbps": 100,
+            "vni": base["vni"],
+            "endpoints": [
+                {"label": "A", "device_id": dev_z["id"], "interface_name": "GE1/0/3"},
+            ],
+        },
+    ).json()
+    v = client.get(f"/api/v1/circuits/{dup['id']}/validate", headers=auth_headers).json()
+    assert v["ok"] is False
+    assert any(i["code"] == "vni_collision" for i in v["issues"])
+
+    # Provisioning must be blocked by the pre-check.
+    wo = client.post(
+        f"/api/v1/work-orders/provision/{dup['id']}", headers=auth_headers
+    ).json()
+    assert wo["status"] == "failed"
+
+
+def test_device_check(client, auth_headers):
+    _, _, dev_a, _ = _bootstrap_topology(client, auth_headers)
+    r = client.post(f"/api/v1/devices/{dev_a['id']}/check", headers=auth_headers)
+    assert r.status_code == 200
+    body = r.json()
+    assert "reachable" in body and body["status"] in ("online", "offline")
+
+
 def test_webhook_provision_and_ansible(client, auth_headers):
     _, tenant, dev_a, dev_z = _bootstrap_topology(client, auth_headers)
     # Webhook intake (StackStorm-style) with shared token.

@@ -18,7 +18,7 @@ from app.schemas.circuit import (
     CircuitOut,
     CircuitUpdate,
 )
-from app.services import allocation
+from app.services import allocation, validation
 
 router = APIRouter()
 
@@ -87,6 +87,19 @@ def get_circuit(
     if not circuit:
         raise HTTPException(status_code=404, detail="circuit not found")
     return circuit
+
+
+@router.get("/{circuit_id}/validate")
+def validate_circuit(
+    circuit_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    """Run pre-flight compliance checks on a circuit."""
+    circuit = db.get(Circuit, circuit_id)
+    if not circuit:
+        raise HTTPException(status_code=404, detail="circuit not found")
+    return validation.summarize(validation.validate_circuit(db, circuit))
 
 
 @router.patch("/{circuit_id}", response_model=CircuitOut)
