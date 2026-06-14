@@ -13,7 +13,7 @@ from app.bootstrap import ensure_superuser  # noqa: E402
 from app.core.database import SessionLocal, init_db  # noqa: E402
 from app.models.circuit import Circuit, CircuitEndpoint  # noqa: E402
 from app.models.controller import Controller  # noqa: E402
-from app.models.device import Device, DeviceInterface  # noqa: E402
+from app.models.device import Device  # noqa: E402
 from app.models.enums import (  # noqa: E402
     CircuitStatus,
     ControllerType,
@@ -106,11 +106,8 @@ def run() -> None:
         db.flush()
         by_name = {d.name: d for d in devices}
 
-        for d in devices:
-            for i in range(1, 5):
-                db.add(DeviceInterface(
-                    device_id=d.id, name=f"GE1/0/{i}", speed_mbps=10000))
-        db.flush()
+        # Interfaces are populated on demand via SNMP discovery
+        # (POST /devices/{id}/discover-interfaces), so we don't pre-seed them.
 
         # --- Service offerings (套餐) ---
         db.add_all([
