@@ -49,6 +49,13 @@ def raise_alarm(
     )
     db.add(alarm)
     db.flush()
+    # Best-effort outbound notification dispatch (never breaks alarm raising).
+    try:
+        from app.services import notify
+
+        notify.dispatch_for_alarm(db, alarm)
+    except Exception:  # noqa: BLE001
+        pass
     return alarm
 
 

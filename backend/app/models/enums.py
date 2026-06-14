@@ -151,3 +151,22 @@ class DeliveryMode(str, enum.Enum):
 
     DIRECT = "direct"  # 平台直连设备下发 (NETCONF/CLI)
     CONTROLLER = "controller"  # 委托给厂商/SDN 控制器北向下发
+
+
+class NotificationType(str, enum.Enum):
+    """Outbound alarm notification channel type."""
+
+    WEBHOOK = "webhook"  # 通用 JSON webhook
+    SLACK = "slack"
+    DINGTALK = "dingtalk"  # 钉钉
+    WECOM = "wecom"  # 企业微信
+
+
+# Severity ordering for notification thresholds (higher = more severe).
+SEVERITY_RANK = {
+    "info": 0,
+    "warning": 1,
+    "minor": 2,
+    "major": 3,
+    "critical": 4,
+}

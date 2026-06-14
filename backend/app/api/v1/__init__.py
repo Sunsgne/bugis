@@ -12,6 +12,7 @@ from app.api.v1 import (
     devices,
     drivers,
     integrations,
+    notifications,
     offerings,
     sites,
     stream,
@@ -38,6 +39,9 @@ api_router.include_router(
 )
 api_router.include_router(telemetry.router, prefix="/telemetry", tags=["telemetry"])
 api_router.include_router(alarms.router, prefix="/alarms", tags=["alarms"])
+api_router.include_router(
+    notifications.router, prefix="/notifications", tags=["notifications"]
+)
 api_router.include_router(capacity.router, prefix="/capacity", tags=["capacity"])
 api_router.include_router(
     integrations.router, prefix="/integrations", tags=["integrations"]

@@ -395,6 +395,23 @@ def test_controller_delegation(client, auth_headers):
     assert "huawei-nce-fabric" in ctrl_job["rendered_config"]
 
 
+def test_notification_channel_and_test_send(client, auth_headers):
+    ch = client.post(
+        "/api/v1/notifications",
+        headers=auth_headers,
+        json={"name": "NOC 钉钉", "type": "dingtalk",
+              "url": "https://oapi.dingtalk.com/robot/send?access_token=x",
+              "min_severity": "warning"},
+    ).json()
+    assert ch["type"] == "dingtalk"
+    # Test send (dry-run) returns rendered payload.
+    res = client.post(f"/api/v1/notifications/{ch['id']}/test", headers=auth_headers)
+    assert res.status_code == 200
+    body = res.json()
+    assert body["success"] is True
+    assert body["payload"]["msgtype"] == "text"
+
+
 def test_bulk_csv_devices(client, auth_headers):
     site, _, _, _ = _bootstrap_topology(client, auth_headers)
     n = next(_seq)
