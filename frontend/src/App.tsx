@@ -19,6 +19,7 @@ import {
   AppstoreOutlined,
   CloudServerOutlined,
   BellOutlined,
+  ShareAltOutlined,
 } from "@ant-design/icons";
 import { useEffect, useState } from "react";
 import { useAuth } from "./auth";
@@ -39,6 +40,7 @@ import Audit from "./pages/Audit";
 import Users from "./pages/Users";
 import Catalog from "./pages/Catalog";
 import Controllers from "./pages/Controllers";
+import ControlPlane from "./pages/ControlPlane";
 import Notifications from "./pages/Notifications";
 
 const { Header, Sider, Content } = Layout;
@@ -49,6 +51,7 @@ const MENU = [
   { key: "/sites", icon: <EnvironmentOutlined />, label: "数据中心" },
   { key: "/devices", icon: <ClusterOutlined />, label: "设备管理" },
   { key: "/controllers", icon: <CloudServerOutlined />, label: "控制器" },
+  { key: "/control-plane", icon: <ShareAltOutlined />, label: "SDN 控制平面" },
   { key: "/catalog", icon: <AppstoreOutlined />, label: "服务套餐" },
   { key: "/circuits", icon: <ApiOutlined />, label: "专线管理" },
   { key: "/work-orders", icon: <ProfileOutlined />, label: "工单流转" },
@@ -177,6 +180,7 @@ function Shell() {
             <Route path="/sites" element={<Sites />} />
             <Route path="/devices" element={<Devices />} />
             <Route path="/controllers" element={<Controllers />} />
+            <Route path="/control-plane" element={<ControlPlane />} />
             <Route path="/catalog" element={<Catalog />} />
             <Route path="/circuits" element={<Circuits />} />
             <Route path="/work-orders" element={<WorkOrders />} />
