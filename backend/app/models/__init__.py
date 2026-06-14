@@ -7,6 +7,8 @@ from app.models.circuit import Circuit, CircuitEndpoint  # noqa: F401
 from app.models.workorder import WorkOrder, WorkOrderEvent  # noqa: F401
 from app.models.config_job import ConfigJob  # noqa: F401
 from app.models.telemetry import TelemetrySample  # noqa: F401
+from app.models.alarm import Alarm  # noqa: F401
+from app.models.link import Link  # noqa: F401
 
 __all__ = [
     "User",
@@ -20,4 +22,6 @@ __all__ = [
     "WorkOrderEvent",
     "ConfigJob",
     "TelemetrySample",
+    "Alarm",
+    "Link",
 ]

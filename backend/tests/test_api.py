@@ -99,6 +99,63 @@ def test_circuit_provisioning_pipeline(client, auth_headers):
     assert refreshed["status"] == "active"
 
 
+def test_alarms_lifecycle(client, auth_headers):
+    _, tenant, dev_a, _ = _bootstrap_topology(client, auth_headers)
+    circuit = client.post(
+        "/api/v1/circuits",
+        headers=auth_headers,
+        json={
+            "name": "Alarm circuit", "tenant_id": tenant["id"],
+            "service_type": "l2vpn_evpn", "bandwidth_mbps": 1000,
+            "endpoints": [
+                {"label": "A", "device_id": dev_a["id"], "interface_name": "GE1/0/9"},
+            ],
+        },
+    ).json()
+    client.post(f"/api/v1/work-orders/provision/{circuit['id']}", headers=auth_headers)
+
+    # Inject a breaching sample then evaluate.
+    for _ in range(3):
+        client.post(
+            "/api/v1/telemetry/samples",
+            headers=auth_headers,
+            json={"circuit_id": circuit["id"], "packet_loss_pct": 5.0,
+                  "latency_ms": 99, "utilization_pct": 98},
+        )
+    r = client.post("/api/v1/alarms/evaluate", headers=auth_headers)
+    assert r.status_code == 200
+    assert r.json()["active_alarms"] >= 1
+
+    alarms = client.get(
+        "/api/v1/alarms?status=active", headers=auth_headers
+    ).json()
+    circuit_alarms = [a for a in alarms if a["circuit_id"] == circuit["id"]]
+    assert circuit_alarms
+    # Acknowledge then clear.
+    aid = circuit_alarms[0]["id"]
+    assert client.post(f"/api/v1/alarms/{aid}/ack", headers=auth_headers, json={}).status_code == 200
+    assert client.post(f"/api/v1/alarms/{aid}/clear", headers=auth_headers).status_code == 200
+
+
+def test_capacity_and_topology(client, auth_headers):
+    _, _, dev_a, dev_z = _bootstrap_topology(client, auth_headers)
+    link = client.post(
+        "/api/v1/capacity/links",
+        headers=auth_headers,
+        json={
+            "name": "test-dci", "type": "dci",
+            "device_a_id": dev_a["id"], "device_z_id": dev_z["id"],
+            "capacity_mbps": 100000, "reserved_mbps": 5000,
+        },
+    )
+    assert link.status_code == 201
+    usage = client.get("/api/v1/capacity/links/usage", headers=auth_headers).json()
+    assert any(u["name"] == "test-dci" for u in usage)
+    topo = client.get("/api/v1/capacity/topology", headers=auth_headers).json()
+    assert "nodes" in topo and "edges" in topo
+    assert len(topo["nodes"]) >= 2
+
+
 def test_telemetry_and_health(client, auth_headers):
     _, tenant, dev_a, dev_z = _bootstrap_topology(client, auth_headers)
     circuit = client.post(

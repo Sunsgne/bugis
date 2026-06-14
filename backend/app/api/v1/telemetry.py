@@ -19,7 +19,7 @@ from app.schemas.telemetry import (
     TelemetrySampleIn,
     TelemetrySampleOut,
 )
-from app.services import telemetry_service
+from app.services import alarm_service, telemetry_service
 
 router = APIRouter()
 
@@ -76,6 +76,11 @@ def simulate(
     for c in circuits:
         telemetry_service.simulate_circuit_sample(db, c)
         count += 1
+    db.flush()
+    # Re-evaluate SLA alarms against the fresh samples.
+    for c in circuits:
+        health = telemetry_service.compute_health(db, c)
+        alarm_service.evaluate_circuit_health(db, c, health)
     db.commit()
     return {"generated": count}
 

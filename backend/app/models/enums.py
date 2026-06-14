@@ -111,3 +111,26 @@ class UserRole(str, enum.Enum):
     ADMIN = "admin"
     OPERATOR = "operator"
     VIEWER = "viewer"
+
+
+class AlarmSeverity(str, enum.Enum):
+    CRITICAL = "critical"
+    MAJOR = "major"
+    MINOR = "minor"
+    WARNING = "warning"
+    INFO = "info"
+
+
+class AlarmStatus(str, enum.Enum):
+    ACTIVE = "active"
+    ACKNOWLEDGED = "acknowledged"
+    CLEARED = "cleared"
+
+
+class LinkType(str, enum.Enum):
+    """Physical / logical link between two devices."""
+
+    INTRA_DC = "intra_dc"  # 同 DC 内 (spine-leaf)
+    DCI = "dci"  # 跨 DC 互联
+    ACCESS = "access"  # 接入侧
+    UPLINK = "uplink"  # 上联

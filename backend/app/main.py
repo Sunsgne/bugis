@@ -19,9 +19,10 @@ from app.api.v1 import api_router
 from app.bootstrap import ensure_superuser
 from app.core.config import settings
 from app.core.database import SessionLocal, init_db
+from app.models.alarm import Alarm
 from app.models.circuit import Circuit
 from app.models.device import Device
-from app.models.enums import CircuitStatus
+from app.models.enums import AlarmStatus, CircuitStatus
 from app.models.tenant import Tenant
 
 # --- Prometheus metrics ----------------------------------------------------
@@ -32,6 +33,7 @@ TENANTS_TOTAL = Gauge("bugis_tenants_total", "Total number of tenants")
 ACTIVE_BANDWIDTH = Gauge(
     "bugis_active_bandwidth_mbps", "Sum of active circuit bandwidth (Mbps)"
 )
+ACTIVE_ALARMS = Gauge("bugis_active_alarms", "Number of active (uncleared) alarms")
 
 
 @asynccontextmanager
@@ -97,6 +99,11 @@ def metrics():
                 select(func.coalesce(func.sum(Circuit.bandwidth_mbps), 0)).where(
                     Circuit.status == CircuitStatus.ACTIVE
                 )
+            ) or 0
+        )
+        ACTIVE_ALARMS.set(
+            db.scalar(
+                select(func.count(Alarm.id)).where(Alarm.status != AlarmStatus.CLEARED)
             ) or 0
         )
     finally:

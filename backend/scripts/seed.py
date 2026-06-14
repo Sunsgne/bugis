@@ -17,11 +17,13 @@ from app.models.enums import (  # noqa: E402
     CircuitStatus,
     DeviceRole,
     DeviceStatus,
+    LinkType,
     OverlayTech,
     ServiceType,
     TenantType,
     Vendor,
 )
+from app.models.link import Link  # noqa: E402
 from app.models.site import Site  # noqa: E402
 from app.models.tenant import Tenant  # noqa: E402
 from app.services import allocation  # noqa: E402
@@ -139,6 +141,32 @@ def run() -> None:
         make_circuit("政务DCI数据中心互联", t_gov, ServiceType.DCI,
                      [("A", "BJ-BORDER-01", "GE1/0/3"),
                       ("Z", "SH-BORDER-01", "GE1/0/3")], 5000, sla="99.99")
+
+        # --- DCI / intra-DC links (capacity & topology) ---
+        db.add_all([
+            Link(name="BJ<->SH DCI", type=LinkType.DCI,
+                 device_a_id=by_name["BJ-BORDER-01"].id,
+                 device_z_id=by_name["SH-BORDER-01"].id,
+                 interface_a="HundredGE1/0/1", interface_z="HundredGE0/0/1",
+                 capacity_mbps=100000, reserved_mbps=6000),
+            Link(name="SH<->GZ DCI", type=LinkType.DCI,
+                 device_a_id=by_name["SH-BORDER-01"].id,
+                 device_z_id=by_name["GZ-PE-01"].id,
+                 interface_a="HundredGE0/0/2", interface_z="et-0/0/0",
+                 capacity_mbps=100000, reserved_mbps=2000),
+            Link(name="BJ leaf-border", type=LinkType.INTRA_DC,
+                 device_a_id=by_name["BJ-LEAF-01"].id,
+                 device_z_id=by_name["BJ-BORDER-01"].id,
+                 capacity_mbps=40000, reserved_mbps=1000),
+            Link(name="SH leaf-border", type=LinkType.INTRA_DC,
+                 device_a_id=by_name["SH-LEAF-01"].id,
+                 device_z_id=by_name["SH-BORDER-01"].id,
+                 capacity_mbps=40000, reserved_mbps=1000),
+            Link(name="GZ leaf-pe", type=LinkType.INTRA_DC,
+                 device_a_id=by_name["GZ-LEAF-01"].id,
+                 device_z_id=by_name["GZ-PE-01"].id,
+                 capacity_mbps=40000, reserved_mbps=2000),
+        ])
 
         db.commit()
         print("Seed complete:")

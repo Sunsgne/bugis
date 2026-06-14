@@ -44,6 +44,14 @@ class Settings(BaseSettings):
     # --- Telemetry ---
     enable_metrics: bool = True
 
+    # --- Alarm thresholds (SLA / capacity) ---
+    threshold_packet_loss_pct: float = 0.5
+    threshold_latency_ms: float = 50.0
+    threshold_utilization_pct: float = 90.0
+    threshold_health_score: float = 70.0
+    # Capacity reservation warning ratio for links.
+    threshold_link_utilization_pct: float = 85.0
+
     # --- Bootstrap admin ---
     first_superuser: str = "admin"
     first_superuser_password: str = "admin123"
