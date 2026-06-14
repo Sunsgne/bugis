@@ -28,6 +28,8 @@ orchestration, work-order workflow, and bandwidth/SLA telemetry.
 - **容量管理与拓扑** — 数据中心 / 设备 / 链路带宽分配率，SVG 网络拓扑可视化
 - **带宽变更** — MODIFY 工单一键调整带宽并重新下发各厂商 QoS
 - **北向自动化** — StackStorm 风格 Webhook 一键开通；**Ansible** inventory/playbook 导出（厂商官方 Collection）
+- **控制器北向适配** — 站点可托管给 SDN/厂商控制器（华为 NCE-Fabric / 华三 SeerEngine / OpenDaylight / ONOS），开通时下发 JSON 意图到控制器北向 RESTful
+- **实时推送 (SSE)** 与 **CSV 批量导入导出**（设备 / 专线）
 - **操作审计** — 全量写操作审计日志（操作人 / 路径 / 状态 / 来源 IP）
 - **Dry-run 安全模式** — 默认仅渲染配置不下发，无需实验设备即可端到端演示
 - **现代化运营门户** — React + Ant Design 大屏与管理界面

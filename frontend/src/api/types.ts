@@ -7,6 +7,18 @@ export interface Site {
   bgp_asn?: number;
   underlay_prefix?: string;
   description?: string;
+  delivery_mode?: string;
+  controller_id?: number;
+}
+
+export interface Controller {
+  id: number;
+  name: string;
+  type: string;
+  base_url: string;
+  username?: string;
+  verify_tls: number;
+  description?: string;
 }
 
 export interface Tenant {
