@@ -7,6 +7,7 @@ import {
   DeleteOutlined,
   DownloadOutlined,
   KeyOutlined,
+  MoreOutlined,
   NodeIndexOutlined,
   PlusOutlined,
   RadarChartOutlined,
@@ -22,9 +23,9 @@ import {
   Card,
   Col,
   Drawer,
+  Dropdown,
   Input,
   Modal,
-  Popconfirm,
   Row,
   Space,
   Statistic,
@@ -468,7 +469,7 @@ function CredentialEditDialog({
 }
 
 export default function Devices() {
-  const { message } = AntApp.useApp();
+  const { message, modal } = AntApp.useApp();
   const [rows, setRows] = useState<Device[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -793,15 +794,19 @@ export default function Devices() {
       title={pageCopy.devices}
       description="多厂商 Fabric 纳管 · SNMP / NETCONF / SSH"
       extra={
-        <Space wrap>
-          <Link to="/settings/management">
-            <Button icon={<SettingOutlined />}>南向</Button>
-          </Link>
-          <Link to="/settings/snmp">
-            <Button icon={<SettingOutlined />}>SNMP</Button>
-          </Link>
+        <Space wrap size={8}>
+          <Dropdown
+            menu={{
+              items: [
+                { key: "mgmt", label: <Link to="/settings/management">南向接口</Link> },
+                { key: "snmp", label: <Link to="/settings/snmp">SNMP 采集</Link> },
+              ],
+            }}
+          >
+            <Button icon={<SettingOutlined />}>设置</Button>
+          </Dropdown>
           <Button icon={<DownloadOutlined />} onClick={exportCsv}>
-            导出 CSV
+            导出
           </Button>
           <input
             ref={importRef}
@@ -824,48 +829,44 @@ export default function Devices() {
       }
     >
       <ListToolbar
-        summary={`共 ${total.toLocaleString()} 台设备${total > pageSize ? " · 已分页" : ""}`}
+        summary={`共 ${total.toLocaleString()} 台 · ${stats.online} 在线 · ${stats.offline} 离线`}
         left={
-          <>
-            <Input.Search
-              allowClear
-              placeholder="搜索名称或管理 IP"
-              style={{ width: 260 }}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              onSearch={runSearch}
-              enterButton={<SearchOutlined />}
-            />
-            <Space size={4}>
-              <Typography.Text type="secondary">导入即学习</Typography.Text>
-              <Switch checked={learnOnImport} onChange={setLearnOnImport} size="small" />
-            </Space>
-          </>
+          <Input.Search
+            allowClear
+            placeholder="搜索名称或管理 IP"
+            style={{ width: 280 }}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            onSearch={runSearch}
+            enterButton={<SearchOutlined />}
+          />
+        }
+        right={
+          <Space size={6}>
+            <Typography.Text type="secondary">导入即学习</Typography.Text>
+            <Switch checked={learnOnImport} onChange={setLearnOnImport} size="small" />
+          </Space>
         }
       />
 
-      <Row gutter={16} style={{ marginBottom: 16 }}>
-        <Col xs={12} md={6}>
-          <Card size="small">
-            <Statistic title="设备总数" value={total} />
+      <Row gutter={[12, 12]} style={{ marginBottom: 16, maxWidth: 720 }}>
+        <Col xs={24} sm={8}>
+          <Card size="small" styles={{ body: { padding: "12px 16px" } }}>
+            <Statistic title="设备总数" value={total} suffix="台" />
           </Card>
         </Col>
-        <Col xs={12} md={6}>
-          <Card size="small">
-            <Statistic title="在线" value={stats.online} valueStyle={{ color: "#3f8600" }} />
+        <Col xs={12} sm={8}>
+          <Card size="small" styles={{ body: { padding: "12px 16px" } }}>
+            <Statistic title="在线" value={stats.online} valueStyle={{ color: "#3f8600" }} suffix="台" />
           </Card>
         </Col>
-        <Col xs={12} md={6}>
-          <Card size="small">
-            <Statistic title="离线" value={stats.offline} valueStyle={{ color: stats.offline ? "#cf1322" : undefined }} />
-          </Card>
-        </Col>
-        <Col xs={12} md={6}>
-          <Card size="small">
+        <Col xs={12} sm={8}>
+          <Card size="small" styles={{ body: { padding: "12px 16px" } }}>
             <Statistic
-              title="当前页"
-              value={rows.length}
-              suffix={total > pageSize ? `/ ${pageSize}` : undefined}
+              title="离线"
+              value={stats.offline}
+              valueStyle={{ color: stats.offline ? "#cf1322" : "#8c8c8c" }}
+              suffix="台"
             />
           </Card>
         </Col>
@@ -876,7 +877,7 @@ export default function Devices() {
         loading={loading}
         dataSource={rows}
         locale={{ emptyText: "暂无设备 · 从导入或纳管开始" }}
-        {...dataTableProps(1180, rows.length > 0)}
+        {...dataTableProps(1040, true)}
         pagination={tablePagination(total, page, pageSize, (p, ps) => {
           setPage(p);
           setPageSize(ps);
@@ -885,7 +886,7 @@ export default function Devices() {
           {
             title: "设备",
             dataIndex: "name",
-            width: 180,
+            width: 200,
             ellipsis: true,
             render: (name: string, d: Device) => (
               <Tooltip
@@ -895,10 +896,10 @@ export default function Devices() {
                     .join(" · ") || name
                 }
               >
-                <div>
-                  <div style={{ fontWeight: 500 }}>{name}</div>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis" }}>{name}</div>
                   {d.model ? (
-                    <Typography.Text type="secondary" ellipsis style={{ fontSize: 12 }}>
+                    <Typography.Text type="secondary" ellipsis style={{ fontSize: 12, display: "block" }}>
                       {d.model}
                     </Typography.Text>
                   ) : null}
@@ -909,41 +910,42 @@ export default function Devices() {
           {
             title: "厂商",
             dataIndex: "vendor",
-            width: 96,
+            width: 88,
             render: (v: string) => <Tag>{VENDOR_SHORT[v] || v}</Tag>,
           },
           {
             title: "角色",
             dataIndex: "role",
-            width: 72,
+            width: 64,
             render: (r: string) => labelForOption(DEVICE_ROLE_OPTIONS, r).split(" ")[0],
           },
           {
             title: "管理 IP",
             dataIndex: "mgmt_ip",
-            width: 130,
+            width: 140,
+            ellipsis: true,
             render: (ip: string) => <Typography.Text code>{ip}</Typography.Text>,
           },
           {
             title: "站点",
-            width: 88,
+            width: 96,
             ellipsis: true,
             render: (_: unknown, r: Device) => siteName(r.site_id),
           },
           {
             title: "凭证",
-            width: 56,
-            align: "center",
+            width: 52,
+            align: "center" as const,
             render: (_: unknown, r: Device) =>
               r.password_set || r.username ? (
-                <CheckCircleOutlined style={{ color: "#52c41a" }} />
+                <CheckCircleOutlined style={{ color: "#52c41a", fontSize: 16 }} />
               ) : (
-                <CloseCircleOutlined style={{ color: "#d9d9d9" }} />
+                <CloseCircleOutlined style={{ color: "#d9d9d9", fontSize: 16 }} />
               ),
           },
           {
             title: "SNMP",
-            width: 72,
+            width: 68,
             render: (_: unknown, r: Device) =>
               r.snmp_enabled === false ? (
                 <Typography.Text type="secondary">—</Typography.Text>
@@ -954,46 +956,73 @@ export default function Devices() {
           {
             title: "状态",
             dataIndex: "status",
-            width: 88,
+            width: 76,
             render: (s: string) => (
-              <Tag color={DEVICE_STATUS_COLOR[s] || "default"}>
-                {DEVICE_STATUS_LABEL[s] || s}
-              </Tag>
+              <Tag color={DEVICE_STATUS_COLOR[s] || "default"}>{DEVICE_STATUS_LABEL[s] || s}</Tag>
             ),
           },
           {
             title: "操作",
-            width: 320,
+            key: "actions",
+            width: 168,
+            fixed: "right" as const,
             className: "table-actions",
             render: (_: unknown, r: Device) => (
-              <Space wrap>
-                <Tooltip title="端口清单与 S-VID 占用">
-                  <Button size="small" type="primary" icon={<ApiOutlined />} onClick={() => openPorts(r)}>
-                    端口
-                  </Button>
-                </Tooltip>
-                <Tooltip title="编辑登录 / SNMP 凭证">
+              <Space size={4} wrap={false} className="table-actions">
+                <Button size="small" type="primary" icon={<ApiOutlined />} onClick={() => openPorts(r)}>
+                  端口
+                </Button>
+                <Tooltip title="凭证">
                   <Button size="small" icon={<KeyOutlined />} onClick={() => openCredEdit(r)} />
                 </Tooltip>
-                <Tooltip title="现网配置学习">
-                  <Button size="small" icon={<BookOutlined />} onClick={() => learnConfig(r)} />
-                </Tooltip>
-                <Tooltip title="基线初始化">
-                  <Button size="small" icon={<RocketOutlined />} onClick={() => initialize(r)} />
-                </Tooltip>
-                <Tooltip title="可达性探测与 S-VID 扫描">
-                  <Button size="small" icon={<RadarChartOutlined />} onClick={() => check(r.id)} />
-                </Tooltip>
-                <Tooltip title="SNMP 接口发现">
-                  <Button size="small" icon={<NodeIndexOutlined />} onClick={() => discover(r.id)} />
-                </Tooltip>
-                <Popconfirm
-                  title="确认删除该设备?"
-                  description="此操作不可撤销，将永久删除该设备及其关联数据。"
-                  onConfirm={() => remove(r.id)}
+                <Dropdown
+                  trigger={["click"]}
+                  menu={{
+                    items: [
+                      {
+                        key: "learn",
+                        icon: <BookOutlined />,
+                        label: "现网学习",
+                        onClick: () => learnConfig(r),
+                      },
+                      {
+                        key: "init",
+                        icon: <RocketOutlined />,
+                        label: "初始化",
+                        onClick: () => initialize(r),
+                      },
+                      {
+                        key: "check",
+                        icon: <RadarChartOutlined />,
+                        label: "检测",
+                        onClick: () => check(r.id),
+                      },
+                      {
+                        key: "discover",
+                        icon: <NodeIndexOutlined />,
+                        label: "SNMP 发现",
+                        onClick: () => discover(r.id),
+                      },
+                      { type: "divider" },
+                      {
+                        key: "delete",
+                        icon: <DeleteOutlined />,
+                        label: "删除",
+                        danger: true,
+                        onClick: () =>
+                          modal.confirm({
+                            title: "确认删除该设备?",
+                            content: "此操作不可撤销，将永久删除该设备及其关联数据。",
+                            okType: "danger",
+                            okText: "删除",
+                            onOk: () => remove(r.id),
+                          }),
+                      },
+                    ],
+                  }}
                 >
-                  <Button size="small" danger icon={<DeleteOutlined />} />
-                </Popconfirm>
+                  <Button size="small" icon={<MoreOutlined />} />
+                </Dropdown>
               </Space>
             ),
           },
