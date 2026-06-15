@@ -42,7 +42,12 @@ class Device(Base, TimestampMixin):
     ssh_port: Mapped[int] = mapped_column(Integer, default=22)
     username: Mapped[str | None] = mapped_column(String(64), nullable=True)
     # NOTE: store credentials encrypted / in a vault in production.
+    # Also used as SNMP read community override when prefer_device_community is on.
     password: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    @property
+    def password_set(self) -> bool:
+        return bool(self.password)
 
     # Routing identity
     loopback_ip: Mapped[str | None] = mapped_column(String(64), nullable=True)

@@ -76,6 +76,10 @@ export interface Device {
   overlay_tech: string;
   status: string;
   mgmt_ip: string;
+  netconf_port?: number;
+  ssh_port?: number;
+  username?: string;
+  password_set?: boolean;
   loopback_ip?: string;
   bgp_asn?: number;
   sr_node_sid?: number;

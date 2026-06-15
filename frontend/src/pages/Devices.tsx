@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
+  Alert,
   Button,
   Card,
+  Divider,
   Form,
   Input,
   InputNumber,
@@ -16,8 +18,9 @@ import {
   Upload,
   App as AntApp,
   Popconfirm,
+  Typography,
 } from "antd";
-import { PlusOutlined, DownloadOutlined, UploadOutlined, ApiOutlined, RocketOutlined, SettingOutlined } from "@ant-design/icons";
+import { PlusOutlined, DownloadOutlined, UploadOutlined, ApiOutlined, RocketOutlined, SettingOutlined, KeyOutlined } from "@ant-design/icons";
 import { api } from "../api/client";
 import type { Device, DeviceInterface, Site, SvidUsage } from "../api/types";
 import { configPreviewModalProps, ConfigPreviewPre } from "../utils/configPreview";
@@ -40,14 +43,27 @@ const ROLES = ["spine", "leaf", "border_leaf", "vtep", "pe", "p", "rr", "dci_gw"
 const OVERLAYS = ["vxlan_evpn", "srmpls_evpn"];
 const VENDORS = ["h3c", "huawei", "juniper", "arista", "cisco", "frr"];
 
+const VENDOR_AUTH_HINT: Record<string, string> = {
+  h3c: "默认 NETCONF 830 / SSH 22；账号常为 admin 或 netconf",
+  huawei: "默认 NETCONF 830；账号常为 netconf 或 huawei",
+  juniper: "默认 NETCONF 830；账号常为 netconf",
+  arista: "默认 SSH/eAPI；部分场景用 admin",
+  cisco: "IOS-XR NETCONF 830；账号常为 admin / cisco",
+  frr: "SSH 22，vtysh CLI；账号为 Linux 用户",
+};
+
 export default function Devices() {
   const { message, modal } = AntApp.useApp();
   const [rows, setRows] = useState<Device[]>([]);
   const [sites, setSites] = useState<Site[]>([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
+  const [credOpen, setCredOpen] = useState(false);
+  const [credDevice, setCredDevice] = useState<Device | null>(null);
   const [form] = Form.useForm();
+  const [credForm] = Form.useForm();
   const [ifaces, setIfaces] = useState<Record<number, DeviceInterface[]>>({});
+  const watchVendor = Form.useWatch("vendor", form);
 
   async function loadIfaces(deviceId: number) {
     const { data } = await api.get<DeviceInterface[]>(`/devices/${deviceId}/interfaces`);
@@ -88,14 +104,46 @@ export default function Devices() {
 
   async function onCreate() {
     const values = await form.validateFields();
+    const payload = { ...values };
+    if (!payload.password) delete payload.password;
     try {
-      await api.post("/devices", values);
+      await api.post("/devices", payload);
       message.success("设备已添加");
       setOpen(false);
       form.resetFields();
       load();
     } catch (e: any) {
       message.error(e?.response?.data?.detail || "创建失败");
+    }
+  }
+
+  function openCredEdit(d: Device) {
+    setCredDevice(d);
+    credForm.setFieldsValue({
+      username: d.username || "",
+      netconf_port: d.netconf_port ?? 830,
+      ssh_port: d.ssh_port ?? 22,
+      password: "",
+    });
+    setCredOpen(true);
+  }
+
+  async function saveCred() {
+    if (!credDevice) return;
+    const v = await credForm.validateFields();
+    const payload: Record<string, unknown> = {
+      username: v.username || null,
+      netconf_port: v.netconf_port,
+      ssh_port: v.ssh_port,
+    };
+    if (v.password) payload.password = v.password;
+    try {
+      await api.patch(`/devices/${credDevice.id}`, payload);
+      message.success("设备凭证已保存");
+      setCredOpen(false);
+      load();
+    } catch (e: any) {
+      message.error(e?.response?.data?.detail || "保存失败");
     }
   }
 
@@ -345,6 +393,16 @@ export default function Devices() {
             ),
           },
           { title: "管理IP", dataIndex: "mgmt_ip" },
+          {
+            title: "凭证",
+            width: 100,
+            render: (_, r) =>
+              r.password_set || r.username ? (
+                <Tag color="green">已配置</Tag>
+              ) : (
+                <Tag>未配置</Tag>
+              ),
+          },
           { title: "Loopback", dataIndex: "loopback_ip" },
           { title: "ASN", dataIndex: "bgp_asn" },
           { title: "站点", render: (_, r) => siteName(r.site_id) },
@@ -356,7 +414,10 @@ export default function Devices() {
           {
             title: "操作",
             render: (_, r) => (
-              <Space>
+              <Space wrap>
+                <a onClick={() => openCredEdit(r)}>
+                  <KeyOutlined /> 凭证
+                </a>
                 <a onClick={() => initialize(r)}>
                   <RocketOutlined /> 初始化
                 </a>
@@ -377,7 +438,8 @@ export default function Devices() {
         open={open}
         onOk={onCreate}
         onCancel={() => setOpen(false)}
-        width={620}
+        width={720}
+        okText="添加"
       >
         <Form
           form={form}
@@ -386,53 +448,130 @@ export default function Devices() {
             vendor: "h3c",
             role: "leaf",
             overlay_tech: "vxlan_evpn",
-            status: "online",
+            status: "unknown",
             netconf_port: 830,
             ssh_port: 22,
+            username: "admin",
           }}
         >
-          <Space size="middle" style={{ display: "flex" }}>
-            <Form.Item name="name" label="名称" rules={[{ required: true }]} style={{ flex: 1 }}>
+          <Alert
+            type="info"
+            showIcon
+            style={{ marginBottom: 16 }}
+            message="远程登录凭证说明"
+            description={
+              <Typography.Paragraph style={{ marginBottom: 0 }}>
+                <strong>配置下发 / 初始化</strong> 使用 NETCONF（或 SSH CLI）的 <strong>用户名 + 密码</strong>。
+                <strong> SNMP 发现</strong> 默认读全局 SNMP 设置；若开启「优先设备凭证」，本页密码字段同时作为该设备的只读 Community。
+                Demo 环境默认 <strong>Dry-run</strong>，检测仅模拟可达；关闭 Dry-run 后才会真实登录设备。
+              </Typography.Paragraph>
+            }
+          />
+          <Space size="middle" style={{ display: "flex", flexWrap: "wrap" }}>
+            <Form.Item name="name" label="名称" rules={[{ required: true }]} style={{ flex: "1 1 200px" }}>
               <Input placeholder="BJ-LEAF-01" />
             </Form.Item>
-            <Form.Item name="vendor" label="厂商" style={{ width: 140 }}>
+            <Form.Item name="vendor" label="厂商" style={{ flex: "0 1 140px" }}>
               <Select options={VENDORS.map((v) => ({ value: v, label: v.toUpperCase() }))} />
             </Form.Item>
           </Space>
-          <Space size="middle" style={{ display: "flex" }}>
-            <Form.Item name="model" label="型号" style={{ flex: 1 }}>
+          <Space size="middle" style={{ display: "flex", flexWrap: "wrap" }}>
+            <Form.Item name="model" label="型号" style={{ flex: "1 1 200px" }}>
               <Input placeholder="S6850 / CE12800 / MX204 ..." />
             </Form.Item>
-            <Form.Item name="role" label="角色" style={{ width: 140 }}>
+            <Form.Item name="role" label="角色" style={{ flex: "0 1 140px" }}>
               <Select options={ROLES.map((v) => ({ value: v, label: v }))} />
             </Form.Item>
-            <Form.Item name="overlay_tech" label="Overlay" style={{ width: 160 }}>
+            <Form.Item name="overlay_tech" label="Overlay" style={{ flex: "0 1 160px" }}>
               <Select options={OVERLAYS.map((v) => ({ value: v, label: v }))} />
             </Form.Item>
           </Space>
-          <Space size="middle" style={{ display: "flex" }}>
-            <Form.Item name="mgmt_ip" label="管理 IP" rules={[{ required: true }]} style={{ flex: 1 }}>
+          <Space size="middle" style={{ display: "flex", flexWrap: "wrap" }}>
+            <Form.Item name="mgmt_ip" label="管理 IP" rules={[{ required: true }]} style={{ flex: "1 1 180px" }}>
               <Input placeholder="10.1.0.11" />
             </Form.Item>
-            <Form.Item name="loopback_ip" label="Loopback" style={{ flex: 1 }}>
+            <Form.Item name="loopback_ip" label="Loopback" style={{ flex: "1 1 180px" }}>
               <Input placeholder="10.1.255.11" />
             </Form.Item>
-            <Form.Item name="bgp_asn" label="BGP ASN" style={{ width: 120 }}>
+            <Form.Item name="bgp_asn" label="BGP ASN" style={{ flex: "0 1 120px" }}>
               <InputNumber style={{ width: "100%" }} />
             </Form.Item>
           </Space>
-          <Space size="middle" style={{ display: "flex" }}>
-            <Form.Item name="site_id" label="数据中心" style={{ flex: 1 }}>
+          <Space size="middle" style={{ display: "flex", flexWrap: "wrap" }}>
+            <Form.Item name="site_id" label="数据中心" style={{ flex: "1 1 200px" }}>
               <Select
                 allowClear
                 options={sites.map((s) => ({ value: s.id, label: `${s.code} ${s.name}` }))}
               />
             </Form.Item>
-            <Form.Item name="sr_node_sid" label="SR Node-SID" style={{ width: 140 }}>
+            <Form.Item name="sr_node_sid" label="SR Node-SID" style={{ flex: "0 1 140px" }}>
               <InputNumber style={{ width: "100%" }} />
             </Form.Item>
             <Form.Item name="is_route_reflector" label="路由反射器" valuePropName="checked">
               <Switch />
+            </Form.Item>
+          </Space>
+
+          <Divider orientation="left" style={{ margin: "8px 0 16px" }}>
+            南向登录凭证
+          </Divider>
+          {watchVendor && VENDOR_AUTH_HINT[watchVendor] && (
+            <Typography.Text type="secondary" style={{ display: "block", marginBottom: 12 }}>
+              {VENDOR_AUTH_HINT[watchVendor]}
+            </Typography.Text>
+          )}
+          <Space size="middle" style={{ display: "flex", flexWrap: "wrap" }}>
+            <Form.Item name="username" label="用户名 (NETCONF / SSH)" style={{ flex: "1 1 200px" }}>
+              <Input placeholder="admin / netconf" />
+            </Form.Item>
+            <Form.Item
+              name="password"
+              label="密码 / SNMP Community"
+              extra="SNMP 可在「系统设置 → SNMP 采集」配置全局 Community；此处可覆盖单台设备"
+              style={{ flex: "1 1 200px" }}
+            >
+              <Input.Password placeholder="登录密码或只读 community" autoComplete="new-password" />
+            </Form.Item>
+          </Space>
+          <Space size="middle" style={{ display: "flex", flexWrap: "wrap" }}>
+            <Form.Item name="netconf_port" label="NETCONF 端口" style={{ flex: "0 1 120px" }}>
+              <InputNumber min={1} max={65535} style={{ width: "100%" }} />
+            </Form.Item>
+            <Form.Item name="ssh_port" label="SSH 端口" style={{ flex: "0 1 120px" }}>
+              <InputNumber min={1} max={65535} style={{ width: "100%" }} />
+            </Form.Item>
+          </Space>
+        </Form>
+      </Modal>
+
+      <Modal
+        title={credDevice ? `设备凭证 · ${credDevice.name}` : "设备凭证"}
+        open={credOpen}
+        onOk={saveCred}
+        onCancel={() => setCredOpen(false)}
+        width={520}
+        okText="保存"
+      >
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message="密码不会回显"
+          description="留空密码则保持原值不变。修改后可用于 NETCONF/SSH 下发与 SNMP（若启用设备凭证优先）。"
+        />
+        <Form form={credForm} layout="vertical">
+          <Form.Item name="username" label="用户名">
+            <Input placeholder="admin / netconf" />
+          </Form.Item>
+          <Form.Item name="password" label="密码 / SNMP Community">
+            <Input.Password placeholder="留空不修改" autoComplete="new-password" />
+          </Form.Item>
+          <Space size="middle" style={{ display: "flex" }}>
+            <Form.Item name="netconf_port" label="NETCONF 端口" style={{ flex: 1 }}>
+              <InputNumber min={1} max={65535} style={{ width: "100%" }} />
+            </Form.Item>
+            <Form.Item name="ssh_port" label="SSH 端口" style={{ flex: 1 }}>
+              <InputNumber min={1} max={65535} style={{ width: "100%" }} />
             </Form.Item>
           </Space>
         </Form>

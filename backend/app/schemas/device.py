@@ -87,6 +87,7 @@ class DeviceListOut(DeviceBase, TimestampedSchema):
 
     id: int
     password: str | None = Field(default=None, exclude=True)
+    password_set: bool = False
 
 
 class DeviceOut(DeviceBase, TimestampedSchema):
