@@ -82,6 +82,13 @@ class DeviceUpdate(BaseModel):
     site_id: int | None = None
 
 
+class DeviceListOut(DeviceBase, TimestampedSchema):
+    """Device summary for list views (no interface payload)."""
+
+    id: int
+    password: str | None = Field(default=None, exclude=True)
+
+
 class DeviceOut(DeviceBase, TimestampedSchema):
     id: int
     # Never expose stored credentials in API responses.

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, noload
 
 import random
 
@@ -18,6 +18,7 @@ from app.schemas.device import (
     DeviceCreate,
     DeviceInterfaceCreate,
     DeviceInterfaceOut,
+    DeviceListOut,
     DeviceOut,
     DeviceUpdate,
 )
@@ -26,14 +27,14 @@ from app.services import baseline, config_mgmt, port_inventory, snmp
 router = APIRouter()
 
 
-@router.get("", response_model=list[DeviceOut])
+@router.get("", response_model=list[DeviceListOut])
 def list_devices(
     vendor: Vendor | None = None,
     site_id: int | None = None,
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
-    stmt = select(Device).order_by(Device.id)
+    stmt = select(Device).options(noload(Device.interfaces)).order_by(Device.id)
     if vendor:
         stmt = stmt.where(Device.vendor == vendor)
     if site_id:
@@ -54,11 +55,13 @@ def create_device(
     return device
 
 
-@router.get("/{device_id}", response_model=DeviceOut)
+@router.get("/{device_id}", response_model=DeviceListOut)
 def get_device(
     device_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_user)
 ):
-    device = db.get(Device, device_id)
+    device = db.execute(
+        select(Device).options(noload(Device.interfaces)).where(Device.id == device_id)
+    ).scalar_one_or_none()
     if not device:
         raise HTTPException(status_code=404, detail="device not found")
     return device

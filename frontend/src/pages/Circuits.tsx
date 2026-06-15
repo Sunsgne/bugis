@@ -105,27 +105,51 @@ export default function Circuits() {
 
   async function load() {
     setLoading(true);
-    try {
-      const circuitUrl = selectedTenantId
-        ? `/circuits?tenant_id=${selectedTenantId}`
-        : "/circuits";
-      const [c, t, s, d, o, sum] = await Promise.all([
-        api.get<Circuit[]>(circuitUrl),
-        api.get<Tenant[]>("/tenants"),
-        api.get<Site[]>("/sites"),
-        api.get<Device[]>("/devices"),
-        api.get<Offering[]>("/offerings?active=true"),
-        api.get<TenantSummary[]>("/tenants/summaries"),
-      ]);
-      setRows(c.data);
-      setTenants(t.data);
-      setSites(s.data);
-      setDevices(d.data);
-      setOfferings(o.data);
-      setSummaries(sum.data);
-    } finally {
-      setLoading(false);
+    const circuitUrl = selectedTenantId
+      ? `/circuits?tenant_id=${selectedTenantId}`
+      : "/circuits";
+    const tasks = [
+      { key: "circuits", req: api.get<Circuit[]>(circuitUrl) },
+      { key: "tenants", req: api.get<Tenant[]>("/tenants") },
+      { key: "sites", req: api.get<Site[]>("/sites") },
+      { key: "devices", req: api.get<Device[]>("/devices") },
+      { key: "offerings", req: api.get<Offering[]>("/offerings?active=true") },
+      { key: "summaries", req: api.get<TenantSummary[]>("/tenants/summaries") },
+    ] as const;
+    const results = await Promise.allSettled(tasks.map((t) => t.req));
+    const failed: string[] = [];
+    results.forEach((result, idx) => {
+      const key = tasks[idx].key;
+      if (result.status === "rejected") {
+        failed.push(key);
+        return;
+      }
+      const data = result.value.data;
+      switch (key) {
+        case "circuits":
+          setRows(data as Circuit[]);
+          break;
+        case "tenants":
+          setTenants(data as Tenant[]);
+          break;
+        case "sites":
+          setSites(data as Site[]);
+          break;
+        case "devices":
+          setDevices(data as Device[]);
+          break;
+        case "offerings":
+          setOfferings(data as Offering[]);
+          break;
+        case "summaries":
+          setSummaries(data as TenantSummary[]);
+          break;
+      }
+    });
+    if (failed.length) {
+      message.warning(`部分数据加载失败: ${failed.join(", ")}，请刷新页面重试`);
     }
+    setLoading(false);
   }
   useEffect(() => {
     load();
@@ -677,10 +701,10 @@ export default function Circuits() {
 function CreateModal({
   open,
   form,
-  tenants,
-  devices,
-  sites,
-  offerings,
+  tenants: tenantsProp,
+  devices: devicesProp,
+  sites: sitesProp,
+  offerings: offeringsProp,
   defaultTenantId,
   onOk,
   onCancel,
@@ -688,6 +712,56 @@ function CreateModal({
 }: any) {
   const [ifaceByDevice, setIfaceByDevice] = useState<Record<number, DeviceInterface[]>>({});
   const [pathPreview, setPathPreview] = useState<any>(null);
+  const [formLoading, setFormLoading] = useState(false);
+  const [tenants, setTenants] = useState<Tenant[]>(tenantsProp);
+  const [devices, setDevices] = useState<Device[]>(devicesProp);
+  const [sites, setSites] = useState<Site[]>(sitesProp);
+  const [offerings, setOfferings] = useState<Offering[]>(offeringsProp);
+
+  useEffect(() => {
+    setTenants(tenantsProp);
+    setDevices(devicesProp);
+    setSites(sitesProp);
+    setOfferings(offeringsProp);
+  }, [tenantsProp, devicesProp, sitesProp, offeringsProp]);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    async function ensureFormData() {
+      const needTenants = !tenantsProp.length;
+      const needDevices = !devicesProp.length;
+      const needSites = !sitesProp.length;
+      const needOfferings = !offeringsProp.length;
+      if (!needTenants && !needDevices && !needSites && !needOfferings) return;
+
+      setFormLoading(true);
+      try {
+        const [tRes, dRes, sRes, oRes] = await Promise.allSettled([
+          needTenants ? api.get<Tenant[]>("/tenants") : Promise.resolve(null),
+          needDevices ? api.get<Device[]>("/devices") : Promise.resolve(null),
+          needSites ? api.get<Site[]>("/sites") : Promise.resolve(null),
+          needOfferings ? api.get<Offering[]>("/offerings?active=true") : Promise.resolve(null),
+        ]);
+        if (cancelled) return;
+        if (tRes.status === "fulfilled" && tRes.value) setTenants(tRes.value.data);
+        if (dRes.status === "fulfilled" && dRes.value) setDevices(dRes.value.data);
+        if (sRes.status === "fulfilled" && sRes.value) setSites(sRes.value.data);
+        if (oRes.status === "fulfilled" && oRes.value) setOfferings(oRes.value.data);
+        const tenantFailed = needTenants && tRes.status === "rejected";
+        const deviceFailed = needDevices && dRes.status === "rejected";
+        if (tenantFailed || deviceFailed) {
+          message.error("表单数据加载失败，请刷新页面后重试");
+        }
+      } finally {
+        if (!cancelled) setFormLoading(false);
+      }
+    }
+    ensureFormData();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, tenantsProp, devicesProp, sitesProp, offeringsProp, message]);
 
   function deviceLabel(d: Device) {
     const sid = d.sr_node_sid ? ` SID:${d.sr_node_sid}` : "";
@@ -741,10 +815,22 @@ function CreateModal({
   }
 
   function ifaceOptions(deviceId: number) {
-    return (ifaceByDevice[deviceId] || []).map((i) => ({
-      value: i.name,
-      label: `${i.name}${i.speed_mbps ? ` (${i.speed_mbps >= 1000 ? i.speed_mbps / 1000 + "G" : i.speed_mbps + "M"})` : ""}${i.oper_status ? ` · ${i.oper_status}` : ""}`,
-    }));
+    return (ifaceByDevice[deviceId] || []).map((i) => {
+      const svids = (i.used_s_vids || [])
+        .map((u) =>
+          u.access_mode === "access"
+            ? "untagged"
+            : u.c_vid
+              ? `S${u.s_vid}/C${u.c_vid}`
+              : `S${u.s_vid}`
+        )
+        .join(",");
+      const svidHint = svids ? ` · 已占:${svids}` : "";
+      return {
+        value: i.name,
+        label: `${i.name}${i.speed_mbps ? ` (${i.speed_mbps >= 1000 ? i.speed_mbps / 1000 + "G" : i.speed_mbps + "M"})` : ""}${i.oper_status ? ` · ${i.oper_status}` : ""}${svidHint}`,
+      };
+    });
   }
 
   function applyOffering(id: number) {
@@ -757,7 +843,14 @@ function CreateModal({
     });
   }
   return (
-    <Modal title="新建专线" open={open} onOk={onOk} onCancel={onCancel} width={780}>
+    <Modal
+      title="新建专线"
+      open={open}
+      onOk={onOk}
+      onCancel={onCancel}
+      width={780}
+      confirmLoading={formLoading}
+    >
       <Form
         form={form}
         layout="vertical"
@@ -788,6 +881,11 @@ function CreateModal({
           </Form.Item>
           <Form.Item name="tenant_id" label="租户" rules={[{ required: true }]} style={{ width: 200 }}>
             <Select
+              loading={formLoading}
+              placeholder="选择租户"
+              showSearch
+              optionFilterProp="label"
+              notFoundContent={formLoading ? "加载中..." : "暂无租户，请先在租户管理创建"}
               options={tenants.map((t: Tenant) => ({ value: t.id, label: `${t.code} ${t.name}` }))}
             />
           </Form.Item>
@@ -891,6 +989,10 @@ function CreateModal({
                     <Select
                       style={{ width: 200 }}
                       placeholder="选择设备"
+                      loading={formLoading}
+                      showSearch
+                      optionFilterProp="label"
+                      notFoundContent={formLoading ? "加载中..." : "暂无设备，请先在设备管理添加"}
                       onChange={(v) => {
                         form.setFieldValue(["endpoints", field.name, "interface_name"], undefined);
                         loadIfaces(v);
