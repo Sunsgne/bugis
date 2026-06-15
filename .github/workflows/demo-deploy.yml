@@ -8,14 +8,24 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    if: ${{ secrets.DEMO_SSH_PASSWORD != '' }}
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check deploy credentials
+        env:
+          DEMO_SSH_PASSWORD: ${{ secrets.DEMO_SSH_PASSWORD }}
+        run: |
+          if [ -z "$DEMO_SSH_PASSWORD" ]; then
+            echo "::warning::DEMO_SSH_PASSWORD secret not set — skip demo deploy"
+            exit 0
+          fi
+
       - name: Install sshpass
+        if: ${{ secrets.DEMO_SSH_PASSWORD != '' }}
         run: sudo apt-get update && sudo apt-get install -y sshpass
 
       - name: Deploy to demo server
+        if: ${{ secrets.DEMO_SSH_PASSWORD != '' }}
         env:
           DEMO_SSH_HOST: ${{ secrets.DEMO_SSH_HOST }}
           DEMO_SSH_PORT: ${{ secrets.DEMO_SSH_PORT }}

@@ -19,6 +19,7 @@ from app.api.v1 import api_router
 from app.bootstrap import ensure_bugis_controller, ensure_cluster_node, ensure_superuser
 from app.core.config import settings
 from app.core.database import SessionLocal, init_db
+from app.migrate import run_migrations
 from app.models.alarm import Alarm
 from app.models.circuit import Circuit
 from app.models.device import Device
@@ -48,6 +49,7 @@ ALARMS_BY_SEVERITY = Gauge(
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    run_migrations()
     db = SessionLocal()
     try:
         ensure_superuser(db)
