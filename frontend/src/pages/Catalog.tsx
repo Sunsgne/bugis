@@ -1,22 +1,27 @@
 import { useEffect, useState } from "react";
 import {
+  Alert,
   Button,
   Card,
-  Col,
   Form,
   Input,
   InputNumber,
   Modal,
-  Row,
   Select,
+  Space,
+  Switch,
+  Table,
   Tag,
   App as AntApp,
   Popconfirm,
-  Statistic,
+  Typography,
 } from "antd";
-import { PlusOutlined, CrownOutlined } from "@ant-design/icons";
+import { PlusOutlined, SearchOutlined } from "@ant-design/icons";
 import { api } from "../api/client";
-import type { Offering } from "../api/types";
+import type { Offering, Paginated } from "../api/types";
+import { buildListQuery, tablePagination } from "../utils/table";
+
+const { Text, Paragraph } = Typography;
 
 const SERVICE_LABEL: Record<string, string> = {
   l2vpn_evpn: "EVPN L2VPN",
@@ -24,6 +29,11 @@ const SERVICE_LABEL: Record<string, string> = {
   evpn_vpws: "EVPN-VPWS",
   dci: "DCI 互联",
   remote_ipt: "Remote IPT",
+};
+const TIER_LABEL: Record<string, string> = {
+  gold: "金牌",
+  silver: "银牌",
+  bronze: "铜牌",
 };
 const TIER_COLOR: Record<string, string> = {
   gold: "gold",
@@ -34,16 +44,30 @@ const TIER_COLOR: Record<string, string> = {
 export default function Catalog() {
   const { message } = AntApp.useApp();
   const [rows, setRows] = useState<Offering[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [form] = Form.useForm();
 
-  async function load() {
-    const { data } = await api.get<Offering[]>("/offerings");
-    setRows(data);
+  async function load(p = page, ps = pageSize, q = search) {
+    setLoading(true);
+    try {
+      const { data } = await api.get<Paginated<Offering>>(
+        `/offerings${buildListQuery({ page: p, page_size: ps, q: q || undefined })}`,
+      );
+      setRows(data.items);
+      setTotal(data.total);
+    } finally {
+      setLoading(false);
+    }
   }
+
   useEffect(() => {
     load();
-  }, []);
+  }, [page, pageSize]);
 
   async function onCreate() {
     const values = await form.validateFields();
@@ -52,7 +76,8 @@ export default function Catalog() {
       message.success("套餐已创建");
       setOpen(false);
       form.resetFields();
-      load();
+      load(1);
+      setPage(1);
     } catch (e: any) {
       message.error(e?.response?.data?.detail || "创建失败");
     }
@@ -64,68 +89,163 @@ export default function Catalog() {
     load();
   }
 
+  async function toggleActive(o: Offering, active: boolean) {
+    await api.patch(`/offerings/${o.id}`, { active });
+    message.success(active ? "已上架" : "已下架");
+    load();
+  }
+
   return (
     <Card
-      title="服务套餐目录"
+      title="服务套餐"
       extra={
         <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>
           新建套餐
         </Button>
       }
     >
-      <Row gutter={[16, 16]}>
-        {rows.map((o) => (
-          <Col xs={24} sm={12} md={8} lg={6} key={o.id}>
-            <Card
-              type="inner"
-              title={
-                <span>
-                  {o.tier === "gold" && <CrownOutlined style={{ color: "#faad14" }} />}{" "}
-                  {o.name}
-                </span>
-              }
-              extra={<Tag color={TIER_COLOR[o.tier || ""]}>{o.tier || "-"}</Tag>}
-              actions={[
-                <Popconfirm title="删除该套餐?" onConfirm={() => remove(o.id)} key="del">
-                  <span style={{ color: "#cf1322" }}>删除</span>
-                </Popconfirm>,
-              ]}
-            >
-              <Statistic
-                value={o.bandwidth_mbps}
-                suffix="Mbps"
-                valueStyle={{ color: "#1677ff", fontSize: 22 }}
+      <Alert
+        type="info"
+        showIcon
+        style={{ marginBottom: 16 }}
+        message="套餐是什么？"
+        description={
+          <Paragraph style={{ marginBottom: 0 }}>
+            套餐是<strong>开通专线时的参数模板</strong>，不是已售出的业务实例。运营人员在「客户服务 · 专线」新建专线时选择套餐，
+            系统自动预填<strong>业务类型、带宽、SLA、CoS、MTU</strong> 等字段，保证同类业务配置一致、报价口径统一。
+            实际专线记录在「客户服务」中管理；此处仅维护可售产品目录。
+          </Paragraph>
+        }
+      />
+
+      <Space style={{ marginBottom: 16 }} wrap>
+        <Input.Search
+          allowClear
+          placeholder="搜索套餐名称或编码"
+          style={{ width: 280 }}
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          onSearch={() => {
+            setPage(1);
+            load(1, pageSize, search);
+          }}
+          enterButton={<SearchOutlined />}
+        />
+        <Text type="secondary">共 {total.toLocaleString()} 个套餐</Text>
+      </Space>
+
+      <Table
+        rowKey="id"
+        loading={loading}
+        dataSource={rows}
+        size="middle"
+        scroll={{ x: 960 }}
+        pagination={tablePagination(total, page, pageSize, (p, ps) => {
+          setPage(p);
+          setPageSize(ps);
+        })}
+        columns={[
+          { title: "套餐名称", dataIndex: "name", width: 180, ellipsis: true },
+          {
+            title: "编码",
+            dataIndex: "code",
+            width: 120,
+            render: (c) => <Tag>{c}</Tag>,
+          },
+          {
+            title: "业务类型",
+            dataIndex: "service_type",
+            width: 130,
+            render: (s) => <Tag color="geekblue">{SERVICE_LABEL[s] || s}</Tag>,
+          },
+          {
+            title: "带宽",
+            dataIndex: "bandwidth_mbps",
+            width: 110,
+            render: (b) => `${b.toLocaleString()} Mbps`,
+          },
+          {
+            title: "SLA",
+            dataIndex: "sla_target",
+            width: 90,
+            render: (s) => (s ? `${s}%` : "-"),
+          },
+          { title: "CoS", dataIndex: "cos", width: 80, render: (c) => c || "-" },
+          { title: "MTU", dataIndex: "mtu", width: 80 },
+          {
+            title: "等级",
+            dataIndex: "tier",
+            width: 90,
+            render: (t) =>
+              t ? (
+                <Tag color={TIER_COLOR[t]}>
+                  {TIER_LABEL[t] || t} {t}
+                </Tag>
+              ) : (
+                "-"
+              ),
+          },
+          {
+            title: "状态",
+            dataIndex: "active",
+            width: 100,
+            render: (active, r) => (
+              <Switch
+                checked={active}
+                checkedChildren="上架"
+                unCheckedChildren="下架"
+                onChange={(v) => toggleActive(r, v)}
               />
-              <div style={{ marginTop: 8 }}>
-                <Tag color="geekblue">{SERVICE_LABEL[o.service_type] || o.service_type}</Tag>
-                {o.sla_target && <Tag>SLA {o.sla_target}%</Tag>}
-                {o.cos && <Tag>CoS {o.cos}</Tag>}
-              </div>
-              <div style={{ marginTop: 8, color: "#888", fontSize: 12, minHeight: 32 }}>
-                {o.description}
-              </div>
-              <Tag color="blue" style={{ marginTop: 4 }}>
-                {o.code}
-              </Tag>
-            </Card>
-          </Col>
-        ))}
-      </Row>
+            ),
+          },
+          {
+            title: "说明",
+            dataIndex: "description",
+            ellipsis: true,
+            render: (d) => d || <Text type="secondary">-</Text>,
+          },
+          {
+            title: "操作",
+            width: 80,
+            fixed: "right",
+            render: (_, r) => (
+              <Popconfirm title="删除该套餐?" onConfirm={() => remove(r.id)}>
+                <Button type="link" danger size="small">
+                  删除
+                </Button>
+              </Popconfirm>
+            ),
+          },
+        ]}
+      />
 
       <Modal title="新建套餐" open={open} onOk={onCreate} onCancel={() => setOpen(false)}>
         <Form
           form={form}
           layout="vertical"
-          initialValues={{ service_type: "l2vpn_evpn", bandwidth_mbps: 1000, mtu: 9000, tier: "silver" }}
+          initialValues={{
+            service_type: "l2vpn_evpn",
+            bandwidth_mbps: 1000,
+            mtu: 9000,
+            tier: "silver",
+            active: true,
+          }}
         >
           <Form.Item name="name" label="套餐名称" rules={[{ required: true }]}>
-            <Input placeholder="例如 金牌混合云接入" />
+            <Input placeholder="例如 银牌混合云接入 1G" />
           </Form.Item>
-          <Form.Item name="code" label="编码" rules={[{ required: true }]}>
-            <Input placeholder="例如 GOLD-HC" />
+          <Form.Item
+            name="code"
+            label="编码"
+            rules={[{ required: true }]}
+            extra="开通专线时下拉显示此编码，建议简短唯一"
+          >
+            <Input placeholder="例如 SILVER-HC-1G" />
           </Form.Item>
           <Form.Item name="service_type" label="业务类型">
-            <Select options={Object.entries(SERVICE_LABEL).map(([value, label]) => ({ value, label }))} />
+            <Select
+              options={Object.entries(SERVICE_LABEL).map(([value, label]) => ({ value, label }))}
+            />
           </Form.Item>
           <Form.Item name="bandwidth_mbps" label="带宽 (Mbps)">
             <InputNumber min={1} style={{ width: "100%" }} />
@@ -143,7 +263,10 @@ export default function Catalog() {
             />
           </Form.Item>
           <Form.Item name="description" label="描述">
-            <Input.TextArea rows={2} />
+            <Input.TextArea rows={2} placeholder="面向客户的套餐说明，如适用场景、交付标准" />
+          </Form.Item>
+          <Form.Item name="active" label="立即上架" valuePropName="checked">
+            <Switch />
           </Form.Item>
         </Form>
       </Modal>

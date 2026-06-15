@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import {
   Button,
   Card,
+  Drawer,
   Form,
   Input,
   InputNumber,
@@ -15,10 +16,19 @@ import {
   Upload,
   App as AntApp,
   Popconfirm,
+  Typography,
 } from "antd";
-import { PlusOutlined, DownloadOutlined, UploadOutlined, ApiOutlined, RocketOutlined } from "@ant-design/icons";
+import {
+  PlusOutlined,
+  DownloadOutlined,
+  UploadOutlined,
+  ApiOutlined,
+  RocketOutlined,
+  SearchOutlined,
+} from "@ant-design/icons";
 import { api } from "../api/client";
-import type { Device, DeviceInterface, Site, SvidUsage } from "../api/types";
+import type { Device, DeviceInterface, Paginated, Site, SvidUsage } from "../api/types";
+import { buildListQuery, tablePagination } from "../utils/table";
 
 const VENDOR_COLOR: Record<string, string> = {
   h3c: "blue",
@@ -41,48 +51,67 @@ const VENDORS = ["h3c", "huawei", "juniper", "arista", "cisco", "frr"];
 export default function Devices() {
   const { message, modal } = AntApp.useApp();
   const [rows, setRows] = useState<Device[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
+  const [search, setSearch] = useState("");
   const [sites, setSites] = useState<Site[]>([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [form] = Form.useForm();
-  const [ifaces, setIfaces] = useState<Record<number, DeviceInterface[]>>({});
+  const [drawerDevice, setDrawerDevice] = useState<Device | null>(null);
+  const [ifaces, setIfaces] = useState<DeviceInterface[]>([]);
+  const [ifacesLoading, setIfacesLoading] = useState(false);
 
   async function loadIfaces(deviceId: number) {
-    const { data } = await api.get<DeviceInterface[]>(`/devices/${deviceId}/interfaces`);
-    setIfaces((p) => ({ ...p, [deviceId]: data }));
+    setIfacesLoading(true);
+    try {
+      const { data } = await api.get<DeviceInterface[]>(`/devices/${deviceId}/interfaces`);
+      setIfaces(data);
+    } finally {
+      setIfacesLoading(false);
+    }
+  }
+
+  async function openPorts(device: Device) {
+    setDrawerDevice(device);
+    setIfaces([]);
+    await loadIfaces(device.id);
   }
 
   async function discover(deviceId: number) {
     const hide = message.loading("SNMP 接口发现中...", 0);
     try {
       const { data } = await api.post<DeviceInterface[]>(
-        `/devices/${deviceId}/discover-interfaces`
+        `/devices/${deviceId}/discover-interfaces`,
       );
       hide();
       message.success(`已发现 ${data.length} 个接口`);
-      setIfaces((p) => ({ ...p, [deviceId]: data }));
+      setIfaces(data);
     } catch (e: any) {
       hide();
       message.error(e?.response?.data?.detail || "发现失败");
     }
   }
 
-  async function load() {
+  async function load(p = page, ps = pageSize, q = search) {
     setLoading(true);
     try {
       const [d, s] = await Promise.all([
-        api.get<Device[]>("/devices"),
+        api.get<Paginated<Device>>(`/devices${buildListQuery({ page: p, page_size: ps, q: q || undefined })}`),
         api.get<Site[]>("/sites"),
       ]);
-      setRows(d.data);
+      setRows(d.data.items);
+      setTotal(d.data.total);
       setSites(s.data);
     } finally {
       setLoading(false);
     }
   }
+
   useEffect(() => {
     load();
-  }, []);
+  }, [page, pageSize]);
 
   async function onCreate() {
     const values = await form.validateFields();
@@ -91,7 +120,8 @@ export default function Devices() {
       message.success("设备已添加");
       setOpen(false);
       form.resetFields();
-      load();
+      load(1);
+      setPage(1);
     } catch (e: any) {
       message.error(e?.response?.data?.detail || "创建失败");
     }
@@ -121,7 +151,8 @@ export default function Devices() {
       const { data } = await api.post("/bulk/devices/import", fd);
       message.success(`导入完成: 新增 ${data.created}, 跳过 ${data.skipped}`);
       if (data.errors?.length) message.warning(`${data.errors.length} 行有误`);
-      load();
+      load(1);
+      setPage(1);
     } catch (e: any) {
       message.error(e?.response?.data?.detail || "导入失败");
     }
@@ -162,37 +193,41 @@ export default function Devices() {
         const conflictCount = scan?.conflicts?.length ?? 0;
         if (conflictCount > 0) {
           message.warning(
-            `${data.device} 可达 · 发现 ${svidCount} 个 S-VID · ${conflictCount} 处冲突`
+            `${data.device} 可达 · 发现 ${svidCount} 个 S-VID · ${conflictCount} 处冲突`,
           );
         } else {
           message.success(
-            `${data.device} 可达 (${data.latency_ms}ms) · 已扫描 ${svidCount} 个 S-VID 占用`
+            `${data.device} 可达 (${data.latency_ms}ms) · 已扫描 ${svidCount} 个 S-VID 占用`,
           );
         }
-        setIfaces((p) => {
-          const ports = scan?.ports as Array<{ interface: string; s_vids: SvidUsage[]; allocated: boolean }> | undefined;
-          if (!ports?.length) return p;
+        if (drawerDevice?.id === id && scan?.ports?.length) {
+          const ports = scan.ports as Array<{
+            interface: string;
+            s_vids: SvidUsage[];
+            allocated: boolean;
+          }>;
           const byName = Object.fromEntries(ports.map((row) => [row.interface, row]));
-          const existing = p[id] || [];
-          const merged = existing.map((iface) => {
-            const hit = byName[iface.name];
-            if (!hit) return iface;
-            return { ...iface, used_s_vids: hit.s_vids, allocated: hit.allocated };
-          });
-          for (const row of ports) {
-            if (!merged.some((i) => i.name === row.interface)) {
-              merged.push({
-                id: -1,
-                device_id: id,
-                name: row.interface,
-                admin_up: true,
-                allocated: row.allocated,
-                used_s_vids: row.s_vids,
-              } as DeviceInterface);
+          setIfaces((existing) => {
+            const merged = existing.map((iface) => {
+              const hit = byName[iface.name];
+              if (!hit) return iface;
+              return { ...iface, used_s_vids: hit.s_vids, allocated: hit.allocated };
+            });
+            for (const row of ports) {
+              if (!merged.some((i) => i.name === row.interface)) {
+                merged.push({
+                  id: -1,
+                  device_id: id,
+                  name: row.interface,
+                  admin_up: true,
+                  allocated: row.allocated,
+                  used_s_vids: row.s_vids,
+                } as DeviceInterface);
+              }
             }
-          }
-          return { ...p, [id]: merged };
-        });
+            return merged;
+          });
+        }
       } else {
         message.error(`${data.device} 不可达 (${data.mgmt_ip})`);
       }
@@ -252,112 +287,74 @@ export default function Devices() {
         </Space>
       }
     >
+      <Space style={{ marginBottom: 16 }} wrap>
+        <Input.Search
+          allowClear
+          placeholder="搜索设备名称、主机名或管理 IP"
+          style={{ width: 320 }}
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          onSearch={() => {
+            setPage(1);
+            load(1, pageSize, search);
+          }}
+          enterButton={<SearchOutlined />}
+        />
+        <Typography.Text type="secondary">共 {total.toLocaleString()} 台设备</Typography.Text>
+      </Space>
+
       <Table
         rowKey="id"
         loading={loading}
         dataSource={rows}
-        expandable={{
-          onExpand: (expanded, r) => {
-            if (expanded && !ifaces[r.id]) loadIfaces(r.id);
-          },
-          expandedRowRender: (r) => {
-            const list = ifaces[r.id] || [];
-            return list.length ? (
-              <Table
-                size="small"
-                rowKey="id"
-                pagination={false}
-                dataSource={list}
-                columns={[
-                  { title: "接口", dataIndex: "name" },
-                  {
-                    title: "描述",
-                    dataIndex: "description",
-                    ellipsis: true,
-                    render: (d: string) =>
-                      d ? (
-                        <Tooltip title={d}>
-                          {d.includes("bw(") ? <Tag color="purple">{d}</Tag> : d}
-                        </Tooltip>
-                      ) : (
-                        "-"
-                      ),
-                  },
-                  {
-                    title: "速率",
-                    dataIndex: "speed_mbps",
-                    render: (s) => (s ? `${s >= 1000 ? s / 1000 + "G" : s + "M"}` : "-"),
-                  },
-                  {
-                    title: "Oper",
-                    dataIndex: "oper_status",
-                    render: (s) => <Tag color={s === "up" ? "green" : "default"}>{s || "-"}</Tag>,
-                  },
-                  { title: "ifIndex", dataIndex: "ifindex" },
-                  {
-                    title: "发现方式",
-                    dataIndex: "discovered_via",
-                    render: (d) => d && <Tag>{d}</Tag>,
-                  },
-                  {
-                    title: "S-VID 占用",
-                    dataIndex: "used_s_vids",
-                    render: (v: SvidUsage[] | null) => renderSvidUsage(v),
-                  },
-                  {
-                    title: "占用",
-                    dataIndex: "allocated",
-                    render: (a, row) =>
-                      a || row.used_s_vids?.length ? (
-                        <Tag color="orange">已占用</Tag>
-                      ) : (
-                        "-"
-                      ),
-                  },
-                ]}
-              />
-            ) : (
-              <span style={{ color: "#888" }}>暂无接口，点击「SNMP 发现」</span>
-            );
-          },
-        }}
+        scroll={{ x: 1200 }}
+        pagination={tablePagination(total, page, pageSize, (p, ps) => {
+          setPage(p);
+          setPageSize(ps);
+        })}
         columns={[
-          { title: "名称", dataIndex: "name" },
+          { title: "名称", dataIndex: "name", width: 140, ellipsis: true },
           {
             title: "厂商",
             dataIndex: "vendor",
+            width: 90,
             render: (v) => <Tag color={VENDOR_COLOR[v]}>{v.toUpperCase()}</Tag>,
           },
-          { title: "型号", dataIndex: "model" },
-          { title: "角色", dataIndex: "role", render: (r) => <Tag>{r}</Tag> },
+          { title: "型号", dataIndex: "model", width: 120, ellipsis: true },
+          { title: "角色", dataIndex: "role", width: 100, render: (r) => <Tag>{r}</Tag> },
           {
             title: "Overlay",
             dataIndex: "overlay_tech",
+            width: 130,
             render: (o) => (
               <Tag color={o === "vxlan_evpn" ? "blue" : "purple"}>
                 {o === "vxlan_evpn" ? "VXLAN-EVPN" : "SR-MPLS-EVPN"}
               </Tag>
             ),
           },
-          { title: "管理IP", dataIndex: "mgmt_ip" },
-          { title: "Loopback", dataIndex: "loopback_ip" },
-          { title: "ASN", dataIndex: "bgp_asn" },
-          { title: "站点", render: (_, r) => siteName(r.site_id) },
+          { title: "管理IP", dataIndex: "mgmt_ip", width: 120 },
+          { title: "Loopback", dataIndex: "loopback_ip", width: 120 },
+          { title: "ASN", dataIndex: "bgp_asn", width: 80 },
+          { title: "站点", width: 80, render: (_, r) => siteName(r.site_id) },
           {
             title: "状态",
             dataIndex: "status",
+            width: 90,
             render: (s) => <Tag color={STATUS_COLOR[s]}>{s}</Tag>,
           },
           {
             title: "操作",
+            width: 280,
+            fixed: "right",
             render: (_, r) => (
-              <Space>
+              <Space wrap size="small">
+                <a onClick={() => openPorts(r)}>端口</a>
                 <a onClick={() => initialize(r)}>
                   <RocketOutlined /> 初始化
                 </a>
                 <a onClick={() => check(r.id)}>检测</a>
                 <a onClick={() => discover(r.id)}>
-                  <ApiOutlined /> SNMP发现
+                  <ApiOutlined /> SNMP
                 </a>
                 <Popconfirm title="确认删除?" onConfirm={() => remove(r.id)}>
                   <a style={{ color: "#cf1322" }}>删除</a>
@@ -367,6 +364,79 @@ export default function Devices() {
           },
         ]}
       />
+
+      <Drawer
+        title={drawerDevice ? `端口清单 · ${drawerDevice.name}` : "端口清单"}
+        width={880}
+        open={!!drawerDevice}
+        onClose={() => setDrawerDevice(null)}
+        extra={
+          drawerDevice && (
+            <Space>
+              <Button onClick={() => check(drawerDevice.id)}>检测 S-VID</Button>
+              <Button type="primary" onClick={() => discover(drawerDevice.id)}>
+                SNMP 发现
+              </Button>
+            </Space>
+          )
+        }
+      >
+        <Table
+          size="small"
+          rowKey={(r) => `${r.device_id}-${r.name}`}
+          loading={ifacesLoading}
+          dataSource={ifaces}
+          pagination={{ pageSize: 20, showSizeChanger: true, showTotal: (t) => `共 ${t} 个端口` }}
+          columns={[
+            { title: "接口", dataIndex: "name", width: 120 },
+            {
+              title: "描述",
+              dataIndex: "description",
+              ellipsis: true,
+              render: (d: string) =>
+                d ? (
+                  <Tooltip title={d}>
+                    {d.includes("bw(") ? <Tag color="purple">{d}</Tag> : d}
+                  </Tooltip>
+                ) : (
+                  "-"
+                ),
+            },
+            {
+              title: "速率",
+              dataIndex: "speed_mbps",
+              width: 80,
+              render: (s) => (s ? `${s >= 1000 ? s / 1000 + "G" : s + "M"}` : "-"),
+            },
+            {
+              title: "Oper",
+              dataIndex: "oper_status",
+              width: 70,
+              render: (s) => <Tag color={s === "up" ? "green" : "default"}>{s || "-"}</Tag>,
+            },
+            { title: "ifIndex", dataIndex: "ifindex", width: 70 },
+            {
+              title: "发现方式",
+              dataIndex: "discovered_via",
+              width: 90,
+              render: (d) => d && <Tag>{d}</Tag>,
+            },
+            {
+              title: "S-VID 占用",
+              dataIndex: "used_s_vids",
+              render: (v: SvidUsage[] | null) => renderSvidUsage(v),
+            },
+            {
+              title: "占用",
+              dataIndex: "allocated",
+              width: 70,
+              render: (a, row) =>
+                a || row.used_s_vids?.length ? <Tag color="orange">已占用</Tag> : "-",
+            },
+          ]}
+        />
+      </Drawer>
+
       <Modal
         title="添加设备"
         open={open}

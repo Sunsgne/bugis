@@ -1,8 +1,8 @@
 """Circuit (专线) management endpoints."""
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, require_operator
@@ -21,10 +21,12 @@ from app.schemas.circuit import (
     CircuitCreate,
     CircuitEndpointCreate,
     CircuitEndpointOut,
+    CircuitListOut,
     CircuitOut,
     CircuitPathHopSchema,
     CircuitUpdate,
 )
+from app.schemas.pagination import PaginatedResponse, paginate_query, paginated
 from app.schemas.path import PathPreviewRequest, PathPreviewResponse
 from app.services import allocation, path_service, port_inventory, probe, validation
 
@@ -45,6 +47,10 @@ def _site_asn_for_endpoints(db: Session, endpoints: list[CircuitEndpoint]) -> in
         if device and device.site and device.site.bgp_asn:
             return device.site.bgp_asn
     return None
+
+
+def _to_circuit_list_out(circuit: Circuit) -> CircuitListOut:
+    return CircuitListOut.model_validate(circuit, from_attributes=True)
 
 
 def _to_circuit_out(db: Session, circuit: Circuit) -> CircuitOut:
@@ -85,17 +91,31 @@ def preview_path(
     return PathPreviewResponse(**data)
 
 
-@router.get("", response_model=list[CircuitOut])
+@router.get("", response_model=PaginatedResponse[CircuitListOut])
 def list_circuits(
     tenant_id: int | None = None,
+    q: str | None = Query(None, description="Search code or name"),
+    status: CircuitStatus | None = None,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
-    stmt = select(Circuit).order_by(Circuit.id)
+    stmt = select(Circuit).order_by(Circuit.id.desc())
     if tenant_id:
         stmt = stmt.where(Circuit.tenant_id == tenant_id)
-    circuits = db.execute(stmt).scalars().all()
-    return [_to_circuit_out(db, c) for c in circuits]
+    if status:
+        stmt = stmt.where(Circuit.status == status)
+    if q:
+        like = f"%{q.strip()}%"
+        stmt = stmt.where(or_(Circuit.code.ilike(like), Circuit.name.ilike(like)))
+    circuits, total = paginate_query(db, stmt, page=page, page_size=page_size)
+    return paginated(
+        [_to_circuit_list_out(c) for c in circuits],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
 
 
 @router.post("", response_model=CircuitOut, status_code=201)
