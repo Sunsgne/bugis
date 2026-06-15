@@ -98,7 +98,8 @@ run_ssh "cd '$REMOTE_DIR' && \
   cp /tmp/bugis-demo.env .env && \
   rm -f bugis-demo-src.tar.gz && \
   docker compose -f docker-compose.demo.yml --env-file .env build && \
-  docker compose -f docker-compose.demo.yml --env-file .env up -d"
+  docker compose -f docker-compose.demo.yml --env-file .env up -d && \
+  docker compose -f docker-compose.demo.yml --env-file .env exec -T backend python -m scripts.ensure_demo"
 
 echo "==> Health check (allow time for migrations + seed on first boot)"
 for i in $(seq 1 20); do
