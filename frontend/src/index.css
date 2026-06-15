@@ -141,6 +141,68 @@ body {
   }
 }
 
+/* Traffic insights / monitoring */
+.monitoring-page {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  flex: 1;
+  min-height: 0;
+}
+
+.monitoring-header-card,
+.monitoring-empty-card {
+  width: 100%;
+}
+
+.monitoring-toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+}
+
+.monitoring-toolbar-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.monitoring-toolbar-actions {
+  flex-shrink: 0;
+}
+
+@media (max-width: 768px) {
+  .monitoring-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .monitoring-toolbar-actions {
+    display: flex;
+    justify-content: flex-end;
+  }
+}
+
+.monitoring-empty-card {
+  flex: 1;
+  min-height: min(56vh, 560px);
+}
+
+.monitoring-empty-card > div:last-child {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: min(48vh, 480px);
+}
+
+.circuit-monitor-panel {
+  width: 100%;
+}
+
 /* Config management split layout */
 .config-management-page {
   width: 100%;

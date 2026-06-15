@@ -3,16 +3,14 @@ import { Link } from "react-router-dom";
 import {
   Alert,
   Button,
-  Col,
   Empty,
-  Row,
   Select,
   Space,
   Spin,
   Tag,
   App as AntApp,
 } from "antd";
-import { ExperimentOutlined, ReloadOutlined } from "@ant-design/icons";
+import { ExperimentOutlined, PlusOutlined, ReloadOutlined } from "@ant-design/icons";
 import { useSearchParams } from "react-router-dom";
 import { api } from "../api/client";
 import type { Circuit } from "../api/types";
@@ -99,14 +97,14 @@ export default function Monitoring() {
   const showInactiveHint = current && current.status !== "active";
 
   return (
-    <div className="monitoring-page" style={{ display: "flex", flexDirection: "column", gap: 16, flex: 1, minHeight: 0 }}>
-      <PageCard title={page.monitoring}>
+    <div className="monitoring-page">
+      <PageCard title={page.monitoring} className="monitoring-header-card">
         <Spin spinning={loading}>
-          <Row align="middle" gutter={[16, 12]}>
-            <Col xs={24} md={14} lg={16}>
+          <div className="monitoring-toolbar">
+            <div className="monitoring-toolbar-main">
               {circuits.length ? (
                 <Select
-                  style={{ width: "100%", maxWidth: 480 }}
+                  style={{ width: "100%" }}
                   value={selected ?? undefined}
                   onChange={selectCircuit}
                   placeholder="选择专线"
@@ -145,8 +143,8 @@ export default function Monitoring() {
                   }
                 />
               )}
-            </Col>
-            <Col xs={24} md={10} lg={8} style={{ textAlign: "right" }}>
+            </div>
+            <div className="monitoring-toolbar-actions">
               <Space wrap>
                 <Button icon={<ExperimentOutlined />} onClick={simulate} type="primary" ghost>
                   立即采集
@@ -155,8 +153,8 @@ export default function Monitoring() {
                   {action.refresh}
                 </Button>
               </Space>
-            </Col>
-          </Row>
+            </div>
+          </div>
         </Spin>
       </PageCard>
 
@@ -177,7 +175,15 @@ export default function Monitoring() {
             <Empty
               image={Empty.PRESENTED_IMAGE_SIMPLE}
               description={circuits.length ? empty.data : empty.circuits}
-            />
+            >
+              {!circuits.length && (
+                <Link to="/circuits">
+                  <Button type="primary" icon={<PlusOutlined />}>
+                    前往专线编排
+                  </Button>
+                </Link>
+              )}
+            </Empty>
           </PageCard>
         )
       )}
