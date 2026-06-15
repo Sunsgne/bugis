@@ -89,6 +89,53 @@ body,
   background: #fafafa;
 }
 
+.create-circuit-modal .ant-modal {
+  max-width: calc(100vw - 48px);
+  padding-bottom: 0;
+}
+
+.create-circuit-modal .ant-modal-content {
+  border-radius: 12px;
+}
+
+.create-circuit-modal .endpoint-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(520px, 1fr));
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.create-circuit-modal .endpoint-grid .endpoint-card {
+  margin-bottom: 0 !important;
+  height: 100%;
+}
+
+.create-circuit-modal .endpoint-port-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  width: 100%;
+}
+
+.create-circuit-modal .endpoint-port-row > .ant-form-item {
+  flex: 1;
+  min-width: 0;
+  margin-bottom: 0;
+}
+
+.create-circuit-modal .endpoint-port-row > .ant-btn {
+  flex-shrink: 0;
+  margin-top: 0;
+}
+
+.create-circuit-modal .port-detail-row {
+  flex-wrap: wrap;
+}
+
+.create-circuit-modal .port-detail-label {
+  flex: 0 0 auto;
+}
+
 .iface-option {
   padding: 6px 4px;
   line-height: 1.4;

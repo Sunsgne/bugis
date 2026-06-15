@@ -18,6 +18,25 @@ export const configPreviewModalProps: Pick<
   },
 };
 
+/** Large form modal for「新建专线」— wide layout, minimal nested scrollbars. */
+export const createCircuitModalProps: Pick<
+  ModalFuncProps,
+  "width" | "centered" | "styles" | "maskClosable" | "wrapClassName"
+> = {
+  width: 1280,
+  centered: true,
+  maskClosable: false,
+  wrapClassName: "create-circuit-modal",
+  styles: {
+    body: {
+      maxHeight: "calc(88vh - 110px)",
+      overflowY: "auto",
+      overflowX: "hidden",
+      paddingTop: 4,
+    },
+  },
+};
+
 export function ConfigPreviewPre({ children }: { children: ReactNode }) {
   return <pre className="config-pre config-pre-lg">{children}</pre>;
 }

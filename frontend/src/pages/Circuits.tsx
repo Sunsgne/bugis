@@ -41,7 +41,7 @@ import {
 } from "@ant-design/icons";
 import { api } from "../api/client";
 import type { Circuit, Device, DeviceInterface, Offering, Site, SvidUsage, Tenant } from "../api/types";
-import { configPreviewModalProps, ConfigPreviewPre } from "../utils/configPreview";
+import { configPreviewModalProps, ConfigPreviewPre, createCircuitModalProps } from "../utils/configPreview";
 import { TenantSearchSelect, useTenantSearch } from "../components/TenantSearchSelect";
 import OfferingSearchSelect, { useOfferingSearch } from "../components/OfferingSearchSelect";
 
@@ -1013,9 +1013,10 @@ function CreateModal({
       open={open}
       onOk={onOk}
       onCancel={onCancel}
-      width={920}
       confirmLoading={formLoading}
-      styles={{ body: { maxHeight: "72vh", overflowY: "auto" } }}
+      okText="创建"
+      cancelText="取消"
+      {...createCircuitModalProps}
     >
       <Form
         form={form}
@@ -1154,6 +1155,7 @@ function CreateModal({
         <Form.List name="endpoints">
           {(fields, { add, remove }) => (
             <>
+              <div className="endpoint-grid">
               {fields.map((field) => (
                 <Form.Item
                   key={field.key}
@@ -1190,8 +1192,8 @@ function CreateModal({
                         }
                         style={{ marginBottom: 12 }}
                       >
-                        <Row gutter={12}>
-                          <Col span={4}>
+                        <Row gutter={[16, 0]}>
+                          <Col xs={24} sm={8} md={6} lg={5}>
                             <Form.Item
                               name={[field.name, "label"]}
                               label="标签"
@@ -1200,7 +1202,7 @@ function CreateModal({
                               <Input placeholder="A" />
                             </Form.Item>
                           </Col>
-                          <Col span={20}>
+                          <Col xs={24} sm={16} md={18} lg={19}>
                             <Form.Item
                               name={[field.name, "device_id"]}
                               label="接入设备"
@@ -1225,19 +1227,18 @@ function CreateModal({
                         </Row>
 
                         <Form.Item label="物理端口" required style={{ marginBottom: 8 }}>
-                          <Space.Compact style={{ width: "100%" }}>
+                          <div className="endpoint-port-row">
                             <Form.Item
                               name={[field.name, "interface_name"]}
                               rules={[{ required: true, message: "请选择端口" }]}
                               noStyle
                             >
                               <Select
-                                style={{ width: "100%" }}
                                 placeholder={did ? "选择端口（下拉可查看占用详情）" : "请先选择设备"}
                                 showSearch
                                 disabled={!did}
                                 optionLabelProp="label"
-                                popupMatchSelectWidth={420}
+                                popupMatchSelectWidth={520}
                                 listHeight={360}
                                 notFoundContent={
                                   did ? (
@@ -1262,7 +1263,7 @@ function CreateModal({
                             >
                               发现
                             </Button>
-                          </Space.Compact>
+                          </div>
                         </Form.Item>
 
                         {selectedIface && (
@@ -1274,8 +1275,8 @@ function CreateModal({
                           />
                         )}
 
-                        <Row gutter={12} style={{ marginTop: 12 }}>
-                          <Col span={8}>
+                        <Row gutter={[16, 0]} style={{ marginTop: 12 }}>
+                          <Col xs={24} sm={12} md={8}>
                             <Form.Item name={[field.name, "access_mode"]} label="封装模式" initialValue="dot1q">
                               <Select
                                 options={[
@@ -1286,7 +1287,7 @@ function CreateModal({
                               />
                             </Form.Item>
                           </Col>
-                          <Col span={ep.access_mode === "qinq" ? 8 : 16}>
+                          <Col xs={24} sm={12} md={ep.access_mode === "qinq" ? 8 : 16}>
                             <Form.Item
                               name={[field.name, "vlan_id"]}
                               label="S-VID"
@@ -1301,7 +1302,7 @@ function CreateModal({
                             </Form.Item>
                           </Col>
                           {ep.access_mode === "qinq" && (
-                            <Col span={8}>
+                            <Col xs={24} sm={12} md={8}>
                               <Form.Item name={[field.name, "inner_vlan_id"]} label="C-VID">
                                 <InputNumber
                                   placeholder="内层 VLAN"
@@ -1318,6 +1319,7 @@ function CreateModal({
                   }}
                 </Form.Item>
               ))}
+              </div>
               <Button
                 type="dashed"
                 block
