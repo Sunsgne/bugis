@@ -69,3 +69,62 @@ body,
   max-height: 420px;
   white-space: pre;
 }
+
+.endpoint-card .ant-card-head {
+  min-height: 40px;
+  background: #fafafa;
+}
+
+.iface-option {
+  padding: 6px 4px;
+  line-height: 1.4;
+}
+
+.iface-option-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.iface-option-name {
+  font-weight: 600;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 13px;
+}
+
+.iface-option-svids {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed #f0f0f0;
+}
+
+.port-detail-panel {
+  background: #f6ffed;
+  border: 1px solid #b7eb8f;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 4px;
+}
+
+.port-detail-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  margin-bottom: 8px;
+}
+
+.port-detail-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.port-detail-label {
+  flex: 0 0 72px;
+  color: #666;
+  font-size: 12px;
+  line-height: 22px;
+}

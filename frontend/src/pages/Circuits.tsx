@@ -24,6 +24,8 @@ import {
   Switch,
   Segmented,
   Alert,
+  Divider,
+  Typography,
 } from "antd";
 import {
   PlusOutlined,
@@ -35,9 +37,10 @@ import {
   HistoryOutlined,
   RadarChartOutlined,
   DeleteOutlined,
+  WarningOutlined,
 } from "@ant-design/icons";
 import { api } from "../api/client";
-import type { Circuit, Device, DeviceInterface, Offering, Site, Tenant } from "../api/types";
+import type { Circuit, Device, DeviceInterface, Offering, Site, SvidUsage, Tenant } from "../api/types";
 
 const SERVICE_LABEL: Record<string, string> = {
   l2vpn_evpn: "EVPN L2VPN",
@@ -81,6 +84,134 @@ interface TenantSummary {
 }
 
 const DELETABLE = new Set(["decommissioned", "draft", "failed"]);
+
+const SVID_SOURCE: Record<string, { label: string; color: string }> = {
+  platform: { label: "平台", color: "blue" },
+  device: { label: "设备", color: "orange" },
+  legacy: { label: "手工", color: "red" },
+};
+
+function formatPortSpeed(mbps?: number) {
+  if (!mbps) return null;
+  return mbps >= 1000 ? `${mbps / 1000}G` : `${mbps}M`;
+}
+
+function svidUsageLabel(u: SvidUsage) {
+  if (u.access_mode === "access") return "untagged";
+  if (u.c_vid != null && u.s_vid != null) return `S:${u.s_vid} / C:${u.c_vid}`;
+  if (u.s_vid != null) return `S:${u.s_vid}`;
+  return "unknown";
+}
+
+function svidUsageTitle(u: SvidUsage) {
+  const src = SVID_SOURCE[u.source || "platform"]?.label || u.source;
+  const parts = [`来源: ${src}`];
+  if (u.circuit_code) parts.push(`专线 ${u.circuit_code}`);
+  if (u.note) parts.push(u.note);
+  return parts.join(" · ");
+}
+
+function vlanConflict(
+  usage: SvidUsage[] | null | undefined,
+  vlanId?: number | null,
+  accessMode?: string,
+  innerVlanId?: number | null
+): string | null {
+  if (!usage?.length) return null;
+  if (accessMode === "access") {
+    if (usage.some((u) => u.access_mode === "access")) {
+      return "该端口已配置 untagged 接入";
+    }
+    if (usage.length > 0) return "该端口已有 VLAN 封装，无法再配置 untagged";
+    return null;
+  }
+  if (vlanId == null) return null;
+  for (const u of usage) {
+    if (u.access_mode === "access") return "该端口已配置 untagged，无法叠加 VLAN";
+    if (accessMode === "qinq" && u.s_vid === vlanId && u.c_vid === innerVlanId) {
+      return `QinQ S:${vlanId}/C:${innerVlanId} 已被占用`;
+    }
+    if (accessMode !== "qinq" && u.access_mode !== "qinq" && u.s_vid === vlanId) {
+      return `S-VID ${vlanId} 已被占用`;
+    }
+  }
+  return null;
+}
+
+function SvidUsageTags({ list, emptyText }: { list?: SvidUsage[] | null; emptyText?: string }) {
+  if (!list?.length) {
+    return <span style={{ color: "#52c41a", fontSize: 12 }}>{emptyText || "无占用 · 可分配"}</span>;
+  }
+  return (
+    <Space size={[4, 4]} wrap>
+      {list.map((u, idx) => {
+        const src = SVID_SOURCE[u.source || "platform"] || SVID_SOURCE.platform;
+        return (
+          <Tooltip key={idx} title={svidUsageTitle(u)}>
+            <Tag color={src.color} style={{ margin: 0 }}>
+              {svidUsageLabel(u)}
+              <span style={{ opacity: 0.75, marginLeft: 4 }}>({src.label})</span>
+            </Tag>
+          </Tooltip>
+        );
+      })}
+    </Space>
+  );
+}
+
+function InterfaceOptionRow({ iface }: { iface: DeviceInterface }) {
+  const speed = formatPortSpeed(iface.speed_mbps);
+  const used = (iface.used_s_vids?.length || 0) > 0;
+  return (
+    <div className="iface-option">
+      <div className="iface-option-head">
+        <span className="iface-option-name">{iface.name}</span>
+        {speed && <Tag bordered={false}>{speed}</Tag>}
+        <Tag color={iface.oper_status === "up" ? "success" : "default"} bordered={false}>
+          {iface.oper_status || "unknown"}
+        </Tag>
+        {!used && <Tag color="green" bordered={false}>空闲</Tag>}
+      </div>
+      {used && (
+        <div className="iface-option-svids">
+          <SvidUsageTags list={iface.used_s_vids} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PortDetailPanel({
+  iface,
+  vlanId,
+  accessMode,
+  innerVlanId,
+}: {
+  iface?: DeviceInterface;
+  vlanId?: number | null;
+  accessMode?: string;
+  innerVlanId?: number | null;
+}) {
+  if (!iface) return null;
+  const speed = formatPortSpeed(iface.speed_mbps);
+  const conflict = vlanConflict(iface.used_s_vids, vlanId, accessMode, innerVlanId);
+  return (
+    <div className="port-detail-panel">
+      <div className="port-detail-title">
+        <span>{iface.name}</span>
+        {speed && <Tag>{speed}</Tag>}
+        <Tag color={iface.oper_status === "up" ? "success" : "default"}>{iface.oper_status || "-"}</Tag>
+      </div>
+      <div className="port-detail-row">
+        <span className="port-detail-label">S-VID 占用</span>
+        <SvidUsageTags list={iface.used_s_vids} emptyText="该端口暂无 VLAN 占用" />
+      </div>
+      {conflict && (
+        <Alert type="warning" showIcon icon={<WarningOutlined />} message={conflict} style={{ marginTop: 8 }} />
+      )}
+    </div>
+  );
+}
 
 export default function Circuits() {
   const { message, modal } = AntApp.useApp();
@@ -807,30 +938,31 @@ function CreateModal({
 
   async function discover(deviceId: number) {
     if (!deviceId) return message.warning("请先选择设备");
-    const { data } = await api.post<DeviceInterface[]>(
-      `/devices/${deviceId}/discover-interfaces`
-    );
-    setIfaceByDevice((p) => ({ ...p, [deviceId]: data }));
-    message.success(`已发现 ${data.length} 个接口`);
+    const hide = message.loading("SNMP 发现 + S-VID 扫描...", 0);
+    try {
+      const { data } = await api.post<DeviceInterface[]>(
+        `/devices/${deviceId}/discover-interfaces`
+      );
+      setIfaceByDevice((p) => ({ ...p, [deviceId]: data }));
+      message.success(`已发现 ${data.length} 个接口，并更新 VLAN 占用`);
+    } catch (e: any) {
+      message.error(e?.response?.data?.detail || "发现失败");
+    } finally {
+      hide();
+    }
   }
 
-  function ifaceOptions(deviceId: number) {
-    return (ifaceByDevice[deviceId] || []).map((i) => {
-      const svids = (i.used_s_vids || [])
-        .map((u) =>
-          u.access_mode === "access"
-            ? "untagged"
-            : u.c_vid
-              ? `S${u.s_vid}/C${u.c_vid}`
-              : `S${u.s_vid}`
-        )
-        .join(",");
-      const svidHint = svids ? ` · 已占:${svids}` : "";
-      return {
-        value: i.name,
-        label: `${i.name}${i.speed_mbps ? ` (${i.speed_mbps >= 1000 ? i.speed_mbps / 1000 + "G" : i.speed_mbps + "M"})` : ""}${i.oper_status ? ` · ${i.oper_status}` : ""}${svidHint}`,
-      };
-    });
+  function ifaceSelectOptions(deviceId: number) {
+    return (ifaceByDevice[deviceId] || []).map((iface) => ({
+      value: iface.name,
+      label: iface.name,
+      iface,
+    }));
+  }
+
+  function findIface(deviceId: number, name?: string) {
+    if (!deviceId || !name) return undefined;
+    return (ifaceByDevice[deviceId] || []).find((i) => i.name === name);
   }
 
   function applyOffering(id: number) {
@@ -848,8 +980,9 @@ function CreateModal({
       open={open}
       onOk={onOk}
       onCancel={onCancel}
-      width={780}
+      width={920}
       confirmLoading={formLoading}
+      styles={{ body: { maxHeight: "72vh", overflowY: "auto" } }}
     >
       <Form
         form={form}
@@ -864,7 +997,11 @@ function CreateModal({
           endpoints: [{ label: "A" }, { label: "Z" }],
         }}
       >
-        <Form.Item name="offering_id" label="选择套餐 (可选, 自动预填参数)">
+        <Typography.Text type="secondary" style={{ display: "block", marginBottom: 12 }}>
+          填写业务参数并配置 A/Z 接入端点；选择端口后可查看 S-VID 占用，避免 VLAN 冲突。
+        </Typography.Text>
+
+        <Form.Item name="offering_id" label="选择套餐 (可选)">
           <Select
             allowClear
             placeholder="不使用套餐则手动填写下方参数"
@@ -875,42 +1012,52 @@ function CreateModal({
             }))}
           />
         </Form.Item>
-        <Space size="middle" style={{ display: "flex" }}>
-          <Form.Item name="name" label="名称" rules={[{ required: true }]} style={{ flex: 1 }}>
-            <Input placeholder="例如 银行北京-上海二层专线" />
-          </Form.Item>
-          <Form.Item name="tenant_id" label="租户" rules={[{ required: true }]} style={{ width: 200 }}>
-            <Select
-              loading={formLoading}
-              placeholder="选择租户"
-              showSearch
-              optionFilterProp="label"
-              notFoundContent={formLoading ? "加载中..." : "暂无租户，请先在租户管理创建"}
-              options={tenants.map((t: Tenant) => ({ value: t.id, label: `${t.code} ${t.name}` }))}
-            />
-          </Form.Item>
-        </Space>
-        <Space size="middle" style={{ display: "flex" }}>
-          <Form.Item name="service_type" label="业务类型" style={{ flex: 1 }}>
-            <Select
-              onChange={(v) => {
-                if (v === "remote_ipt") {
-                  const eps = form.getFieldValue("endpoints") || [];
-                  if (eps.length > 1) {
-                    form.setFieldValue("endpoints", [eps[0]]);
+
+        <Row gutter={16}>
+          <Col span={16}>
+            <Form.Item name="name" label="名称" rules={[{ required: true }]}>
+              <Input placeholder="例如 银行北京-上海二层专线" />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item name="tenant_id" label="租户" rules={[{ required: true }]}>
+              <Select
+                loading={formLoading}
+                placeholder="选择租户"
+                showSearch
+                optionFilterProp="label"
+                notFoundContent={formLoading ? "加载中..." : "暂无租户"}
+                options={tenants.map((t: Tenant) => ({ value: t.id, label: `${t.code} ${t.name}` }))}
+              />
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Row gutter={16}>
+          <Col span={10}>
+            <Form.Item name="service_type" label="业务类型">
+              <Select
+                onChange={(v) => {
+                  if (v === "remote_ipt") {
+                    const eps = form.getFieldValue("endpoints") || [];
+                    if (eps.length > 1) form.setFieldValue("endpoints", [eps[0]]);
                   }
-                }
-              }}
-              options={Object.entries(SERVICE_LABEL).map(([value, label]) => ({ value, label }))}
-            />
-          </Form.Item>
-          <Form.Item name="bandwidth_mbps" label="带宽(Mbps)" style={{ width: 140 }}>
-            <InputNumber min={1} style={{ width: "100%" }} />
-          </Form.Item>
-          <Form.Item name="sla_target" label="SLA(%)" style={{ width: 120 }}>
-            <Input placeholder="99.95" />
-          </Form.Item>
-        </Space>
+                }}
+                options={Object.entries(SERVICE_LABEL).map(([value, label]) => ({ value, label }))}
+              />
+            </Form.Item>
+          </Col>
+          <Col span={7}>
+            <Form.Item name="bandwidth_mbps" label="带宽 (Mbps)">
+              <InputNumber min={1} style={{ width: "100%" }} />
+            </Form.Item>
+          </Col>
+          <Col span={7}>
+            <Form.Item name="sla_target" label="SLA (%)">
+              <Input placeholder="99.95" />
+            </Form.Item>
+          </Col>
+        </Row>
 
         <Form.Item noStyle shouldUpdate={(p, c) => p.service_type !== c.service_type}>
           {({ getFieldValue }) =>
@@ -964,110 +1111,182 @@ function CreateModal({
           }
         </Form.Item>
 
-        <div style={{ fontWeight: 600, marginBottom: 8 }}>接入端点</div>
+        <Divider orientation="left" style={{ margin: "8px 0 16px" }}>
+          接入端点
+        </Divider>
+        <div style={{ marginBottom: 8, fontSize: 12, color: "#888" }}>
+          图例：
+          <Tag color="green" bordered={false} style={{ marginLeft: 8 }}>空闲</Tag>
+          <Tag color="blue" bordered={false}>S:VID (平台)</Tag>
+          <Tag color="orange" bordered={false}>S:VID (设备)</Tag>
+          <Tag color="red" bordered={false}>S:VID (手工)</Tag>
+        </div>
         <Form.List name="endpoints">
           {(fields, { add, remove }) => (
             <>
               {fields.map((field) => (
-                <div
+                <Form.Item
                   key={field.key}
-                  style={{
-                    display: "flex",
-                    flexWrap: "wrap",
-                    gap: 8,
-                    alignItems: "baseline",
-                    border: "1px dashed #eee",
-                    borderRadius: 8,
-                    padding: "8px 8px 0",
-                    marginBottom: 8,
-                  }}
+                  noStyle
+                  shouldUpdate={(p, c) => p.endpoints !== c.endpoints}
                 >
-                  <Form.Item name={[field.name, "label"]} rules={[{ required: true }]}>
-                    <Input placeholder="标签 A/Z" style={{ width: 70 }} />
-                  </Form.Item>
-                  <Form.Item name={[field.name, "device_id"]} rules={[{ required: true }]}>
-                    <Select
-                      style={{ width: 200 }}
-                      placeholder="选择设备"
-                      loading={formLoading}
-                      showSearch
-                      optionFilterProp="label"
-                      notFoundContent={formLoading ? "加载中..." : "暂无设备，请先在设备管理添加"}
-                      onChange={(v) => {
-                        form.setFieldValue(["endpoints", field.name, "interface_name"], undefined);
-                        loadIfaces(v);
-                      }}
-                      options={devices.map((d: Device) => ({
-                        value: d.id,
-                        label: deviceLabel(d),
-                      }))}
-                    />
-                  </Form.Item>
-                  <Form.Item
-                    noStyle
-                    shouldUpdate={(p, c) =>
-                      p.endpoints?.[field.name]?.device_id !==
-                      c.endpoints?.[field.name]?.device_id
-                    }
-                  >
-                    {({ getFieldValue }) => {
-                      const did = getFieldValue(["endpoints", field.name, "device_id"]);
-                      return (
-                        <Space.Compact>
-                          <Form.Item
-                            name={[field.name, "interface_name"]}
-                            rules={[{ required: true }]}
-                            noStyle
-                          >
-                            <Select
-                              style={{ width: 180 }}
-                              placeholder="选择接口(SNMP)"
-                              showSearch
-                              disabled={!did}
-                              notFoundContent="无接口,点🔍发现"
-                              options={ifaceOptions(did)}
+                  {({ getFieldValue }) => {
+                    const ep = getFieldValue(["endpoints", field.name]) || {};
+                    const did = ep.device_id as number | undefined;
+                    const ifName = ep.interface_name as string | undefined;
+                    const selectedIface = findIface(did || 0, ifName);
+                    const label = ep.label || String.fromCharCode(65 + field.name);
+                    return (
+                      <Card
+                        size="small"
+                        className="endpoint-card"
+                        title={
+                          <Space>
+                            <Tag color={label === "A" ? "blue" : label === "Z" ? "purple" : "default"}>
+                              端点 {label}
+                            </Tag>
+                          </Space>
+                        }
+                        extra={
+                          fields.length > 1 ? (
+                            <Button
+                              type="text"
+                              danger
+                              size="small"
+                              icon={<MinusCircleOutlined />}
+                              onClick={() => remove(field.name)}
                             />
-                          </Form.Item>
-                          <Button
-                            icon={<RadarChartOutlined />}
-                            disabled={!did}
-                            onClick={() => discover(did)}
-                            title="SNMP 发现接口"
-                          />
-                        </Space.Compact>
-                      );
-                    }}
-                  </Form.Item>
-                  <Form.Item name={[field.name, "access_mode"]} initialValue="dot1q">
-                    <Select
-                      style={{ width: 130 }}
-                      options={[
-                        { value: "access", label: "Access(不带标签)" },
-                        { value: "dot1q", label: "Dot1Q(单标签)" },
-                        { value: "qinq", label: "QinQ(双标签)" },
-                      ]}
-                    />
-                  </Form.Item>
-                  <Form.Item name={[field.name, "vlan_id"]} tooltip="S-VID / 接入 VLAN">
-                    <InputNumber placeholder="S-VID" style={{ width: 90 }} min={1} max={4094} />
-                  </Form.Item>
-                  <Form.Item
-                    noStyle
-                    shouldUpdate={(p, c) =>
-                      p.endpoints?.[field.name]?.access_mode !==
-                      c.endpoints?.[field.name]?.access_mode
-                    }
-                  >
-                    {({ getFieldValue }) =>
-                      getFieldValue(["endpoints", field.name, "access_mode"]) === "qinq" ? (
-                        <Form.Item name={[field.name, "inner_vlan_id"]} tooltip="C-VID (内层)">
-                          <InputNumber placeholder="C-VID" style={{ width: 90 }} min={1} max={4094} />
+                          ) : null
+                        }
+                        style={{ marginBottom: 12 }}
+                      >
+                        <Row gutter={12}>
+                          <Col span={4}>
+                            <Form.Item
+                              name={[field.name, "label"]}
+                              label="标签"
+                              rules={[{ required: true }]}
+                            >
+                              <Input placeholder="A" />
+                            </Form.Item>
+                          </Col>
+                          <Col span={20}>
+                            <Form.Item
+                              name={[field.name, "device_id"]}
+                              label="接入设备"
+                              rules={[{ required: true, message: "请选择设备" }]}
+                            >
+                              <Select
+                                placeholder="选择 VTEP / PE / Leaf"
+                                loading={formLoading}
+                                showSearch
+                                optionFilterProp="label"
+                                onChange={(v) => {
+                                  form.setFieldValue(["endpoints", field.name, "interface_name"], undefined);
+                                  loadIfaces(v);
+                                }}
+                                options={devices.map((d: Device) => ({
+                                  value: d.id,
+                                  label: deviceLabel(d),
+                                }))}
+                              />
+                            </Form.Item>
+                          </Col>
+                        </Row>
+
+                        <Form.Item label="物理端口" required style={{ marginBottom: 8 }}>
+                          <Space.Compact style={{ width: "100%" }}>
+                            <Form.Item
+                              name={[field.name, "interface_name"]}
+                              rules={[{ required: true, message: "请选择端口" }]}
+                              noStyle
+                            >
+                              <Select
+                                style={{ width: "100%" }}
+                                placeholder={did ? "选择端口（下拉可查看占用详情）" : "请先选择设备"}
+                                showSearch
+                                disabled={!did}
+                                optionLabelProp="label"
+                                popupMatchSelectWidth={420}
+                                listHeight={360}
+                                notFoundContent={
+                                  did ? (
+                                    <span style={{ padding: 8, color: "#888" }}>
+                                      无接口记录，请点击右侧按钮 SNMP 发现
+                                    </span>
+                                  ) : (
+                                    "请先选择设备"
+                                  )
+                                }
+                                options={ifaceSelectOptions(did || 0)}
+                                optionRender={(option) => {
+                                  const iface = (option.data as { iface?: DeviceInterface })?.iface;
+                                  return iface ? <InterfaceOptionRow iface={iface} /> : option.label;
+                                }}
+                              />
+                            </Form.Item>
+                            <Button
+                              icon={<RadarChartOutlined />}
+                              disabled={!did}
+                              onClick={() => discover(did!)}
+                            >
+                              发现
+                            </Button>
+                          </Space.Compact>
                         </Form.Item>
-                      ) : null
-                    }
-                  </Form.Item>
-                  <MinusCircleOutlined onClick={() => remove(field.name)} />
-                </div>
+
+                        {selectedIface && (
+                          <PortDetailPanel
+                            iface={selectedIface}
+                            vlanId={ep.vlan_id}
+                            accessMode={ep.access_mode}
+                            innerVlanId={ep.inner_vlan_id}
+                          />
+                        )}
+
+                        <Row gutter={12} style={{ marginTop: 12 }}>
+                          <Col span={8}>
+                            <Form.Item name={[field.name, "access_mode"]} label="封装模式" initialValue="dot1q">
+                              <Select
+                                options={[
+                                  { value: "access", label: "Access · 不带标签" },
+                                  { value: "dot1q", label: "Dot1Q · 单标签" },
+                                  { value: "qinq", label: "QinQ · 双标签" },
+                                ]}
+                              />
+                            </Form.Item>
+                          </Col>
+                          <Col span={ep.access_mode === "qinq" ? 8 : 16}>
+                            <Form.Item
+                              name={[field.name, "vlan_id"]}
+                              label="S-VID"
+                              tooltip="Service VLAN，留空则自动分配"
+                            >
+                              <InputNumber
+                                placeholder="自动分配"
+                                style={{ width: "100%" }}
+                                min={1}
+                                max={4094}
+                              />
+                            </Form.Item>
+                          </Col>
+                          {ep.access_mode === "qinq" && (
+                            <Col span={8}>
+                              <Form.Item name={[field.name, "inner_vlan_id"]} label="C-VID">
+                                <InputNumber
+                                  placeholder="内层 VLAN"
+                                  style={{ width: "100%" }}
+                                  min={1}
+                                  max={4094}
+                                />
+                              </Form.Item>
+                            </Col>
+                          )}
+                        </Row>
+                      </Card>
+                    );
+                  }}
+                </Form.Item>
               ))}
               <Button
                 type="dashed"
@@ -1081,6 +1300,9 @@ function CreateModal({
           )}
         </Form.List>
 
+        <Divider orientation="left" style={{ margin: "16px 0" }}>
+          Underlay 路径
+        </Divider>
         <Form.Item noStyle shouldUpdate>
           {({ getFieldValue }) => {
             const eps = getFieldValue("endpoints") || [];
@@ -1098,13 +1320,11 @@ function CreateModal({
             return (
               <div
                 style={{
-                  marginTop: 8,
                   padding: 12,
                   border: "1px dashed #d9d9d9",
                   borderRadius: 8,
                 }}
               >
-                <div style={{ fontWeight: 600, marginBottom: 8 }}>Underlay 路径</div>
                 {hasVxlan && (
                   <Alert
                     type="info"
