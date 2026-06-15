@@ -174,8 +174,8 @@ export function physicalTopologyOption(topo: Topology): EChartsOption {
 }
 
 /** EVPN overlay full-mesh per VNI with force layout. */
-export function overlayTopologyOption(topo: OverlayTopo): EChartsOption | null {
-  if (!topo.nodes?.length) return null;
+export function overlayTopologyOption(topo: OverlayTopo | null | undefined): EChartsOption | null {
+  if (!topo?.nodes?.length) return null;
 
   const vniColor = (vni: number) =>
     VNI_PALETTE[(topo.vnis.indexOf(vni) + VNI_PALETTE.length) % VNI_PALETTE.length];

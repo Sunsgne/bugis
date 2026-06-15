@@ -30,9 +30,12 @@ import { empty, page } from "../constants/uiCopy";
 const { Text } = Typography;
 
 function OverlayMap({ topo }: { topo: any }) {
-  const chartOpt = useMemo(() => overlayTopologyOption(topo), [topo]);
+  const chartOpt = useMemo(
+    () => (topo?.nodes?.length ? overlayTopologyOption(topo) : null),
+    [topo],
+  );
 
-  if (!topo || !topo.nodes?.length || !chartOpt) {
+  if (!topo?.nodes?.length || !chartOpt) {
     return <Empty description="Overlay 尚未建立 · 开通控制器托管专线后自动呈现" />;
   }
 
@@ -84,24 +87,30 @@ export default function ControlPlane() {
   const [bindings, setBindings] = useState<any[]>([]);
   const [vni, setVni] = useState<number | undefined>(undefined);
   const [syncing, setSyncing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   async function load() {
-    const [s, v, r, t, b, c, d] = await Promise.all([
-      api.get("/controller/status"),
-      api.get("/controller/vteps"),
-      api.get("/controller/routes" + (vni != null ? `?vni=${vni}` : "")),
-      api.get("/controller/topology"),
-      api.get("/controller/bgp/sessions"),
-      api.get("/controller/cluster"),
-      api.get("/controller/dataplane/bindings"),
-    ]);
-    setStatus(s.data);
-    setVteps(v.data);
-    setRoutes(r.data);
-    setTopo(t.data);
-    setBgp(b.data);
-    setCluster(c.data);
-    setBindings(d.data);
+    try {
+      const [s, v, r, t, b, c, d] = await Promise.all([
+        api.get("/controller/status"),
+        api.get("/controller/vteps"),
+        api.get("/controller/routes" + (vni != null ? `?vni=${vni}` : "")),
+        api.get("/controller/topology"),
+        api.get("/controller/bgp/sessions"),
+        api.get("/controller/cluster"),
+        api.get("/controller/dataplane/bindings"),
+      ]);
+      setStatus(s.data);
+      setVteps(Array.isArray(v.data) ? v.data : []);
+      setRoutes(Array.isArray(r.data) ? r.data : []);
+      setTopo(t.data ?? { nodes: [], edges: [], vnis: [] });
+      setBgp(Array.isArray(b.data) ? b.data : []);
+      setCluster(c.data);
+      setBindings(Array.isArray(d.data) ? d.data : []);
+      setLoadError(null);
+    } catch (e: any) {
+      setLoadError(e?.response?.data?.detail || e?.message || "加载控制器数据失败");
+    }
   }
 
   async function syncBgp() {
@@ -121,10 +130,15 @@ export default function ControlPlane() {
     return () => clearInterval(t);
   }, [vni]);
 
-  const allVnis = Array.from(new Set(vteps.flatMap((v) => v.vnis))).sort((a, b) => a - b);
+  const allVnis = Array.from(new Set(vteps.flatMap((v) => v.vnis ?? []))).sort((a, b) => a - b);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {loadError && (
+        <Card size="small">
+          <Text type="danger">{loadError}</Text>
+        </Card>
+      )}
       <Card>
         <Row gutter={16} align="middle">
           <Col flex="auto">
@@ -281,7 +295,7 @@ export default function ControlPlane() {
             {
               title: "VNI",
               dataIndex: "vnis",
-              render: (vs: number[]) => vs.map((v) => <Tag key={v}>{v}</Tag>),
+              render: (vs: number[] | undefined) => (vs ?? []).map((v) => <Tag key={v}>{v}</Tag>),
             },
           ]}
         />
