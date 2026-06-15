@@ -80,7 +80,6 @@ import {
   FormLabel,
 } from "@/components/ui/form";
 import { Input as UiInput } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Switch as UiSwitch } from "@/components/ui/switch";
 import { Button as UiButton } from "@/components/ui/button";
