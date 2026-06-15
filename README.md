@@ -156,6 +156,14 @@ cd backend && python -m pytest -q
 
 公开 Demo：`http://203.117.117.196:3300/`（账号 `admin` / `admin123`）
 
+Demo 栈与生产 Compose 对齐，使用 **PostgreSQL 16**（非 SQLite），并附带 **Prometheus / Grafana** 可观测性组件：
+
+| 服务 | 地址 |
+|------|------|
+| 门户 | `http://<host>:3300/` |
+| Prometheus | `http://<host>:3309/` |
+| Grafana | `http://<host>:3303/`（默认 `admin` / 见 `GRAFANA_ADMIN_PASSWORD`） |
+
 每次合并到 `main` 后，可通过 GitHub Actions 自动同步 Demo（需在仓库 Secrets 配置）：
 
 | Secret | 说明 |
@@ -165,14 +173,25 @@ cd backend && python -m pytest -q
 | `DEMO_SSH_PORT` | 默认 `2333` |
 | `DEMO_SSH_USER` | 默认 `root` |
 | `DEMO_REMOTE_DIR` | 默认 `/root/bugis` |
+| `POSTGRES_PASSWORD` | 可选，Demo 库密码（未设则用脚本默认值） |
+| `BUGIS_SECRET_KEY` | 可选，JWT 签名密钥 |
+| `GRAFANA_ADMIN_PASSWORD` | 可选，Grafana 管理员密码 |
 
 本地手动部署：
 
 ```bash
-cp deploy/demo.env.example deploy/demo.env   # 填入密码，勿提交
+cp deploy/demo.env.example deploy/demo.env   # 填入 SSH 密码与栈密钥，勿提交
 source deploy/demo.env
 ./scripts/deploy-demo.sh
 ```
+
+本地仅启动 Demo 栈（无需 SSH）：
+
+```bash
+docker compose -f docker-compose.demo.yml --env-file deploy/demo.env up --build
+```
+
+从旧版 SQLite Demo 升级时，数据需重新 seed（`pgdata` 卷持久化 PostgreSQL）；旧 `bugis_data` 卷可手动删除。
 
 Workflow 文件：`.github/workflows/demo-deploy.yml`（push `main` 或手动触发）。
 
