@@ -5,8 +5,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, noload
 
-import random
-
 from app.api.deps import get_current_user, require_operator
 from app.core.config import settings
 from app.core.database import get_db
@@ -146,23 +144,9 @@ def check_device(
     if not device:
         raise HTTPException(status_code=404, detail="device not found")
 
-    if settings.dry_run:
-        reachable = random.random() > 0.1
-        latency = round(random.uniform(0.5, 12.0), 2)
-    else:  # pragma: no cover - requires live device
-        import socket
-        reachable = False
-        latency = 0.0
-        transport = device_management.effective_transport(device)
-        try:
-            with socket.create_connection(
-                (device.mgmt_ip, device_management.probe_port(device, transport)),
-                timeout=3,
-            ):
-                reachable = True
-        except OSError:
-            reachable = False
-
+    probe = device_management.probe_reachability(db, device)
+    reachable = probe["reachable"]
+    latency = probe.get("latency_ms")
     transport = device_management.effective_transport(device)
     device.status = DeviceStatus.ONLINE if reachable else DeviceStatus.OFFLINE
     svid_scan: dict | None = None
@@ -178,6 +162,8 @@ def check_device(
         "transport": transport,
         "reachable": reachable,
         "latency_ms": latency,
+        "method": probe.get("method"),
+        "probes": probe.get("probes") or [],
         "status": device.status.value,
         "dry_run": settings.dry_run,
         "svid_scan": svid_scan,

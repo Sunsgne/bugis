@@ -379,7 +379,7 @@ export default function Devices() {
           );
         } else {
           message.success(
-            `${data.device} 可达 (${data.latency_ms}ms) · 已扫描 ${svidCount} 个 S-VID 占用`,
+            `${data.device} 可达${data.method ? ` · ${data.method}` : ""} (${data.latency_ms}ms) · 已扫描 ${svidCount} 个 S-VID 占用`,
           );
         }
         if (drawerDevice?.id === id && scan?.ports?.length) {
@@ -411,7 +411,14 @@ export default function Devices() {
           });
         }
       } else {
-        message.error(`${data.device} 不可达 (${data.mgmt_ip})`);
+        const tried = (data.probes as Array<{ method?: string }> | undefined)
+          ?.map((p) => p.method)
+          .filter(Boolean)
+          .join(" / ");
+        message.warning(
+          `${data.device} 管理面不可达 (${data.mgmt_ip})${tried ? ` · 已探测 ${tried}` : ""} · 请检查 IP、端口、SNMP Community 与防火墙`,
+          6,
+        );
       }
       load();
     } catch (e: unknown) {

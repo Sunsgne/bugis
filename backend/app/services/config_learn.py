@@ -1,7 +1,6 @@
 """Orchestrate live-network config learning and feed results into platform features."""
 from __future__ import annotations
 
-import socket
 from datetime import datetime, timezone
 
 from sqlalchemy import select
@@ -15,18 +14,16 @@ from app.services import config_fetch, config_learn_parse, config_mgmt, port_inv
 from app.services import device_management, snmp_settings as snmp_cfg
 
 
-def _check_reachable(device: Device) -> tuple[bool, str | None]:
-    if settings.dry_run:
+def _check_reachable(db: Session, device: Device) -> tuple[bool, str | None]:
+    probe = device_management.probe_reachability(db, device)
+    if probe["reachable"]:
         return True, None
-    transport = device_management.effective_transport(device)
-    try:
-        with socket.create_connection(
-            (device.mgmt_ip, device_management.probe_port(device, transport)),
-            timeout=3,
-        ):
-            return True, None
-    except OSError as exc:
-        return False, str(exc)
+    errors = [
+        f"{p.get('method')}:{p.get('error')}"
+        for p in probe.get("probes") or []
+        if p.get("error")
+    ]
+    return False, "; ".join(errors) if errors else "unreachable"
 
 
 def _enrich_device(device: Device, inventory: config_learn_parse.LearnedInventory) -> dict:
@@ -53,7 +50,7 @@ def learn_device(
 ) -> dict:
     """Full learn pipeline: fetch → parse → snapshot → port inventory → enrich."""
     started = datetime.now(timezone.utc)
-    reachable, reach_err = _check_reachable(device)
+    reachable, reach_err = _check_reachable(db, device)
     if not reachable:
         run = DeviceLearnRun(
             device_id=device.id,

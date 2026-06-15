@@ -1312,7 +1312,7 @@ def test_sr_explicit_circuit_path(client, auth_headers):
 
 
 def test_device_check_svid_scan(client, auth_headers, monkeypatch):
-    monkeypatch.setattr("app.api.v1.devices.random.random", lambda: 0.99)
+    monkeypatch.setattr("app.services.device_management.random.random", lambda: 0.99)
 
     dev = client.post(
         "/api/v1/devices", headers=auth_headers,
