@@ -13,7 +13,6 @@ from app.models.circuit import Circuit, CircuitEndpoint
 from app.models.config_job import ConfigJob
 from app.models.device import Device
 from app.models.enums import CircuitStatus, PathMode, AccessMode, ServiceType
-from app.models.offering import ServiceOffering
 from app.models.tenant import Tenant
 from app.models.user import User
 from app.models.workorder import WorkOrder
@@ -130,7 +129,7 @@ def create_circuit(
         raise HTTPException(status_code=404, detail="tenant not found")
 
     data = payload.model_dump(
-        exclude={"endpoints", "code", "offering_id", "via_device_ids"}
+        exclude={"endpoints", "code", "via_device_ids"}
     )
     via_ids = payload.via_device_ids or []
     path_mode = payload.path_mode
@@ -148,19 +147,6 @@ def create_circuit(
                 detail="; ".join(preview["connectivity_errors"]),
             )
     data["path_mode"] = path_mode
-
-    # Apply offering defaults (only where the request left fields at default).
-    if payload.offering_id:
-        offering = db.get(ServiceOffering, payload.offering_id)
-        if not offering:
-            raise HTTPException(status_code=404, detail="offering not found")
-        data["service_type"] = offering.service_type
-        data["bandwidth_mbps"] = offering.bandwidth_mbps
-        data["mtu"] = offering.mtu
-        if offering.sla_target:
-            data["sla_target"] = offering.sla_target
-        if offering.cos:
-            data["cos"] = offering.cos
 
     circuit = Circuit(**data)
     circuit.code = payload.code or allocation.next_circuit_code(db)

@@ -4,7 +4,6 @@ import {
   Users,
   MapPin,
   Server,
-  Package,
   Cable,
   ClipboardList,
   Cloud,
@@ -33,7 +32,6 @@ import Monitoring from "./pages/Monitoring";
 import Alarms from "./pages/Alarms";
 import Capacity from "./pages/Capacity";
 import Topology from "./pages/Topology";
-import Catalog from "./pages/Catalog";
 import Controllers from "./pages/Controllers";
 import ControlPlane from "./pages/ControlPlane";
 import ConfigManagement from "./pages/ConfigManagement";
@@ -81,7 +79,6 @@ const MENU: NavGroup[] = [
   {
     label: nav.groups.circuits,
     items: [
-      { key: "/catalog", label: nav.items.catalog, icon: <Package className="h-4 w-4" /> },
       { key: "/circuits", label: nav.items.circuits, icon: <Cable className="h-4 w-4" /> },
       { key: "/work-orders", label: nav.items.workOrders, icon: <ClipboardList className="h-4 w-4" /> },
     ],
@@ -271,7 +268,7 @@ function Shell() {
             <Route path="/devices" element={<Devices />} />
             <Route path="/controllers" element={<Controllers />} />
             <Route path="/control-plane" element={<ControlPlane />} />
-            <Route path="/catalog" element={<Catalog />} />
+            <Route path="/catalog" element={<Navigate to="/circuits" replace />} />
             <Route path="/circuits" element={<Circuits />} />
             <Route path="/work-orders" element={<WorkOrders />} />
             <Route path="/config" element={<ConfigManagement />} />

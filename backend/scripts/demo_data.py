@@ -1,4 +1,4 @@
-"""Shared demo catalog: tenants, offerings, circuits, links."""
+"""Shared demo data: tenants, circuits, links."""
 from __future__ import annotations
 
 from sqlalchemy.orm import Session
@@ -10,7 +10,6 @@ from app.models.controlplane import EvpnRoute
 from app.models.device import Device
 from app.models.enums import CircuitStatus, LinkType, ServiceType, TenantType
 from app.models.link import Link
-from app.models.offering import ServiceOffering
 from app.models.site import Site
 from app.models.tenant import Tenant
 from app.services import allocation
@@ -18,44 +17,6 @@ from app.services import allocation
 
 def _devices_by_name(db: Session) -> dict[str, Device]:
     return {d.name: d for d in db.query(Device).all()}
-
-
-def ensure_demo_offerings(db: Session) -> None:
-    if db.query(ServiceOffering).count() > 0:
-        return
-    db.add_all([
-        ServiceOffering(
-            name="金牌混合云接入", code="GOLD-HC",
-            service_type=ServiceType.L3VPN_EVPN, bandwidth_mbps=2000,
-            sla_target="99.99", cos="ef", tier="gold",
-            description="2Gbps L3VPN 混合云接入，最高优先级",
-        ),
-        ServiceOffering(
-            name="银牌企业专线", code="SILVER-L2",
-            service_type=ServiceType.L2VPN_EVPN, bandwidth_mbps=1000,
-            sla_target="99.95", cos="af31", tier="silver",
-            description="1Gbps L2VPN 企业互联",
-        ),
-        ServiceOffering(
-            name="铜牌基础专线", code="BRONZE-L2",
-            service_type=ServiceType.L2VPN_EVPN, bandwidth_mbps=200,
-            sla_target="99.9", cos="af11", tier="bronze",
-            description="200Mbps 基础二层专线",
-        ),
-        ServiceOffering(
-            name="DCI 大带宽互联", code="DCI-XL",
-            service_type=ServiceType.DCI, bandwidth_mbps=10000,
-            sla_target="99.99", cos="ef", tier="gold",
-            description="10Gbps 数据中心互联",
-        ),
-        ServiceOffering(
-            name="Remote IPT 跨境公网", code="RIPT-STD",
-            service_type=ServiceType.REMOTE_IPT, bandwidth_mbps=500,
-            sla_target="99.9", cos="af21", tier="silver",
-            description="通过专线接入对端国家/地区公网出口 (IPT)",
-        ),
-    ])
-    db.flush()
 
 
 def ensure_demo_tenants(db: Session) -> dict[str, Tenant]:
@@ -138,7 +99,6 @@ def backfill_demo_circuits(db: Session) -> int:
         print(f"Skip circuit backfill: missing devices {sorted(need - by_name.keys())}")
         return 0
 
-    ensure_demo_offerings(db)
     tenants = ensure_demo_tenants(db)
 
     created = 0

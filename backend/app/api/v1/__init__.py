@@ -15,7 +15,6 @@ from app.api.v1 import (
     drivers,
     integrations,
     notifications,
-    offerings,
     platform_settings,
     sites,
     snmp_settings,
@@ -36,9 +35,6 @@ api_router.include_router(
 )
 api_router.include_router(
     controlplane.router, prefix="/controller", tags=["sdn-controller"]
-)
-api_router.include_router(
-    offerings.router, prefix="/offerings", tags=["offerings"]
 )
 api_router.include_router(circuits.router, prefix="/circuits", tags=["circuits"])
 api_router.include_router(

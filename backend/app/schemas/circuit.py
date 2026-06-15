@@ -61,8 +61,6 @@ class CircuitBase(BaseModel):
 
 class CircuitCreate(CircuitBase):
     code: str | None = None  # auto-generated when omitted
-    # Optional service offering to prefill service_type/bandwidth/sla/mtu/cos.
-    offering_id: int | None = None
     endpoints: list[CircuitEndpointCreate] = []
     via_device_ids: list[int] = []
 

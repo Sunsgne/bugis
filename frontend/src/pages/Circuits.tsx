@@ -43,11 +43,10 @@ import {
   ApartmentOutlined,
 } from "@ant-design/icons";
 import { api } from "../api/client";
-import type { Circuit, Device, Offering, Paginated, Site, Tenant } from "../api/types";
+import type { Circuit, Device, Paginated, Site, Tenant } from "../api/types";
 import { configPreviewModalProps, ConfigPreviewPre, createCircuitModalProps } from "../utils/configPreview";
 import { formModalProps } from "../utils/formModal";
 import { TenantSearchSelect, useTenantSearch } from "../components/TenantSearchSelect";
-import OfferingSearchSelect, { useOfferingSearch } from "../components/OfferingSearchSelect";
 import { buildListQuery, dataTableProps, tablePagination } from "../utils/table";
 import { fetchAllPages } from "../utils/pagination";
 import PageCard from "../components/PageCard";
@@ -1020,7 +1019,6 @@ function CreateModal({
   const [pathPreview, setPathPreview] = useState<any>(null);
   const [formLoading, setFormLoading] = useState(false);
   const tenantSearch = useTenantSearch(open ? defaultTenantId : null);
-  const offeringSearch = useOfferingSearch();
   const [devices, setDevices] = useState<Device[]>(devicesProp);
   const [sites, setSites] = useState<Site[]>(sitesProp);
 
@@ -1086,17 +1084,6 @@ function CreateModal({
     return `${d.name} (${d.vendor}/${d.overlay_tech})${sid}`;
   }
 
-  async function applyOffering(id: number) {
-    const cached = offeringSearch.options.find((o) => o.value === id)?.offering;
-    const o = cached || (await api.get<Offering>(`/offerings/${id}`)).data;
-    form.setFieldsValue({
-      service_type: o.service_type,
-      bandwidth_mbps: o.bandwidth_mbps,
-      sla_target: o.sla_target,
-      cos: o.cos,
-      mtu: o.mtu,
-    });
-  }
   return (
     <Modal
       title="新建专线"
@@ -1125,16 +1112,6 @@ function CreateModal({
         <Typography.Text type="secondary" style={{ display: "block", marginBottom: 12 }}>
           填写业务参数并配置 A/Z 接入端点；选择端口后可查看 S-VID 占用，避免 VLAN 冲突。
         </Typography.Text>
-
-        <Form.Item name="offering_id" label="选择套餐 (可选)">
-          <OfferingSearchSelect
-            loading={offeringSearch.loading || formLoading}
-            options={offeringSearch.options}
-            onSearch={offeringSearch.onSearch}
-            offeringTotal={offeringSearch.total}
-            onChange={(v) => v && applyOffering(v as number)}
-          />
-        </Form.Item>
 
         <Row gutter={16}>
           <Col span={16}>
