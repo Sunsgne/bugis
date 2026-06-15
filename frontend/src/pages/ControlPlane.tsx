@@ -211,7 +211,7 @@ export default function ControlPlane() {
           <Descriptions.Item label="集群模式">{cluster?.mode || "-"}</Descriptions.Item>
           <Descriptions.Item label="Leader">{cluster?.leader || "-"}</Descriptions.Item>
           <Descriptions.Item label="配置版本化">
-            设备配置见 <Link to="/config-management">配置管理</Link>
+            设备配置见 <Link to="/config">配置管理</Link>
           </Descriptions.Item>
         </Descriptions>
       </Card>
