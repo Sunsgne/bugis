@@ -3,6 +3,7 @@ import { Button, Card, Col, Row, Select, Table, Tag, Typography, App as AntApp }
 import { DownloadOutlined } from "@ant-design/icons";
 import { api } from "../api/client";
 import type { WorkOrder } from "../api/types";
+import { page } from "../constants/uiCopy";
 
 const { Paragraph, Text } = Typography;
 
@@ -53,15 +54,15 @@ export default function Integrations() {
       responseType: "text",
     });
     download("inventory.ini", data);
-    message.success("已下载 Ansible inventory");
+    message.success("Inventory 已导出");
   }
 
   async function downloadPlaybook() {
-    if (!selectedWo) return message.warning("请选择工单");
+    if (!selectedWo) return message.warning("请先选择工单");
     const { data } = await api.get(`/work-orders/${selectedWo}/ansible`);
     download(`playbook-${data.work_order}.yml`, data.playbook);
     download(`inventory-${data.work_order}.ini`, data.inventory);
-    message.success("已下载 playbook 与 inventory");
+    message.success("Playbook · Inventory 已导出");
   }
 
   const driverRows = Object.entries(drivers).map(([vendor, d]: any) => ({
@@ -73,9 +74,9 @@ export default function Integrations() {
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <Row gutter={16}>
         <Col xs={24} md={12}>
-          <Card title="北向 Webhook 接入 (StackStorm / ITSM)">
+          <Card title="北向 Webhook · StackStorm / ITSM">
             <Paragraph type="secondary">
-              外部编排系统可通过 Webhook 携带 <Text code>X-Webhook-Token</Text> 触发专线一键开通。
+              外部编排系统携带 <Text code>X-Webhook-Token</Text> 即可触发 Circuit 一键开通。
             </Paragraph>
             <pre className="config-pre">{WEBHOOK_EXAMPLE}</pre>
           </Card>
@@ -84,19 +85,19 @@ export default function Integrations() {
           <Card title="Ansible 编排导出">
             <Paragraph type="secondary">
               基于厂商官方 Collection（h3c.comware / huawei.datacom / cisco.iosxr /
-              junipernetworks.junos / arista.eos）导出 inventory 与 playbook。
+              junipernetworks.junos / arista.eos）导出 Inventory 与 Playbook。
             </Paragraph>
             <Button
               icon={<DownloadOutlined />}
               onClick={downloadInventory}
               style={{ marginBottom: 12 }}
             >
-              下载全量 Inventory
+              导出全量 Inventory
             </Button>
             <div style={{ display: "flex", gap: 8 }}>
               <Select
                 style={{ flex: 1 }}
-                placeholder="选择工单导出 playbook"
+                placeholder="选择工单导出 Playbook"
                 value={selectedWo ?? undefined}
                 onChange={setSelectedWo}
                 options={workOrders.map((w) => ({
@@ -112,7 +113,7 @@ export default function Integrations() {
         </Col>
       </Row>
 
-      <Card title="南向驱动目录">
+      <Card title={`${page.integrations} · 南向驱动`}>
         <Table
           rowKey="vendor"
           pagination={false}

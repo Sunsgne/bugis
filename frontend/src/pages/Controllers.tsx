@@ -18,6 +18,7 @@ import {
 import { PlusOutlined, ShareAltOutlined } from "@ant-design/icons";
 import { api } from "../api/client";
 import type { Controller } from "../api/types";
+import { action, empty, page, toast } from "../constants/uiCopy";
 
 const TYPE_LABEL: Record<string, string> = {
   bugis: "Bugis SDN 控制器 (内置)",
@@ -59,30 +60,30 @@ export default function Controllers() {
   async function onCreate() {
     const values = await form.validateFields();
     if (values.type === "bugis") {
-      return message.error("Bugis SDN 控制器为内置组件，无需手动添加");
+      return message.error("内置 Bugis SDN 控制器 · 无需手动纳管");
     }
     try {
       await api.post("/controllers", values);
-      message.success("外部控制器已添加");
+      message.success("外部控制器已纳管");
       setOpen(false);
       form.resetFields();
       load();
     } catch (e: any) {
-      message.error(e?.response?.data?.detail || "创建失败");
+      message.error(e?.response?.data?.detail || toast.failed);
     }
   }
 
   async function remove(id: number) {
     const ctrl = rows.find((r) => r.id === id);
     if (ctrl?.type === "bugis") {
-      return message.error("内置 Bugis SDN 控制器不可删除");
+      return message.error("内置控制器不可移除");
     }
     try {
       await api.delete(`/controllers/${id}`);
-      message.success("已删除");
+      message.success(toast.deleted);
       load();
     } catch (e: any) {
-      message.error(e?.response?.data?.detail || "删除失败");
+      message.error(e?.response?.data?.detail || toast.failed);
     }
   }
 
@@ -95,15 +96,13 @@ export default function Controllers() {
         type="info"
         showIcon
         icon={<ShareAltOutlined />}
-        message="内置 vs 外部控制器"
+        message="内置 vs 北向控制器"
         description={
           <span>
-            <Tag color="geekblue">Bugis SDN 控制器</Tag> 是平台内嵌的自研 EVPN
-            控制平面，应用启动时自动注册，<strong>不需要也不允许手动添加</strong>。
-            在「数据中心」将下发模式设为「控制器托管」并选择内置控制器即可；控制面状态、版本与
-            EVPN RIB 请查看{" "}
-            <Link to="/control-plane">SDN 控制平面</Link> 页面。下方「添加外部控制器」用于对接
-            华为 NCE-Fabric、华三 SeerEngine 等厂商/开源控制器。
+            <Tag color="geekblue">Bugis SDN 控制器</Tag> 为平台内嵌自研 EVPN 控制平面，启动时自动注册，<strong>无需手动纳管</strong>。
+            在 Fabric 站点将下发模式设为「控制器托管」并选择内置实例；控制面状态与 EVPN RIB 请前往{" "}
+            <Link to="/control-plane">{page.controlPlane}</Link>。下方「纳管外部控制器」用于对接
+            华为 NCE-Fabric、华三 SeerEngine 等厂商 / 开源控制器。
           </span>
         }
       />
@@ -114,7 +113,7 @@ export default function Controllers() {
           loading={loading}
           dataSource={builtin ? [builtin] : []}
           pagination={false}
-          locale={{ emptyText: "内置控制器加载中…" }}
+          locale={{ emptyText: empty.data }}
           columns={[
             { title: "名称", dataIndex: "name" },
             {
@@ -134,13 +133,13 @@ export default function Controllers() {
             {
               title: "说明",
               dataIndex: "description",
-              render: (d) => d || "平台内置，自动注册",
+              render: (d) => d || "平台内置 · 自动注册",
             },
             {
               title: "操作",
               render: () => (
                 <Link to="/control-plane">
-                  <ShareAltOutlined /> 查看控制平面
+                  <ShareAltOutlined /> 进入控制面
                 </Link>
               ),
             },
@@ -149,22 +148,21 @@ export default function Controllers() {
       </Card>
 
       <Card
-        title="外部控制器"
+        title="北向控制器"
         extra={
           <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>
-            添加外部控制器
+            纳管外部控制器
           </Button>
         }
       >
         <Typography.Paragraph type="secondary">
-          控制器托管的数据中心，开通时由平台将业务意图通过北向 RESTful 下发给外部控制器，
-          由控制器完成底层设备配置（厂商开放 API 路线）。
+          控制器托管模式下，平台将业务意图经北向 RESTful 下发至外部控制器，由后者完成底层设备编排。
         </Typography.Paragraph>
         <Table
           rowKey="id"
           loading={loading}
           dataSource={external}
-          locale={{ emptyText: "暂无外部控制器" }}
+          locale={{ emptyText: empty.default }}
           columns={[
             { title: "名称", dataIndex: "name" },
             {
@@ -178,8 +176,8 @@ export default function Controllers() {
             {
               title: "操作",
               render: (_, r) => (
-                <Popconfirm title="确认删除?" onConfirm={() => remove(r.id)}>
-                  <a style={{ color: "#cf1322" }}>删除</a>
+                <Popconfirm title={`${action.confirm}${action.delete}？`} onConfirm={() => remove(r.id)}>
+                  <a style={{ color: "#cf1322" }}>{action.delete}</a>
                 </Popconfirm>
               ),
             },
@@ -187,7 +185,7 @@ export default function Controllers() {
         />
       </Card>
 
-      <Modal title="添加外部控制器" open={open} onOk={onCreate} onCancel={() => setOpen(false)}>
+      <Modal title="纳管外部控制器" open={open} onOk={onCreate} onCancel={() => setOpen(false)}>
         <Form form={form} layout="vertical" initialValues={{ type: "nce_fabric" }}>
           <Form.Item name="name" label="名称" rules={[{ required: true }]}>
             <Input placeholder="例如 华为 iMaster NCE-Fabric" />

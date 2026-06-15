@@ -16,6 +16,7 @@ import { PlusOutlined } from "@ant-design/icons";
 import { Select } from "antd";
 import { api } from "../api/client";
 import type { Controller, Site } from "../api/types";
+import { action, page, toast } from "../constants/uiCopy";
 
 export default function Sites() {
   const { message } = AntApp.useApp();
@@ -50,27 +51,27 @@ export default function Sites() {
     const values = await form.validateFields();
     try {
       await api.post("/sites", values);
-      message.success("数据中心已创建");
+      message.success(toast.created);
       setOpen(false);
       form.resetFields();
       load();
     } catch (e: any) {
-      message.error(e?.response?.data?.detail || "创建失败");
+      message.error(e?.response?.data?.detail || toast.failed);
     }
   }
 
   async function remove(id: number) {
     await api.delete(`/sites/${id}`);
-    message.success("已删除");
+    message.success(toast.deleted);
     load();
   }
 
   return (
     <Card
-      title="数据中心 (DC / 站点)"
+      title={page.sites}
       extra={
         <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>
-          新建数据中心
+          新建站点
         </Button>
       }
     >
@@ -98,18 +99,18 @@ export default function Sites() {
             title: "操作",
             render: (_, r) => (
               <Space>
-                <Popconfirm title="确认删除?" onConfirm={() => remove(r.id)}>
-                  <a style={{ color: "#cf1322" }}>删除</a>
+                <Popconfirm title="确认删除该站点?" onConfirm={() => remove(r.id)}>
+                  <a style={{ color: "#cf1322" }}>{action.delete}</a>
                 </Popconfirm>
               </Space>
             ),
           },
         ]}
       />
-      <Modal title="新建数据中心" open={open} onOk={onCreate} onCancel={() => setOpen(false)}>
+      <Modal title="新建 Fabric 站点" open={open} onOk={onCreate} onCancel={() => setOpen(false)} okText={action.create}>
         <Form form={form} layout="vertical">
-          <Form.Item name="name" label="名称" rules={[{ required: true }]}>
-            <Input placeholder="例如 北京数据中心" />
+          <Form.Item name="name" label="站点名称" rules={[{ required: true }]}>
+            <Input placeholder="例如 北京 Fabric PoP" />
           </Form.Item>
           <Form.Item name="code" label="编码" rules={[{ required: true }]}>
             <Input placeholder="例如 BJ-DC1" />

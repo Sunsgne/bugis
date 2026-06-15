@@ -15,6 +15,7 @@ import { PlusOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { api } from "../api/client";
 import { useAuth } from "../auth";
+import { page, toast } from "../constants/uiCopy";
 
 interface UserRow {
   id: number;
@@ -60,26 +61,26 @@ export default function Users() {
     const values = await form.validateFields();
     try {
       await api.post("/auth/users", values);
-      message.success("用户已创建");
+      message.success(toast.created);
       setOpen(false);
       form.resetFields();
       load();
     } catch (e: any) {
-      message.error(e?.response?.data?.detail || "创建失败");
+      message.error(e?.response?.data?.detail || toast.failed);
     }
   }
 
   if (!isAdmin) {
     return (
-      <Card title="用户与权限">
-        <Alert type="warning" message="仅管理员（admin）可管理用户。" showIcon />
+      <Card title={page.users}>
+        <Alert type="warning" message="仅 Admin 角色可管理用户与权限" showIcon />
       </Card>
     );
   }
 
   return (
     <Card
-      title="用户与权限 (RBAC)"
+      title={`${page.users} · RBAC`}
       extra={
         <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>
           新建用户
@@ -128,9 +129,9 @@ export default function Users() {
           <Form.Item name="role" label="角色">
             <Select
               options={[
-                { value: "admin", label: "管理员 admin" },
-                { value: "operator", label: "操作员 operator" },
-                { value: "viewer", label: "只读 viewer" },
+                { value: "admin", label: "Admin 管理员" },
+                { value: "operator", label: "Operator 操作员" },
+                { value: "viewer", label: "Viewer 只读" },
               ]}
             />
           </Form.Item>

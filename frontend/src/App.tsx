@@ -44,29 +44,79 @@ import Controllers from "./pages/Controllers";
 import ControlPlane from "./pages/ControlPlane";
 import ConfigManagement from "./pages/ConfigManagement";
 import Notifications from "./pages/Notifications";
+import { brand, nav } from "./constants/uiCopy";
+import type { MenuProps } from "antd";
 
 const { Header, Sider, Content } = Layout;
 
-const MENU = [
-  { key: "/", icon: <DashboardOutlined />, label: "运营总览" },
-  { key: "/tenants", icon: <TeamOutlined />, label: "客户服务" },
-  { key: "/sites", icon: <EnvironmentOutlined />, label: "数据中心" },
-  { key: "/devices", icon: <ClusterOutlined />, label: "设备管理" },
-  { key: "/controllers", icon: <CloudServerOutlined />, label: "控制器" },
-  { key: "/control-plane", icon: <ShareAltOutlined />, label: "SDN 控制平面" },
-  { key: "/catalog", icon: <AppstoreOutlined />, label: "服务套餐" },
-  { key: "/circuits", icon: <ApiOutlined />, label: "专线开通" },
-  { key: "/work-orders", icon: <ProfileOutlined />, label: "工单流转" },
-  { key: "/config", icon: <FileTextOutlined />, label: "配置管理" },
-  { key: "/topology", icon: <PartitionOutlined />, label: "网络拓扑" },
-  { key: "/capacity", icon: <DeploymentUnitOutlined />, label: "容量管理" },
-  { key: "/monitoring", icon: <LineChartOutlined />, label: "监控大屏" },
-  { key: "/alarms", icon: <AlertOutlined />, label: "告警中心" },
-  { key: "/notifications", icon: <BellOutlined />, label: "通知渠道" },
-  { key: "/integrations", icon: <IntegrationIcon />, label: "集成中心" },
-  { key: "/audit", icon: <AuditOutlined />, label: "操作审计" },
-  { key: "/users", icon: <SafetyOutlined />, label: "用户权限" },
+type MenuItem = Required<MenuProps>["items"][number];
+
+const MENU: MenuItem[] = [
+  {
+    type: "group",
+    label: nav.groups.overview,
+    children: [{ key: "/", icon: <DashboardOutlined />, label: nav.items.dashboard }],
+  },
+  {
+    type: "group",
+    label: nav.groups.resources,
+    children: [
+      { key: "/tenants", icon: <TeamOutlined />, label: nav.items.tenants },
+      { key: "/sites", icon: <EnvironmentOutlined />, label: nav.items.sites },
+      { key: "/devices", icon: <ClusterOutlined />, label: nav.items.devices },
+    ],
+  },
+  {
+    type: "group",
+    label: nav.groups.circuits,
+    children: [
+      { key: "/catalog", icon: <AppstoreOutlined />, label: nav.items.catalog },
+      { key: "/circuits", icon: <ApiOutlined />, label: nav.items.circuits },
+      { key: "/work-orders", icon: <ProfileOutlined />, label: nav.items.workOrders },
+    ],
+  },
+  {
+    type: "group",
+    label: nav.groups.network,
+    children: [
+      { key: "/controllers", icon: <CloudServerOutlined />, label: nav.items.controllers },
+      { key: "/control-plane", icon: <ShareAltOutlined />, label: nav.items.controlPlane },
+      { key: "/config", icon: <FileTextOutlined />, label: nav.items.config },
+      { key: "/topology", icon: <PartitionOutlined />, label: nav.items.topology },
+    ],
+  },
+  {
+    type: "group",
+    label: nav.groups.ops,
+    children: [
+      { key: "/capacity", icon: <DeploymentUnitOutlined />, label: nav.items.capacity },
+      { key: "/monitoring", icon: <LineChartOutlined />, label: nav.items.monitoring },
+      { key: "/alarms", icon: <AlertOutlined />, label: nav.items.alarms },
+    ],
+  },
+  {
+    type: "group",
+    label: "集成与治理",
+    children: [
+      { key: "/notifications", icon: <BellOutlined />, label: nav.items.notifications },
+      { key: "/integrations", icon: <IntegrationIcon />, label: nav.items.integrations },
+      { key: "/users", icon: <SafetyOutlined />, label: nav.items.users },
+      { key: "/audit", icon: <AuditOutlined />, label: "操作审计" },
+    ],
+  },
 ];
+
+const ROUTE_KEYS = MENU.flatMap((g) =>
+  g && "children" in g && g.children ? g.children.map((c) => (c as { key: string }).key) : []
+);
+
+function selectedMenuKey(pathname: string): string {
+  const match = ROUTE_KEYS.filter((k) => k !== "/")
+    .sort((a, b) => b.length - a.length)
+    .find((k) => pathname.startsWith(k));
+  if (match) return match;
+  return pathname === "/" ? "/" : ROUTE_KEYS.find((k) => k === pathname) || "/";
+}
 
 function AlarmBell({ onClick }: { onClick: () => void }) {
   const [count, setCount] = useState(0);
@@ -114,7 +164,7 @@ function AlarmBell({ onClick }: { onClick: () => void }) {
   }, []);
 
   return (
-    <Badge count={count} size="small" offset={[-2, 2]} title={live ? "实时" : "轮询"}>
+    <Badge count={count} size="small" offset={[-2, 2]} title={live ? "SSE 实时" : "轮询同步"}>
       <AlertOutlined
         style={{ fontSize: 20, cursor: "pointer", color: count ? "#cf1322" : undefined }}
         onClick={onClick}
@@ -127,21 +177,19 @@ function Shell() {
   const nav = useNavigate();
   const loc = useLocation();
   const { user, logout } = useAuth();
-  const selected = MENU.find(
-    (m) => m.key === loc.pathname || (m.key !== "/" && loc.pathname.startsWith(m.key))
-  );
+  const selected = selectedMenuKey(loc.pathname);
 
   return (
     <Layout style={{ height: "100vh" }}>
       <Sider breakpoint="lg" collapsedWidth="0" theme="dark">
         <div className="app-logo">
           <span className="dot" />
-          <span>Bugis 专线运营</span>
+          <span>{brand.product}</span>
         </div>
         <Menu
           theme="dark"
           mode="inline"
-          selectedKeys={[selected?.key || "/"]}
+          selectedKeys={[selected]}
           items={MENU}
           onClick={(e) => nav(e.key)}
         />
@@ -158,14 +206,14 @@ function Shell() {
           }}
         >
           <div style={{ fontSize: 18, fontWeight: 600 }}>
-            DCI / EVPN 专线开通与运营平台
+            {brand.header}
           </div>
           <Space size="large">
           <AlarmBell onClick={() => nav("/alarms")} />
           <Dropdown
             menu={{
               items: [
-                { key: "logout", icon: <LogoutOutlined />, label: "退出登录", onClick: logout },
+                  { key: "logout", icon: <LogoutOutlined />, label: "退出", onClick: logout },
               ],
             }}
           >

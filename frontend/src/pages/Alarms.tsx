@@ -4,6 +4,7 @@ import { ReloadOutlined, ThunderboltOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { api } from "../api/client";
 import type { Alarm } from "../api/types";
+import { action, empty, page } from "../constants/uiCopy";
 
 const SEV_COLOR: Record<string, string> = {
   critical: "red",
@@ -42,7 +43,7 @@ export default function Alarms() {
 
   async function evaluate() {
     const { data } = await api.post("/alarms/evaluate");
-    message.success(`已评估 ${data.evaluated} 条专线，当前活跃告警 ${data.active_alarms}`);
+    message.success(`评估完成 · ${data.evaluated} 条专线 · 活跃告警 ${data.active_alarms}`);
     load();
   }
   async function ack(id: number) {
@@ -56,7 +57,7 @@ export default function Alarms() {
 
   return (
     <Card
-      title="告警中心"
+      title={page.alarms}
       extra={
         <Space>
           <Segmented
@@ -66,11 +67,11 @@ export default function Alarms() {
               { label: "活跃", value: "active" },
               { label: "已确认", value: "acknowledged" },
               { label: "已清除", value: "cleared" },
-              { label: "全部", value: "all" },
+              { label: "全域", value: "all" },
             ]}
           />
           <Button icon={<ThunderboltOutlined />} type="primary" onClick={evaluate}>
-            立即评估
+            触发评估
           </Button>
           <Button icon={<ReloadOutlined />} onClick={load} />
         </Space>
@@ -80,6 +81,7 @@ export default function Alarms() {
         rowKey="id"
         loading={loading}
         dataSource={rows}
+        locale={{ emptyText: filter === "active" ? empty.alarms : empty.default }}
         columns={[
           {
             title: "级别",
@@ -108,7 +110,7 @@ export default function Alarms() {
             render: (_, r) =>
               r.status !== "cleared" && (
                 <Space>
-                  {r.status === "active" && <a onClick={() => ack(r.id)}>确认</a>}
+                  {r.status === "active" && <a onClick={() => ack(r.id)}>{action.confirm}</a>}
                   <a style={{ color: "#52c41a" }} onClick={() => clear(r.id)}>
                     清除
                   </a>

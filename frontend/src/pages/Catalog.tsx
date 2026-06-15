@@ -17,6 +17,7 @@ import {
 import { PlusOutlined, CrownOutlined } from "@ant-design/icons";
 import { api } from "../api/client";
 import type { Offering } from "../api/types";
+import { action, page, toast } from "../constants/uiCopy";
 
 const SERVICE_LABEL: Record<string, string> = {
   l2vpn_evpn: "EVPN L2VPN",
@@ -49,27 +50,27 @@ export default function Catalog() {
     const values = await form.validateFields();
     try {
       await api.post("/offerings", values);
-      message.success("套餐已创建");
+      message.success(toast.created);
       setOpen(false);
       form.resetFields();
       load();
     } catch (e: any) {
-      message.error(e?.response?.data?.detail || "创建失败");
+      message.error(e?.response?.data?.detail || toast.failed);
     }
   }
 
   async function remove(id: number) {
     await api.delete(`/offerings/${id}`);
-    message.success("已删除");
+    message.success(toast.deleted);
     load();
   }
 
   return (
     <Card
-      title="服务套餐目录"
+      title={page.catalog}
       extra={
         <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>
-          新建套餐
+          新建 Offering
         </Button>
       }
     >
@@ -86,8 +87,8 @@ export default function Catalog() {
               }
               extra={<Tag color={TIER_COLOR[o.tier || ""]}>{o.tier || "-"}</Tag>}
               actions={[
-                <Popconfirm title="删除该套餐?" onConfirm={() => remove(o.id)} key="del">
-                  <span style={{ color: "#cf1322" }}>删除</span>
+                <Popconfirm title={`${action.confirm}${action.delete}该 Offering？`} onConfirm={() => remove(o.id)} key="del">
+                  <span style={{ color: "#cf1322" }}>{action.delete}</span>
                 </Popconfirm>,
               ]}
             >
@@ -112,17 +113,17 @@ export default function Catalog() {
         ))}
       </Row>
 
-      <Modal title="新建套餐" open={open} onOk={onCreate} onCancel={() => setOpen(false)}>
+      <Modal title="新建 Offering" open={open} onOk={onCreate} onCancel={() => setOpen(false)}>
         <Form
           form={form}
           layout="vertical"
           initialValues={{ service_type: "l2vpn_evpn", bandwidth_mbps: 1000, mtu: 9000, tier: "silver" }}
         >
-          <Form.Item name="name" label="套餐名称" rules={[{ required: true }]}>
-            <Input placeholder="例如 金牌混合云接入" />
+          <Form.Item name="name" label="Offering 名称" rules={[{ required: true }]}>
+            <Input placeholder="金牌混合云接入" />
           </Form.Item>
           <Form.Item name="code" label="编码" rules={[{ required: true }]}>
-            <Input placeholder="例如 GOLD-HC" />
+            <Input placeholder="GOLD-HC" />
           </Form.Item>
           <Form.Item name="service_type" label="业务类型">
             <Select options={Object.entries(SERVICE_LABEL).map(([value, label]) => ({ value, label }))} />
@@ -136,9 +137,9 @@ export default function Catalog() {
           <Form.Item name="tier" label="等级">
             <Select
               options={[
-                { value: "gold", label: "金牌 gold" },
-                { value: "silver", label: "银牌 silver" },
-                { value: "bronze", label: "铜牌 bronze" },
+                { value: "gold", label: "Gold 金牌" },
+                { value: "silver", label: "Silver 银牌" },
+                { value: "bronze", label: "Bronze 铜牌" },
               ]}
             />
           </Form.Item>

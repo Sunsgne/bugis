@@ -41,6 +41,7 @@ import {
 } from "@ant-design/icons";
 import { api } from "../api/client";
 import type { Circuit, Device, DeviceInterface, Offering, Site, SvidUsage, Tenant } from "../api/types";
+import { action, empty, page } from "../constants/uiCopy";
 
 const SERVICE_LABEL: Record<string, string> = {
   l2vpn_evpn: "EVPN L2VPN",
@@ -501,7 +502,7 @@ export default function Circuits() {
 
   return (
     <Card
-      title="客户服务 · 专线"
+      title={page.circuitsFull}
       extra={
         <Space>
           <Button
@@ -520,10 +521,10 @@ export default function Circuits() {
               URL.revokeObjectURL(dl);
             }}
           >
-            导出 CSV
+            {action.export} CSV
           </Button>
           <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>
-            新建专线
+            {action.createCircuit}
           </Button>
         </Space>
       }
@@ -533,7 +534,10 @@ export default function Circuits() {
           value={selectedTenantId ?? "all"}
           onChange={(v) => setTenantFilter(v === "all" ? null : Number(v))}
           options={[
-            { label: `全部客户 (${summaries.reduce((n, s) => n + s.circuits_total, 0)})`, value: "all" },
+            {
+              label: `${action.viewAll} (${summaries.reduce((n, s) => n + s.circuits_total, 0)})`,
+              value: "all",
+            },
             ...tenants.map((t) => {
               const sum = summaries.find((s) => s.tenant_id === t.id);
               return {
@@ -543,29 +547,34 @@ export default function Circuits() {
             }),
           ]}
         />
+        {!selectedTenantId && (
+          <Typography.Text type="secondary" className="platform-overview" style={{ display: "inline-flex", marginTop: 10 }}>
+            <strong>{tenants.length}</strong> 租户 · <strong>{summaries.reduce((n, s) => n + s.circuits_total, 0)}</strong> 专线 · 全平台视图
+          </Typography.Text>
+        )}
       </div>
 
       {selectedTenantId && activeSummary && (
         <Row gutter={16} style={{ marginBottom: 16 }}>
           <Col xs={12} md={6}>
             <Card size="small">
-              <Statistic title="活跃专线" value={activeSummary.circuits_active} suffix={`/ ${activeSummary.circuits_total}`} />
+              <Statistic title="在网专线" value={activeSummary.circuits_active} suffix={`/ ${activeSummary.circuits_total}`} />
             </Card>
           </Col>
           <Col xs={12} md={6}>
             <Card size="small">
-              <Statistic title="活跃带宽" value={activeSummary.active_bandwidth_mbps} suffix="Mbps" />
+              <Statistic title="在网带宽" value={activeSummary.active_bandwidth_mbps} suffix="Mbps" />
             </Card>
           </Col>
           <Col xs={12} md={6}>
             <Card size="small">
-              <Statistic title="已拆除" value={activeSummary.circuits_decommissioned} valueStyle={{ color: "#8c8c8c" }} />
+              <Statistic title="已下线" value={activeSummary.circuits_decommissioned} valueStyle={{ color: "#8c8c8c" }} />
             </Card>
           </Col>
           <Col xs={12} md={6}>
             <Card size="small">
               <Statistic
-                title="业务类型"
+                title="产品形态"
                 value={Object.keys(activeSummary.by_service_type).length}
                 suffix="种"
               />
@@ -578,6 +587,7 @@ export default function Circuits() {
         rowKey="id"
         loading={loading}
         dataSource={rows}
+        locale={{ emptyText: empty.circuits }}
         expandable={{
           expandedRowRender: (r) => (
             <Descriptions size="small" column={3} bordered>
@@ -976,7 +986,7 @@ function CreateModal({
   }
   return (
     <Modal
-      title="新建专线"
+      title={`${action.create} Circuit`}
       open={open}
       onOk={onOk}
       onCancel={onCancel}

@@ -19,6 +19,7 @@ import {
 import { PlusOutlined, DownloadOutlined, UploadOutlined, ApiOutlined, RocketOutlined } from "@ant-design/icons";
 import { api } from "../api/client";
 import type { Device, DeviceInterface, Site, SvidUsage } from "../api/types";
+import { action, empty, page, toast } from "../constants/uiCopy";
 
 const VENDOR_COLOR: Record<string, string> = {
   h3c: "blue",
@@ -53,17 +54,17 @@ export default function Devices() {
   }
 
   async function discover(deviceId: number) {
-    const hide = message.loading("SNMP 接口发现中...", 0);
+    const hide = message.loading("SNMP 接口扫描中…", 0);
     try {
       const { data } = await api.post<DeviceInterface[]>(
         `/devices/${deviceId}/discover-interfaces`
       );
       hide();
-      message.success(`已发现 ${data.length} 个接口`);
+      message.success(`发现 ${data.length} 个接口`);
       setIfaces((p) => ({ ...p, [deviceId]: data }));
     } catch (e: any) {
       hide();
-      message.error(e?.response?.data?.detail || "发现失败");
+      message.error(e?.response?.data?.detail || toast.failed);
     }
   }
 
@@ -88,18 +89,18 @@ export default function Devices() {
     const values = await form.validateFields();
     try {
       await api.post("/devices", values);
-      message.success("设备已添加");
+      message.success("设备已纳管");
       setOpen(false);
       form.resetFields();
       load();
     } catch (e: any) {
-      message.error(e?.response?.data?.detail || "创建失败");
+      message.error(e?.response?.data?.detail || toast.failed);
     }
   }
 
   async function remove(id: number) {
     await api.delete(`/devices/${id}`);
-    message.success("已删除");
+    message.success(toast.deleted);
     load();
   }
 
@@ -119,11 +120,11 @@ export default function Devices() {
     fd.append("file", file);
     try {
       const { data } = await api.post("/bulk/devices/import", fd);
-      message.success(`导入完成: 新增 ${data.created}, 跳过 ${data.skipped}`);
-      if (data.errors?.length) message.warning(`${data.errors.length} 行有误`);
+      message.success(`导入完成 · 新增 ${data.created} · 跳过 ${data.skipped}`);
+      if (data.errors?.length) message.warning(`${data.errors.length} 行需修正`);
       load();
     } catch (e: any) {
-      message.error(e?.response?.data?.detail || "导入失败");
+      message.error(e?.response?.data?.detail || toast.failed);
     }
     return false;
   }
@@ -131,28 +132,28 @@ export default function Devices() {
   async function initialize(d: Device) {
     const { data: bl } = await api.get(`/devices/${d.id}/baseline`);
     modal.confirm({
-      title: `设备初始化 · ${d.name} (${d.vendor})`,
+      title: `基线初始化 · ${d.name} (${d.vendor})`,
       width: 760,
       icon: null,
       content: (
         <div>
           <div style={{ marginBottom: 8, color: "#888" }}>
-            标准基线配置(管理/Loopback/Underlay/EVPN Overlay)预览,确认后下发(dry-run)并保存为初始化快照:
+            标准基线预览（管理 / Loopback / Underlay / EVPN Overlay）· 确认后 dry-run 下发并归档初始化快照
           </div>
           <pre className="config-pre">{bl.content}</pre>
         </div>
       ),
-      okText: "下发初始化配置",
+      okText: "下发基线配置",
       onOk: async () => {
         const { data } = await api.post(`/devices/${d.id}/initialize`);
-        message.success(`${data.device} 初始化完成 (v${data.version}, ${data.transport})`);
+        message.success(`${data.device} 初始化完成 · v${data.version} · ${data.transport}`);
         load();
       },
     });
   }
 
   async function check(id: number) {
-    const hide = message.loading("设备检测中 (可达性 + S-VID 占用)...", 0);
+    const hide = message.loading("可达性探测 · S-VID 扫描中…", 0);
     try {
       const { data } = await api.post(`/devices/${id}/check`);
       hide();
@@ -199,7 +200,7 @@ export default function Devices() {
       load();
     } catch (e: any) {
       hide();
-      message.error(e?.response?.data?.detail || "检测失败");
+      message.error(e?.response?.data?.detail || toast.failed);
     }
   }
 
@@ -237,17 +238,17 @@ export default function Devices() {
 
   return (
     <Card
-      title="设备管理"
+      title={page.devices}
       extra={
         <Space>
           <Button icon={<DownloadOutlined />} onClick={exportCsv}>
-            导出 CSV
+            {action.export} CSV
           </Button>
           <Upload accept=".csv" showUploadList={false} beforeUpload={importCsv}>
-            <Button icon={<UploadOutlined />}>导入 CSV</Button>
+            <Button icon={<UploadOutlined />}>{action.import} CSV</Button>
           </Upload>
           <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>
-            添加设备
+            纳管设备
           </Button>
         </Space>
       }
@@ -317,7 +318,7 @@ export default function Devices() {
                 ]}
               />
             ) : (
-              <span style={{ color: "#888" }}>暂无接口，点击「SNMP 发现」</span>
+              <span style={{ color: "#888" }}>接口未同步 · 触发 SNMP 发现</span>
             );
           },
         }}
@@ -357,10 +358,10 @@ export default function Devices() {
                 </a>
                 <a onClick={() => check(r.id)}>检测</a>
                 <a onClick={() => discover(r.id)}>
-                  <ApiOutlined /> SNMP发现
+                  <ApiOutlined /> SNMP 发现
                 </a>
-                <Popconfirm title="确认删除?" onConfirm={() => remove(r.id)}>
-                  <a style={{ color: "#cf1322" }}>删除</a>
+                <Popconfirm title={`${action.confirm}${action.delete}？`} onConfirm={() => remove(r.id)}>
+                  <a style={{ color: "#cf1322" }}>{action.delete}</a>
                 </Popconfirm>
               </Space>
             ),
@@ -368,7 +369,7 @@ export default function Devices() {
         ]}
       />
       <Modal
-        title="添加设备"
+        title="纳管设备"
         open={open}
         onOk={onCreate}
         onCancel={() => setOpen(false)}

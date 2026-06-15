@@ -16,6 +16,7 @@ import {
 import { PlusOutlined } from "@ant-design/icons";
 import { api } from "../api/client";
 import type { Tenant } from "../api/types";
+import { action, page, toast } from "../constants/uiCopy";
 
 const TYPE_LABEL: Record<string, string> = {
   enterprise: "企业专线",
@@ -70,24 +71,24 @@ export default function Tenants() {
     const values = await form.validateFields();
     try {
       await api.post("/tenants", values);
-      message.success("租户已创建");
+      message.success(toast.created);
       setOpen(false);
       form.resetFields();
       load();
     } catch (e: any) {
-      message.error(e?.response?.data?.detail || "创建失败");
+      message.error(e?.response?.data?.detail || toast.failed);
     }
   }
 
   async function remove(id: number) {
     await api.delete(`/tenants/${id}`);
-    message.success("已删除");
+    message.success(toast.deleted);
     load();
   }
 
   return (
     <Card
-      title="客户服务 · 租户"
+      title={page.tenants}
       extra={
         <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>
           新建租户
@@ -118,9 +119,9 @@ export default function Tenants() {
               if (!s) return "-";
               return (
                 <Space size={4}>
-                  <Tag color="green">{s.circuits_active} 活跃</Tag>
+                  <Tag color="green">{s.circuits_active} 在网</Tag>
                   {s.circuits_decommissioned > 0 && (
-                    <Tag>{s.circuits_decommissioned} 已拆</Tag>
+                    <Tag>{s.circuits_decommissioned} 已下线</Tag>
                   )}
                   <span style={{ color: "#888", fontSize: 12 }}>
                     {s.active_bandwidth_mbps} Mbps
@@ -135,19 +136,19 @@ export default function Tenants() {
             title: "操作",
             render: (_, r) => (
               <Space>
-                <Link to={`/circuits?tenant=${r.id}`}>管理专线</Link>
+                <Link to={`/circuits?tenant=${r.id}`}>专线编排</Link>
                 <Popconfirm title="确认删除该租户?" onConfirm={() => remove(r.id)}>
-                  <a style={{ color: "#cf1322" }}>删除</a>
+                  <a style={{ color: "#cf1322" }}>{action.delete}</a>
                 </Popconfirm>
               </Space>
             ),
           },
         ]}
       />
-      <Modal title="新建租户" open={open} onOk={onCreate} onCancel={() => setOpen(false)}>
+      <Modal title="新建租户" open={open} onOk={onCreate} onCancel={() => setOpen(false)} okText={action.create}>
         <Form form={form} layout="vertical" initialValues={{ type: "enterprise", status: "active" }}>
           <Form.Item name="name" label="名称" rules={[{ required: true }]}>
-            <Input />
+            <Input placeholder="例如 某金融集团" />
           </Form.Item>
           <Form.Item name="code" label="编码" rules={[{ required: true }]}>
             <Input placeholder="例如 BANK01" />

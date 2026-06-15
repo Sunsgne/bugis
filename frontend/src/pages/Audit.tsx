@@ -4,6 +4,7 @@ import { ReloadOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { api } from "../api/client";
 import type { AuditEntry } from "../api/types";
+import { empty, page } from "../constants/uiCopy";
 
 const METHOD_COLOR: Record<string, string> = {
   POST: "green",
@@ -35,10 +36,10 @@ export default function Audit() {
 
   return (
     <Card
-      title="操作审计"
+      title={page.audit}
       extra={
         <Input.Search
-          placeholder="按操作人过滤"
+          placeholder="按操作人筛选"
           allowClear
           style={{ width: 220 }}
           onSearch={setActor}
@@ -50,6 +51,7 @@ export default function Audit() {
         rowKey="id"
         loading={loading}
         dataSource={rows}
+        locale={{ emptyText: empty.default }}
         columns={[
           {
             title: "时间",

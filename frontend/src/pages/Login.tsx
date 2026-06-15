@@ -3,6 +3,7 @@ import { LockOutlined, UserOutlined } from "@ant-design/icons";
 import { useState } from "react";
 import { login } from "../api/client";
 import { useAuth } from "../auth";
+import { action, brand, toast } from "../constants/uiCopy";
 
 export default function Login() {
   const { loginWithToken } = useAuth();
@@ -14,9 +15,9 @@ export default function Login() {
     try {
       const token = await login(v.username, v.password);
       await loginWithToken(token);
-      message.success("登录成功");
+      message.success(toast.loginOk);
     } catch {
-      message.error("用户名或密码错误");
+      message.error(toast.loginFail);
     } finally {
       setLoading(false);
     }
@@ -27,10 +28,10 @@ export default function Login() {
       <Card style={{ width: 380, boxShadow: "0 12px 40px rgba(0,0,0,0.25)" }}>
         <div style={{ textAlign: "center", marginBottom: 20 }}>
           <Typography.Title level={3} style={{ marginBottom: 0 }}>
-            Bugis 专线运营平台
+            {brand.loginTitle}
           </Typography.Title>
           <Typography.Text type="secondary">
-            DCI · EVPN VXLAN · SR-MPLS EVPN
+            {brand.loginSubtitle}
           </Typography.Text>
         </div>
         <Form onFinish={onFinish} initialValues={{ username: "admin", password: "admin123" }}>
@@ -41,7 +42,7 @@ export default function Login() {
             <Input.Password prefix={<LockOutlined />} placeholder="密码" size="large" />
           </Form.Item>
           <Button type="primary" htmlType="submit" block size="large" loading={loading}>
-            登录
+            {action.login}
           </Button>
         </Form>
         <Typography.Paragraph type="secondary" style={{ marginTop: 16, marginBottom: 0, fontSize: 12 }}>

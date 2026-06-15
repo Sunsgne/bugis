@@ -32,18 +32,46 @@ body,
   gap: 10px;
   color: #fff;
   font-weight: 700;
-  font-size: 16px;
+  font-size: 15px;
+  letter-spacing: 0.04em;
   padding: 0 16px;
   height: 56px;
   white-space: nowrap;
   overflow: hidden;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 .app-logo .dot {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
-  background: #52c41a;
-  box-shadow: 0 0 8px #52c41a;
+  background: linear-gradient(135deg, #52c41a, #13c2c2);
+  box-shadow: 0 0 12px rgba(82, 196, 26, 0.85);
+  flex-shrink: 0;
+}
+.platform-overview {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(22, 119, 255, 0.08), rgba(19, 194, 194, 0.08));
+  border: 1px solid rgba(22, 119, 255, 0.15);
+  font-size: 13px;
+  color: #595959;
+}
+.platform-overview strong {
+  color: #1677ff;
+  font-weight: 600;
+}
+.ant-layout-header {
+  backdrop-filter: blur(8px);
+}
+.ant-menu-dark .ant-menu-item-group-title {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  opacity: 0.55;
+  padding-top: 12px;
 }
 .login-wrap {
   height: 100%;

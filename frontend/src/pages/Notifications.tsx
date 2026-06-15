@@ -16,6 +16,7 @@ import {
 import { PlusOutlined, SendOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { api } from "../api/client";
+import { action, page, toast } from "../constants/uiCopy";
 
 interface Channel {
   id: number;
@@ -79,39 +80,39 @@ export default function Notifications() {
     const values = await form.validateFields();
     try {
       await api.post("/notifications", values);
-      message.success("通知渠道已创建");
+      message.success(toast.created);
       setOpen(false);
       form.resetFields();
       load();
     } catch (e: any) {
-      message.error(e?.response?.data?.detail || "创建失败");
+      message.error(e?.response?.data?.detail || toast.failed);
     }
   }
 
   async function testSend(id: number) {
     const { data } = await api.post(`/notifications/${id}/test`);
-    if (data.success) message.success("测试通知已发送");
-    else message.error(`发送失败: ${data.detail}`);
+    if (data.success) message.success("测试通知已送达");
+    else message.error(`发送失败 · ${data.detail}`);
     load();
   }
 
   async function remove(id: number) {
     await api.delete(`/notifications/${id}`);
-    message.success("已删除");
+    message.success(toast.deleted);
     load();
   }
 
   return (
     <Card
-      title="告警通知渠道"
+      title={page.notifications}
       extra={
         <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>
-          添加渠道
+          新建渠道
         </Button>
       }
     >
       <Typography.Paragraph type="secondary">
-        当告警级别达到渠道阈值时，平台自动向该渠道外发通知（支持通用 Webhook、Slack、钉钉、企业微信）。
+        告警级别达到渠道阈值时，平台自动外发通知（Webhook · Slack · 钉钉 · 企业微信 · 飞书）。
       </Typography.Paragraph>
       <Table
         rowKey="id"
@@ -147,15 +148,15 @@ export default function Notifications() {
                 <a onClick={() => testSend(r.id)}>
                   <SendOutlined /> 测试
                 </a>
-                <Popconfirm title="确认删除?" onConfirm={() => remove(r.id)}>
-                  <a style={{ color: "#cf1322" }}>删除</a>
+                <Popconfirm title={`${action.confirm}${action.delete}？`} onConfirm={() => remove(r.id)}>
+                  <a style={{ color: "#cf1322" }}>{action.delete}</a>
                 </Popconfirm>
               </Space>
             ),
           },
         ]}
       />
-      <Modal title="添加通知渠道" open={open} onOk={onCreate} onCancel={() => setOpen(false)}>
+      <Modal title="新建通知渠道" open={open} onOk={onCreate} onCancel={() => setOpen(false)}>
         <Form form={form} layout="vertical" initialValues={{ type: "dingtalk", min_severity: "major" }}>
           <Form.Item name="name" label="名称" rules={[{ required: true }]}>
             <Input placeholder="例如 NOC 运维群" />

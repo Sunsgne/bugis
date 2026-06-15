@@ -3,6 +3,7 @@ import { Button, Card, Col, Row, Table, Tag, Tabs, App as AntApp, Empty, Modal }
 import { CloudUploadOutlined, DiffOutlined, ReloadOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { api } from "../api/client";
+import { empty, page, toast } from "../constants/uiCopy";
 
 const VENDOR_COLOR: Record<string, string> = {
   h3c: "blue", huawei: "red", juniper: "green", arista: "orange", cisco: "purple", frr: "cyan",
@@ -50,7 +51,7 @@ export default function ConfigManagement() {
   async function backup() {
     if (!sel) return;
     await api.post(`/config/devices/${sel}/backup`);
-    message.success("已生成配置备份快照");
+    message.success("配置快照已归档");
     select(sel);
   }
 
@@ -72,7 +73,7 @@ export default function ConfigManagement() {
   return (
     <Row gutter={16}>
       <Col xs={24} md={7}>
-        <Card title="设备配置" extra={<Button size="small" icon={<ReloadOutlined />} onClick={loadDevices} />}>
+        <Card title="设备清单" extra={<Button size="small" icon={<ReloadOutlined />} onClick={loadDevices} />}>
           <Table
             rowKey="device_id"
             size="small"
@@ -90,30 +91,30 @@ export default function ConfigManagement() {
       </Col>
       <Col xs={24} md={17}>
         <Card
-          title="配置管理"
+          title={page.config}
           extra={
             <Button type="primary" icon={<CloudUploadOutlined />} onClick={backup} disabled={!sel}>
-              备份当前配置
+              备份 Running Config
             </Button>
           }
         >
           {!sel ? (
-            <Empty description="选择左侧设备" />
+            <Empty description={empty.selectDevice} />
           ) : (
             <Tabs
               items={[
                 {
                   key: "running",
-                  label: "运行配置 (Running)",
+                  label: "Running Config",
                   children: <pre className="config-pre">{running}</pre>,
                 },
                 {
                   key: "history",
-                  label: `版本历史 (${snaps.length})`,
+                  label: `版本快照 (${snaps.length})`,
                   children: (
                     <>
                       <Button size="small" icon={<DiffOutlined />} onClick={loadDiff} style={{ marginBottom: 8 }}>
-                        对比最近两版
+                        对比最近两版 Diff
                       </Button>
                       {diff && <ColoredDiff text={diff} />}
                       <Table
@@ -121,12 +122,12 @@ export default function ConfigManagement() {
                         rowKey="id"
                         pagination={false}
                         dataSource={snaps}
-                        locale={{ emptyText: <Empty description="暂无快照，点击「备份当前配置」" /> }}
+                        locale={{ emptyText: <Empty description={empty.snapshots} /> }}
                         columns={[
                           { title: "版本", dataIndex: "version", render: (v) => `v${v}` },
                           {
                             title: "来源", dataIndex: "source",
-                            render: (s) => <Tag color={s === "push" ? "green" : "blue"}>{s === "push" ? "开通下发" : s === "backup" ? "手动备份" : s}</Tag>,
+                            render: (s) => <Tag color={s === "push" ? "green" : "blue"}>{s === "push" ? "编排下发" : s === "backup" ? "手动备份" : s}</Tag>,
                           },
                           { title: "行数", dataIndex: "lines" },
                           { title: "操作人", dataIndex: "created_by" },
