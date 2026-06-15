@@ -229,6 +229,80 @@ body {
   justify-content: flex-end;
 }
 
+/* Settings layout */
+.settings-layout-card {
+  width: 100%;
+}
+
+.settings-layout-card > .ant-card-body {
+  width: 100%;
+}
+
+.settings-layout-inner {
+  width: 100% !important;
+}
+
+.settings-layout-inner > .ant-layout-content.settings-layout-content {
+  flex: 1;
+  min-width: 0;
+  padding: 0 0 0 24px !important;
+}
+
+/* Brand settings */
+.brand-settings-page {
+  width: 100%;
+}
+
+.brand-settings-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
+  gap: 24px;
+  width: 100%;
+  align-items: start;
+}
+
+@media (max-width: 991px) {
+  .brand-settings-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.brand-settings-form {
+  width: 100%;
+  min-width: 0;
+}
+
+.brand-settings-preview {
+  width: 100%;
+  position: sticky;
+  top: 16px;
+}
+
+.brand-settings-preview .brand-preview-block {
+  width: 100%;
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+.brand-settings-preview .brand-preview-sidebar {
+  background: #001529;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.brand-settings-preview .brand-preview-login {
+  padding: 24px 20px;
+  color: #fff;
+}
+
+.brand-settings-preview .brand-preview-hero {
+  background: linear-gradient(120deg, #0b1f3a 0%, #1668dc 60%, #13c2c2 100%);
+  padding: 20px 16px;
+  color: #fff;
+}
+
 /* Config management split layout */
 .config-management-page {
   width: 100%;

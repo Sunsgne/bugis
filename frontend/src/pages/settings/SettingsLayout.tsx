@@ -39,6 +39,7 @@ export default function SettingsLayout() {
 
   return (
     <Card
+      className="settings-layout-card"
       title={
         <span>
           <SettingOutlined style={{ marginRight: 8 }} />
@@ -49,7 +50,7 @@ export default function SettingsLayout() {
       <Paragraph type="secondary" style={{ marginTop: 0 }}>
         集中管理品牌外观、平台运行参数、告警策略、SNMP/邮件、北向集成与用户权限。修改后即时生效。
       </Paragraph>
-      <Layout style={{ background: "transparent", minHeight: 520 }}>
+      <Layout className="settings-layout-inner" style={{ background: "transparent", minHeight: 520 }}>
         <Sider width={200} theme="light" style={{ borderRight: "1px solid #f0f0f0", background: "#fafafa" }}>
           <Menu
             mode="inline"
@@ -59,7 +60,7 @@ export default function SettingsLayout() {
             style={{ border: "none", background: "transparent" }}
           />
         </Sider>
-        <Content style={{ padding: "0 0 0 24px", minWidth: 0 }}>
+        <Content className="settings-layout-content">
           <Outlet />
         </Content>
       </Layout>

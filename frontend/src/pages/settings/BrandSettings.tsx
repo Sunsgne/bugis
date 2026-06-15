@@ -97,8 +97,8 @@ export default function BrandSettings() {
   const previewBrand = { ...brand, ...preview };
 
   return (
-    <div>
-      <Space style={{ marginBottom: 16, width: "100%", justifyContent: "space-between" }}>
+    <div className="brand-settings-page">
+      <Space className="brand-settings-header" style={{ marginBottom: 16, width: "100%", justifyContent: "space-between" }}>
         <div>
           <Typography.Title level={5} style={{ margin: 0 }}>
             品牌与外观
@@ -134,9 +134,8 @@ export default function BrandSettings() {
         />
       )}
 
-      <Row gutter={24}>
-        <Col xs={24} lg={14}>
-          <Form form={form} layout="vertical" className="app-form" disabled={!canEdit || loading}>
+      <div className="brand-settings-grid">
+        <Form form={form} layout="vertical" className="app-form brand-settings-form" disabled={!canEdit || loading}>
             <Title level={5} style={{ marginTop: 0 }}>
               全局品牌
             </Title>
@@ -218,33 +217,16 @@ export default function BrandSettings() {
             >
               <ColorPicker showText format="hex" />
             </Form.Item>
-          </Form>
-        </Col>
+        </Form>
 
-        <Col xs={24} lg={10}>
-          <Card size="small" title="实时预览" style={{ position: "sticky", top: 16 }}>
-            <div
-              style={{
-                background: "#001529",
-                borderRadius: 8,
-                padding: "12px 16px",
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                marginBottom: 12,
-              }}
-            >
+        <Card size="small" title="实时预览" className="brand-settings-preview">
+            <div className="brand-preview-block brand-preview-sidebar">
               <BrandLogo brand={previewBrand} variant="sidebar" />
               <Text style={{ color: "#fff", fontWeight: 600 }}>{previewBrand.product_name}</Text>
             </div>
             <div
-              style={{
-                background: previewBrand.login_background || undefined,
-                borderRadius: 8,
-                padding: 20,
-                color: "#fff",
-                marginBottom: 12,
-              }}
+              className="brand-preview-block brand-preview-login"
+              style={{ background: previewBrand.login_background || undefined }}
             >
               <div style={{ display: "flex", justifyContent: "center", marginBottom: 8 }}>
                 <BrandLogo brand={previewBrand} variant="login" height={36} />
@@ -254,23 +236,15 @@ export default function BrandSettings() {
                 {previewBrand.login_subtitle}
               </div>
             </div>
-            <div
-              style={{
-                background: "linear-gradient(120deg, #0b1f3a 0%, #1668dc 60%, #13c2c2 100%)",
-                borderRadius: 8,
-                padding: 16,
-                color: "#fff",
-              }}
-            >
+            <div className="brand-preview-block brand-preview-hero">
               <div style={{ fontWeight: 700 }}>{previewBrand.hero_title}</div>
               <div style={{ opacity: 0.85, fontSize: 12, marginTop: 4 }}>{previewBrand.hero_subtitle}</div>
             </div>
-            <Text type="secondary" style={{ display: "block", marginTop: 12, fontSize: 12 }}>
+            <Text type="secondary" style={{ display: "block", fontSize: 12 }}>
               顶栏：{previewBrand.header_title}
             </Text>
-          </Card>
-        </Col>
-      </Row>
+        </Card>
+      </div>
     </div>
   );
 }
