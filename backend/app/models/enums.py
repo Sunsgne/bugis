@@ -87,6 +87,13 @@ class CircuitStatus(str, enum.Enum):
     FAILED = "failed"
 
 
+class PathMode(str, enum.Enum):
+    """Underlay steering mode for a circuit."""
+
+    AUTO = "auto"  # BGP EVPN + OSPF/IS-IS best effort (no explicit hops)
+    EXPLICIT_SR = "explicit_sr"  # SR-MPLS explicit node-SID segment list
+
+
 class WorkOrderType(str, enum.Enum):
     PROVISION = "provision"  # 开通
     MODIFY = "modify"  # 变更（带宽/参数）

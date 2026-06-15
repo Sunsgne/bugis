@@ -186,7 +186,12 @@ class BugisController:
             db.add(r)
         db.flush()
 
-        mpls_count = srmpls.enrich_routes(db, routes, endpoints)
+        mpls_count = srmpls.enrich_routes(db, routes, endpoints, circuit)
+        from app.services import path_service
+
+        path_segments = path_service.segment_list(
+            path_service.full_path_for_circuit(db, circuit)
+        )
         bgp_sessions = bgp_peering.ensure_sessions(db, devices)
         bgp_peering.sync_sessions(db)
         rib_version = ha.bump_rib_version(db)
@@ -204,7 +209,11 @@ class BugisController:
             "bgp_sessions": len(bgp_sessions),
             "rib_version": rib_version,
             "dataplane_bindings": len(dp_bindings),
-            "summary": self._render_summary(circuit, vteps, routes, bgp_sessions),
+            "path_mode": circuit.path_mode.value,
+            "path_segments": path_segments,
+            "summary": self._render_summary(
+                circuit, vteps, routes, bgp_sessions, path_segments
+            ),
         }
 
     def withdraw_circuit(
@@ -231,12 +240,23 @@ class BugisController:
         }
 
     def _render_summary(
-        self, circuit: Circuit, vteps, routes, bgp_sessions: list[BgpEvpnSession]
+        self,
+        circuit: Circuit,
+        vteps,
+        routes,
+        bgp_sessions: list[BgpEvpnSession],
+        path_segments: list[int] | None = None,
     ) -> str:
         lines = [
             "# ===== Bugis SDN Controller · EVPN control plane =====",
             f"# service={circuit.code} vni={circuit.vni} "
             f"type={circuit.service_type.value} rt={circuit.route_target}",
+            f"# path_mode={circuit.path_mode.value}"
+            + (
+                f" sr_segments={' -> '.join(str(s) for s in path_segments)}"
+                if path_segments
+                else ""
+            ),
             f"# VTEPs ({len(vteps)}): " + ", ".join(p.vtep_ip for p in vteps),
             f"# reflecting {len(routes)} routes · BGP peers {len(bgp_sessions)}",
             "#",

@@ -984,3 +984,84 @@ def test_link_bandwidth_from_port_description(client, auth_headers):
     row2 = next(u for u in usage2 if u["link_id"] == link["id"])
     assert row2["samples"] > 0
     assert row2["traffic_mbps"] > 0
+
+
+def test_sr_explicit_circuit_path(client, auth_headers):
+    n = next(_seq)
+    site = client.post(
+        "/api/v1/sites", headers=auth_headers,
+        json={"name": f"SR DC {n}", "code": f"SR{n}", "bgp_asn": 65110},
+    ).json()
+    pe_a = client.post(
+        "/api/v1/devices", headers=auth_headers,
+        json={"name": f"PE-A-{n}", "vendor": "juniper", "role": "pe",
+              "overlay_tech": "srmpls_evpn", "status": "online",
+              "mgmt_ip": f"10.40.{n}.1", "bgp_asn": 65110, "site_id": site["id"],
+              "sr_node_sid": 100, "loopback_ip": "10.255.1.1"},
+    ).json()
+    p_mid = client.post(
+        "/api/v1/devices", headers=auth_headers,
+        json={"name": f"P-MID-{n}", "vendor": "juniper", "role": "p",
+              "overlay_tech": "srmpls_evpn", "status": "online",
+              "mgmt_ip": f"10.40.{n}.2", "bgp_asn": 65110, "site_id": site["id"],
+              "sr_node_sid": 200},
+    ).json()
+    pe_z = client.post(
+        "/api/v1/devices", headers=auth_headers,
+        json={"name": f"PE-Z-{n}", "vendor": "cisco", "role": "pe",
+              "overlay_tech": "srmpls_evpn", "status": "online",
+              "mgmt_ip": f"10.40.{n}.3", "bgp_asn": 65110, "site_id": site["id"],
+              "sr_node_sid": 300, "loopback_ip": "10.255.1.3"},
+    ).json()
+    client.post(
+        "/api/v1/capacity/links", headers=auth_headers,
+        json={"name": f"A-P-{n}", "type": "dci",
+              "device_a_id": pe_a["id"], "device_z_id": p_mid["id"],
+              "interface_a": "xe-0/0/0", "interface_z": "xe-0/0/1",
+              "capacity_mbps": 100000},
+    )
+    client.post(
+        "/api/v1/capacity/links", headers=auth_headers,
+        json={"name": f"P-Z-{n}", "type": "dci",
+              "device_a_id": p_mid["id"], "device_z_id": pe_z["id"],
+              "interface_a": "xe-0/0/2", "interface_z": "TenGigE0/0/0/1",
+              "capacity_mbps": 100000},
+    )
+    preview = client.post(
+        "/api/v1/circuits/path/preview", headers=auth_headers,
+        json={
+            "endpoint_device_ids": [pe_a["id"], pe_z["id"]],
+            "via_device_ids": [p_mid["id"]],
+            "path_mode": "explicit_sr",
+        },
+    ).json()
+    assert preview["explicit_supported"] is True
+    assert preview["segment_list"] == [100, 200, 300]
+
+    tenant = client.post(
+        "/api/v1/tenants", headers=auth_headers,
+        json={"name": f"SR Tenant {n}", "code": f"SRT{n}", "type": "enterprise"},
+    ).json()
+    circuit = client.post(
+        "/api/v1/circuits", headers=auth_headers,
+        json={
+            "name": "SR explicit path circuit",
+            "tenant_id": tenant["id"],
+            "service_type": "l2vpn_evpn",
+            "path_mode": "explicit_sr",
+            "via_device_ids": [p_mid["id"]],
+            "endpoints": [
+                {"label": "A", "device_id": pe_a["id"], "interface_name": "ge-0/0/1"},
+                {"label": "Z", "device_id": pe_z["id"], "interface_name": "GigabitEthernet0/0/0/1"},
+            ],
+        },
+    ).json()
+    assert circuit["path_mode"] == "explicit_sr"
+    assert circuit["segment_list"] == [100, 200, 300]
+
+    wo = client.post(
+        f"/api/v1/work-orders/provision/{circuit['id']}", headers=auth_headers
+    ).json()
+    assert wo["status"] == "completed"
+    configs = "\n".join(j.get("rendered_config", "") for j in wo["config_jobs"])
+    assert "segment-list" in configs.lower() or "SR Policy" in configs or "segment-routing" in configs

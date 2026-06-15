@@ -12,7 +12,7 @@ import difflib
 from app.models.circuit import Circuit, CircuitEndpoint
 from app.models.config_job import ConfigJob
 from app.models.device import Device
-from app.models.enums import CircuitStatus
+from app.models.enums import CircuitStatus, PathMode
 from app.models.offering import ServiceOffering
 from app.models.tenant import Tenant
 from app.models.user import User
@@ -22,9 +22,11 @@ from app.schemas.circuit import (
     CircuitEndpointCreate,
     CircuitEndpointOut,
     CircuitOut,
+    CircuitPathHopSchema,
     CircuitUpdate,
 )
-from app.services import allocation, probe, validation
+from app.schemas.path import PathPreviewRequest, PathPreviewResponse
+from app.services import allocation, path_service, probe, validation
 
 router = APIRouter()
 
@@ -45,6 +47,44 @@ def _site_asn_for_endpoints(db: Session, endpoints: list[CircuitEndpoint]) -> in
     return None
 
 
+def _to_circuit_out(db: Session, circuit: Circuit) -> CircuitOut:
+    path_devices = path_service.full_path_for_circuit(db, circuit)
+    hop_schemas = []
+    for h in sorted(circuit.path_hops, key=lambda x: x.sequence):
+        dev = h.device or db.get(Device, h.device_id)
+        hop_schemas.append(
+            CircuitPathHopSchema(
+                device_id=h.device_id,
+                sequence=h.sequence,
+                device_name=dev.name if dev else None,
+                overlay_tech=dev.overlay_tech.value if dev else None,
+                sr_node_sid=dev.sr_node_sid if dev else None,
+            )
+        )
+    base = CircuitOut.model_validate(circuit, from_attributes=True)
+    return base.model_copy(
+        update={
+            "path_hops": hop_schemas,
+            "segment_list": path_service.segment_list(path_devices),
+        }
+    )
+
+
+@router.post("/path/preview", response_model=PathPreviewResponse)
+def preview_path(
+    payload: PathPreviewRequest,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    data = path_service.preview_path(
+        db,
+        payload.endpoint_device_ids,
+        payload.via_device_ids,
+        payload.path_mode,
+    )
+    return PathPreviewResponse(**data)
+
+
 @router.get("", response_model=list[CircuitOut])
 def list_circuits(
     tenant_id: int | None = None,
@@ -54,7 +94,8 @@ def list_circuits(
     stmt = select(Circuit).order_by(Circuit.id)
     if tenant_id:
         stmt = stmt.where(Circuit.tenant_id == tenant_id)
-    return db.execute(stmt).scalars().all()
+    circuits = db.execute(stmt).scalars().all()
+    return [_to_circuit_out(db, c) for c in circuits]
 
 
 @router.post("", response_model=CircuitOut, status_code=201)
@@ -66,7 +107,25 @@ def create_circuit(
     if not db.get(Tenant, payload.tenant_id):
         raise HTTPException(status_code=404, detail="tenant not found")
 
-    data = payload.model_dump(exclude={"endpoints", "code", "offering_id"})
+    data = payload.model_dump(
+        exclude={"endpoints", "code", "offering_id", "via_device_ids"}
+    )
+    via_ids = payload.via_device_ids or []
+    path_mode = payload.path_mode
+    if via_ids and path_mode == PathMode.AUTO:
+        path_mode = PathMode.EXPLICIT_SR
+
+    endpoint_ids = [ep.device_id for ep in payload.endpoints]
+    if path_mode == PathMode.EXPLICIT_SR:
+        preview = path_service.preview_path(db, endpoint_ids, via_ids, path_mode)
+        if not preview["explicit_supported"]:
+            raise HTTPException(status_code=400, detail=preview["reason"])
+        if preview["connectivity_errors"]:
+            raise HTTPException(
+                status_code=400,
+                detail="; ".join(preview["connectivity_errors"]),
+            )
+    data["path_mode"] = path_mode
 
     # Apply offering defaults (only where the request left fields at default).
     if payload.offering_id:
@@ -99,10 +158,12 @@ def create_circuit(
 
     asn = _site_asn_for_endpoints(db, endpoints)
     allocation.auto_allocate_circuit_fields(db, circuit, asn)
+    if via_ids:
+        path_service.save_path_hops(db, circuit, via_ids)
 
     db.commit()
     db.refresh(circuit)
-    return circuit
+    return _to_circuit_out(db, circuit)
 
 
 @router.get("/{circuit_id}", response_model=CircuitOut)
@@ -112,7 +173,20 @@ def get_circuit(
     circuit = db.get(Circuit, circuit_id)
     if not circuit:
         raise HTTPException(status_code=404, detail="circuit not found")
-    return circuit
+    return _to_circuit_out(db, circuit)
+
+
+@router.get("/{circuit_id}/path", response_model=PathPreviewResponse)
+def get_circuit_path(
+    circuit_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_user)
+):
+    circuit = db.get(Circuit, circuit_id)
+    if not circuit:
+        raise HTTPException(status_code=404, detail="circuit not found")
+    endpoint_ids = [ep.device_id for ep in circuit.endpoints]
+    via_ids = [h.device_id for h in sorted(circuit.path_hops, key=lambda h: h.sequence)]
+    data = path_service.preview_path(db, endpoint_ids, via_ids, circuit.path_mode)
+    return PathPreviewResponse(**data)
 
 
 @router.get("/{circuit_id}/validate")

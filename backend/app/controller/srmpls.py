@@ -15,7 +15,10 @@ def _mpls_label(vni: int, device_id: int) -> int:
 
 
 def enrich_routes(
-    db: Session, routes: list[EvpnRoute], endpoints: list[CircuitEndpoint]
+    db: Session,
+    routes: list[EvpnRoute],
+    endpoints: list[CircuitEndpoint],
+    circuit=None,
 ) -> int:
     """Add MPLS encapsulation metadata for SR-MPLS capable devices."""
     mpls_devices = {
@@ -26,6 +29,13 @@ def enrich_routes(
     if not mpls_devices:
         return 0
     count = 0
+    path_segments: list[int] = []
+    if circuit is not None:
+        from app.services import path_service
+
+        path_segments = path_service.segment_list(
+            path_service.full_path_for_circuit(db, circuit)
+        )
     for route in routes:
         if route.origin_device_id not in mpls_devices:
             continue
@@ -34,6 +44,8 @@ def enrich_routes(
         route.mpls_label = _mpls_label(route.vni, route.origin_device_id or 0)
         if device and device.sr_node_sid:
             route.sr_sid = device.sr_node_sid
+        if path_segments and route.origin_device_id == endpoints[0].device_id:
+            route.sr_sid = path_segments[0]
         count += 1
     db.flush()
     return count

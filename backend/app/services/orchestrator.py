@@ -31,6 +31,8 @@ from app.models.enums import (
     ControllerType,
     DeliveryMode,
     DeviceRole,
+    OverlayTech,
+    PathMode,
     ServiceType,
     WorkOrderStatus,
     WorkOrderType,
@@ -124,15 +126,73 @@ def _build_context(
     *,
     is_egress: bool = False,
     is_gateway: bool = False,
+    db: Session | None = None,
 ) -> dict:
-    return {
+    ctx = {
         "circuit": circuit,
         "endpoint": endpoint,
         "device": device,
         "site": site,
         "is_egress": is_egress,
         "is_gateway": is_gateway,
+        "path_mode": circuit.path_mode.value,
+        "path_segments": [],
+        "path_devices": [],
+        "is_sr_headend": False,
     }
+    if db is not None:
+        from app.services import path_service
+
+        path_devs = path_service.full_path_for_circuit(db, circuit)
+        ctx["path_segments"] = path_service.segment_list(path_devs)
+        ctx["path_devices"] = [d.name for d in path_devs]
+        if circuit.endpoints:
+            first = sorted(circuit.endpoints, key=lambda e: (e.label != "A", e.label))[0]
+            ctx["is_sr_headend"] = endpoint.id == first.id
+    return ctx
+
+
+def _render_sr_policy(
+    db: Session,
+    wo: WorkOrder,
+    circuit: Circuit,
+    endpoint: CircuitEndpoint,
+    device: Device,
+    operation: str,
+    actor: str | None,
+    base_job: ConfigJob,
+) -> bool:
+    """Append SR Policy / explicit segment-list config on the A-end PE."""
+    if circuit.path_mode != PathMode.EXPLICIT_SR:
+        return True
+    if device.overlay_tech != OverlayTech.SRMPLS_EVPN or not endpoint:
+        return True
+    if not circuit.endpoints:
+        return True
+    first = sorted(circuit.endpoints, key=lambda e: (e.label != "A", e.label))[0]
+    if endpoint.id != first.id:
+        return True
+
+    driver = get_driver(device.vendor)
+    context = _build_context(
+        circuit, endpoint, device, device.site, db=db,
+    )
+    if not context["path_segments"]:
+        return True
+    try:
+        sr_cfg = driver.render("sr_policy", operation, context)
+        base_job.rendered_config = (base_job.rendered_config or "") + "\n!\n" + sr_cfg
+        _log(
+            db, wo,
+            f"[SR Policy] {device.name}: segment-list "
+            f"{' -> '.join(str(s) for s in context['path_segments'])}",
+            actor=actor,
+        )
+        return True
+    except Exception as exc:  # noqa: BLE001
+        _log(db, wo, f"SR Policy render skipped on {device.name}: {exc}",
+             level="warning", actor=actor)
+        return True
 
 
 def _dci_gateways(db: Session, circuit: Circuit) -> list[Device]:
@@ -421,7 +481,7 @@ def _render_and_push(
         gateway_ip=None,
     )
     context = _build_context(
-        circuit, ep, device, site, is_egress=is_egress, is_gateway=is_gateway,
+        circuit, ep, device, site, is_egress=is_egress, is_gateway=is_gateway, db=db,
     )
 
     job = ConfigJob(
@@ -438,6 +498,10 @@ def _render_and_push(
         rendered = driver.render(service_type.value, operation, context)
         job.rendered_config = rendered
         job.status = ConfigJobStatus.RENDERED
+        if endpoint and operation == "apply":
+            _render_sr_policy(db, wo, circuit, endpoint, device, operation, actor, job)
+        elif endpoint and operation == "remove":
+            _render_sr_policy(db, wo, circuit, endpoint, device, operation, actor, job)
         ctrl_dataplane.mark_rendered(
             db, circuit.id, device.id, operation, rendered
         )

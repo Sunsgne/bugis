@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from app.models.enums import AccessMode, CircuitStatus, ServiceType
+from app.models.enums import AccessMode, CircuitStatus, PathMode, ServiceType
 from app.schemas.common import TimestampedSchema
 
 
@@ -47,6 +47,7 @@ class CircuitBase(BaseModel):
     egress_site_id: int | None = None
     ipt_public_ip: str | None = None
     ipt_nat_enabled: int = 1
+    path_mode: PathMode = PathMode.AUTO
 
 
 class CircuitCreate(CircuitBase):
@@ -54,6 +55,7 @@ class CircuitCreate(CircuitBase):
     # Optional service offering to prefill service_type/bandwidth/sla/mtu/cos.
     offering_id: int | None = None
     endpoints: list[CircuitEndpointCreate] = []
+    via_device_ids: list[int] = []
 
 
 class CircuitUpdate(BaseModel):
@@ -69,6 +71,15 @@ class CircuitUpdate(BaseModel):
     ipt_public_ip: str | None = None
     ipt_nat_enabled: int | None = None
     status: CircuitStatus | None = None
+    path_mode: PathMode | None = None
+
+
+class CircuitPathHopSchema(BaseModel):
+    device_id: int
+    sequence: int
+    device_name: str | None = None
+    overlay_tech: str | None = None
+    sr_node_sid: int | None = None
 
 
 class CircuitOut(CircuitBase, TimestampedSchema):
@@ -76,3 +87,5 @@ class CircuitOut(CircuitBase, TimestampedSchema):
     code: str
     status: CircuitStatus
     endpoints: list[CircuitEndpointOut] = []
+    path_hops: list[CircuitPathHopSchema] = []
+    segment_list: list[int] = []

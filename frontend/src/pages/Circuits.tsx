@@ -23,6 +23,7 @@ import {
   Statistic,
   Switch,
   Segmented,
+  Alert,
 } from "antd";
 import {
   PlusOutlined,
@@ -168,6 +169,11 @@ export default function Circuits() {
       delete payload.egress_site_id;
       delete payload.ipt_nat_enabled;
     }
+    const viaIds = (payload.via_hops || [])
+      .map((h: { device_id?: number }) => h?.device_id)
+      .filter(Boolean);
+    payload.via_device_ids = viaIds;
+    delete payload.via_hops;
     try {
       await api.post("/circuits", payload);
       message.success("专线已创建（草稿），可点击开通下发配置");
@@ -446,6 +452,19 @@ export default function Circuits() {
                   </Tag>
                 ))}
               </Descriptions.Item>
+              {(r.path_mode === "explicit_sr" || (r.path_hops && r.path_hops.length > 0)) && (
+                <Descriptions.Item label="SR 路径" span={3}>
+                  <Tag color="purple">{r.path_mode || "auto"}</Tag>
+                  {(r.path_hops || []).map((h) => (
+                    <Tag key={h.sequence}>#{h.sequence + 1} {h.device_name || h.device_id}</Tag>
+                  ))}
+                  {r.segment_list && r.segment_list.length > 0 && (
+                    <span style={{ marginLeft: 8, color: "#531dab" }}>
+                      SID: {r.segment_list.join(" → ")}
+                    </span>
+                  )}
+                </Descriptions.Item>
+              )}
             </Descriptions>
           ),
         }}
@@ -668,6 +687,31 @@ function CreateModal({
   message,
 }: any) {
   const [ifaceByDevice, setIfaceByDevice] = useState<Record<number, DeviceInterface[]>>({});
+  const [pathPreview, setPathPreview] = useState<any>(null);
+
+  function deviceLabel(d: Device) {
+    const sid = d.sr_node_sid ? ` SID:${d.sr_node_sid}` : "";
+    return `${d.name} (${d.vendor}/${d.overlay_tech})${sid}`;
+  }
+
+  async function previewPath() {
+    const values = form.getFieldsValue();
+    const endpointIds = (values.endpoints || [])
+      .map((e: { device_id?: number }) => e?.device_id)
+      .filter(Boolean);
+    if (endpointIds.length < 2) {
+      return message.warning("请先选择至少两个端点设备");
+    }
+    const viaIds = (values.via_hops || [])
+      .map((h: { device_id?: number }) => h?.device_id)
+      .filter(Boolean);
+    const { data } = await api.post("/circuits/path/preview", {
+      endpoint_device_ids: endpointIds,
+      via_device_ids: viaIds,
+      path_mode: values.path_mode || "auto",
+    });
+    setPathPreview(data);
+  }
 
   useEffect(() => {
     if (open && defaultTenantId) {
@@ -713,7 +757,7 @@ function CreateModal({
     });
   }
   return (
-    <Modal title="新建专线" open={open} onOk={onOk} onCancel={onCancel} width={720}>
+    <Modal title="新建专线" open={open} onOk={onOk} onCancel={onCancel} width={780}>
       <Form
         form={form}
         layout="vertical"
@@ -722,6 +766,8 @@ function CreateModal({
           bandwidth_mbps: 100,
           mtu: 9000,
           ipt_nat_enabled: true,
+          path_mode: "auto",
+          via_hops: [],
           endpoints: [{ label: "A" }, { label: "Z" }],
         }}
       >
@@ -851,7 +897,7 @@ function CreateModal({
                       }}
                       options={devices.map((d: Device) => ({
                         value: d.id,
-                        label: `${d.name} (${d.vendor})`,
+                        label: deviceLabel(d),
                       }))}
                     />
                   </Form.Item>
@@ -932,6 +978,136 @@ function CreateModal({
             </>
           )}
         </Form.List>
+
+        <Form.Item noStyle shouldUpdate>
+          {({ getFieldValue }) => {
+            const eps = getFieldValue("endpoints") || [];
+            const epDevs = eps
+              .map((e: { device_id?: number }) => devices.find((d: Device) => d.id === e?.device_id))
+              .filter(Boolean) as Device[];
+            const hasVxlan = epDevs.some((d) => d.overlay_tech === "vxlan_evpn");
+            const allSr =
+              epDevs.length >= 2 &&
+              epDevs.every((d) => d.overlay_tech === "srmpls_evpn" && d.sr_node_sid);
+            const srDevices = devices.filter(
+              (d: Device) => d.overlay_tech === "srmpls_evpn" && d.sr_node_sid
+            );
+            const epIds = new Set(epDevs.map((d) => d.id));
+            return (
+              <div
+                style={{
+                  marginTop: 8,
+                  padding: 12,
+                  border: "1px dashed #d9d9d9",
+                  borderRadius: 8,
+                }}
+              >
+                <div style={{ fontWeight: 600, marginBottom: 8 }}>Underlay 路径</div>
+                {hasVxlan && (
+                  <Alert
+                    type="info"
+                    showIcon
+                    style={{ marginBottom: 12 }}
+                    message="BGP EVPN + OSPF 底层"
+                    description="VXLAN 专线无法指定经由设备，流量按 OSPF/IGP 最短路径自动转发。"
+                  />
+                )}
+                {allSr && (
+                  <Alert
+                    type="success"
+                    showIcon
+                    style={{ marginBottom: 12 }}
+                    message="SR-MPLS 支持显式路径"
+                    description="可指定经由的 P/PE 节点，控制器将下发 SR segment-list 策略。"
+                  />
+                )}
+                <Form.Item name="path_mode" label="选路模式">
+                  <Segmented
+                    disabled={!allSr}
+                    options={[
+                      { label: "自动 (IS-IS SR 最短路径)", value: "auto" },
+                      { label: "显式 SR 路径", value: "explicit_sr" },
+                    ]}
+                  />
+                </Form.Item>
+                <Form.Item noStyle shouldUpdate={(p, c) => p.path_mode !== c.path_mode}>
+                  {() =>
+                    getFieldValue("path_mode") === "explicit_sr" && allSr ? (
+                      <>
+                        <div style={{ fontWeight: 500, marginBottom: 8 }}>经由设备 (按顺序)</div>
+                        <Form.List name="via_hops">
+                          {(fields, { add, remove }) => (
+                            <>
+                              {fields.map((field) => (
+                                <Space key={field.key} style={{ display: "flex", marginBottom: 8 }}>
+                                  <Form.Item
+                                    name={[field.name, "device_id"]}
+                                    rules={[{ required: true, message: "选择经由设备" }]}
+                                    noStyle
+                                  >
+                                    <Select
+                                      style={{ width: 320 }}
+                                      placeholder="SR 节点"
+                                      showSearch
+                                      optionFilterProp="label"
+                                      options={srDevices
+                                        .filter((d: Device) => !epIds.has(d.id))
+                                        .map((d: Device) => ({
+                                          value: d.id,
+                                          label: deviceLabel(d),
+                                        }))}
+                                    />
+                                  </Form.Item>
+                                  <MinusCircleOutlined onClick={() => remove(field.name)} />
+                                </Space>
+                              ))}
+                              <Button
+                                type="dashed"
+                                block
+                                icon={<PlusOutlined />}
+                                onClick={() => add({})}
+                              >
+                                添加经由跳
+                              </Button>
+                            </>
+                          )}
+                        </Form.List>
+                      </>
+                    ) : null
+                  }
+                </Form.Item>
+                <Button onClick={previewPath} style={{ marginTop: 8 }}>
+                  预览路径
+                </Button>
+                {pathPreview && (
+                  <div style={{ marginTop: 12, fontSize: 12 }}>
+                    {pathPreview.reason && (
+                      <div style={{ color: "#666", marginBottom: 6 }}>{pathPreview.reason}</div>
+                    )}
+                    {pathPreview.hops?.map((h: any, i: number) => (
+                      <Tag key={i} color={h.hop_type === "via" ? "purple" : "blue"}>
+                        {h.name}
+                        {h.sr_node_sid ? ` (SID ${h.sr_node_sid})` : ""}
+                      </Tag>
+                    ))}
+                    {pathPreview.segment_list?.length > 0 && (
+                      <div style={{ marginTop: 6, color: "#531dab" }}>
+                        Segment-list: {pathPreview.segment_list.join(" → ")}
+                      </div>
+                    )}
+                    {pathPreview.connectivity_errors?.length > 0 && (
+                      <Alert
+                        type="error"
+                        style={{ marginTop: 8 }}
+                        message={pathPreview.connectivity_errors.join("; ")}
+                      />
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          }}
+        </Form.Item>
       </Form>
     </Modal>
   );

@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.models.circuit import Circuit
 from app.models.device import Device
-from app.models.enums import AccessMode, DeviceRole, ServiceType
+from app.models.enums import AccessMode, DeviceRole, PathMode, ServiceType
 from app.models.site import Site
 
 
@@ -163,6 +163,24 @@ def validate_circuit(db: Session, circuit: Circuit) -> list[Issue]:
                 Issue("warning", "iface_name",
                       f"端点 {ep.label} 接口名缺失")
             )
+
+    # Explicit SR path validation
+    if circuit.path_mode == PathMode.EXPLICIT_SR:
+        from app.services import path_service
+
+        chain = path_service.full_path_for_circuit(db, circuit)
+        ok, msg = path_service.supports_explicit_sr(chain)
+        if not ok:
+            issues.append(Issue("error", "path_unsupported", msg or "路径不支持"))
+        for err in path_service.validate_connectivity(db, [d.id for d in chain]):
+            issues.append(Issue("error", "path_connectivity", err))
+    elif circuit.path_hops:
+        issues.append(
+            Issue(
+                "warning", "path_ignored",
+                "VXLAN/OSPF 专线忽略了经由设备，实际按 IGP 最短路径转发",
+            )
+        )
 
     return issues
 

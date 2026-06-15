@@ -1,0 +1,12 @@
+! Arista EOS SR TE · circuit {{ circuit.code }} · SIDs {{ path_segments | join(' -> ') }}
+!
+segment-routing
+ traffic-engineering
+  segment-list SL_{{ circuit.code }}
+{% for sid in path_segments %}
+   index {{ loop.index }} mpls label {{ sid }}
+{% endfor %}
+  policy POLICY_{{ circuit.code }}
+   color 100 endpoint ipv4 {{ device.loopback_ip }}
+   preference 100
+    explicit segment-list SL_{{ circuit.code }}

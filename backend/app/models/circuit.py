@@ -7,7 +7,7 @@ from sqlalchemy import Enum, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
-from app.models.enums import AccessMode, CircuitStatus, ServiceType
+from app.models.enums import AccessMode, CircuitStatus, PathMode, ServiceType
 from app.models.mixins import TimestampMixin
 from sqlalchemy import Enum as SAEnum
 
@@ -61,9 +61,18 @@ class Circuit(Base, TimestampMixin):
     ipt_public_ip: Mapped[str | None] = mapped_column(String(64), nullable=True)
     ipt_nat_enabled: Mapped[int] = mapped_column(Integer, default=1)
 
+    # Underlay path: auto (OSPF/BGP best effort) or SR-MPLS explicit segment list.
+    path_mode: Mapped[PathMode] = mapped_column(
+        SAEnum(PathMode), default=PathMode.AUTO
+    )
+
     tenant: Mapped["Tenant"] = relationship(back_populates="circuits")
     endpoints: Mapped[list["CircuitEndpoint"]] = relationship(
         back_populates="circuit", cascade="all, delete-orphan"
+    )
+    path_hops: Mapped[list["CircuitPathHop"]] = relationship(
+        back_populates="circuit", cascade="all, delete-orphan",
+        order_by="CircuitPathHop.sequence",
     )
     work_orders: Mapped[list["WorkOrder"]] = relationship(
         back_populates="circuit", cascade="all, delete-orphan"
@@ -96,4 +105,22 @@ class CircuitEndpoint(Base, TimestampMixin):
     gateway_ip: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     circuit: Mapped["Circuit"] = relationship(back_populates="endpoints")
+    device: Mapped["Device"] = relationship()
+
+
+class CircuitPathHop(Base, TimestampMixin):
+    """Ordered transit device on an SR-MPLS explicit path (between A/Z endpoints)."""
+
+    __tablename__ = "circuit_path_hops"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    circuit_id: Mapped[int] = mapped_column(
+        ForeignKey("circuits.id", ondelete="CASCADE"), index=True
+    )
+    device_id: Mapped[int] = mapped_column(
+        ForeignKey("devices.id", ondelete="CASCADE"), index=True
+    )
+    sequence: Mapped[int] = mapped_column(Integer, default=0)
+
+    circuit: Mapped["Circuit"] = relationship(back_populates="path_hops")
     device: Mapped["Device"] = relationship()

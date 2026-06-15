@@ -1,0 +1,3 @@
+! Cisco XR remove SR policy {{ circuit.code }}
+no segment-routing traffic-eng policy name POLICY_{{ circuit.code }}
+no segment-routing traffic-eng segment-list name SL_{{ circuit.code }}

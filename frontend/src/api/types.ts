@@ -102,6 +102,9 @@ export interface Circuit {
   ipt_public_ip?: string;
   ipt_nat_enabled?: number;
   endpoints: CircuitEndpoint[];
+  path_mode?: string;
+  path_hops?: { device_id: number; sequence: number; device_name?: string; sr_node_sid?: number }[];
+  segment_list?: number[];
 }
 
 export interface ConfigJob {

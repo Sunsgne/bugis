@@ -3,7 +3,7 @@ from app.models.user import User  # noqa: F401
 from app.models.tenant import Tenant  # noqa: F401
 from app.models.site import Site  # noqa: F401
 from app.models.device import Device, DeviceInterface  # noqa: F401
-from app.models.circuit import Circuit, CircuitEndpoint  # noqa: F401
+from app.models.circuit import Circuit, CircuitEndpoint, CircuitPathHop  # noqa: F401
 from app.models.workorder import WorkOrder, WorkOrderEvent  # noqa: F401
 from app.models.config_job import ConfigJob  # noqa: F401
 from app.models.telemetry import TelemetrySample  # noqa: F401
@@ -30,6 +30,7 @@ __all__ = [
     "DeviceInterface",
     "Circuit",
     "CircuitEndpoint",
+    "CircuitPathHop",
     "WorkOrder",
     "WorkOrderEvent",
     "ConfigJob",

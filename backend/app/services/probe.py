@@ -15,15 +15,17 @@ from sqlalchemy.orm import Session
 
 from app.models.circuit import Circuit
 from app.models.device import Device
-from app.models.enums import CircuitStatus, DeviceRole
-from app.services import telemetry_service
+from app.models.enums import CircuitStatus, DeviceRole, PathMode
+from app.services import path_service, telemetry_service
 
 
 def _path_devices(db: Session, circuit: Circuit) -> list[Device]:
-    """Build an ordered device path across the circuit endpoints.
+    """Ordered device path: explicit SR hops when configured, else heuristic."""
+    if circuit.path_mode == PathMode.EXPLICIT_SR or circuit.path_hops:
+        chain = path_service.full_path_for_circuit(db, circuit)
+        if chain:
+            return chain
 
-    Inserts DCI/border gateways when endpoints span different sites.
-    """
     endpoint_devices = [ep.device for ep in circuit.endpoints if ep.device]
     if len(endpoint_devices) < 2:
         return endpoint_devices

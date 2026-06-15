@@ -1,0 +1,9 @@
+## Juniper SR explicit path · circuit {{ circuit.code }} · mode {{ path_mode }}
+## head-end {{ device.name }} segment-list: {{ path_segments | join(' -> ') }}
+
+{% for sid in path_segments %}
+set protocols source-packet-routing segment-list SL_{{ circuit.code }} segment {{ loop.index }} label {{ sid }}
+{% endfor %}
+set policy-options policy-statement STEER_{{ circuit.code }} term 1 from route-filter-list RF_{{ circuit.code }}
+set policy-options policy-statement STEER_{{ circuit.code }} term 1 then install-nexthop segment-list SL_{{ circuit.code }}
+set routing-instances EVI_{{ circuit.code }} forwarding-options export STEER_{{ circuit.code }}

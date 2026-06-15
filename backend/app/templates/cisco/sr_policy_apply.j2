@@ -1,0 +1,13 @@
+! Cisco XR SR Policy explicit path · circuit {{ circuit.code }}
+! segment-list: {{ path_segments | join(' -> ') }}
+{% for sid in path_segments %}
+ segment-routing
+  traffic-eng
+   segment-list name SL_{{ circuit.code }}
+    index {{ loop.index }} mpls label {{ sid }}
+{% endfor %}
+  policy name POLICY_{{ circuit.code }}
+   color 100 end-point ipv4 {{ endpoint.gateway_ip or device.loopback_ip }}
+   candidate-paths
+    preference 100
+     explicit segment-list name SL_{{ circuit.code }}
