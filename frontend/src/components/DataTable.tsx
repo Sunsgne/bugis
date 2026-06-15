@@ -76,9 +76,9 @@ export default function DataTable<TData>({
   const totalPages = serverMode ? pageCount! : table.getPageCount();
 
   return (
-    <div className={cn("space-y-3", className)}>
-      <div className="rounded-lg border bg-card">
-        <Table>
+    <div className={cn("w-full min-w-0 space-y-3", className)}>
+      <div className="w-full overflow-x-auto rounded-lg border bg-card">
+        <Table className="w-full table-fixed">
           <TableHeader>
             {table.getHeaderGroups().map((hg) => (
               <TableRow key={hg.id}>

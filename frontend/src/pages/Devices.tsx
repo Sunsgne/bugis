@@ -1,11 +1,13 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ColumnDef } from "@tanstack/react-table";
 import {
+  Activity,
   AlertTriangle,
   BookOpen,
   Cable,
   Download,
   KeyRound,
+  MoreHorizontal,
   Network,
   Plus,
   Rocket,
@@ -54,6 +56,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -956,41 +965,53 @@ export default function Devices() {
       {
         id: "actions",
         header: "操作",
-        size: 300,
+        size: 120,
         cell: ({ row }) => {
           const r = row.original;
           return (
-            <div className="flex flex-wrap gap-x-2 gap-y-1">
-              <Button variant="link" size="sm" className="h-auto p-0" onClick={() => openPorts(r)}>
+            <div className="flex items-center gap-1">
+              <Button variant="outline" size="sm" className="h-8" onClick={() => openPorts(r)}>
+                <Cable className="mr-1 h-3.5 w-3.5" />
                 端口
               </Button>
-              <Button variant="link" size="sm" className="h-auto gap-1 p-0" onClick={() => openCredEdit(r)}>
-                <KeyRound className="h-3.5 w-3.5" />
-                凭证
-              </Button>
-              <Button variant="link" size="sm" className="h-auto gap-1 p-0" onClick={() => learnConfig(r)}>
-                <BookOpen className="h-3.5 w-3.5" />
-                现网学习
-              </Button>
-              <Button variant="link" size="sm" className="h-auto gap-1 p-0" onClick={() => initialize(r)}>
-                <Rocket className="h-3.5 w-3.5" />
-                初始化
-              </Button>
-              <Button variant="link" size="sm" className="h-auto p-0" onClick={() => check(r.id)}>
-                检测
-              </Button>
-              <Button variant="link" size="sm" className="h-auto gap-1 p-0" onClick={() => discover(r.id)}>
-                <Network className="h-3.5 w-3.5" />
-                SNMP 发现
-              </Button>
-              <Button
-                variant="link"
-                size="sm"
-                className="h-auto p-0 text-destructive hover:text-destructive"
-                onClick={() => setDeleteId(r.id)}
-              >
-                {action.delete}
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-8 w-8">
+                    <MoreHorizontal className="h-4 w-4" />
+                    <span className="sr-only">更多操作</span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-44">
+                  <DropdownMenuItem onClick={() => openCredEdit(r)}>
+                    <KeyRound className="mr-2 h-4 w-4" />
+                    凭证
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => learnConfig(r)}>
+                    <BookOpen className="mr-2 h-4 w-4" />
+                    现网学习
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => initialize(r)}>
+                    <Rocket className="mr-2 h-4 w-4" />
+                    初始化
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => check(r.id)}>
+                    <Activity className="mr-2 h-4 w-4" />
+                    检测
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => discover(r.id)}>
+                    <Network className="mr-2 h-4 w-4" />
+                    SNMP 发现
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    className="text-destructive focus:text-destructive"
+                    onClick={() => setDeleteId(r.id)}
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    {action.delete}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           );
         },

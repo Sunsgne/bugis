@@ -72,7 +72,7 @@ def _synthesize(device: Device) -> list[dict]:
 
 
 def _auth_proto(name: str | None):
-    from pysnmp.hlapi import (  # pragma: no cover
+    from pysnmp.hlapi.asyncio import (  # pragma: no cover
         usmAesCfb128Protocol,
         usmAesCfb192Protocol,
         usmAesCfb256Protocol,
@@ -94,7 +94,7 @@ def _auth_proto(name: str | None):
 
 
 def _build_credentials(device: Device, cfg: SnmpSettings, community: str):
-    from pysnmp.hlapi import CommunityData, UsmUserData  # pragma: no cover
+    from pysnmp.hlapi.asyncio import CommunityData, UsmUserData  # pragma: no cover
 
     eff = snmp_device.effective_snmp(device, cfg)
     version = eff["version"]
@@ -120,16 +120,10 @@ def _walk_oid(
     *,
     port: int | None = None,
 ) -> dict[int, str]:
-    from pysnmp.hlapi import (  # pragma: no cover
-        ContextData,
-        ObjectIdentity,
-        ObjectType,
-        SnmpEngine,
-        UdpTransportTarget,
-        nextCmd,
-    )
+    from pysnmp.hlapi.asyncio import ContextData  # pragma: no cover
 
-    out: dict[int, str] = {}
+    from app.services import snmp_hlapi
+
     eff = snmp_device.effective_snmp(device, cfg)
     creds = _build_credentials(device, cfg, community)
     ctx = (
@@ -137,25 +131,17 @@ def _walk_oid(
         if eff["version"] == "3" and eff["v3_context_name"]
         else ContextData()
     )
-    for (errInd, errStat, _idx, varBinds) in nextCmd(
-        SnmpEngine(),
+    walk_port = port or cfg.port
+    return snmp_hlapi.walk_oid(
+        device.mgmt_ip,
+        walk_port,
+        float(cfg.timeout_sec),
+        int(cfg.retries),
         creds,
-        UdpTransportTarget(
-            (device.mgmt_ip, port or cfg.port),
-            timeout=cfg.timeout_sec,
-            retries=cfg.retries,
-        ),
         ctx,
-        ObjectType(ObjectIdentity(oid)),
-        lexicographicMode=False,
-        maxRepetitions=cfg.max_repetitions,
-    ):
-        if errInd or errStat:
-            break
-        for oid_val, val in varBinds:
-            ifindex = int(str(oid_val).rsplit(".", 1)[-1])
-            out[ifindex] = str(val)
-    return out
+        oid,
+        max_repetitions=int(cfg.max_repetitions),
+    )
 
 
 def probe_interfaces(
@@ -252,7 +238,12 @@ def discover_interfaces(db: Session, device: Device) -> list[DeviceInterface]:
         community = snmp_cfg.effective_community(db, device)
         try:
             discovered = _walk_real(device, cfg, community, port=device_snmp["port"])
-        except (RuntimeError, ImportError, ModuleNotFoundError):
+        except (RuntimeError, ImportError, ModuleNotFoundError, Exception) as exc:
+            msg = str(exc)
+            if "asyncore" in msg:
+                raise RuntimeError(
+                    "SNMP 库与 Python 3.12 不兼容，请升级 PySNMP（>=6.2）后重试"
+                ) from exc
             if settings.dry_run:
                 discovered = _synthesize(device)
             else:

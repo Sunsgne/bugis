@@ -53,46 +53,33 @@ def _get_oid(
     *,
     port: int | None = None,
 ) -> int | None:  # pragma: no cover
-    from pysnmp.hlapi import (
-        CommunityData,
-        ContextData,
-        ObjectIdentity,
-        ObjectType,
-        SnmpEngine,
-        UdpTransportTarget,
-        UsmUserData,
-        getCmd,
-    )
+    from pysnmp.hlapi.asyncio import ContextData  # pragma: no cover
 
-    from app.services.snmp import _auth_proto, _build_credentials
+    from app.services import snmp_hlapi
+    from app.services.snmp import _build_credentials
 
-    creds = _build_credentials(cfg, community)
+    eff = snmp_device.effective_snmp(device, cfg)
+    creds = _build_credentials(device, cfg, community)
     ctx = (
-        ContextData(cfg.v3_context_name)
-        if cfg.version == "3" and cfg.v3_context_name
+        ContextData(eff["v3_context_name"])
+        if eff["version"] == "3" and eff["v3_context_name"]
         else ContextData()
     )
-    err_ind, err_stat, _idx, var_binds = next(
-        getCmd(
-            SnmpEngine(),
-            creds,
-            UdpTransportTarget(
-                (device.mgmt_ip, port or cfg.port),
-                timeout=cfg.timeout_sec,
-                retries=cfg.retries,
-            ),
-            ctx,
-            ObjectType(ObjectIdentity(oid)),
-        )
+    raw = snmp_hlapi.get_oid(
+        device.mgmt_ip,
+        port or eff["port"] or cfg.port,
+        float(cfg.timeout_sec),
+        int(cfg.retries),
+        creds,
+        ctx,
+        oid,
     )
-    if err_ind or err_stat:
+    if raw is None:
         return None
-    for _oid, val in var_binds:
-        try:
-            return int(val)
-        except (TypeError, ValueError):
-            return None
-    return None
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return None
 
 
 def _poll_iface_counters(
