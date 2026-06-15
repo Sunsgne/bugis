@@ -15,7 +15,7 @@ import {
   App as AntApp,
   Popconfirm,
 } from "antd";
-import { PlusOutlined, DownloadOutlined, UploadOutlined, ApiOutlined } from "@ant-design/icons";
+import { PlusOutlined, DownloadOutlined, UploadOutlined, ApiOutlined, RocketOutlined } from "@ant-design/icons";
 import { api } from "../api/client";
 import type { Device, DeviceInterface, Site } from "../api/types";
 
@@ -38,7 +38,7 @@ const OVERLAYS = ["vxlan_evpn", "srmpls_evpn"];
 const VENDORS = ["h3c", "huawei", "juniper", "arista", "cisco", "frr"];
 
 export default function Devices() {
-  const { message } = AntApp.useApp();
+  const { message, modal } = AntApp.useApp();
   const [rows, setRows] = useState<Device[]>([]);
   const [sites, setSites] = useState<Site[]>([]);
   const [loading, setLoading] = useState(false);
@@ -125,6 +125,29 @@ export default function Devices() {
       message.error(e?.response?.data?.detail || "导入失败");
     }
     return false;
+  }
+
+  async function initialize(d: Device) {
+    const { data: bl } = await api.get(`/devices/${d.id}/baseline`);
+    modal.confirm({
+      title: `设备初始化 · ${d.name} (${d.vendor})`,
+      width: 760,
+      icon: null,
+      content: (
+        <div>
+          <div style={{ marginBottom: 8, color: "#888" }}>
+            标准基线配置(管理/Loopback/Underlay/EVPN Overlay)预览,确认后下发(dry-run)并保存为初始化快照:
+          </div>
+          <pre className="config-pre">{bl.content}</pre>
+        </div>
+      ),
+      okText: "下发初始化配置",
+      onOk: async () => {
+        const { data } = await api.post(`/devices/${d.id}/initialize`);
+        message.success(`${data.device} 初始化完成 (v${data.version}, ${data.transport})`);
+        load();
+      },
+    });
   }
 
   async function check(id: number) {
@@ -233,6 +256,9 @@ export default function Devices() {
             title: "操作",
             render: (_, r) => (
               <Space>
+                <a onClick={() => initialize(r)}>
+                  <RocketOutlined /> 初始化
+                </a>
                 <a onClick={() => check(r.id)}>检测</a>
                 <a onClick={() => discover(r.id)}>
                   <ApiOutlined /> SNMP发现
