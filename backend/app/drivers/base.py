@@ -4,8 +4,8 @@ A driver is responsible for:
   1. Rendering vendor configuration from a normalized intent (Jinja2 templates).
   2. Optionally pushing that configuration to a device (NETCONF / CLI).
 
-Real device transport (netmiko / ncclient) is imported lazily and is optional,
-so the platform works in dry-run mode out of the box.
+Real device transport (netmiko / ncclient) is imported lazily; packages are
+listed in requirements.txt for production (dry_run=false) deployments.
 """
 from __future__ import annotations
 

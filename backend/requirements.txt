@@ -30,10 +30,9 @@ pysnmp>=6.2.0,<7.0.0
 # Metrics
 prometheus-client==0.21.1
 
-# Optional southbound device drivers (real device interaction).
-# Kept optional so the platform runs in dry-run mode without them.
-# netmiko==4.5.0
-# ncclient==0.6.16
+# Southbound device drivers (SSH CLI / NETCONF) — required when dry_run=false
+netmiko>=4.5.0,<5.0.0
+ncclient>=0.6.16,<0.7.0
 
 # Testing
 pytest==8.3.4
