@@ -1,12 +1,12 @@
 """Service offerings / packages (产品化专线套餐)."""
 from __future__ import annotations
 
-from sqlalchemy import Boolean, Enum, Integer, String
+from sqlalchemy import Boolean, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
 from app.models.enums import ServiceType
-from app.models.mixins import TimestampMixin
+from app.models.mixins import TimestampMixin, str_enum_column
 
 
 class ServiceOffering(Base, TimestampMixin):
@@ -16,7 +16,7 @@ class ServiceOffering(Base, TimestampMixin):
     name: Mapped[str] = mapped_column(String(128), index=True)
     code: Mapped[str] = mapped_column(String(48), unique=True, index=True)
     service_type: Mapped[ServiceType] = mapped_column(
-        Enum(ServiceType), default=ServiceType.L2VPN_EVPN
+        str_enum_column(ServiceType), default=ServiceType.L2VPN_EVPN
     )
     bandwidth_mbps: Mapped[int] = mapped_column(Integer, default=100)
     sla_target: Mapped[str | None] = mapped_column(String(16), nullable=True)

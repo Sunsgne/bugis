@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Enum, ForeignKey, Integer, String
+from sqlalchemy import ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -28,10 +28,10 @@ class Circuit(Base, TimestampMixin):
         ForeignKey("tenants.id", ondelete="CASCADE"), index=True
     )
     service_type: Mapped[ServiceType] = mapped_column(
-        Enum(ServiceType), default=ServiceType.L2VPN_EVPN
+        str_enum_column(ServiceType), default=ServiceType.L2VPN_EVPN
     )
     status: Mapped[CircuitStatus] = mapped_column(
-        Enum(CircuitStatus), default=CircuitStatus.DRAFT
+        str_enum_column(CircuitStatus), default=CircuitStatus.DRAFT
     )
 
     # EVPN identifiers

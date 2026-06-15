@@ -1,12 +1,12 @@
 """Links between devices, used for capacity / topology."""
 from __future__ import annotations
 
-from sqlalchemy import Enum, ForeignKey, Integer, String
+from sqlalchemy import ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
 from app.models.enums import LinkType
-from app.models.mixins import TimestampMixin
+from app.models.mixins import TimestampMixin, str_enum_column
 
 
 class Link(Base, TimestampMixin):
@@ -14,7 +14,7 @@ class Link(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     name: Mapped[str] = mapped_column(String(128), index=True)
-    type: Mapped[LinkType] = mapped_column(Enum(LinkType), default=LinkType.DCI)
+    type: Mapped[LinkType] = mapped_column(str_enum_column(LinkType), default=LinkType.DCI)
     device_a_id: Mapped[int] = mapped_column(
         ForeignKey("devices.id", ondelete="CASCADE")
     )

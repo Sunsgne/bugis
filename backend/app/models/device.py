@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, Enum, ForeignKey, Integer, JSON, String
+from sqlalchemy import Boolean, ForeignKey, Integer, JSON, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -13,7 +13,7 @@ from app.models.enums import (
     OverlayTech,
     Vendor,
 )
-from app.models.mixins import TimestampMixin
+from app.models.mixins import TimestampMixin, str_enum_column
 
 if TYPE_CHECKING:
     from app.models.site import Site
@@ -25,15 +25,15 @@ class Device(Base, TimestampMixin):
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     name: Mapped[str] = mapped_column(String(128), index=True)
     hostname: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    vendor: Mapped[Vendor] = mapped_column(Enum(Vendor), index=True)
+    vendor: Mapped[Vendor] = mapped_column(str_enum_column(Vendor), index=True)
     model: Mapped[str | None] = mapped_column(String(64), nullable=True)
     os_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    role: Mapped[DeviceRole] = mapped_column(Enum(DeviceRole), default=DeviceRole.LEAF)
+    role: Mapped[DeviceRole] = mapped_column(str_enum_column(DeviceRole), default=DeviceRole.LEAF)
     overlay_tech: Mapped[OverlayTech] = mapped_column(
-        Enum(OverlayTech), default=OverlayTech.VXLAN_EVPN
+        str_enum_column(OverlayTech), default=OverlayTech.VXLAN_EVPN
     )
     status: Mapped[DeviceStatus] = mapped_column(
-        Enum(DeviceStatus), default=DeviceStatus.UNKNOWN
+        str_enum_column(DeviceStatus), default=DeviceStatus.UNKNOWN
     )
 
     # Management / southbound connectivity

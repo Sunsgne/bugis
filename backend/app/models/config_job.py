@@ -3,12 +3,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Enum, ForeignKey, String, Text
+from sqlalchemy import ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
 from app.models.enums import ConfigJobStatus
-from app.models.mixins import TimestampMixin
+from app.models.mixins import TimestampMixin, str_enum_column
 
 if TYPE_CHECKING:
     from app.models.device import Device
@@ -28,7 +28,7 @@ class ConfigJob(Base, TimestampMixin):
         ForeignKey("devices.id", ondelete="CASCADE")
     )
     status: Mapped[ConfigJobStatus] = mapped_column(
-        Enum(ConfigJobStatus), default=ConfigJobStatus.PENDING
+        str_enum_column(ConfigJobStatus), default=ConfigJobStatus.PENDING
     )
     # Operation intent: "apply" or "remove"
     operation: Mapped[str] = mapped_column(String(16), default="apply")

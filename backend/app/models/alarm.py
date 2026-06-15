@@ -1,12 +1,12 @@
 """Alarms raised from SLA / capacity / device-state evaluation."""
 from __future__ import annotations
 
-from sqlalchemy import Enum, ForeignKey, String, Text
+from sqlalchemy import ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
 from app.models.enums import AlarmSeverity, AlarmStatus
-from app.models.mixins import TimestampMixin
+from app.models.mixins import TimestampMixin, str_enum_column
 
 
 class Alarm(Base, TimestampMixin):
@@ -14,10 +14,10 @@ class Alarm(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     severity: Mapped[AlarmSeverity] = mapped_column(
-        Enum(AlarmSeverity), default=AlarmSeverity.WARNING, index=True
+        str_enum_column(AlarmSeverity), default=AlarmSeverity.WARNING, index=True
     )
     status: Mapped[AlarmStatus] = mapped_column(
-        Enum(AlarmStatus), default=AlarmStatus.ACTIVE, index=True
+        str_enum_column(AlarmStatus), default=AlarmStatus.ACTIVE, index=True
     )
     # Logical alarm type, e.g. "sla_loss", "utilization", "tunnel_down".
     kind: Mapped[str] = mapped_column(String(48), index=True)

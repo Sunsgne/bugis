@@ -3,12 +3,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Enum, String
+from sqlalchemy import String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
 from app.models.enums import TenantStatus, TenantType
-from app.models.mixins import TimestampMixin
+from app.models.mixins import TimestampMixin, str_enum_column
 
 if TYPE_CHECKING:
     from app.models.circuit import Circuit
@@ -21,10 +21,10 @@ class Tenant(Base, TimestampMixin):
     name: Mapped[str] = mapped_column(String(128), index=True)
     code: Mapped[str] = mapped_column(String(32), unique=True, index=True)
     type: Mapped[TenantType] = mapped_column(
-        Enum(TenantType), default=TenantType.ENTERPRISE
+        str_enum_column(TenantType), default=TenantType.ENTERPRISE
     )
     status: Mapped[TenantStatus] = mapped_column(
-        Enum(TenantStatus), default=TenantStatus.ACTIVE
+        str_enum_column(TenantStatus), default=TenantStatus.ACTIVE
     )
     contact_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
     contact_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
