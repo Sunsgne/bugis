@@ -12,7 +12,7 @@ import difflib
 from app.models.circuit import Circuit, CircuitEndpoint
 from app.models.config_job import ConfigJob
 from app.models.device import Device
-from app.models.enums import CircuitStatus, PathMode, AccessMode
+from app.models.enums import CircuitStatus, PathMode, AccessMode, ServiceType
 from app.models.offering import ServiceOffering
 from app.models.tenant import Tenant
 from app.models.user import User
@@ -21,6 +21,8 @@ from app.schemas.circuit import (
     CircuitCreate,
     CircuitEndpointCreate,
     CircuitEndpointOut,
+    CircuitEndpointsReplace,
+    CircuitEndpointUpdate,
     CircuitListOut,
     CircuitOut,
     CircuitPathHopSchema,
@@ -399,6 +401,111 @@ def delete_circuit(
         )
     db.delete(circuit)
     db.commit()
+
+
+@router.put("/{circuit_id}/endpoints", response_model=CircuitOut)
+def replace_endpoints(
+    circuit_id: int,
+    payload: CircuitEndpointsReplace,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
+    """Replace all attachment endpoints on a circuit (for port / VLAN changes)."""
+    circuit = db.get(Circuit, circuit_id)
+    if not circuit:
+        raise HTTPException(status_code=404, detail="circuit not found")
+
+    min_eps = 1 if circuit.service_type == ServiceType.REMOTE_IPT else 2
+    if len(payload.endpoints) < min_eps:
+        raise HTTPException(
+            status_code=400,
+            detail=f"至少需要 {min_eps} 个端点",
+        )
+
+    for ep in payload.endpoints:
+        if not db.get(Device, ep.device_id):
+            raise HTTPException(status_code=404, detail=f"device {ep.device_id} not found")
+
+    for ep in payload.endpoints:
+        svid = ep.vlan_id or circuit.vlan_id
+        mode = ep.access_mode or AccessMode.DOT1Q
+        ok, msg = port_inventory.check_endpoint_available(
+            db,
+            ep.device_id,
+            ep.interface_name,
+            svid,
+            ep.inner_vlan_id,
+            mode,
+            exclude_circuit_id=circuit.id,
+        )
+        if not ok:
+            raise HTTPException(status_code=409, detail=msg)
+
+    for old in list(circuit.endpoints):
+        db.delete(old)
+    db.flush()
+
+    new_endpoints: list[CircuitEndpoint] = []
+    for ep in payload.endpoints:
+        endpoint = CircuitEndpoint(circuit_id=circuit.id, **ep.model_dump())
+        db.add(endpoint)
+        new_endpoints.append(endpoint)
+    db.flush()
+
+    if circuit.path_mode == PathMode.EXPLICIT_SR:
+        endpoint_ids = [ep.device_id for ep in new_endpoints]
+        via_ids = [h.device_id for h in sorted(circuit.path_hops, key=lambda h: h.sequence)]
+        preview = path_service.preview_path(db, endpoint_ids, via_ids, circuit.path_mode)
+        if preview.get("connectivity_errors"):
+            db.rollback()
+            raise HTTPException(
+                status_code=400,
+                detail="; ".join(preview["connectivity_errors"]),
+            )
+
+    db.commit()
+    db.refresh(circuit)
+    return _to_circuit_out(db, circuit)
+
+
+@router.patch("/{circuit_id}/endpoints/{endpoint_id}", response_model=CircuitEndpointOut)
+def update_endpoint(
+    circuit_id: int,
+    endpoint_id: int,
+    payload: CircuitEndpointUpdate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
+    circuit = db.get(Circuit, circuit_id)
+    if not circuit:
+        raise HTTPException(status_code=404, detail="circuit not found")
+    endpoint = db.get(CircuitEndpoint, endpoint_id)
+    if not endpoint or endpoint.circuit_id != circuit_id:
+        raise HTTPException(status_code=404, detail="endpoint not found")
+
+    data = payload.model_dump()
+    if not db.get(Device, data["device_id"]):
+        raise HTTPException(status_code=404, detail="device not found")
+
+    svid = data.get("vlan_id") or circuit.vlan_id
+    mode = data.get("access_mode") or AccessMode.DOT1Q
+    ok, msg = port_inventory.check_endpoint_available(
+        db,
+        data["device_id"],
+        data["interface_name"],
+        svid,
+        data.get("inner_vlan_id"),
+        mode,
+        exclude_circuit_id=circuit.id,
+    )
+    if not ok:
+        raise HTTPException(status_code=409, detail=msg)
+
+    for k, v in data.items():
+        setattr(endpoint, k, v)
+    db.commit()
+    db.refresh(endpoint)
+    return endpoint
 
 
 @router.post(

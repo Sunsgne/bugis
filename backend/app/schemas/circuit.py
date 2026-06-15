@@ -22,6 +22,14 @@ class CircuitEndpointCreate(CircuitEndpointBase):
     pass
 
 
+class CircuitEndpointUpdate(CircuitEndpointBase):
+    pass
+
+
+class CircuitEndpointsReplace(BaseModel):
+    endpoints: list[CircuitEndpointCreate]
+
+
 class CircuitEndpointOut(CircuitEndpointBase, TimestampedSchema):
     id: int
     circuit_id: int

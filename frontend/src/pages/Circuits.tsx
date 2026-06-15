@@ -39,11 +39,11 @@ import {
   RadarChartOutlined,
   LineChartOutlined,
   DeleteOutlined,
-  WarningOutlined,
   SearchOutlined,
+  ApartmentOutlined,
 } from "@ant-design/icons";
 import { api } from "../api/client";
-import type { Circuit, Device, DeviceInterface, Offering, Paginated, Site, SvidUsage, Tenant } from "../api/types";
+import type { Circuit, Device, Offering, Paginated, Site, Tenant } from "../api/types";
 import { configPreviewModalProps, ConfigPreviewPre, createCircuitModalProps } from "../utils/configPreview";
 import { formModalProps } from "../utils/formModal";
 import { TenantSearchSelect, useTenantSearch } from "../components/TenantSearchSelect";
@@ -52,6 +52,7 @@ import { buildListQuery, dataTableProps, tablePagination } from "../utils/table"
 import PageCard from "../components/PageCard";
 import ListToolbar from "../components/ListToolbar";
 import CircuitMonitorPanel from "../components/CircuitMonitorPanel";
+import CircuitEndpointsEditor from "../components/CircuitEndpointsEditor";
 
 const SERVICE_LABEL: Record<string, string> = {
   l2vpn_evpn: "EVPN L2VPN",
@@ -105,134 +106,6 @@ interface TenantOverview {
 
 const DELETABLE = new Set(["decommissioned", "draft", "failed"]);
 
-const SVID_SOURCE: Record<string, { label: string; color: string }> = {
-  platform: { label: "平台", color: "blue" },
-  device: { label: "设备", color: "orange" },
-  legacy: { label: "手工", color: "red" },
-};
-
-function formatPortSpeed(mbps?: number) {
-  if (!mbps) return null;
-  return mbps >= 1000 ? `${mbps / 1000}G` : `${mbps}M`;
-}
-
-function svidUsageLabel(u: SvidUsage) {
-  if (u.access_mode === "access") return "untagged";
-  if (u.c_vid != null && u.s_vid != null) return `S:${u.s_vid} / C:${u.c_vid}`;
-  if (u.s_vid != null) return `S:${u.s_vid}`;
-  return "unknown";
-}
-
-function svidUsageTitle(u: SvidUsage) {
-  const src = SVID_SOURCE[u.source || "platform"]?.label || u.source;
-  const parts = [`来源: ${src}`];
-  if (u.circuit_code) parts.push(`专线 ${u.circuit_code}`);
-  if (u.note) parts.push(u.note);
-  return parts.join(" · ");
-}
-
-function vlanConflict(
-  usage: SvidUsage[] | null | undefined,
-  vlanId?: number | null,
-  accessMode?: string,
-  innerVlanId?: number | null
-): string | null {
-  if (!usage?.length) return null;
-  if (accessMode === "access") {
-    if (usage.some((u) => u.access_mode === "access")) {
-      return "该端口已配置 untagged 接入";
-    }
-    if (usage.length > 0) return "该端口已有 VLAN 封装，无法再配置 untagged";
-    return null;
-  }
-  if (vlanId == null) return null;
-  for (const u of usage) {
-    if (u.access_mode === "access") return "该端口已配置 untagged，无法叠加 VLAN";
-    if (accessMode === "qinq" && u.s_vid === vlanId && u.c_vid === innerVlanId) {
-      return `QinQ S:${vlanId}/C:${innerVlanId} 已被占用`;
-    }
-    if (accessMode !== "qinq" && u.access_mode !== "qinq" && u.s_vid === vlanId) {
-      return `S-VID ${vlanId} 已被占用`;
-    }
-  }
-  return null;
-}
-
-function SvidUsageTags({ list, emptyText }: { list?: SvidUsage[] | null; emptyText?: string }) {
-  if (!list?.length) {
-    return <span style={{ color: "#52c41a", fontSize: 12 }}>{emptyText || "无占用 · 可分配"}</span>;
-  }
-  return (
-    <Space size={[4, 4]} wrap>
-      {list.map((u, idx) => {
-        const src = SVID_SOURCE[u.source || "platform"] || SVID_SOURCE.platform;
-        return (
-          <Tooltip key={idx} title={svidUsageTitle(u)}>
-            <Tag color={src.color} style={{ margin: 0 }}>
-              {svidUsageLabel(u)}
-              <span style={{ opacity: 0.75, marginLeft: 4 }}>({src.label})</span>
-            </Tag>
-          </Tooltip>
-        );
-      })}
-    </Space>
-  );
-}
-
-function InterfaceOptionRow({ iface }: { iface: DeviceInterface }) {
-  const speed = formatPortSpeed(iface.speed_mbps);
-  const used = (iface.used_s_vids?.length || 0) > 0;
-  return (
-    <div className="iface-option">
-      <div className="iface-option-head">
-        <span className="iface-option-name">{iface.name}</span>
-        {speed && <Tag bordered={false}>{speed}</Tag>}
-        <Tag color={iface.oper_status === "up" ? "success" : "default"} bordered={false}>
-          {iface.oper_status || "unknown"}
-        </Tag>
-        {!used && <Tag color="green" bordered={false}>空闲</Tag>}
-      </div>
-      {used && (
-        <div className="iface-option-svids">
-          <SvidUsageTags list={iface.used_s_vids} />
-        </div>
-      )}
-    </div>
-  );
-}
-
-function PortDetailPanel({
-  iface,
-  vlanId,
-  accessMode,
-  innerVlanId,
-}: {
-  iface?: DeviceInterface;
-  vlanId?: number | null;
-  accessMode?: string;
-  innerVlanId?: number | null;
-}) {
-  if (!iface) return null;
-  const speed = formatPortSpeed(iface.speed_mbps);
-  const conflict = vlanConflict(iface.used_s_vids, vlanId, accessMode, innerVlanId);
-  return (
-    <div className="port-detail-panel">
-      <div className="port-detail-title">
-        <span>{iface.name}</span>
-        {speed && <Tag>{speed}</Tag>}
-        <Tag color={iface.oper_status === "up" ? "success" : "default"}>{iface.oper_status || "-"}</Tag>
-      </div>
-      <div className="port-detail-row">
-        <span className="port-detail-label">S-VID 占用</span>
-        <SvidUsageTags list={iface.used_s_vids} emptyText="该端口暂无 VLAN 占用" />
-      </div>
-      {conflict && (
-        <Alert type="warning" showIcon icon={<WarningOutlined />} message={conflict} style={{ marginTop: 8 }} />
-      )}
-    </div>
-  );
-}
-
 export default function Circuits() {
   const { message, modal } = AntApp.useApp();
   const navigate = useNavigate();
@@ -256,6 +129,9 @@ export default function Circuits() {
   const [form] = Form.useForm();
   const [modifyForm] = Form.useForm();
   const [modifyTarget, setModifyTarget] = useState<Circuit | null>(null);
+  const [editEndpointsTarget, setEditEndpointsTarget] = useState<Circuit | null>(null);
+  const [editEndpointsForm] = Form.useForm();
+  const [editEndpointsSaving, setEditEndpointsSaving] = useState(false);
   const [historyCircuit, setHistoryCircuit] = useState<Circuit | null>(null);
   const [history, setHistory] = useState<any>(null);
   const [diffText, setDiffText] = useState<Record<number, string>>({});
@@ -497,6 +373,70 @@ export default function Circuits() {
     }
   }
 
+  function openEditEndpoints(circuit: Circuit, detail?: Circuit) {
+    const d = detail || detailCache[circuit.id] || circuit;
+    setEditEndpointsTarget(d);
+    editEndpointsForm.setFieldsValue({
+      endpoints: (d.endpoints || []).map((e) => ({
+        label: e.label,
+        device_id: e.device_id,
+        interface_name: e.interface_name,
+        access_mode: e.access_mode || "dot1q",
+        vlan_id: e.vlan_id,
+        inner_vlan_id: e.inner_vlan_id,
+      })),
+    });
+  }
+
+  async function saveEndpointsAndProvision() {
+    if (!editEndpointsTarget) return;
+    const values = await editEndpointsForm.validateFields();
+    const endpoints = (values.endpoints || []).map(
+      ({ label, device_id, interface_name, access_mode, vlan_id, inner_vlan_id }: Record<string, unknown>) => ({
+        label,
+        device_id,
+        interface_name,
+        access_mode: access_mode || "dot1q",
+        ...(vlan_id != null && vlan_id !== "" ? { vlan_id } : {}),
+        ...(inner_vlan_id != null && inner_vlan_id !== "" ? { inner_vlan_id } : {}),
+      }),
+    );
+    const minEps = editEndpointsTarget.service_type === "remote_ipt" ? 1 : 2;
+    if (endpoints.length < minEps) {
+      message.warning(`至少需要 ${minEps} 个端点`);
+      return;
+    }
+    setEditEndpointsSaving(true);
+    const circuitId = editEndpointsTarget.id;
+    try {
+      await api.put(`/circuits/${circuitId}/endpoints`, { endpoints });
+      const woType =
+        editEndpointsTarget.status === "active" || editEndpointsTarget.status === "degraded"
+          ? "modify"
+          : "provision";
+      const { data } = await api.post(
+        `/work-orders/provision/${circuitId}?wo_type=${woType}`,
+      );
+      message.success(
+        woType === "modify"
+          ? `端点已更新，变更工单 ${data.code}: ${data.status}`
+          : `端点已更新，开通工单 ${data.code}: ${data.status}`,
+      );
+      setEditEndpointsTarget(null);
+      editEndpointsForm.resetFields();
+      setDetailCache((prev) => {
+        const next = { ...prev };
+        delete next[circuitId];
+        return next;
+      });
+      loadCircuits();
+    } catch (e: any) {
+      message.error(e?.response?.data?.detail || "端点更新失败");
+    } finally {
+      setEditEndpointsSaving(false);
+    }
+  }
+
   async function probe(c: Circuit) {
     const hide = message.loading(`正在拨测 ${c.code} ...`, 0);
     try {
@@ -726,14 +666,29 @@ export default function Circuits() {
                           </>
                         )}
                         <Descriptions.Item label="端点" span={3}>
-                          {detail.endpoints.map((e) => (
-                            <Tag key={e.id}>
-                              {e.label}: {deviceName(e.device_id)} / {e.interface_name}
-                              {e.access_mode ? ` · ${e.access_mode}` : ""}
-                              {e.vlan_id ? ` vlan ${e.vlan_id}` : ""}
-                              {e.inner_vlan_id ? `/${e.inner_vlan_id}` : ""}
-                            </Tag>
-                          ))}
+                          <Space direction="vertical" size={8} style={{ width: "100%" }}>
+                            <Space wrap>
+                              {detail.endpoints.map((e) => (
+                                <Tag key={e.id}>
+                                  {e.label}: {deviceName(e.device_id)} / {e.interface_name}
+                                  {e.access_mode ? ` · ${e.access_mode}` : ""}
+                                  {e.vlan_id ? ` vlan ${e.vlan_id}` : ""}
+                                  {e.inner_vlan_id ? `/${e.inner_vlan_id}` : ""}
+                                </Tag>
+                              ))}
+                            </Space>
+                            {r.status !== "decommissioned" && (
+                              <Button
+                                size="small"
+                                type="link"
+                                icon={<EditOutlined />}
+                                style={{ padding: 0, height: "auto" }}
+                                onClick={() => openEditEndpoints(r, detail)}
+                              >
+                                修改端点并重新下发
+                              </Button>
+                            )}
+                          </Space>
                         </Descriptions.Item>
                         {(detail.path_mode === "explicit_sr" || (detail.path_hops && detail.path_hops.length > 0)) && (
                           <Descriptions.Item label="SR 路径" span={3}>
@@ -843,6 +798,18 @@ export default function Circuits() {
                     />
                   </Tooltip>
                 )}
+                {r.status !== "decommissioned" && (
+                  <Tooltip title="修改接入端点 (设备/端口/VLAN)">
+                    <Button
+                      size="small"
+                      icon={<ApartmentOutlined />}
+                      onClick={async () => {
+                        const detail = await loadCircuitDetail(r.id);
+                        openEditEndpoints(r, detail);
+                      }}
+                    />
+                  </Tooltip>
+                )}
                 <Tooltip title="预览各厂商配置">
                   <Button size="small" icon={<EyeOutlined />} onClick={() => preview(r)} />
                 </Tooltip>
@@ -916,6 +883,42 @@ export default function Circuits() {
           <div style={{ color: "#888", fontSize: 12 }}>
             变更将创建 MODIFY 工单并重新下发各厂商 QoS / 限速配置。
           </div>
+        </Form>
+      </Modal>
+
+      <Modal
+        title={editEndpointsTarget ? `修改端点 · ${editEndpointsTarget.code}` : "修改端点"}
+        open={!!editEndpointsTarget}
+        onOk={saveEndpointsAndProvision}
+        onCancel={() => {
+          setEditEndpointsTarget(null);
+          editEndpointsForm.resetFields();
+        }}
+        confirmLoading={editEndpointsSaving}
+        okText={
+          editEndpointsTarget?.status === "active" || editEndpointsTarget?.status === "degraded"
+            ? "保存并重新下发"
+            : "保存并开通"
+        }
+        cancelText="取消"
+        {...formModalProps}
+        width={960}
+        wrapClassName="app-form-modal create-circuit-modal"
+      >
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 12 }}
+          message="修改接入端点"
+          description="可更换设备、物理端口、封装模式与 S-VID。保存后将创建变更/开通工单并重新下发各端设备配置。"
+        />
+        <Form form={editEndpointsForm} layout="vertical" className="app-form">
+          <CircuitEndpointsEditor
+            form={editEndpointsForm}
+            devices={devices}
+            preloadDeviceIds={editEndpointsTarget?.endpoints.map((e) => e.device_id) || []}
+            minEndpoints={editEndpointsTarget?.service_type === "remote_ipt" ? 1 : 2}
+          />
         </Form>
       </Modal>
 
@@ -1008,7 +1011,6 @@ function CreateModal({
   onCancel,
   message,
 }: any) {
-  const [ifaceByDevice, setIfaceByDevice] = useState<Record<number, DeviceInterface[]>>({});
   const [pathPreview, setPathPreview] = useState<any>(null);
   const [formLoading, setFormLoading] = useState(false);
   const tenantSearch = useTenantSearch(open ? defaultTenantId : null);
@@ -1051,11 +1053,6 @@ function CreateModal({
     };
   }, [open, devicesProp, sitesProp, message]);
 
-  function deviceLabel(d: Device) {
-    const sid = d.sr_node_sid ? ` SID:${d.sr_node_sid}` : "";
-    return `${d.name} (${d.vendor}/${d.overlay_tech})${sid}`;
-  }
-
   async function previewPath() {
     const values = form.getFieldsValue();
     const endpointIds = (values.endpoints || [])
@@ -1081,45 +1078,9 @@ function CreateModal({
     }
   }, [open, defaultTenantId, form]);
 
-  async function loadIfaces(deviceId: number, autoDiscover = true) {
-    if (!deviceId) return;
-    let { data } = await api.get<DeviceInterface[]>(`/devices/${deviceId}/interfaces`);
-    if ((!data || data.length === 0) && autoDiscover) {
-      const r = await api.post<DeviceInterface[]>(
-        `/devices/${deviceId}/discover-interfaces`
-      );
-      data = r.data;
-    }
-    setIfaceByDevice((p) => ({ ...p, [deviceId]: data }));
-  }
-
-  async function discover(deviceId: number) {
-    if (!deviceId) return message.warning("请先选择设备");
-    const hide = message.loading("SNMP 发现 + S-VID 扫描...", 0);
-    try {
-      const { data } = await api.post<DeviceInterface[]>(
-        `/devices/${deviceId}/discover-interfaces`
-      );
-      setIfaceByDevice((p) => ({ ...p, [deviceId]: data }));
-      message.success(`已发现 ${data.length} 个接口，并更新 VLAN 占用`);
-    } catch (e: any) {
-      message.error(e?.response?.data?.detail || "发现失败");
-    } finally {
-      hide();
-    }
-  }
-
-  function ifaceSelectOptions(deviceId: number) {
-    return (ifaceByDevice[deviceId] || []).map((iface) => ({
-      value: iface.name,
-      label: iface.name,
-      iface,
-    }));
-  }
-
-  function findIface(deviceId: number, name?: string) {
-    if (!deviceId || !name) return undefined;
-    return (ifaceByDevice[deviceId] || []).find((i) => i.name === name);
+  function deviceLabel(d: Device) {
+    const sid = d.sr_node_sid ? ` SID:${d.sr_node_sid}` : "";
+    return `${d.name} (${d.vendor}/${d.overlay_tech})${sid}`;
   }
 
   async function applyOffering(id: number) {
@@ -1323,192 +1284,7 @@ function CreateModal({
         <Divider orientation="left" style={{ margin: "8px 0 16px" }}>
           接入端点
         </Divider>
-        <div style={{ marginBottom: 8, fontSize: 12, color: "#888" }}>
-          图例：
-          <Tag color="green" bordered={false} style={{ marginLeft: 8 }}>空闲</Tag>
-          <Tag color="blue" bordered={false}>S:VID (平台)</Tag>
-          <Tag color="orange" bordered={false}>S:VID (设备)</Tag>
-          <Tag color="red" bordered={false}>S:VID (手工)</Tag>
-        </div>
-        <Form.List name="endpoints">
-          {(fields, { add, remove }) => (
-            <>
-              <div className="endpoint-grid">
-              {fields.map((field) => (
-                <Form.Item
-                  key={field.key}
-                  noStyle
-                  shouldUpdate={(p, c) => p.endpoints !== c.endpoints}
-                >
-                  {({ getFieldValue }) => {
-                    const ep = getFieldValue(["endpoints", field.name]) || {};
-                    const did = ep.device_id as number | undefined;
-                    const ifName = ep.interface_name as string | undefined;
-                    const selectedIface = findIface(did || 0, ifName);
-                    const label = ep.label || String.fromCharCode(65 + field.name);
-                    return (
-                      <Card
-                        size="small"
-                        className="endpoint-card"
-                        title={
-                          <Space>
-                            <Tag color={label === "A" ? "blue" : label === "Z" ? "purple" : "default"}>
-                              端点 {label}
-                            </Tag>
-                          </Space>
-                        }
-                        extra={
-                          fields.length > 1 ? (
-                            <Button
-                              type="text"
-                              danger
-                              size="small"
-                              icon={<MinusCircleOutlined />}
-                              onClick={() => remove(field.name)}
-                            />
-                          ) : null
-                        }
-                        style={{ marginBottom: 12 }}
-                      >
-                        <Row gutter={[16, 0]}>
-                          <Col xs={24} sm={8} md={6} lg={5}>
-                            <Form.Item
-                              name={[field.name, "label"]}
-                              label="标签"
-                              rules={[{ required: true }]}
-                            >
-                              <Input placeholder="A" />
-                            </Form.Item>
-                          </Col>
-                          <Col xs={24} sm={16} md={18} lg={19}>
-                            <Form.Item
-                              name={[field.name, "device_id"]}
-                              label="接入设备"
-                              rules={[{ required: true, message: "请选择设备" }]}
-                            >
-                              <Select
-                                placeholder="选择 VTEP / PE / Leaf"
-                                loading={formLoading}
-                                showSearch
-                                optionFilterProp="label"
-                                onChange={(v) => {
-                                  form.setFieldValue(["endpoints", field.name, "interface_name"], undefined);
-                                  loadIfaces(v);
-                                }}
-                                options={devices.map((d: Device) => ({
-                                  value: d.id,
-                                  label: deviceLabel(d),
-                                }))}
-                              />
-                            </Form.Item>
-                          </Col>
-                        </Row>
-
-                        <Form.Item label="物理端口" required style={{ marginBottom: 8 }}>
-                          <div className="endpoint-port-row">
-                            <Form.Item
-                              name={[field.name, "interface_name"]}
-                              rules={[{ required: true, message: "请选择端口" }]}
-                              noStyle
-                            >
-                              <Select
-                                placeholder={did ? "选择端口（下拉可查看占用详情）" : "请先选择设备"}
-                                showSearch
-                                disabled={!did}
-                                optionLabelProp="label"
-                                popupMatchSelectWidth={520}
-                                listHeight={360}
-                                notFoundContent={
-                                  did ? (
-                                    <span style={{ padding: 8, color: "#888" }}>
-                                      无接口记录，请点击右侧按钮 SNMP 发现
-                                    </span>
-                                  ) : (
-                                    "请先选择设备"
-                                  )
-                                }
-                                options={ifaceSelectOptions(did || 0)}
-                                optionRender={(option) => {
-                                  const iface = (option.data as { iface?: DeviceInterface })?.iface;
-                                  return iface ? <InterfaceOptionRow iface={iface} /> : option.label;
-                                }}
-                              />
-                            </Form.Item>
-                            <Button
-                              icon={<RadarChartOutlined />}
-                              disabled={!did}
-                              onClick={() => discover(did!)}
-                            >
-                              发现
-                            </Button>
-                          </div>
-                        </Form.Item>
-
-                        {selectedIface && (
-                          <PortDetailPanel
-                            iface={selectedIface}
-                            vlanId={ep.vlan_id}
-                            accessMode={ep.access_mode}
-                            innerVlanId={ep.inner_vlan_id}
-                          />
-                        )}
-
-                        <Row gutter={[16, 0]} style={{ marginTop: 12 }}>
-                          <Col xs={24} sm={12} md={8}>
-                            <Form.Item name={[field.name, "access_mode"]} label="封装模式" initialValue="dot1q">
-                              <Select
-                                options={[
-                                  { value: "access", label: "Access · 不带标签" },
-                                  { value: "dot1q", label: "Dot1Q · 单标签" },
-                                  { value: "qinq", label: "QinQ · 双标签" },
-                                ]}
-                              />
-                            </Form.Item>
-                          </Col>
-                          <Col xs={24} sm={12} md={ep.access_mode === "qinq" ? 8 : 16}>
-                            <Form.Item
-                              name={[field.name, "vlan_id"]}
-                              label="S-VID"
-                              tooltip="Service VLAN，留空则自动分配"
-                            >
-                              <InputNumber
-                                placeholder="自动分配"
-                                style={{ width: "100%" }}
-                                min={1}
-                                max={4094}
-                              />
-                            </Form.Item>
-                          </Col>
-                          {ep.access_mode === "qinq" && (
-                            <Col xs={24} sm={12} md={8}>
-                              <Form.Item name={[field.name, "inner_vlan_id"]} label="C-VID">
-                                <InputNumber
-                                  placeholder="内层 VLAN"
-                                  style={{ width: "100%" }}
-                                  min={1}
-                                  max={4094}
-                                />
-                              </Form.Item>
-                            </Col>
-                          )}
-                        </Row>
-                      </Card>
-                    );
-                  }}
-                </Form.Item>
-              ))}
-              </div>
-              <Button
-                type="dashed"
-                block
-                icon={<PlusOutlined />}
-                onClick={() => add({ label: "", access_mode: "dot1q" })}
-              >
-                添加端点
-              </Button>
-            </>
-          )}
-        </Form.List>
+        <CircuitEndpointsEditor form={form} devices={devices} formLoading={formLoading} minEndpoints={1} />
 
         <Divider orientation="left" style={{ margin: "16px 0" }}>
           Underlay 路径

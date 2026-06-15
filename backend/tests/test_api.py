@@ -359,6 +359,44 @@ def test_config_history_and_diff(client, auth_headers):
     assert "500" in diff["diff"]  # new bandwidth appears in the diff
 
 
+def test_replace_circuit_endpoints(client, auth_headers):
+    _, tenant, dev_a, dev_z = _bootstrap_topology(client, auth_headers)
+    circuit = client.post(
+        "/api/v1/circuits",
+        headers=auth_headers,
+        json={
+            "name": "Endpoint Swap",
+            "tenant_id": tenant["id"],
+            "service_type": "l2vpn_evpn",
+            "bandwidth_mbps": 100,
+            "endpoints": [
+                {"label": "A", "device_id": dev_a["id"], "interface_name": "GE1/0/1"},
+                {"label": "Z", "device_id": dev_z["id"], "interface_name": "GE1/0/1"},
+            ],
+        },
+    ).json()
+    client.post(f"/api/v1/work-orders/provision/{circuit['id']}", headers=auth_headers)
+
+    updated = client.put(
+        f"/api/v1/circuits/{circuit['id']}/endpoints",
+        headers=auth_headers,
+        json={
+            "endpoints": [
+                {"label": "A", "device_id": dev_a["id"], "interface_name": "GE1/0/2"},
+                {"label": "Z", "device_id": dev_z["id"], "interface_name": "GE1/0/2"},
+            ],
+        },
+    ).json()
+    assert len(updated["endpoints"]) == 2
+    assert updated["endpoints"][0]["interface_name"] == "GE1/0/2"
+
+    wo = client.post(
+        f"/api/v1/work-orders/provision/{circuit['id']}?wo_type=modify",
+        headers=auth_headers,
+    ).json()
+    assert wo["type"] == "modify"
+
+
 def test_device_baseline_initialize(client, auth_headers):
     site, _, _, _ = _bootstrap_topology(client, auth_headers)
     n = next(_seq)
