@@ -56,6 +56,7 @@ import { buildListQuery, dataTableProps, tablePagination } from "../utils/table"
 import { PageCard } from "@/components";
 import ListToolbar from "../components/ListToolbar";
 import DeviceFormDialog, { type DeviceFormValues } from "@/components/DeviceFormDialog";
+import SvidUsageCell from "@/components/SvidUsageCell";
 
 const VENDOR_SHORT: Record<string, string> = {
   h3c: "H3C",
@@ -78,11 +79,6 @@ const DEVICE_STATUS_LABEL: Record<string, string> = {
   offline: "离线",
   maintenance: "维护",
   unknown: "未知",
-};
-
-const SVID_SOURCE_COLOR: Record<string, string> = {
-  legacy: "red",
-  device: "orange",
 };
 
 const FALLBACK_SNMP: SnmpDefaults = {
@@ -128,31 +124,6 @@ function buildDevicePayload(
   return payload;
 }
 
-function renderSvidUsage(list?: SvidUsage[] | null) {
-  if (!list?.length) return <Typography.Text type="secondary">—</Typography.Text>;
-  return (
-    <Space size={[4, 4]} wrap>
-      {list.map((u, idx) => {
-        const label =
-          u.access_mode === "access"
-            ? "untagged"
-            : u.c_vid
-              ? `S:${u.s_vid}/C:${u.c_vid}`
-              : `S:${u.s_vid}`;
-        const tip = [u.circuit_code && `专线 ${u.circuit_code}`, u.source && `来源 ${u.source}`, u.note]
-          .filter(Boolean)
-          .join(" · ");
-        return (
-          <Tooltip key={idx} title={tip || label}>
-            <Tag color={SVID_SOURCE_COLOR[u.source || ""] || "blue"}>{label}</Tag>
-          </Tooltip>
-        );
-      })}
-    </Space>
-  );
-}
-
-
 export default function Devices() {
   const { message, modal } = AntApp.useApp();
   const [rows, setRows] = useState<Device[]>([]);
@@ -171,6 +142,7 @@ export default function Devices() {
   const [drawerDevice, setDrawerDevice] = useState<Device | null>(null);
   const [ifaces, setIfaces] = useState<DeviceInterface[]>([]);
   const [ifacesLoading, setIfacesLoading] = useState(false);
+  const [ifaceSvidOnly, setIfaceSvidOnly] = useState(false);
   const [initOpen, setInitOpen] = useState(false);
   const [initDevice, setInitDevice] = useState<Device | null>(null);
   const [initBaseline, setInitBaseline] = useState("");
@@ -194,6 +166,7 @@ export default function Devices() {
   async function openPorts(device: Device) {
     setDrawerDevice(device);
     setIfaces([]);
+    setIfaceSvidOnly(false);
     await loadIfaces(device.id, true);
   }
 
@@ -449,6 +422,16 @@ export default function Devices() {
   }
 
   const ifaceHasSvid = ifaces.some((i) => (i.used_s_vids?.length ?? 0) > 0);
+
+  const ifaceRows = useMemo(
+    () => (ifaceSvidOnly ? ifaces.filter((i) => (i.used_s_vids?.length ?? 0) > 0) : ifaces),
+    [ifaces, ifaceSvidOnly],
+  );
+
+  const ifaceSvidTotal = useMemo(
+    () => ifaces.reduce((sum, i) => sum + (i.used_s_vids?.length ?? 0), 0),
+    [ifaces],
+  );
 
   const stats = useMemo(() => {
     const online = rows.filter((r) => r.status === "online").length;
@@ -759,14 +742,26 @@ export default function Devices() {
           />
         ) : null}
 
+        {ifaceHasSvid ? (
+          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12, marginBottom: 12 }}>
+            <Typography.Text type="secondary">
+              全设备共 {ifaceSvidTotal.toLocaleString()} 个 S-VID 占用 · {ifaces.length.toLocaleString()} 个端口
+            </Typography.Text>
+            <Space size={6}>
+              <Typography.Text type="secondary">仅显示有占用</Typography.Text>
+              <Switch checked={ifaceSvidOnly} onChange={setIfaceSvidOnly} size="small" />
+            </Space>
+          </div>
+        ) : null}
+
         <Table
           rowKey={(r) => `${r.device_id}-${r.name}`}
           size="small"
           loading={ifacesLoading}
-          dataSource={ifaces}
-          locale={{ emptyText: "暂无端口数据 · 先执行 SNMP 发现" }}
+          dataSource={ifaceRows}
+          locale={{ emptyText: ifaceSvidOnly ? "暂无 S-VID 占用端口" : "暂无端口数据 · 先执行 SNMP 发现" }}
           pagination={{ pageSize: 20, showSizeChanger: true, pageSizeOptions: ["20", "50", "100"] }}
-          scroll={{ x: 960 }}
+          scroll={{ x: 880 }}
           columns={[
             {
               title: "接口",
@@ -829,19 +824,8 @@ export default function Devices() {
             {
               title: "S-VID 占用",
               dataIndex: "used_s_vids",
-              width: 220,
-              render: (list?: SvidUsage[]) => renderSvidUsage(list),
-            },
-            {
-              title: "占用",
-              dataIndex: "allocated",
-              width: 72,
-              render: (_: unknown, row: DeviceInterface) =>
-                row.allocated || row.used_s_vids?.length ? (
-                  <Tag color="orange">已占用</Tag>
-                ) : (
-                  "—"
-                ),
+              width: 140,
+              render: (list?: SvidUsage[]) => <SvidUsageCell list={list} />,
             },
           ]}
         />
