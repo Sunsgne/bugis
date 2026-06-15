@@ -1,8 +1,8 @@
 """Tenant CRUD endpoints."""
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, require_operator
@@ -11,7 +11,15 @@ from app.models.circuit import Circuit
 from app.models.enums import CircuitStatus
 from app.models.tenant import Tenant
 from app.models.user import User
-from app.schemas.tenant import TenantCreate, TenantOut, TenantSummary, TenantUpdate
+from app.schemas.pagination import PaginatedResponse, paginate_query, paginated
+from app.schemas.tenant import (
+    TenantCreate,
+    TenantListOut,
+    TenantOut,
+    TenantOverview,
+    TenantSummary,
+    TenantUpdate,
+)
 
 router = APIRouter()
 
@@ -46,15 +54,80 @@ def _build_tenant_summary(db: Session, tenant_id: int) -> TenantSummary:
     )
 
 
-@router.get("", response_model=list[TenantOut])
-def list_tenants(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
-    return db.execute(select(Tenant).order_by(Tenant.id)).scalars().all()
+def _tenant_list_stmt(q: str | None = None):
+    circuits_total = func.count(Circuit.id).label("circuits_total")
+    stmt = (
+        select(Tenant, circuits_total)
+        .outerjoin(Circuit, Circuit.tenant_id == Tenant.id)
+        .group_by(Tenant.id)
+        .order_by(Tenant.name)
+    )
+    if q:
+        like = f"%{q.strip()}%"
+        stmt = stmt.where(or_(Tenant.name.ilike(like), Tenant.code.ilike(like)))
+    return stmt
+
+
+def _to_tenant_list_out(row: tuple[Tenant, int]) -> TenantListOut:
+    tenant, circuits_total = row[0], row[1]
+    base = TenantListOut.model_validate(tenant, from_attributes=True)
+    return base.model_copy(update={"circuits_total": int(circuits_total or 0)})
+
+
+@router.get("/overview", response_model=TenantOverview)
+def tenant_overview(
+    db: Session = Depends(get_db), _: User = Depends(get_current_user)
+):
+    tenants_total = int(db.scalar(select(func.count()).select_from(Tenant)) or 0)
+    circuits = db.execute(select(Circuit)).scalars().all()
+    active = decommissioned = draft = 0
+    active_bw = 0
+    for c in circuits:
+        if c.status == CircuitStatus.ACTIVE:
+            active += 1
+            active_bw += c.bandwidth_mbps
+        elif c.status == CircuitStatus.DECOMMISSIONED:
+            decommissioned += 1
+        elif c.status == CircuitStatus.DRAFT:
+            draft += 1
+    return TenantOverview(
+        tenants_total=tenants_total,
+        circuits_total=len(circuits),
+        circuits_active=active,
+        circuits_decommissioned=decommissioned,
+        circuits_draft=draft,
+        active_bandwidth_mbps=active_bw,
+    )
+
+
+@router.get("", response_model=PaginatedResponse[TenantListOut])
+def list_tenants(
+    q: str | None = Query(None, description="Search name or code"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    stmt = _tenant_list_stmt(q)
+    rows, total = paginate_query(db, stmt, page=page, page_size=page_size)
+    return paginated(
+        [_to_tenant_list_out(row) for row in rows],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
 
 
 @router.get("/summaries", response_model=list[TenantSummary])
 def list_tenant_summaries(
-    db: Session = Depends(get_db), _: User = Depends(get_current_user)
+    tenant_id: int | None = None,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
 ):
+    if tenant_id is not None:
+        if not db.get(Tenant, tenant_id):
+            raise HTTPException(status_code=404, detail="tenant not found")
+        return [_build_tenant_summary(db, tenant_id)]
     tenants = db.execute(select(Tenant).order_by(Tenant.id)).scalars().all()
     return [_build_tenant_summary(db, t.id) for t in tenants]
 

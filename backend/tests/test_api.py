@@ -893,6 +893,17 @@ def test_tenant_summaries(client, auth_headers):
     assert one["tenant_id"] == tenant["id"]
 
 
+def test_tenant_list_pagination(client, auth_headers):
+    r = client.get("/api/v1/tenants?page=1&page_size=10", headers=auth_headers)
+    assert r.status_code == 200
+    body = r.json()
+    assert "items" in body and "total" in body
+
+    overview = client.get("/api/v1/tenants/overview", headers=auth_headers).json()
+    assert "tenants_total" in overview
+    assert "circuits_total" in overview
+
+
 def test_remote_ipt_provision(client, auth_headers):
     n = next(_seq)
     egress = client.post(

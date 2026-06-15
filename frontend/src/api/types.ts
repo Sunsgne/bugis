@@ -1,3 +1,10 @@
+export interface Paginated<T> {
+  items: T[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
 export interface Site {
   id: number;
   name: string;
@@ -32,6 +39,7 @@ export interface Tenant {
   contact_phone?: string;
   cloud_account?: string;
   description?: string;
+  circuits_total?: number;
 }
 
 export interface SvidUsage {

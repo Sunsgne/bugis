@@ -38,6 +38,19 @@ class TenantOut(TenantBase, TimestampedSchema):
     id: int
 
 
+class TenantListOut(TenantOut):
+    circuits_total: int = 0
+
+
+class TenantOverview(BaseModel):
+    tenants_total: int = 0
+    circuits_total: int = 0
+    circuits_active: int = 0
+    circuits_decommissioned: int = 0
+    circuits_draft: int = 0
+    active_bandwidth_mbps: int = 0
+
+
 class TenantSummary(BaseModel):
     tenant_id: int
     circuits_total: int = 0

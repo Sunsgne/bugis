@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   Button,
@@ -42,6 +42,7 @@ import {
 import { api } from "../api/client";
 import type { Circuit, Device, DeviceInterface, Offering, Site, SvidUsage, Tenant } from "../api/types";
 import { configPreviewModalProps, ConfigPreviewPre } from "../utils/configPreview";
+import { TenantSearchSelect, useTenantSearch } from "../components/TenantSearchSelect";
 
 const SERVICE_LABEL: Record<string, string> = {
   l2vpn_evpn: "EVPN L2VPN",
@@ -82,6 +83,15 @@ interface TenantSummary {
   total_bandwidth_mbps: number;
   active_bandwidth_mbps: number;
   by_service_type: Record<string, number>;
+}
+
+interface TenantOverview {
+  tenants_total: number;
+  circuits_total: number;
+  circuits_active: number;
+  circuits_decommissioned: number;
+  circuits_draft: number;
+  active_bandwidth_mbps: number;
 }
 
 const DELETABLE = new Set(["decommissioned", "draft", "failed"]);
@@ -221,8 +231,10 @@ export default function Circuits() {
   const selectedTenantId = tenantFilter ? Number(tenantFilter) : null;
 
   const [rows, setRows] = useState<Circuit[]>([]);
-  const [tenants, setTenants] = useState<Tenant[]>([]);
-  const [summaries, setSummaries] = useState<TenantSummary[]>([]);
+  const [overview, setOverview] = useState<TenantOverview | null>(null);
+  const [activeSummary, setActiveSummary] = useState<TenantSummary | null>(null);
+  const [tenantMap, setTenantMap] = useState<Record<number, string>>({});
+  const tenantSearch = useTenantSearch(selectedTenantId);
   const [sites, setSites] = useState<Site[]>([]);
   const [devices, setDevices] = useState<Device[]>([]);
   const [offerings, setOfferings] = useState<Offering[]>([]);
@@ -240,16 +252,22 @@ export default function Circuits() {
     const circuitUrl = selectedTenantId
       ? `/circuits?tenant_id=${selectedTenantId}`
       : "/circuits";
-    const tasks = [
+    const tasks: Array<{ key: string; req: Promise<{ data: unknown }> }> = [
       { key: "circuits", req: api.get<Circuit[]>(circuitUrl) },
-      { key: "tenants", req: api.get<Tenant[]>("/tenants") },
+      { key: "overview", req: api.get<TenantOverview>("/tenants/overview") },
       { key: "sites", req: api.get<Site[]>("/sites") },
       { key: "devices", req: api.get<Device[]>("/devices") },
       { key: "offerings", req: api.get<Offering[]>("/offerings?active=true") },
-      { key: "summaries", req: api.get<TenantSummary[]>("/tenants/summaries") },
-    ] as const;
+    ];
+    if (selectedTenantId) {
+      tasks.push({
+        key: "summary",
+        req: api.get<TenantSummary>(`/tenants/${selectedTenantId}/summary`),
+      });
+    }
     const results = await Promise.allSettled(tasks.map((t) => t.req));
     const failed: string[] = [];
+    let summaryLoaded: TenantSummary | null = null;
     results.forEach((result, idx) => {
       const key = tasks[idx].key;
       if (result.status === "rejected") {
@@ -261,8 +279,8 @@ export default function Circuits() {
         case "circuits":
           setRows(data as Circuit[]);
           break;
-        case "tenants":
-          setTenants(data as Tenant[]);
+        case "overview":
+          setOverview(data as TenantOverview);
           break;
         case "sites":
           setSites(data as Site[]);
@@ -273,11 +291,12 @@ export default function Circuits() {
         case "offerings":
           setOfferings(data as Offering[]);
           break;
-        case "summaries":
-          setSummaries(data as TenantSummary[]);
+        case "summary":
+          summaryLoaded = data as TenantSummary;
           break;
       }
     });
+    setActiveSummary(summaryLoaded);
     if (failed.length) {
       message.warning(`部分数据加载失败: ${failed.join(", ")}，请刷新页面重试`);
     }
@@ -287,14 +306,38 @@ export default function Circuits() {
     load();
   }, [selectedTenantId]);
 
-  const tenantName = (id: number) => tenants.find((t) => t.id === id)?.name || id;
+  useEffect(() => {
+    const missing = [...new Set(rows.map((r) => r.tenant_id))];
+    missing.forEach((id) => {
+      api.get<Tenant>(`/tenants/${id}`).then(({ data }) => {
+        setTenantMap((m) => (m[id] ? m : { ...m, [id]: data.name }));
+      });
+    });
+  }, [rows]);
+
+  const tenantName = (id: number) => tenantMap[id] || `#${id}`;
   const deviceName = (id: number) => devices.find((d) => d.id === id)?.name || id;
   const siteName = (id?: number) => sites.find((s) => s.id === id)?.name || id;
 
-  const activeSummary = useMemo(
-    () => summaries.find((s) => s.tenant_id === selectedTenantId),
-    [summaries, selectedTenantId],
-  );
+  const stats = selectedTenantId && activeSummary
+    ? {
+        title: tenantSearch.options.find((o) => o.value === selectedTenantId)?.label || "当前客户",
+        active: activeSummary.circuits_active,
+        total: activeSummary.circuits_total,
+        bandwidth: activeSummary.active_bandwidth_mbps,
+        decommissioned: activeSummary.circuits_decommissioned,
+        serviceTypes: Object.keys(activeSummary.by_service_type).length,
+      }
+    : overview
+      ? {
+          title: `全部客户 (${overview.tenants_total.toLocaleString()})`,
+          active: overview.circuits_active,
+          total: overview.circuits_total,
+          bandwidth: overview.active_bandwidth_mbps,
+          decommissioned: overview.circuits_decommissioned,
+          serviceTypes: null as number | null,
+        }
+      : null;
 
   function setTenantFilter(id: number | null) {
     if (id) {
@@ -531,49 +574,52 @@ export default function Circuits() {
         </Space>
       }
     >
-      <div style={{ marginBottom: 16 }}>
-        <Segmented
-          value={selectedTenantId ?? "all"}
-          onChange={(v) => setTenantFilter(v === "all" ? null : Number(v))}
-          options={[
-            { label: `全部客户 (${summaries.reduce((n, s) => n + s.circuits_total, 0)})`, value: "all" },
-            ...tenants.map((t) => {
-              const sum = summaries.find((s) => s.tenant_id === t.id);
-              return {
-                value: t.id,
-                label: `${t.name} (${sum?.circuits_total ?? 0})`,
-              };
-            }),
-          ]}
+      <Space style={{ marginBottom: 16 }} wrap align="start">
+        <TenantSearchSelect
+          value={selectedTenantId ?? undefined}
+          onChange={(v) => setTenantFilter(v ?? null)}
+          options={tenantSearch.options}
+          loading={tenantSearch.loading}
+          onSearch={tenantSearch.onSearch}
+          tenantTotal={tenantSearch.total}
         />
-      </div>
+        {selectedTenantId && (
+          <Button onClick={() => setTenantFilter(null)}>查看全部客户</Button>
+        )}
+        {overview && (
+          <Typography.Text type="secondary">
+            平台共 {overview.tenants_total.toLocaleString()} 个客户 · {overview.circuits_total.toLocaleString()} 条专线
+          </Typography.Text>
+        )}
+      </Space>
 
-      {selectedTenantId && activeSummary && (
+      {stats && (
         <Row gutter={16} style={{ marginBottom: 16 }}>
+          <Col span={24} style={{ marginBottom: 8 }}>
+            <Typography.Text strong>{stats.title}</Typography.Text>
+          </Col>
           <Col xs={12} md={6}>
             <Card size="small">
-              <Statistic title="活跃专线" value={activeSummary.circuits_active} suffix={`/ ${activeSummary.circuits_total}`} />
+              <Statistic title="活跃专线" value={stats.active} suffix={`/ ${stats.total}`} />
             </Card>
           </Col>
           <Col xs={12} md={6}>
             <Card size="small">
-              <Statistic title="活跃带宽" value={activeSummary.active_bandwidth_mbps} suffix="Mbps" />
+              <Statistic title="活跃带宽" value={stats.bandwidth} suffix="Mbps" />
             </Card>
           </Col>
           <Col xs={12} md={6}>
             <Card size="small">
-              <Statistic title="已拆除" value={activeSummary.circuits_decommissioned} valueStyle={{ color: "#8c8c8c" }} />
+              <Statistic title="已拆除" value={stats.decommissioned} valueStyle={{ color: "#8c8c8c" }} />
             </Card>
           </Col>
-          <Col xs={12} md={6}>
-            <Card size="small">
-              <Statistic
-                title="业务类型"
-                value={Object.keys(activeSummary.by_service_type).length}
-                suffix="种"
-              />
-            </Card>
-          </Col>
+          {stats.serviceTypes != null && (
+            <Col xs={12} md={6}>
+              <Card size="small">
+                <Statistic title="业务类型" value={stats.serviceTypes} suffix="种" />
+              </Card>
+            </Col>
+          )}
         </Row>
       )}
 
@@ -723,7 +769,6 @@ export default function Circuits() {
       <CreateModal
         open={open}
         form={form}
-        tenants={tenants}
         devices={devices}
         sites={sites}
         offerings={offerings}
@@ -835,7 +880,6 @@ export default function Circuits() {
 function CreateModal({
   open,
   form,
-  tenants: tenantsProp,
   devices: devicesProp,
   sites: sitesProp,
   offerings: offeringsProp,
@@ -847,44 +891,38 @@ function CreateModal({
   const [ifaceByDevice, setIfaceByDevice] = useState<Record<number, DeviceInterface[]>>({});
   const [pathPreview, setPathPreview] = useState<any>(null);
   const [formLoading, setFormLoading] = useState(false);
-  const [tenants, setTenants] = useState<Tenant[]>(tenantsProp);
+  const tenantSearch = useTenantSearch(open ? defaultTenantId : null);
   const [devices, setDevices] = useState<Device[]>(devicesProp);
   const [sites, setSites] = useState<Site[]>(sitesProp);
   const [offerings, setOfferings] = useState<Offering[]>(offeringsProp);
 
   useEffect(() => {
-    setTenants(tenantsProp);
     setDevices(devicesProp);
     setSites(sitesProp);
     setOfferings(offeringsProp);
-  }, [tenantsProp, devicesProp, sitesProp, offeringsProp]);
+  }, [devicesProp, sitesProp, offeringsProp]);
 
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
     async function ensureFormData() {
-      const needTenants = !tenantsProp.length;
       const needDevices = !devicesProp.length;
       const needSites = !sitesProp.length;
       const needOfferings = !offeringsProp.length;
-      if (!needTenants && !needDevices && !needSites && !needOfferings) return;
+      if (!needDevices && !needSites && !needOfferings) return;
 
       setFormLoading(true);
       try {
-        const [tRes, dRes, sRes, oRes] = await Promise.allSettled([
-          needTenants ? api.get<Tenant[]>("/tenants") : Promise.resolve(null),
+        const [dRes, sRes, oRes] = await Promise.allSettled([
           needDevices ? api.get<Device[]>("/devices") : Promise.resolve(null),
           needSites ? api.get<Site[]>("/sites") : Promise.resolve(null),
           needOfferings ? api.get<Offering[]>("/offerings?active=true") : Promise.resolve(null),
         ]);
         if (cancelled) return;
-        if (tRes.status === "fulfilled" && tRes.value) setTenants(tRes.value.data);
         if (dRes.status === "fulfilled" && dRes.value) setDevices(dRes.value.data);
         if (sRes.status === "fulfilled" && sRes.value) setSites(sRes.value.data);
         if (oRes.status === "fulfilled" && oRes.value) setOfferings(oRes.value.data);
-        const tenantFailed = needTenants && tRes.status === "rejected";
-        const deviceFailed = needDevices && dRes.status === "rejected";
-        if (tenantFailed || deviceFailed) {
+        if (needDevices && dRes.status === "rejected") {
           message.error("表单数据加载失败，请刷新页面后重试");
         }
       } finally {
@@ -895,7 +933,7 @@ function CreateModal({
     return () => {
       cancelled = true;
     };
-  }, [open, tenantsProp, devicesProp, sitesProp, offeringsProp, message]);
+  }, [open, devicesProp, sitesProp, offeringsProp, message]);
 
   function deviceLabel(d: Device) {
     const sid = d.sr_node_sid ? ` SID:${d.sr_node_sid}` : "";
@@ -1024,13 +1062,12 @@ function CreateModal({
           </Col>
           <Col span={8}>
             <Form.Item name="tenant_id" label="租户" rules={[{ required: true }]}>
-              <Select
-                loading={formLoading}
-                placeholder="选择租户"
-                showSearch
-                optionFilterProp="label"
-                notFoundContent={formLoading ? "加载中..." : "暂无租户"}
-                options={tenants.map((t: Tenant) => ({ value: t.id, label: `${t.code} ${t.name}` }))}
+              <TenantSearchSelect
+                loading={tenantSearch.loading || formLoading}
+                options={tenantSearch.options}
+                onSearch={tenantSearch.onSearch}
+                tenantTotal={tenantSearch.total}
+                placeholder="搜索客户名称或编码"
               />
             </Form.Item>
           </Col>
