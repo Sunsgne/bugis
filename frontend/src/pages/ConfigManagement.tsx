@@ -3,6 +3,7 @@ import { Button, Card, Col, Row, Table, Tag, Tabs, App as AntApp, Empty, Modal }
 import { CloudUploadOutlined, DiffOutlined, ReloadOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { api } from "../api/client";
+import { configPreviewModalProps, ConfigPreviewPre } from "../utils/configPreview";
 
 const VENDOR_COLOR: Record<string, string> = {
   h3c: "blue", huawei: "red", juniper: "green", arista: "orange", cisco: "purple", frr: "cyan",
@@ -64,8 +65,8 @@ export default function ConfigManagement() {
     const { data } = await api.get(`/config/devices/${sel}/snapshots/${id}`);
     modal.info({
       title: `配置快照 v${data.version}`,
-      width: 760,
-      content: <pre className="config-pre">{data.content}</pre>,
+      ...configPreviewModalProps,
+      content: <ConfigPreviewPre>{data.content}</ConfigPreviewPre>,
     });
   }
 

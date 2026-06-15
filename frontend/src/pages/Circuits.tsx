@@ -41,6 +41,7 @@ import {
 } from "@ant-design/icons";
 import { api } from "../api/client";
 import type { Circuit, Device, DeviceInterface, Offering, Site, SvidUsage, Tenant } from "../api/types";
+import { configPreviewModalProps, ConfigPreviewPre } from "../utils/configPreview";
 
 const SERVICE_LABEL: Record<string, string> = {
   l2vpn_evpn: "EVPN L2VPN",
@@ -484,14 +485,16 @@ export default function Circuits() {
     const { data } = await api.get(`/work-orders/${wo.data.id}/preview`);
     modal.info({
       title: `配置预览 · ${c.code} (${c.name})`,
-      width: 760,
+      ...configPreviewModalProps,
       content: (
-        <div style={{ maxHeight: 480, overflow: "auto" }}>
+        <div>
           {data.previews.map((p: any, i: number) => (
-            <div key={i} style={{ marginBottom: 12 }}>
-              <Tag color="blue">{p.vendor.toUpperCase()}</Tag>
-              <b>{p.device}</b> <Tag>{p.transport}</Tag>
-              <pre className="config-pre">{p.config}</pre>
+            <div key={i} className="config-preview-block">
+              <div style={{ marginBottom: 8 }}>
+                <Tag color="blue">{p.vendor.toUpperCase()}</Tag>
+                <b>{p.device}</b> <Tag>{p.transport}</Tag>
+              </div>
+              <ConfigPreviewPre>{p.config}</ConfigPreviewPre>
             </div>
           ))}
         </div>

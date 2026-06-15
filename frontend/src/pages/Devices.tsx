@@ -20,6 +20,7 @@ import {
 import { PlusOutlined, DownloadOutlined, UploadOutlined, ApiOutlined, RocketOutlined, SettingOutlined } from "@ant-design/icons";
 import { api } from "../api/client";
 import type { Device, DeviceInterface, Site, SvidUsage } from "../api/types";
+import { configPreviewModalProps, ConfigPreviewPre } from "../utils/configPreview";
 
 const VENDOR_COLOR: Record<string, string> = {
   h3c: "blue",
@@ -133,14 +134,14 @@ export default function Devices() {
     const { data: bl } = await api.get(`/devices/${d.id}/baseline`);
     modal.confirm({
       title: `设备初始化 · ${d.name} (${d.vendor})`,
-      width: 760,
+      ...configPreviewModalProps,
       icon: null,
       content: (
         <div>
           <div style={{ marginBottom: 8, color: "#888" }}>
             标准基线配置(管理/Loopback/Underlay/EVPN Overlay)预览,确认后下发(dry-run)并保存为初始化快照:
           </div>
-          <pre className="config-pre">{bl.content}</pre>
+          <ConfigPreviewPre>{bl.content}</ConfigPreviewPre>
         </div>
       ),
       okText: "下发初始化配置",

@@ -68,6 +68,20 @@ body,
   overflow: auto;
   max-height: 420px;
   white-space: pre;
+  margin: 0;
+}
+
+.config-pre-lg {
+  max-height: min(68vh, 720px);
+  min-height: 280px;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.config-preview-block + .config-preview-block {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #f0f0f0;
 }
 
 .endpoint-card .ant-card-head {
