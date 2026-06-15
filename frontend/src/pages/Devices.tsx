@@ -511,7 +511,7 @@ export default function Devices() {
         }
       />
 
-      <Row gutter={[12, 12]} style={{ marginBottom: 16, maxWidth: 720 }}>
+      <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
         <Col xs={24} sm={8}>
           <Card size="small" styles={{ body: { padding: "12px 16px" } }}>
             <Statistic title="设备总数" value={total} suffix="台" />
@@ -539,7 +539,7 @@ export default function Devices() {
         loading={loading}
         dataSource={rows}
         locale={{ emptyText: "暂无设备 · 从导入或纳管开始" }}
-        {...dataTableProps(1040, true)}
+        {...dataTableProps()}
         pagination={tablePagination(total, page, pageSize, (p, ps) => {
           setPage(p);
           setPageSize(ps);
@@ -548,7 +548,7 @@ export default function Devices() {
           {
             title: "设备",
             dataIndex: "name",
-            width: 200,
+            width: "22%",
             ellipsis: true,
             render: (name: string, d: Device) => (
               <Tooltip
@@ -574,31 +574,31 @@ export default function Devices() {
           {
             title: "厂商",
             dataIndex: "vendor",
-            width: 88,
+            width: "8%",
             render: (v: string) => <Tag>{VENDOR_SHORT[v] || v}</Tag>,
           },
           {
             title: "角色",
             dataIndex: "role",
-            width: 64,
+            width: "6%",
             render: (r: string) => labelForOption(DEVICE_ROLE_OPTIONS, r).split(" ")[0],
           },
           {
             title: "管理 IP",
             dataIndex: "mgmt_ip",
-            width: 140,
+            width: "14%",
             ellipsis: true,
             render: (ip: string) => <Typography.Text code>{ip}</Typography.Text>,
           },
           {
             title: "站点",
-            width: 96,
+            width: "12%",
             ellipsis: true,
             render: (_: unknown, r: Device) => siteName(r.site_id),
           },
           {
             title: "凭证",
-            width: 52,
+            width: "5%",
             align: "center" as const,
             render: (_: unknown, r: Device) =>
               r.password_set || r.username ? (
@@ -609,7 +609,7 @@ export default function Devices() {
           },
           {
             title: "SNMP",
-            width: 68,
+            width: "7%",
             render: (_: unknown, r: Device) =>
               r.snmp_enabled === false ? (
                 <Typography.Text type="secondary">—</Typography.Text>
@@ -620,7 +620,7 @@ export default function Devices() {
           {
             title: "状态",
             dataIndex: "status",
-            width: 76,
+            width: "8%",
             render: (s: string) => (
               <Tag color={DEVICE_STATUS_COLOR[s] || "default"}>{DEVICE_STATUS_LABEL[s] || s}</Tag>
             ),
@@ -628,8 +628,7 @@ export default function Devices() {
           {
             title: "操作",
             key: "actions",
-            width: 196,
-            fixed: "right" as const,
+            width: "18%",
             className: "table-actions",
             render: (_: unknown, r: Device) => (
               <Space size={4} wrap={false} className="table-actions">
