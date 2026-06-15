@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Button, Card, Segmented, Space, Table, Tag, App as AntApp } from "antd";
+import { Button, Empty, Segmented, Space, Table, Tag, App as AntApp } from "antd";
 import { ReloadOutlined, ThunderboltOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { api } from "../api/client";
@@ -58,75 +58,86 @@ export default function Alarms() {
   }
 
   return (
-    <PageCard
-      title={page.alarms}
-      extra={
-        <Space wrap>
-          <Segmented
-            value={filter}
-            onChange={(v) => setFilter(v as string)}
-            options={[
-              { label: "活跃", value: "active" },
-              { label: "已确认", value: "acknowledged" },
-              { label: "已清除", value: "cleared" },
-              { label: "全域", value: "all" },
-            ]}
-          />
-          <Button icon={<ThunderboltOutlined />} type="primary" onClick={evaluate}>
-            触发评估
-          </Button>
-          <Button icon={<ReloadOutlined />} onClick={load} />
-        </Space>
-      }
-    >
-      <Table
-        rowKey="id"
-        loading={loading}
-        dataSource={rows}
-        {...dataTableProps()}
-        locale={{ emptyText: filter === "active" ? empty.alarms : empty.default }}
-        columns={[
-          {
-            title: "级别",
-            dataIndex: "severity",
-            width: "8%",
-            render: (s) => <Tag color={SEV_COLOR[s]}>{s.toUpperCase()}</Tag>,
-          },
-          { title: "类型", dataIndex: "kind", width: "12%", ellipsis: true, render: (k) => <Tag>{k}</Tag> },
-          { title: "标题", dataIndex: "title", width: "24%", ellipsis: true },
-          { title: "详情", dataIndex: "detail", width: "22%", ellipsis: true, render: (v) => v || "—" },
-          {
-            title: "时间",
-            dataIndex: "created_at",
-            width: "14%",
-            render: (t) => (t ? dayjs(t).format("MM-DD HH:mm:ss") : "—"),
-          },
-          {
-            title: "状态",
-            dataIndex: "status",
-            width: "8%",
-            render: (s) => <Tag color={STATUS_COLOR[s]}>{s}</Tag>,
-          },
-          {
-            title: "操作",
-            width: "12%",
-            className: "table-actions",
-            render: (_, r) =>
-              r.status !== "cleared" ? (
-                <Space size={4}>
-                  {r.status === "active" && (
-                    <Button type="link" size="small" onClick={() => ack(r.id)}>
-                      {action.confirm}
+    <div className="alarms-page">
+      <PageCard
+        className="alarms-page-card"
+        title={page.alarms}
+        extra={
+          <Space wrap className="alarms-toolbar">
+            <Segmented
+              value={filter}
+              onChange={(v) => setFilter(v as string)}
+              options={[
+                { label: "活跃", value: "active" },
+                { label: "已确认", value: "acknowledged" },
+                { label: "已清除", value: "cleared" },
+                { label: "全域", value: "all" },
+              ]}
+            />
+            <Button icon={<ThunderboltOutlined />} type="primary" onClick={evaluate}>
+              触发评估
+            </Button>
+            <Button icon={<ReloadOutlined />} onClick={load} />
+          </Space>
+        }
+      >
+        <Table
+          rowKey="id"
+          loading={loading}
+          dataSource={rows}
+          style={{ width: "100%" }}
+          {...dataTableProps(undefined, false)}
+          locale={{
+            emptyText: (
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description={filter === "active" ? empty.alarms : empty.default}
+              />
+            ),
+          }}
+          columns={[
+            {
+              title: "级别",
+              dataIndex: "severity",
+              width: "8%",
+              render: (s) => <Tag color={SEV_COLOR[s]}>{s.toUpperCase()}</Tag>,
+            },
+            { title: "类型", dataIndex: "kind", width: "12%", ellipsis: true, render: (k) => <Tag>{k}</Tag> },
+            { title: "标题", dataIndex: "title", width: "24%", ellipsis: true },
+            { title: "详情", dataIndex: "detail", width: "22%", ellipsis: true, render: (v) => v || "—" },
+            {
+              title: "时间",
+              dataIndex: "created_at",
+              width: "14%",
+              render: (t) => (t ? dayjs(t).format("MM-DD HH:mm:ss") : "—"),
+            },
+            {
+              title: "状态",
+              dataIndex: "status",
+              width: "8%",
+              render: (s) => <Tag color={STATUS_COLOR[s]}>{s}</Tag>,
+            },
+            {
+              title: "操作",
+              width: "12%",
+              className: "table-actions",
+              render: (_, r) =>
+                r.status !== "cleared" ? (
+                  <Space size={4}>
+                    {r.status === "active" && (
+                      <Button type="link" size="small" onClick={() => ack(r.id)}>
+                        {action.confirm}
+                      </Button>
+                    )}
+                    <Button type="link" size="small" onClick={() => clear(r.id)}>
+                      清除
                     </Button>
-                  )}
-                  <Button type="link" size="small" onClick={() => clear(r.id)}>
-                    清除
-                  </Button>
-                </Space>
-              ) : null,
-          },
-        ]}
-      />
-    </PageCard>
+                  </Space>
+                ) : null,
+            },
+          ]}
+        />
+      </PageCard>
+    </div>
   );
 }

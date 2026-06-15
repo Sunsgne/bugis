@@ -203,6 +203,32 @@ body {
   width: 100%;
 }
 
+/* Full-width ant tables in list pages */
+.ant-table-wrapper {
+  width: 100%;
+}
+
+.ant-table-wrapper .ant-table {
+  width: 100% !important;
+}
+
+.data-table .ant-table-content > table {
+  width: 100% !important;
+}
+
+/* Alarms */
+.alarms-page {
+  width: 100%;
+}
+
+.alarms-page-card {
+  width: 100%;
+}
+
+.alarms-toolbar {
+  justify-content: flex-end;
+}
+
 /* Config management split layout */
 .config-management-page {
   width: 100%;
