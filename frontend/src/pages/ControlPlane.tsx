@@ -1,5 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
-import { Card, Col, Row, Statistic, Table, Tag, Select, Empty } from "antd";
+import { Link } from "react-router-dom";
+import {
+  Alert,
+  Card,
+  Col,
+  Row,
+  Statistic,
+  Table,
+  Tag,
+  Select,
+  Empty,
+  Descriptions,
+  Typography,
+} from "antd";
 import { ClusterOutlined, NodeIndexOutlined, ShareAltOutlined } from "@ant-design/icons";
 import { api } from "../api/client";
 
@@ -96,6 +109,12 @@ const RT_COLOR: Record<string, string> = {
   type4_es: "orange",
 };
 
+const CAP_STATUS: Record<string, { color: string; label: string }> = {
+  ready: { color: "green", label: "已就绪" },
+  partial: { color: "orange", label: "部分实现" },
+  planned: { color: "default", label: "规划中" },
+};
+
 export default function ControlPlane() {
   const [status, setStatus] = useState<any>(null);
   const [vteps, setVteps] = useState<any[]>([]);
@@ -133,9 +152,53 @@ export default function ControlPlane() {
             <span style={{ fontSize: 16, fontWeight: 600 }}>
               <ShareAltOutlined /> {status?.name || "Bugis SDN 控制器"}
             </span>
-            <Tag color="green" style={{ marginLeft: 8 }}>自研 · 非市售</Tag>
+            <Tag color="geekblue" style={{ marginLeft: 8 }}>内置 · 自研</Tag>
+            {status?.version && (
+              <Tag style={{ marginLeft: 4 }}>v{status.version}</Tag>
+            )}
           </Col>
         </Row>
+        <Descriptions size="small" style={{ marginTop: 16 }} column={{ xs: 1, sm: 2, md: 3 }}>
+          <Descriptions.Item label="类型">平台内嵌 EVPN 控制平面</Descriptions.Item>
+          <Descriptions.Item label="北向地址">
+            <Typography.Text code>{status?.base_url || "internal://bugis"}</Typography.Text>
+          </Descriptions.Item>
+          <Descriptions.Item label="状态版本化">
+            RIB 路由带时间戳；设备配置见{" "}
+            <Link to="/config-management">配置管理</Link>
+          </Descriptions.Item>
+        </Descriptions>
+      </Card>
+
+      <Alert
+        type="warning"
+        showIcon
+        message="功能完备度说明"
+        description="内置控制器已覆盖 VTEP 注册、EVPN RIB 计算与 Overlay 拓扑，适合演示与编排验证。
+          与物理设备的真实 BGP EVPN 会话、SR-MPLS 控制面、控制器 HA 等能力仍在规划中；
+          数据面配置下发当前仍经南向驱动 (NETCONF/CLI) 完成。"
+      />
+
+      <Card title="能力矩阵" size="small">
+        <Table
+          rowKey="key"
+          dataSource={status?.capabilities || []}
+          pagination={false}
+          size="small"
+          columns={[
+            { title: "能力", dataIndex: "name", width: 200 },
+            {
+              title: "状态",
+              dataIndex: "status",
+              width: 120,
+              render: (s: string) => {
+                const meta = CAP_STATUS[s] || CAP_STATUS.planned;
+                return <Tag color={meta.color}>{meta.label}</Tag>;
+              },
+            },
+            { title: "说明", dataIndex: "detail" },
+          ]}
+        />
       </Card>
 
       <Row gutter={16}>

@@ -49,10 +49,67 @@ def _subnet_of(gateway_ip: str, prefixlen: int = 24) -> str:
         return f"{gateway_ip}/{prefixlen}"
 
 
+# Controller software version — bumped when control-plane semantics change.
+CONTROLLER_VERSION = "1.0.0"
+
+# Honest capability matrix shown in the UI (ready | partial | planned).
+CAPABILITIES: list[dict[str, str]] = [
+    {
+        "key": "vtep_registry",
+        "name": "VTEP 注册表",
+        "status": "ready",
+        "detail": "专线开通时自动注册 VTEP 邻居，维护 VNI 成员关系",
+    },
+    {
+        "key": "evpn_rib",
+        "name": "EVPN RIB (Type-2/3/5)",
+        "status": "ready",
+        "detail": "计算并持久化 IMET、MAC/IP、IP 前缀路由，按 VNI 反射",
+    },
+    {
+        "key": "overlay_topology",
+        "name": "Overlay 拓扑计算",
+        "status": "ready",
+        "detail": "按 VNI 全互联隧道拓扑可视化",
+    },
+    {
+        "key": "data_plane_orchestration",
+        "name": "数据面编排",
+        "status": "partial",
+        "detail": "控制面由本控制器决策，配置渲染/下发仍经南向驱动 (NETCONF/CLI)",
+    },
+    {
+        "key": "state_versioning",
+        "name": "状态版本化",
+        "status": "ready",
+        "detail": "RIB 带时间戳；设备配置在「配置管理」中版本快照与 diff",
+    },
+    {
+        "key": "real_bgp_peering",
+        "name": "与设备真实 BGP EVPN 对等",
+        "status": "planned",
+        "detail": "当前为平台内 RIB 模拟；后续可对接 FRR/设备 BGP 会话",
+    },
+    {
+        "key": "sr_mpls_evpn",
+        "name": "SR-MPLS EVPN 控制面",
+        "status": "planned",
+        "detail": "当前聚焦 VXLAN-EVPN；SR-MPLS 仍走直连南向驱动",
+    },
+    {
+        "key": "controller_ha",
+        "name": "控制器集群 / HA",
+        "status": "planned",
+        "detail": "单实例内嵌控制器，生产需外部化或主备",
+    },
+]
+
+
 class BugisController:
     """Self-developed EVPN fabric controller."""
 
     name = "Bugis SDN Controller"
+    version = CONTROLLER_VERSION
 
     # --- VTEP registry ---------------------------------------------------
     def _register_vtep(self, db: Session, device: Device, vni: int) -> VtepPeer:
@@ -198,11 +255,15 @@ class BugisController:
             vnis.add(r.vni)
         return {
             "name": self.name,
+            "version": self.version,
+            "kind": "builtin",
+            "base_url": "internal://bugis",
             "vtep_count": len(vteps),
             "route_count": len(routes),
             "vni_count": len(vnis),
             "routes_by_type": by_type,
             "vteps_up": sum(1 for v in vteps if v.status == VtepStatus.UP),
+            "capabilities": CAPABILITIES,
         }
 
 

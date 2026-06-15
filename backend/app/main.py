@@ -16,7 +16,7 @@ from starlette.responses import Response
 
 from app import __version__
 from app.api.v1 import api_router
-from app.bootstrap import ensure_superuser
+from app.bootstrap import ensure_bugis_controller, ensure_superuser
 from app.core.config import settings
 from app.core.database import SessionLocal, init_db
 from app.models.alarm import Alarm
@@ -51,6 +51,7 @@ async def lifespan(app: FastAPI):
     db = SessionLocal()
     try:
         ensure_superuser(db)
+        ensure_bugis_controller(db)
     finally:
         db.close()
     from app import scheduler

@@ -436,11 +436,20 @@ def test_audit_log_records_mutations(client, auth_headers):
 
 
 def test_bugis_sdn_controller(client, auth_headers):
-    # Site managed by the built-in Bugis SDN controller.
-    ctrl = client.post(
+    # Built-in Bugis controller is auto-registered on startup.
+    controllers = client.get("/api/v1/controllers", headers=auth_headers).json()
+    ctrl = next(c for c in controllers if c["type"] == "bugis")
+    assert ctrl["base_url"] == "internal://bugis"
+
+    # Cannot manually add or delete the built-in controller.
+    dup = client.post(
         "/api/v1/controllers", headers=auth_headers,
         json={"name": "Bugis", "type": "bugis", "base_url": "internal://bugis"},
-    ).json()
+    )
+    assert dup.status_code == 400
+    blocked = client.delete(f"/api/v1/controllers/{ctrl['id']}", headers=auth_headers)
+    assert blocked.status_code == 400
+
     n = next(_seq)
     site = client.post(
         "/api/v1/sites", headers=auth_headers,
@@ -491,6 +500,9 @@ def test_bugis_sdn_controller(client, auth_headers):
     assert "type3_imet" in types and "type2_mac_ip" in types
     status = client.get("/api/v1/controller/status", headers=auth_headers).json()
     assert status["route_count"] >= len(routes)
+    assert status["version"]
+    assert status["kind"] == "builtin"
+    assert any(c["status"] == "ready" for c in status["capabilities"])
 
 
 def test_controller_delegation(client, auth_headers):

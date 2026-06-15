@@ -14,7 +14,7 @@ os.environ["BUGIS_SECRET_KEY"] = "test-secret"
 
 from fastapi.testclient import TestClient  # noqa: E402
 
-from app.bootstrap import ensure_superuser  # noqa: E402
+from app.bootstrap import ensure_bugis_controller, ensure_superuser  # noqa: E402
 from app.core.database import SessionLocal, init_db  # noqa: E402
 from app.main import app  # noqa: E402
 
@@ -25,6 +25,7 @@ def _setup_db():
     db = SessionLocal()
     try:
         ensure_superuser(db)
+        ensure_bugis_controller(db)
     finally:
         db.close()
     yield

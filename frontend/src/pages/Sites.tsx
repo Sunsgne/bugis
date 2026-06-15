@@ -134,7 +134,13 @@ export default function Sites() {
           {deliveryMode === "controller" && (
             <Form.Item name="controller_id" label="关联控制器" rules={[{ required: true }]}>
               <Select
-                options={controllers.map((c) => ({ value: c.id, label: c.name }))}
+                options={controllers.map((c) => ({
+                  value: c.id,
+                  label:
+                    c.type === "bugis"
+                      ? `${c.name} (内置 · 推荐)`
+                      : c.name,
+                }))}
               />
             </Form.Item>
           )}
