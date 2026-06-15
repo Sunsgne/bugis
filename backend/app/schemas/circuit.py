@@ -82,10 +82,15 @@ class CircuitPathHopSchema(BaseModel):
     sr_node_sid: int | None = None
 
 
-class CircuitOut(CircuitBase, TimestampedSchema):
+class CircuitListOut(CircuitBase, TimestampedSchema):
+    """Lightweight list row — no path/segment computation."""
+
     id: int
     code: str
     status: CircuitStatus
     endpoints: list[CircuitEndpointOut] = []
+
+
+class CircuitOut(CircuitListOut):
     path_hops: list[CircuitPathHopSchema] = []
     segment_list: list[int] = []

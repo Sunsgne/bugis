@@ -1,5 +1,16 @@
 import { useEffect, useState } from "react";
-import { Button, Card, Col, Progress, Row, Select, Statistic, Tag, App as AntApp, Empty } from "antd";
+import {
+  Button,
+  Card,
+  Col,
+  Progress,
+  Row,
+  Select,
+  Statistic,
+  Tag,
+  App as AntApp,
+  Empty,
+} from "antd";
 import { ReloadOutlined, ExperimentOutlined } from "@ant-design/icons";
 import {
   Area,
@@ -14,7 +25,7 @@ import {
   Legend,
 } from "recharts";
 import { api } from "../api/client";
-import type { Circuit, CircuitHealth, TelemetrySample } from "../api/types";
+import type { Circuit, CircuitHealth, Paginated, TelemetrySample } from "../api/types";
 import { action, empty } from "../constants/uiCopy";
 
 export default function Monitoring() {
@@ -34,9 +45,9 @@ export default function Monitoring() {
   }
 
   async function loadCircuits() {
-    const { data } = await api.get<Circuit[]>("/circuits");
-    setCircuits(data);
-    if (!selected && data.length) setSelected(data[0].id);
+    const { data } = await api.get<Paginated<Circuit>>("/circuits?page=1&page_size=500&status=active");
+    setCircuits(data.items);
+    if (!selected && data.items.length) setSelected(data.items[0].id);
   }
   useEffect(() => {
     loadCircuits();

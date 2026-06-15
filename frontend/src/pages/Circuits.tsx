@@ -38,12 +38,14 @@ import {
   RadarChartOutlined,
   DeleteOutlined,
   WarningOutlined,
+  SearchOutlined,
 } from "@ant-design/icons";
 import { api } from "../api/client";
-import type { Circuit, Device, DeviceInterface, Offering, Site, SvidUsage, Tenant } from "../api/types";
+import type { Circuit, Device, DeviceInterface, Offering, Paginated, Site, SvidUsage, Tenant } from "../api/types";
 import { configPreviewModalProps, ConfigPreviewPre, createCircuitModalProps } from "../utils/configPreview";
 import { TenantSearchSelect, useTenantSearch } from "../components/TenantSearchSelect";
 import OfferingSearchSelect, { useOfferingSearch } from "../components/OfferingSearchSelect";
+import { buildListQuery, tablePagination } from "../utils/table";
 
 const SERVICE_LABEL: Record<string, string> = {
   l2vpn_evpn: "EVPN L2VPN",
@@ -232,9 +234,13 @@ export default function Circuits() {
   const selectedTenantId = tenantFilter ? Number(tenantFilter) : null;
 
   const [rows, setRows] = useState<Circuit[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
+  const [search, setSearch] = useState("");
+  const [detailCache, setDetailCache] = useState<Record<number, Circuit>>({});
   const [overview, setOverview] = useState<TenantOverview | null>(null);
   const [activeSummary, setActiveSummary] = useState<TenantSummary | null>(null);
-  const [tenantMap, setTenantMap] = useState<Record<number, string>>({});
   const tenantSearch = useTenantSearch(selectedTenantId);
   const [sites, setSites] = useState<Site[]>([]);
   const [devices, setDevices] = useState<Device[]>([]);
@@ -247,26 +253,33 @@ export default function Circuits() {
   const [history, setHistory] = useState<any>(null);
   const [diffText, setDiffText] = useState<Record<number, string>>({});
 
-  async function load() {
+  async function loadCircuits(p = page, ps = pageSize, q = search) {
     setLoading(true);
-    const circuitUrl = selectedTenantId
-      ? `/circuits?tenant_id=${selectedTenantId}`
-      : "/circuits";
+    const circuitUrl = `/circuits${buildListQuery({
+      tenant_id: selectedTenantId ?? undefined,
+      page: p,
+      page_size: ps,
+      q: q || undefined,
+    })}`;
+    try {
+      const { data } = await api.get<Paginated<Circuit>>(circuitUrl);
+      setRows(data.items);
+      setTotal(data.total);
+    } catch {
+      message.warning("专线列表加载失败，请刷新重试");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function loadMeta() {
     const tasks: Array<{ key: string; req: Promise<{ data: unknown }> }> = [
-      { key: "circuits", req: api.get<Circuit[]>(circuitUrl) },
       { key: "overview", req: api.get<TenantOverview>("/tenants/overview") },
       { key: "sites", req: api.get<Site[]>("/sites") },
-      { key: "devices", req: api.get<Device[]>("/devices") },
+      { key: "devices", req: api.get<Paginated<Device>>("/devices?page=1&page_size=500") },
     ];
-    if (selectedTenantId) {
-      tasks.push({
-        key: "summary",
-        req: api.get<TenantSummary>(`/tenants/${selectedTenantId}/summary`),
-      });
-    }
     const results = await Promise.allSettled(tasks.map((t) => t.req));
     const failed: string[] = [];
-    let summaryLoaded: TenantSummary | null = null;
     results.forEach((result, idx) => {
       const key = tasks[idx].key;
       if (result.status === "rejected") {
@@ -275,9 +288,6 @@ export default function Circuits() {
       }
       const data = result.value.data;
       switch (key) {
-        case "circuits":
-          setRows(data as Circuit[]);
-          break;
         case "overview":
           setOverview(data as TenantOverview);
           break;
@@ -285,33 +295,53 @@ export default function Circuits() {
           setSites(data as Site[]);
           break;
         case "devices":
-          setDevices(data as Device[]);
-          break;
-        case "summary":
-          summaryLoaded = data as TenantSummary;
+          setDevices((data as Paginated<Device>).items);
           break;
       }
     });
-    setActiveSummary(summaryLoaded);
     if (failed.length) {
       message.warning(`部分数据加载失败: ${failed.join(", ")}，请刷新页面重试`);
     }
-    setLoading(false);
+  }
+
+  async function loadTenantSummary() {
+    if (!selectedTenantId) {
+      setActiveSummary(null);
+      return;
+    }
+    try {
+      const { data } = await api.get<TenantSummary>(`/tenants/${selectedTenantId}/summary`);
+      setActiveSummary(data);
+    } catch {
+      setActiveSummary(null);
+    }
+  }
+
+  async function loadCircuitDetail(id: number) {
+    if (detailCache[id]) return detailCache[id];
+    const { data } = await api.get<Circuit>(`/circuits/${id}`);
+    setDetailCache((prev) => ({ ...prev, [id]: data }));
+    return data;
   }
   useEffect(() => {
-    load();
+    setPage(1);
+    setDetailCache({});
   }, [selectedTenantId]);
 
   useEffect(() => {
-    const missing = [...new Set(rows.map((r) => r.tenant_id))];
-    missing.forEach((id) => {
-      api.get<Tenant>(`/tenants/${id}`).then(({ data }) => {
-        setTenantMap((m) => (m[id] ? m : { ...m, [id]: data.name }));
-      });
-    });
-  }, [rows]);
+    loadCircuits(page, pageSize, search);
+  }, [selectedTenantId, page, pageSize]);
 
-  const tenantName = (id: number) => tenantMap[id] || `#${id}`;
+  useEffect(() => {
+    loadMeta();
+  }, []);
+
+  useEffect(() => {
+    loadTenantSummary();
+  }, [selectedTenantId]);
+
+  const tenantName = (id: number) =>
+    tenantSearch.options.find((o) => o.value === id)?.label?.split(" · ")[0] || `#${id}`;
   const deviceName = (id: number) => devices.find((d) => d.id === id)?.name || id;
   const siteName = (id?: number) => sites.find((s) => s.id === id)?.name || id;
 
@@ -347,7 +377,7 @@ export default function Circuits() {
     try {
       await api.delete(`/circuits/${c.id}`);
       message.success(`专线 ${c.code} 已删除`);
-      load();
+      loadCircuits();
     } catch (e: any) {
       message.error(e?.response?.data?.detail || "删除失败");
     }
@@ -374,7 +404,7 @@ export default function Circuits() {
       message.success("专线已创建（草稿），可点击开通下发配置");
       setOpen(false);
       form.resetFields();
-      load();
+      loadCircuits();
     } catch (e: any) {
       message.error(e?.response?.data?.detail || "创建失败");
     }
@@ -388,7 +418,7 @@ export default function Circuits() {
       } else {
         message.success(`开通工单 ${data.code}: ${data.status}`);
       }
-      load();
+      loadCircuits();
     } catch (e: any) {
       message.error(e?.response?.data?.detail || "开通失败");
     }
@@ -430,7 +460,7 @@ export default function Circuits() {
         `/work-orders/provision/${c.id}?wo_type=decommission`
       );
       message.success(`拆除工单 ${data.code}: ${data.status}`);
-      load();
+      loadCircuits();
     } catch (e: any) {
       message.error(e?.response?.data?.detail || "拆除失败");
     }
@@ -446,7 +476,7 @@ export default function Circuits() {
       );
       message.success(`变更工单 ${data.code}: ${data.status}`);
       setModifyTarget(null);
-      load();
+      loadCircuits();
     } catch (e: any) {
       message.error(e?.response?.data?.detail || "变更失败");
     }
@@ -619,31 +649,60 @@ export default function Circuits() {
         </Row>
       )}
 
+      <Space style={{ marginBottom: 16 }} wrap>
+        <Input.Search
+          allowClear
+          placeholder="搜索专线编码或名称"
+          style={{ width: 280 }}
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          onSearch={() => {
+            setPage(1);
+            loadCircuits(1, pageSize, search);
+          }}
+          enterButton={<SearchOutlined />}
+        />
+        <Typography.Text type="secondary">
+          当前 {total.toLocaleString()} 条专线
+          {total > pageSize ? " · 已分页加载" : ""}
+        </Typography.Text>
+      </Space>
+
       <Table
         rowKey="id"
         loading={loading}
         dataSource={rows}
+        scroll={{ x: 1100 }}
+        pagination={tablePagination(total, page, pageSize, (p, ps) => {
+          setPage(p);
+          setPageSize(ps);
+        })}
         expandable={{
-          expandedRowRender: (r) => (
+          onExpand: (expanded, r) => {
+            if (expanded) loadCircuitDetail(r.id);
+          },
+          expandedRowRender: (r) => {
+            const detail = detailCache[r.id] || r;
+            return (
             <Descriptions size="small" column={3} bordered>
-              <Descriptions.Item label="VNI">{r.vni}</Descriptions.Item>
-              <Descriptions.Item label="VLAN">{r.vlan_id}</Descriptions.Item>
-              <Descriptions.Item label="VRF">{r.vrf_name}</Descriptions.Item>
-              <Descriptions.Item label="RD">{r.route_distinguisher}</Descriptions.Item>
-              <Descriptions.Item label="RT">{r.route_target}</Descriptions.Item>
-              <Descriptions.Item label="MTU">{r.mtu}</Descriptions.Item>
-              {r.service_type === "remote_ipt" && (
+              <Descriptions.Item label="VNI">{detail.vni}</Descriptions.Item>
+              <Descriptions.Item label="VLAN">{detail.vlan_id}</Descriptions.Item>
+              <Descriptions.Item label="VRF">{detail.vrf_name}</Descriptions.Item>
+              <Descriptions.Item label="RD">{detail.route_distinguisher}</Descriptions.Item>
+              <Descriptions.Item label="RT">{detail.route_target}</Descriptions.Item>
+              <Descriptions.Item label="MTU">{detail.mtu}</Descriptions.Item>
+              {detail.service_type === "remote_ipt" && (
                 <>
-                  <Descriptions.Item label="出口国家">{r.egress_country}</Descriptions.Item>
-                  <Descriptions.Item label="出口站点">{siteName(r.egress_site_id)}</Descriptions.Item>
-                  <Descriptions.Item label="公网 IP">{r.ipt_public_ip}</Descriptions.Item>
+                  <Descriptions.Item label="出口国家">{detail.egress_country}</Descriptions.Item>
+                  <Descriptions.Item label="出口站点">{siteName(detail.egress_site_id)}</Descriptions.Item>
+                  <Descriptions.Item label="公网 IP">{detail.ipt_public_ip}</Descriptions.Item>
                   <Descriptions.Item label="NAT">
-                    {r.ipt_nat_enabled ? "启用" : "关闭"}
+                    {detail.ipt_nat_enabled ? "启用" : "关闭"}
                   </Descriptions.Item>
                 </>
               )}
               <Descriptions.Item label="端点" span={3}>
-                {r.endpoints.map((e) => (
+                {detail.endpoints.map((e) => (
                   <Tag key={e.id}>
                     {e.label}: {deviceName(e.device_id)} / {e.interface_name}
                     {e.access_mode ? ` · ${e.access_mode}` : ""}
@@ -652,21 +711,22 @@ export default function Circuits() {
                   </Tag>
                 ))}
               </Descriptions.Item>
-              {(r.path_mode === "explicit_sr" || (r.path_hops && r.path_hops.length > 0)) && (
+              {(detail.path_mode === "explicit_sr" || (detail.path_hops && detail.path_hops.length > 0)) && (
                 <Descriptions.Item label="SR 路径" span={3}>
-                  <Tag color="purple">{r.path_mode || "auto"}</Tag>
-                  {(r.path_hops || []).map((h) => (
+                  <Tag color="purple">{detail.path_mode || "auto"}</Tag>
+                  {(detail.path_hops || []).map((h) => (
                     <Tag key={h.sequence}>#{h.sequence + 1} {h.device_name || h.device_id}</Tag>
                   ))}
-                  {r.segment_list && r.segment_list.length > 0 && (
+                  {detail.segment_list && detail.segment_list.length > 0 && (
                     <span style={{ marginLeft: 8, color: "#531dab" }}>
-                      SID: {r.segment_list.join(" → ")}
+                      SID: {detail.segment_list.join(" → ")}
                     </span>
                   )}
                 </Descriptions.Item>
               )}
             </Descriptions>
-          ),
+            );
+          },
         }}
         columns={[
           { title: "编码", dataIndex: "code" },
@@ -906,11 +966,11 @@ function CreateModal({
       setFormLoading(true);
       try {
         const [dRes, sRes] = await Promise.allSettled([
-          needDevices ? api.get<Device[]>("/devices") : Promise.resolve(null),
+          needDevices ? api.get<Paginated<Device>>("/devices?page=1&page_size=500") : Promise.resolve(null),
           needSites ? api.get<Site[]>("/sites") : Promise.resolve(null),
         ]);
         if (cancelled) return;
-        if (dRes.status === "fulfilled" && dRes.value) setDevices(dRes.value.data);
+        if (dRes.status === "fulfilled" && dRes.value) setDevices(dRes.value.data.items);
         if (sRes.status === "fulfilled" && sRes.value) setSites(sRes.value.data);
         if (needDevices && dRes.status === "rejected") {
           message.error("表单数据加载失败，请刷新页面后重试");

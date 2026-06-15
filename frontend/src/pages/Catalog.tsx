@@ -104,6 +104,7 @@ export default function Catalog() {
     load(1, pageSize, "", undefined, undefined, undefined);
   }
 
+
   async function onCreate() {
     const values = await form.validateFields();
     try {
@@ -151,6 +152,7 @@ export default function Catalog() {
           </Paragraph>
         }
       />
+
 
       <Space style={{ marginBottom: 16 }} wrap>
         <Input.Search

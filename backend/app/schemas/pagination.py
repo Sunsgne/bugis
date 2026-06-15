@@ -30,7 +30,13 @@ def paginate_query(
     count_stmt = select(func.count()).select_from(stmt.subquery())
     total = int(db.scalar(count_stmt) or 0)
     offset = (page - 1) * page_size
-    items = list(db.execute(stmt.offset(offset).limit(page_size)).all())
+    raw = list(db.execute(stmt.offset(offset).limit(page_size)).all())
+    if not raw:
+        items: list[T] = []
+    elif len(raw[0]) == 1:
+        items = [row[0] for row in raw]
+    else:
+        items = [tuple(row) for row in raw]  # type: ignore[assignment]
     return items, total
 
 

@@ -1196,11 +1196,11 @@ def test_snmp_settings_crud(client, auth_headers):
     assert r2.json()["timeout_sec"] == 3
 
     devs = client.get("/api/v1/devices", headers=auth_headers).json()
-    if devs:
+    if devs["items"]:
         t = client.post(
             "/api/v1/system/snmp/test",
             headers=auth_headers,
-            json={"device_id": devs[0]["id"]},
+            json={"device_id": devs["items"][0]["id"]},
         )
         assert t.status_code == 200
         assert t.json()["ok"] is True
@@ -1235,4 +1235,25 @@ def test_platform_settings_crud(client, auth_headers):
     status = client.get("/api/v1/system/settings/platform/status", headers=auth_headers)
     assert status.status_code == 200
     assert status.json()["dry_run"] is False
+
+
+def test_list_pagination(client, auth_headers):
+    """List endpoints return paginated envelopes for scale."""
+    r = client.get("/api/v1/circuits?page=1&page_size=10", headers=auth_headers)
+    assert r.status_code == 200
+    body = r.json()
+    assert "items" in body and "total" in body and body["page"] == 1
+
+    r2 = client.get("/api/v1/devices?page=1&page_size=10", headers=auth_headers)
+    assert r2.status_code == 200
+    assert "items" in r2.json()
+
+    r3 = client.get("/api/v1/offerings?page=1&page_size=10", headers=auth_headers)
+    assert r3.status_code == 200
+    assert "items" in r3.json()
+
+    r4 = client.get("/api/v1/circuits?q=NONEXISTENT_CODE_XYZ", headers=auth_headers)
+    assert r4.status_code == 200
+    assert r4.json()["total"] == 0
+
 

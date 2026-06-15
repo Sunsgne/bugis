@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func, or_, select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, require_operator
@@ -11,7 +11,7 @@ from app.models.enums import ServiceType
 from app.models.offering import ServiceOffering
 from app.models.user import User
 from app.schemas.offering import OfferingCreate, OfferingOut, OfferingUpdate
-from app.schemas.pagination import PaginatedResponse, paginated
+from app.schemas.pagination import PaginatedResponse, paginate_query, paginated
 
 router = APIRouter()
 
@@ -50,13 +50,8 @@ def list_offerings(
     _: User = Depends(get_current_user),
 ):
     stmt = _offering_list_stmt(active=active, q=q, service_type=service_type, tier=tier)
-    page = max(page, 1)
-    page_size = min(max(page_size, 1), 200)
-    total = int(db.scalar(select(func.count()).select_from(stmt.subquery())) or 0)
-    items = list(
-        db.scalars(stmt.offset((page - 1) * page_size).limit(page_size)).all()
-    )
-    return paginated(items, total=total, page=page, page_size=page_size)
+    rows, total = paginate_query(db, stmt, page=page, page_size=page_size)
+    return paginated(rows, total=total, page=page, page_size=page_size)
 
 
 @router.get("/{offering_id}", response_model=OfferingOut)

@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, noload
 
 import random
@@ -22,6 +22,7 @@ from app.schemas.device import (
     DeviceOut,
     DeviceUpdate,
 )
+from app.schemas.pagination import PaginatedResponse, paginate_query, paginated
 from app.services import baseline, config_learn, config_mgmt, port_inventory, snmp, snmp_settings as snmp_cfg
 from app.services import platform_settings as platform_cfg
 
@@ -35,19 +36,32 @@ def _normalize_snmp_fields(data: dict) -> dict:
     return out
 
 
-@router.get("", response_model=list[DeviceListOut])
+@router.get("", response_model=PaginatedResponse[DeviceListOut])
 def list_devices(
     vendor: Vendor | None = None,
     site_id: int | None = None,
+    q: str | None = Query(None, description="Search name, hostname or mgmt IP"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
-    stmt = select(Device).options(noload(Device.interfaces)).order_by(Device.id)
+    stmt = select(Device).options(noload(Device.interfaces)).order_by(Device.id.desc())
     if vendor:
         stmt = stmt.where(Device.vendor == vendor)
     if site_id:
         stmt = stmt.where(Device.site_id == site_id)
-    return db.execute(stmt).scalars().all()
+    if q:
+        like = f"%{q.strip()}%"
+        stmt = stmt.where(
+            or_(
+                Device.name.ilike(like),
+                Device.hostname.ilike(like),
+                Device.mgmt_ip.ilike(like),
+            )
+        )
+    rows, total = paginate_query(db, stmt, page=page, page_size=page_size)
+    return paginated(rows, total=total, page=page, page_size=page_size)
 
 
 @router.post("", response_model=DeviceListOut, status_code=201)
