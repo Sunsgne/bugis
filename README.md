@@ -119,7 +119,7 @@ docker compose up --build
 关键项：
 
 - `BUGIS_DATABASE_URL` — 数据库连接串（默认 SQLite）
-- `BUGIS_DRY_RUN` — `true` 仅渲染配置不下发；`false` 真实下发（需安装 `ncclient` / `netmiko`）
+- `BUGIS_DRY_RUN` — 默认 `false`（生产模式，真实 NETCONF/SSH 下发）；设为 `true` 则仅渲染预览
 - `BUGIS_SECRET_KEY` — JWT 签名密钥（生产务必修改）
 - `BUGIS_WEBHOOK_TOKEN` — 北向 Webhook 共享令牌（StackStorm/ITSM 对接）
 - `BUGIS_THRESHOLD_*` — 告警阈值（丢包 / 时延 / 利用率 / 健康分）
@@ -197,7 +197,7 @@ Workflow 文件：`.github/workflows/demo-deploy.yml`（push `main` 或手动触
 
 ## ⚠️ 说明
 
-- 默认 **dry-run** 模式，渲染的厂商配置仅用于审阅，不会下发到真实设备。
+- 默认 **生产模式**（`BUGIS_DRY_RUN=false`），配置会通过 NETCONF/SSH 真实下发；开发/演示可设为 dry-run。
 - 模板为生产可参考的范式，实际部署请结合现网命名规范、地址规划与安全基线校验。
 
 ## 📄 License

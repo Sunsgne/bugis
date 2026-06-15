@@ -74,4 +74,9 @@ def ensure_snmp_settings(db: Session) -> None:
 def ensure_platform_settings(db: Session) -> None:
     from app.services import platform_settings
 
-    platform_settings.get_or_create(db)
+    row = platform_settings.get_or_create(db)
+    if row.dry_run != settings.dry_run:
+        row.dry_run = settings.dry_run
+        db.commit()
+        db.refresh(row)
+    platform_settings.sync_to_runtime(row)

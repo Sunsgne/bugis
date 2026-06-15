@@ -779,8 +779,8 @@ export default function Circuits() {
                 <Tooltip
                   title={
                     r.status === "active"
-                      ? "重新下发配置 (re-apply, dry-run)"
-                      : "一键开通 (下发配置, dry-run)"
+                      ? "重新下发配置 (re-apply)"
+                      : "一键开通 (下发配置)"
                   }
                 >
                   <Button

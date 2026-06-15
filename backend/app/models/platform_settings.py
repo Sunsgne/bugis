@@ -15,7 +15,7 @@ class PlatformSettings(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(primary_key=True)
 
-    dry_run: Mapped[bool] = mapped_column(Boolean, default=True)
+    dry_run: Mapped[bool] = mapped_column(Boolean, default=False)
     netconf_timeout: Mapped[int] = mapped_column(Integer, default=30)
     ssh_timeout: Mapped[int] = mapped_column(Integer, default=30)
     default_netconf_port: Mapped[int] = mapped_column(Integer, default=830)

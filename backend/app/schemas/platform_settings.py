@@ -21,7 +21,7 @@ class BrandingOut(BaseModel):
 
 
 class PlatformSettingsBase(BaseModel):
-    dry_run: bool = True
+    dry_run: bool = False
     netconf_timeout: int = Field(default=30, ge=5, le=300)
     ssh_timeout: int = Field(default=30, ge=5, le=300)
     default_netconf_port: int = Field(default=830, ge=1, le=65535)

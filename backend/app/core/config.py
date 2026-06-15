@@ -39,8 +39,7 @@ class Settings(BaseSettings):
 
     # --- Provisioning ---
     # When True, configuration is rendered but NOT pushed to real devices.
-    # This lets the whole platform run end-to-end without lab hardware.
-    dry_run: bool = True
+    dry_run: bool = False
     netconf_timeout: int = 30
     ssh_timeout: int = 30
     default_netconf_port: int = 830

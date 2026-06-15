@@ -63,11 +63,15 @@ export default function GeneralSettings() {
       )}
 
       <Alert
-        type="warning"
+        type={platform?.dry_run ? "warning" : "success"}
         showIcon
         style={{ marginBottom: 16 }}
-        message="Dry-run 模式"
-        description="开启后配置仅渲染预览、不推送到真实设备；Demo 环境建议保持开启。"
+        message={platform?.dry_run ? "Dry-run 模式（模拟下发）" : "生产模式（真实下发）"}
+        description={
+          platform?.dry_run
+            ? "开启后配置仅渲染预览、不推送到真实设备。"
+            : "配置将通过 NETCONF/SSH 真实下发到设备，请确认设备凭证与网络可达性。"
+        }
       />
 
       <Form form={form} layout="vertical" disabled={loading}>
