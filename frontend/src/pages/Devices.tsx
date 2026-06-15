@@ -18,7 +18,7 @@ import {
 } from "antd";
 import { PlusOutlined, DownloadOutlined, UploadOutlined, ApiOutlined, RocketOutlined } from "@ant-design/icons";
 import { api } from "../api/client";
-import type { Device, DeviceInterface, Site } from "../api/types";
+import type { Device, DeviceInterface, Site, SvidUsage } from "../api/types";
 
 const VENDOR_COLOR: Record<string, string> = {
   h3c: "blue",
@@ -152,13 +152,85 @@ export default function Devices() {
   }
 
   async function check(id: number) {
-    const { data } = await api.post(`/devices/${id}/check`);
-    if (data.reachable) {
-      message.success(`${data.device} 可达, 时延 ${data.latency_ms}ms`);
-    } else {
-      message.error(`${data.device} 不可达 (${data.mgmt_ip})`);
+    const hide = message.loading("设备检测中 (可达性 + S-VID 占用)...", 0);
+    try {
+      const { data } = await api.post(`/devices/${id}/check`);
+      hide();
+      if (data.reachable) {
+        const scan = data.svid_scan;
+        const svidCount = scan?.total_s_vids ?? 0;
+        const conflictCount = scan?.conflicts?.length ?? 0;
+        if (conflictCount > 0) {
+          message.warning(
+            `${data.device} 可达 · 发现 ${svidCount} 个 S-VID · ${conflictCount} 处冲突`
+          );
+        } else {
+          message.success(
+            `${data.device} 可达 (${data.latency_ms}ms) · 已扫描 ${svidCount} 个 S-VID 占用`
+          );
+        }
+        setIfaces((p) => {
+          const ports = scan?.ports as Array<{ interface: string; s_vids: SvidUsage[]; allocated: boolean }> | undefined;
+          if (!ports?.length) return p;
+          const byName = Object.fromEntries(ports.map((row) => [row.interface, row]));
+          const existing = p[id] || [];
+          const merged = existing.map((iface) => {
+            const hit = byName[iface.name];
+            if (!hit) return iface;
+            return { ...iface, used_s_vids: hit.s_vids, allocated: hit.allocated };
+          });
+          for (const row of ports) {
+            if (!merged.some((i) => i.name === row.interface)) {
+              merged.push({
+                id: -1,
+                device_id: id,
+                name: row.interface,
+                admin_up: true,
+                allocated: row.allocated,
+                used_s_vids: row.s_vids,
+              } as DeviceInterface);
+            }
+          }
+          return { ...p, [id]: merged };
+        });
+      } else {
+        message.error(`${data.device} 不可达 (${data.mgmt_ip})`);
+      }
+      load();
+    } catch (e: any) {
+      hide();
+      message.error(e?.response?.data?.detail || "检测失败");
     }
-    load();
+  }
+
+  function renderSvidUsage(list?: SvidUsage[] | null) {
+    if (!list?.length) return "-";
+    return (
+      <Space size={[4, 4]} wrap>
+        {list.map((u, idx) => {
+          const label =
+            u.access_mode === "access"
+              ? "untagged"
+              : u.c_vid
+                ? `S:${u.s_vid}/C:${u.c_vid}`
+                : `S:${u.s_vid}`;
+          const color =
+            u.source === "legacy" ? "red" : u.source === "device" ? "orange" : "blue";
+          const tip = [
+            u.circuit_code && `专线 ${u.circuit_code}`,
+            u.source && `来源 ${u.source}`,
+            u.note,
+          ]
+            .filter(Boolean)
+            .join(" · ");
+          return (
+            <Tooltip key={idx} title={tip || label}>
+              <Tag color={color}>{label}</Tag>
+            </Tooltip>
+          );
+        })}
+      </Space>
+    );
   }
 
   const siteName = (id?: number) => sites.find((s) => s.id === id)?.code || "-";
@@ -228,9 +300,19 @@ export default function Devices() {
                     render: (d) => d && <Tag>{d}</Tag>,
                   },
                   {
+                    title: "S-VID 占用",
+                    dataIndex: "used_s_vids",
+                    render: (v: SvidUsage[] | null) => renderSvidUsage(v),
+                  },
+                  {
                     title: "占用",
                     dataIndex: "allocated",
-                    render: (a) => (a ? <Tag color="orange">已占用</Tag> : "-"),
+                    render: (a, row) =>
+                      a || row.used_s_vids?.length ? (
+                        <Tag color="orange">已占用</Tag>
+                      ) : (
+                        "-"
+                      ),
                   },
                 ]}
               />

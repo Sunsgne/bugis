@@ -12,7 +12,7 @@ import difflib
 from app.models.circuit import Circuit, CircuitEndpoint
 from app.models.config_job import ConfigJob
 from app.models.device import Device
-from app.models.enums import CircuitStatus, PathMode
+from app.models.enums import CircuitStatus, PathMode, AccessMode
 from app.models.offering import ServiceOffering
 from app.models.tenant import Tenant
 from app.models.user import User
@@ -26,7 +26,7 @@ from app.schemas.circuit import (
     CircuitUpdate,
 )
 from app.schemas.path import PathPreviewRequest, PathPreviewResponse
-from app.services import allocation, path_service, probe, validation
+from app.services import allocation, path_service, port_inventory, probe, validation
 
 router = APIRouter()
 
@@ -160,6 +160,21 @@ def create_circuit(
     allocation.auto_allocate_circuit_fields(db, circuit, asn)
     if via_ids:
         path_service.save_path_hops(db, circuit, via_ids)
+
+    for ep in endpoints:
+        svid = ep.vlan_id or circuit.vlan_id
+        mode = ep.access_mode or AccessMode.DOT1Q
+        ok, msg = port_inventory.check_endpoint_available(
+            db,
+            ep.device_id,
+            ep.interface_name,
+            svid,
+            ep.inner_vlan_id,
+            mode,
+            exclude_circuit_id=circuit.id,
+        )
+        if not ok:
+            raise HTTPException(status_code=409, detail=msg)
 
     db.commit()
     db.refresh(circuit)

@@ -7,12 +7,22 @@ from app.models.enums import DeviceRole, DeviceStatus, OverlayTech, Vendor
 from app.schemas.common import TimestampedSchema
 
 
+class SvidUsageOut(BaseModel):
+    s_vid: int | None = None
+    c_vid: int | None = None
+    access_mode: str = "dot1q"
+    circuit_code: str | None = None
+    source: str = "platform"
+    note: str | None = None
+
+
 class DeviceInterfaceBase(BaseModel):
     name: str
     description: str | None = None
     speed_mbps: int | None = None
     admin_up: bool = True
     allocated: bool = False
+    used_s_vids: list[SvidUsageOut] | None = None
     ifindex: int | None = None
     oper_status: str | None = None
     discovered_via: str | None = None

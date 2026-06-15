@@ -326,7 +326,7 @@ def execute(db: Session, wo: WorkOrder, actor: str | None = None) -> WorkOrder:
 
 
 def _snapshot_devices(db: Session, circuit: Circuit, actor: str | None) -> None:
-    from app.services import config_mgmt
+    from app.services import config_mgmt, port_inventory
 
     seen: set[int] = set()
     for ep in circuit.endpoints:
@@ -337,6 +337,7 @@ def _snapshot_devices(db: Session, circuit: Circuit, actor: str | None) -> None:
                     db, ep.device, source="push",
                     note=f"auto after {circuit.code}", created_by=actor,
                 )
+                port_inventory.scan_device(db, ep.device)
             except Exception:  # noqa: BLE001
                 pass
 

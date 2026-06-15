@@ -15,6 +15,7 @@ from app.models.circuit import Circuit
 from app.models.device import Device
 from app.models.enums import AccessMode, DeviceRole, PathMode, ServiceType
 from app.models.site import Site
+from app.services import port_inventory
 
 
 @dataclass
@@ -162,6 +163,30 @@ def validate_circuit(db: Session, circuit: Circuit) -> list[Issue]:
             issues.append(
                 Issue("warning", "iface_name",
                       f"端点 {ep.label} 接口名缺失")
+            )
+
+    # S-VID / port encapsulation collision (platform + device inventory)
+    for ep in circuit.endpoints:
+        if not ep.device_id or not ep.interface_name:
+            continue
+        svid = ep.vlan_id or circuit.vlan_id
+        mode = ep.access_mode or AccessMode.DOT1Q
+        ok, msg = port_inventory.check_endpoint_available(
+            db,
+            ep.device_id,
+            ep.interface_name,
+            svid,
+            ep.inner_vlan_id,
+            mode,
+            exclude_circuit_id=circuit.id,
+        )
+        if not ok and msg:
+            issues.append(
+                Issue(
+                    "error",
+                    "svid_collision",
+                    f"端点 {ep.label} ({ep.interface_name}): {msg}",
+                )
             )
 
     # Explicit SR path validation

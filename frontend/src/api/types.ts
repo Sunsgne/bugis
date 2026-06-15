@@ -34,6 +34,15 @@ export interface Tenant {
   description?: string;
 }
 
+export interface SvidUsage {
+  s_vid?: number | null;
+  c_vid?: number | null;
+  access_mode?: string;
+  circuit_code?: string | null;
+  source?: string;
+  note?: string | null;
+}
+
 export interface DeviceInterface {
   id: number;
   device_id: number;
@@ -42,6 +51,7 @@ export interface DeviceInterface {
   speed_mbps?: number;
   admin_up: boolean;
   allocated: boolean;
+  used_s_vids?: SvidUsage[] | null;
   ifindex?: number;
   oper_status?: string;
   discovered_via?: string;

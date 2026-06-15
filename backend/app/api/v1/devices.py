@@ -21,7 +21,7 @@ from app.schemas.device import (
     DeviceOut,
     DeviceUpdate,
 )
-from app.services import baseline, config_mgmt, snmp
+from app.services import baseline, config_mgmt, port_inventory, snmp
 
 router = APIRouter()
 
@@ -121,6 +121,9 @@ def check_device(
             reachable = False
 
     device.status = DeviceStatus.ONLINE if reachable else DeviceStatus.OFFLINE
+    svid_scan: dict | None = None
+    if reachable:
+        svid_scan = port_inventory.scan_device(db, device)
     db.commit()
     return {
         "device": device.name,
@@ -130,6 +133,7 @@ def check_device(
         "latency_ms": latency,
         "status": device.status.value,
         "dry_run": settings.dry_run,
+        "svid_scan": svid_scan,
     }
 
 
@@ -212,5 +216,6 @@ def discover_interfaces(
     if not device:
         raise HTTPException(status_code=404, detail="device not found")
     ifaces = snmp.discover_interfaces(db, device)
+    port_inventory.scan_device(db, device)
     db.commit()
     return sorted(ifaces, key=lambda i: (i.ifindex or 0))

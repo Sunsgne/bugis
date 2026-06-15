@@ -1065,3 +1065,64 @@ def test_sr_explicit_circuit_path(client, auth_headers):
     assert wo["status"] == "completed"
     configs = "\n".join(j.get("rendered_config", "") for j in wo["config_jobs"])
     assert "segment-list" in configs.lower() or "SR Policy" in configs or "segment-routing" in configs
+
+
+def test_device_check_svid_scan(client, auth_headers, monkeypatch):
+    monkeypatch.setattr("app.api.v1.devices.random.random", lambda: 0.99)
+
+    dev = client.post(
+        "/api/v1/devices", headers=auth_headers,
+        json={
+            "name": "SH-PE-SCAN",
+            "vendor": "cisco",
+            "role": "pe",
+            "overlay_tech": "srmpls_evpn",
+            "status": "online",
+            "mgmt_ip": "10.2.0.88",
+            "sr_node_sid": 100,
+        },
+    ).json()
+    client.post(f"/api/v1/devices/{dev['id']}/discover-interfaces", headers=auth_headers)
+
+    r = client.post(f"/api/v1/devices/{dev['id']}/check", headers=auth_headers)
+    assert r.status_code == 200
+    data = r.json()
+    assert data["reachable"] is True
+    assert data["svid_scan"] is not None
+
+    # Simulate legacy S-VID on a port by renaming device to match legacy sim key
+    client.patch(
+        f"/api/v1/devices/{dev['id']}", headers=auth_headers,
+        json={"name": "SH-PE-01"},
+    )
+    r2 = client.post(f"/api/v1/devices/{dev['id']}/check", headers=auth_headers)
+    scan = r2.json()["svid_scan"]
+    assert scan["total_s_vids"] >= 2
+
+    ifaces = client.get(
+        f"/api/v1/devices/{dev['id']}/interfaces", headers=auth_headers
+    ).json()
+    busy = [i for i in ifaces if i.get("used_s_vids")]
+    assert busy
+
+    tenant = client.post(
+        "/api/v1/tenants", headers=auth_headers,
+        json={"name": "SVid Tenant", "code": "SVID01", "type": "enterprise"},
+    ).json()
+    conflict = client.post(
+        "/api/v1/circuits", headers=auth_headers,
+        json={
+            "name": "conflict line",
+            "tenant_id": tenant["id"],
+            "service_type": "l2vpn_evpn",
+            "endpoints": [{
+                "label": "A",
+                "device_id": dev["id"],
+                "interface_name": "GigabitEthernet0/0/0/2",
+                "vlan_id": 150,
+                "access_mode": "dot1q",
+            }],
+        },
+    )
+    assert conflict.status_code == 409
+

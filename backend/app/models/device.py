@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, Enum, ForeignKey, Integer, String
+from sqlalchemy import Boolean, Enum, ForeignKey, Integer, JSON, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -75,6 +75,8 @@ class DeviceInterface(Base, TimestampMixin):
     admin_up: Mapped[bool] = mapped_column(Boolean, default=True)
     # Whether the port is currently allocated to a circuit endpoint.
     allocated: Mapped[bool] = mapped_column(Boolean, default=False)
+    # S-VID / encapsulation inventory from platform + device scan.
+    used_s_vids: Mapped[list | None] = mapped_column(JSON, nullable=True)
     # SNMP-discovered attributes (IF-MIB).
     ifindex: Mapped[int | None] = mapped_column(Integer, nullable=True)
     oper_status: Mapped[str | None] = mapped_column(String(16), nullable=True)
