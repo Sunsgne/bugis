@@ -16,7 +16,8 @@ from app.core.config import settings
 from app.core.database import SessionLocal
 from app.models.circuit import Circuit
 from app.models.enums import CircuitStatus
-from app.services import alarm_service, telemetry_service
+from app.models.link import Link
+from app.services import alarm_service, link_monitor, telemetry_service
 from app.controller import bgp_peering, ha
 
 logger = logging.getLogger("bugis.scheduler")
@@ -43,6 +44,12 @@ def _tick() -> int:
         for c in circuits:
             health = telemetry_service.compute_health(db, c)
             alarm_service.evaluate_circuit_health(db, c, health)
+        link_monitor.sync_all_link_capacity(db)
+        link_monitor.sample_all_links(db)
+        links = db.execute(select(Link)).scalars().all()
+        for link in links:
+            lh = link_monitor.compute_link_health(db, link)
+            alarm_service.evaluate_link_health(db, link, lh)
         bgp_peering.sync_sessions(db)
         ha.heartbeat(db)
         db.commit()

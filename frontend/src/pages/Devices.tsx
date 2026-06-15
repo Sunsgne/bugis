@@ -11,6 +11,7 @@ import {
   Switch,
   Table,
   Tag,
+  Tooltip,
   Upload,
   App as AntApp,
   Popconfirm,
@@ -197,6 +198,19 @@ export default function Devices() {
                 dataSource={list}
                 columns={[
                   { title: "接口", dataIndex: "name" },
+                  {
+                    title: "描述",
+                    dataIndex: "description",
+                    ellipsis: true,
+                    render: (d: string) =>
+                      d ? (
+                        <Tooltip title={d}>
+                          {d.includes("bw(") ? <Tag color="purple">{d}</Tag> : d}
+                        </Tooltip>
+                      ) : (
+                        "-"
+                      ),
+                  },
                   {
                     title: "速率",
                     dataIndex: "speed_mbps",

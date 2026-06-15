@@ -38,6 +38,7 @@ export interface DeviceInterface {
   id: number;
   device_id: number;
   name: string;
+  description?: string;
   speed_mbps?: number;
   admin_up: boolean;
   allocated: boolean;
@@ -221,9 +222,15 @@ export interface LinkUsage {
   type: string;
   device_a: string;
   device_z: string;
+  interface_a?: string;
+  interface_z?: string;
   capacity_mbps: number;
   reserved_mbps: number;
+  traffic_mbps?: number;
+  peak_utilization_pct?: number;
+  avg_utilization_pct?: number;
   utilization_pct: number;
+  samples?: number;
 }
 
 export interface Offering {

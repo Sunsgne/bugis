@@ -227,6 +227,12 @@ def run() -> None:
                  capacity_mbps=40000, reserved_mbps=2000),
         ])
 
+        from app.services import link_monitor, snmp
+
+        for d in devices:
+            snmp.discover_interfaces(db, d)
+        link_monitor.sync_all_link_capacity(db)
+
         db.commit()
         print("Seed complete:")
         print(f"  sites={db.query(Site).count()} "

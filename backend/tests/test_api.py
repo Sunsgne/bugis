@@ -942,3 +942,45 @@ def test_remote_ipt_provision(client, auth_headers):
     configs = " ".join(j.get("rendered_config", "") for j in wo["config_jobs"])
     assert "REMOTE IPT" in configs or "Remote IPT" in configs or "remote_ipt" in configs.lower()
     assert circuit["code"] in configs or "vrf_" in configs
+
+
+def test_link_bandwidth_from_port_description(client, auth_headers):
+    n = next(_seq)
+    site = client.post(
+        "/api/v1/sites", headers=auth_headers,
+        json={"name": f"DC {n}", "code": f"DC{n}", "bgp_asn": 65020},
+    ).json()
+    dev_a = client.post(
+        "/api/v1/devices", headers=auth_headers,
+        json={"name": f"BR-A-{n}", "vendor": "h3c", "role": "dci_gw",
+              "overlay_tech": "vxlan_evpn", "status": "online",
+              "mgmt_ip": f"10.30.{n}.1", "bgp_asn": 65020, "site_id": site["id"]},
+    ).json()
+    dev_z = client.post(
+        "/api/v1/devices", headers=auth_headers,
+        json={"name": f"BR-Z-{n}", "vendor": "huawei", "role": "dci_gw",
+              "overlay_tech": "vxlan_evpn", "status": "online",
+              "mgmt_ip": f"10.30.{n}.2", "bgp_asn": 65020, "site_id": site["id"]},
+    ).json()
+    link = client.post(
+        "/api/v1/capacity/links", headers=auth_headers,
+        json={
+            "name": f"DCI-{n}", "type": "dci",
+            "device_a_id": dev_a["id"], "device_z_id": dev_z["id"],
+            "interface_a": "HundredGigE1/0/1", "interface_z": "HundredGE1/0/1",
+            "capacity_mbps": 50000,
+        },
+    ).json()
+    client.post(f"/api/v1/devices/{dev_a['id']}/discover-interfaces", headers=auth_headers)
+    client.post(f"/api/v1/devices/{dev_z['id']}/discover-interfaces", headers=auth_headers)
+    sync = client.post("/api/v1/capacity/links/sync-bandwidth", headers=auth_headers).json()
+    assert sync["links"] >= 1
+    usage = client.get("/api/v1/capacity/links/usage", headers=auth_headers).json()
+    row = next(u for u in usage if u["link_id"] == link["id"])
+    assert row["capacity_mbps"] == 100000
+    from app.scheduler import run_once
+    run_once()
+    usage2 = client.get("/api/v1/capacity/links/usage", headers=auth_headers).json()
+    row2 = next(u for u in usage2 if u["link_id"] == link["id"])
+    assert row2["samples"] > 0
+    assert row2["traffic_mbps"] > 0

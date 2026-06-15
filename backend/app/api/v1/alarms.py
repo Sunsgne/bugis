@@ -55,11 +55,18 @@ def evaluate(db: Session = Depends(get_db), _: User = Depends(require_operator))
     for c in circuits:
         health = telemetry_service.compute_health(db, c)
         alarm_service.evaluate_circuit_health(db, c, health)
+    from app.models.link import Link
+    from app.services import link_monitor
+
+    links = db.execute(select(Link)).scalars().all()
+    for link in links:
+        lh = link_monitor.compute_link_health(db, link)
+        alarm_service.evaluate_link_health(db, link, lh)
     db.commit()
     active = db.scalar(
         select(func.count(Alarm.id)).where(Alarm.status == AlarmStatus.ACTIVE)
     ) or 0
-    return {"evaluated": len(circuits), "active_alarms": active}
+    return {"evaluated": len(circuits), "links": len(links), "active_alarms": active}
 
 
 @router.post("/{alarm_id}/ack", response_model=AlarmOut)

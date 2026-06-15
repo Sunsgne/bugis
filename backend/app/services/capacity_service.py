@@ -65,27 +65,37 @@ def site_capacity(db: Session) -> list[dict]:
 
 
 def link_capacity(db: Session) -> list[dict]:
+    from app.services import link_monitor
+
     links = db.execute(select(Link)).scalars().all()
     result = []
     for l in links:
         da = db.get(Device, l.device_a_id)
         dz = db.get(Device, l.device_z_id)
+        health = link_monitor.compute_link_health(db, l)
         result.append({
             "link_id": l.id,
             "name": l.name,
             "type": l.type.value,
             "device_a": da.name if da else l.device_a_id,
             "device_z": dz.name if dz else l.device_z_id,
+            "interface_a": l.interface_a,
+            "interface_z": l.interface_z,
             "capacity_mbps": l.capacity_mbps,
             "reserved_mbps": l.reserved_mbps,
-            "utilization_pct": round(l.reserved_mbps / l.capacity_mbps * 100, 1)
-            if l.capacity_mbps else 0.0,
+            "traffic_mbps": health.traffic_mbps,
+            "peak_utilization_pct": health.peak_utilization_pct,
+            "avg_utilization_pct": health.avg_utilization_pct,
+            "utilization_pct": health.peak_utilization_pct,
+            "samples": health.samples,
         })
     return result
 
 
 def topology(db: Session) -> dict:
     """Nodes (devices grouped by site) and edges (links) for visualization."""
+    from app.services import link_monitor
+
     sites = db.execute(select(Site)).scalars().all()
     devices = db.execute(select(Device)).scalars().all()
     links = db.execute(select(Link)).scalars().all()
@@ -112,6 +122,7 @@ def topology(db: Session) -> dict:
                 "target": l.device_z_id,
                 "capacity_mbps": l.capacity_mbps,
                 "reserved_mbps": l.reserved_mbps,
+                "utilization_pct": link_monitor.compute_link_health(db, l).peak_utilization_pct,
             }
             for l in links
         ],

@@ -87,3 +87,13 @@ def link_usage(db: Session = Depends(get_db), _: User = Depends(get_current_user
 @router.get("/topology")
 def topology(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
     return capacity_service.topology(db)
+
+
+@router.post("/links/sync-bandwidth")
+def sync_link_bandwidth(
+    db: Session = Depends(get_db), _: User = Depends(require_operator)
+):
+    """Re-read bw(...) tags from port descriptions and refresh link capacity."""
+    from app.services import link_monitor
+
+    return link_monitor.sync_all_link_capacity(db)

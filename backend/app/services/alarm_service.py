@@ -12,6 +12,7 @@ from app.core.config import settings
 from app.models.alarm import Alarm
 from app.models.circuit import Circuit
 from app.models.enums import AlarmSeverity, AlarmStatus, CircuitStatus
+from app.models.link import Link
 from app.schemas.telemetry import CircuitHealth
 
 
@@ -134,6 +135,29 @@ def evaluate_circuit_health(db: Session, circuit: Circuit, health: CircuitHealth
         )
     else:
         clear_by_key(db, key_health)
+
+
+def evaluate_link_health(db: Session, link: Link, health) -> None:
+    """Raise/clear backbone link utilization alarms from interface telemetry."""
+    key_util = f"link:{link.id}:utilization"
+    if health.samples == 0:
+        return
+    if health.peak_utilization_pct > settings.threshold_link_utilization_pct:
+        raise_alarm(
+            db,
+            "link_utilization",
+            AlarmSeverity.MAJOR,
+            f"骨干链路 {link.name} 利用率 {health.peak_utilization_pct}%",
+            key_util,
+            detail=(
+                f"阈值 {settings.threshold_link_utilization_pct}% · "
+                f"容量 {health.capacity_mbps} Mbps · "
+                f"峰值流量 {health.traffic_mbps} Mbps"
+            ),
+            device_id=link.device_a_id,
+        )
+    else:
+        clear_by_key(db, key_util)
 
 
 def acknowledge(db: Session, alarm: Alarm, actor: str) -> Alarm:
