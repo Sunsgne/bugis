@@ -1165,3 +1165,33 @@ def test_snmp_settings_crud(client, auth_headers):
         assert t.json()["ok"] is True
         assert t.json()["interfaces_found"] > 0
 
+
+def test_platform_settings_crud(client, auth_headers):
+    r = client.get("/api/v1/system/settings", headers=auth_headers)
+    assert r.status_code == 200
+    body = r.json()
+    assert "platform" in body
+    assert "readonly" in body
+    assert body["platform"]["dry_run"] is True
+
+    r2 = client.patch(
+        "/api/v1/system/settings/platform",
+        headers=auth_headers,
+        json={
+            "dry_run": False,
+            "scheduler_interval_seconds": 60,
+            "threshold_latency_ms": 80,
+            "webhook_token": "test-token-xyz",
+        },
+    )
+    assert r2.status_code == 200
+    updated = r2.json()
+    assert updated["dry_run"] is False
+    assert updated["scheduler_interval_seconds"] == 60
+    assert updated["threshold_latency_ms"] == 80
+    assert updated["webhook_token"] == "test-token-xyz"
+
+    status = client.get("/api/v1/system/settings/platform/status", headers=auth_headers)
+    assert status.status_code == 200
+    assert status.json()["dry_run"] is False
+

@@ -19,6 +19,7 @@ from app.api.v1 import api_router
 from app.bootstrap import (
     ensure_bugis_controller,
     ensure_cluster_node,
+    ensure_platform_settings,
     ensure_snmp_settings,
     ensure_superuser,
 )
@@ -61,6 +62,7 @@ async def lifespan(app: FastAPI):
         ensure_bugis_controller(db)
         ensure_cluster_node(db)
         ensure_snmp_settings(db)
+        ensure_platform_settings(db)
     finally:
         db.close()
     from app import scheduler

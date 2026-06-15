@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes, useNavigate, useLocation } from "react-router-dom";
 import { Layout, Menu, Spin, Dropdown, Avatar, Tag, Badge, Space } from "antd";
+import type { MenuProps } from "antd";
 import {
   DashboardOutlined,
   TeamOutlined,
@@ -13,17 +14,13 @@ import {
   AlertOutlined,
   DeploymentUnitOutlined,
   PartitionOutlined,
-  ApiOutlined as IntegrationIcon,
-  AuditOutlined,
-  SafetyOutlined,
   AppstoreOutlined,
   CloudServerOutlined,
-  BellOutlined,
   ShareAltOutlined,
   SettingOutlined,
   FileTextOutlined,
 } from "@ant-design/icons";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "./auth";
 import { api, getToken } from "./api/client";
 import Login from "./pages/Login";
@@ -37,39 +34,87 @@ import Monitoring from "./pages/Monitoring";
 import Alarms from "./pages/Alarms";
 import Capacity from "./pages/Capacity";
 import Topology from "./pages/Topology";
-import Integrations from "./pages/Integrations";
-import Audit from "./pages/Audit";
-import Users from "./pages/Users";
 import Catalog from "./pages/Catalog";
 import Controllers from "./pages/Controllers";
 import ControlPlane from "./pages/ControlPlane";
 import ConfigManagement from "./pages/ConfigManagement";
 import Notifications from "./pages/Notifications";
-import SnmpSettingsPage from "./pages/SnmpSettings";
+import Users from "./pages/Users";
+import Audit from "./pages/Audit";
+import SettingsLayout from "./pages/settings/SettingsLayout";
+import GeneralSettings from "./pages/settings/GeneralSettings";
+import AlarmSettings from "./pages/settings/AlarmSettings";
+import BaselineSettings from "./pages/settings/BaselineSettings";
+import SmtpSettings from "./pages/settings/SmtpSettings";
+import SnmpSettingsTab from "./pages/settings/SnmpSettingsTab";
+import IntegrationSettings from "./pages/settings/IntegrationSettings";
 
 const { Header, Sider, Content } = Layout;
 
-const MENU = [
-  { key: "/", icon: <DashboardOutlined />, label: "运营总览" },
-  { key: "/tenants", icon: <TeamOutlined />, label: "客户服务" },
-  { key: "/sites", icon: <EnvironmentOutlined />, label: "数据中心" },
-  { key: "/devices", icon: <ClusterOutlined />, label: "设备管理" },
-  { key: "/settings/snmp", icon: <SettingOutlined />, label: "SNMP 设置" },
-  { key: "/controllers", icon: <CloudServerOutlined />, label: "控制器" },
-  { key: "/control-plane", icon: <ShareAltOutlined />, label: "SDN 控制平面" },
-  { key: "/catalog", icon: <AppstoreOutlined />, label: "服务套餐" },
-  { key: "/circuits", icon: <ApiOutlined />, label: "专线开通" },
-  { key: "/work-orders", icon: <ProfileOutlined />, label: "工单流转" },
-  { key: "/config", icon: <FileTextOutlined />, label: "配置管理" },
-  { key: "/topology", icon: <PartitionOutlined />, label: "网络拓扑" },
-  { key: "/capacity", icon: <DeploymentUnitOutlined />, label: "容量管理" },
-  { key: "/monitoring", icon: <LineChartOutlined />, label: "监控大屏" },
-  { key: "/alarms", icon: <AlertOutlined />, label: "告警中心" },
-  { key: "/notifications", icon: <BellOutlined />, label: "通知渠道" },
-  { key: "/integrations", icon: <IntegrationIcon />, label: "集成中心" },
-  { key: "/audit", icon: <AuditOutlined />, label: "操作审计" },
-  { key: "/users", icon: <SafetyOutlined />, label: "用户权限" },
+type MenuItem = Required<MenuProps>["items"][number];
+
+const MENU: MenuItem[] = [
+  {
+    type: "group",
+    label: "概览",
+    children: [{ key: "/", icon: <DashboardOutlined />, label: "运营总览" }],
+  },
+  {
+    type: "group",
+    label: "资源与客户",
+    children: [
+      { key: "/tenants", icon: <TeamOutlined />, label: "客户服务" },
+      { key: "/sites", icon: <EnvironmentOutlined />, label: "数据中心" },
+      { key: "/devices", icon: <ClusterOutlined />, label: "设备管理" },
+    ],
+  },
+  {
+    type: "group",
+    label: "专线业务",
+    children: [
+      { key: "/catalog", icon: <AppstoreOutlined />, label: "服务套餐" },
+      { key: "/circuits", icon: <ApiOutlined />, label: "专线开通" },
+      { key: "/work-orders", icon: <ProfileOutlined />, label: "工单流转" },
+    ],
+  },
+  {
+    type: "group",
+    label: "网络与 SDN",
+    children: [
+      { key: "/controllers", icon: <CloudServerOutlined />, label: "控制器" },
+      { key: "/control-plane", icon: <ShareAltOutlined />, label: "SDN 控制平面" },
+      { key: "/config", icon: <FileTextOutlined />, label: "配置管理" },
+      { key: "/topology", icon: <PartitionOutlined />, label: "网络拓扑" },
+    ],
+  },
+  {
+    type: "group",
+    label: "运维监控",
+    children: [
+      { key: "/capacity", icon: <DeploymentUnitOutlined />, label: "容量管理" },
+      { key: "/monitoring", icon: <LineChartOutlined />, label: "监控大屏" },
+      { key: "/alarms", icon: <AlertOutlined />, label: "告警中心" },
+    ],
+  },
+  {
+    type: "group",
+    label: "系统",
+    children: [{ key: "/settings", icon: <SettingOutlined />, label: "系统设置" }],
+  },
 ];
+
+const ROUTE_KEYS = MENU.flatMap((g) =>
+  g && "children" in g && g.children ? g.children.map((c) => (c as { key: string }).key) : []
+);
+
+function selectedMenuKey(pathname: string): string {
+  if (pathname.startsWith("/settings")) return "/settings";
+  const match = ROUTE_KEYS.filter((k) => k !== "/")
+    .sort((a, b) => b.length - a.length)
+    .find((k) => pathname.startsWith(k));
+  if (match) return match;
+  return pathname === "/" ? "/" : ROUTE_KEYS.find((k) => k === pathname) || "/";
+}
 
 function AlarmBell({ onClick }: { onClick: () => void }) {
   const [count, setCount] = useState(0);
@@ -101,7 +146,6 @@ function AlarmBell({ onClick }: { onClick: () => void }) {
         }
       });
       es.onerror = () => {
-        // Fall back to polling if the stream drops.
         setLive(false);
         if (!poll) poll = setInterval(loadOnce, 8000);
       };
@@ -130,9 +174,7 @@ function Shell() {
   const nav = useNavigate();
   const loc = useLocation();
   const { user, logout } = useAuth();
-  const selected = MENU.find(
-    (m) => m.key === loc.pathname || (m.key !== "/" && loc.pathname.startsWith(m.key))
-  );
+  const selected = useMemo(() => selectedMenuKey(loc.pathname), [loc.pathname]);
 
   return (
     <Layout style={{ height: "100vh" }}>
@@ -144,7 +186,7 @@ function Shell() {
         <Menu
           theme="dark"
           mode="inline"
-          selectedKeys={[selected?.key || "/"]}
+          selectedKeys={[selected]}
           items={MENU}
           onClick={(e) => nav(e.key)}
         />
@@ -164,20 +206,20 @@ function Shell() {
             DCI / EVPN 专线开通与运营平台
           </div>
           <Space size="large">
-          <AlarmBell onClick={() => nav("/alarms")} />
-          <Dropdown
-            menu={{
-              items: [
-                { key: "logout", icon: <LogoutOutlined />, label: "退出登录", onClick: logout },
-              ],
-            }}
-          >
-            <span style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 8 }}>
-              <Avatar size="small" icon={<UserOutlined />} />
-              {user?.full_name || user?.username}
-              <Tag color="blue">{user?.role}</Tag>
-            </span>
-          </Dropdown>
+            <AlarmBell onClick={() => nav("/alarms")} />
+            <Dropdown
+              menu={{
+                items: [
+                  { key: "logout", icon: <LogoutOutlined />, label: "退出登录", onClick: logout },
+                ],
+              }}
+            >
+              <span style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 8 }}>
+                <Avatar size="small" icon={<UserOutlined />} />
+                {user?.full_name || user?.username}
+                <Tag color="blue">{user?.role}</Tag>
+              </span>
+            </Dropdown>
           </Space>
         </Header>
         <Content style={{ margin: 16, overflow: "auto" }}>
@@ -186,7 +228,6 @@ function Shell() {
             <Route path="/tenants" element={<Tenants />} />
             <Route path="/sites" element={<Sites />} />
             <Route path="/devices" element={<Devices />} />
-            <Route path="/settings/snmp" element={<SnmpSettingsPage />} />
             <Route path="/controllers" element={<Controllers />} />
             <Route path="/control-plane" element={<ControlPlane />} />
             <Route path="/catalog" element={<Catalog />} />
@@ -197,10 +238,22 @@ function Shell() {
             <Route path="/capacity" element={<Capacity />} />
             <Route path="/monitoring" element={<Monitoring />} />
             <Route path="/alarms" element={<Alarms />} />
-            <Route path="/notifications" element={<Notifications />} />
-            <Route path="/integrations" element={<Integrations />} />
-            <Route path="/audit" element={<Audit />} />
-            <Route path="/users" element={<Users />} />
+            <Route path="/settings" element={<SettingsLayout />}>
+              <Route index element={<Navigate to="general" replace />} />
+              <Route path="general" element={<GeneralSettings />} />
+              <Route path="alarms" element={<AlarmSettings />} />
+              <Route path="baseline" element={<BaselineSettings />} />
+              <Route path="smtp" element={<SmtpSettings />} />
+              <Route path="snmp" element={<SnmpSettingsTab />} />
+              <Route path="integration" element={<IntegrationSettings />} />
+              <Route path="notifications" element={<Notifications embedded />} />
+              <Route path="users" element={<Users embedded />} />
+              <Route path="audit" element={<Audit embedded />} />
+            </Route>
+            <Route path="/notifications" element={<Navigate to="/settings/notifications" replace />} />
+            <Route path="/integrations" element={<Navigate to="/settings/integration" replace />} />
+            <Route path="/users" element={<Navigate to="/settings/users" replace />} />
+            <Route path="/audit" element={<Navigate to="/settings/audit" replace />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Content>

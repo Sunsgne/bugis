@@ -20,6 +20,7 @@ from app.models.controlplane import (  # noqa: F401
     EvpnRoute,
     VtepPeer,
 )
+from app.models.platform_settings import PlatformSettings  # noqa: F401
 from app.models.snmp_settings import SnmpSettings  # noqa: F401
 from app.models.config_snapshot import DeviceConfigSnapshot  # noqa: F401
 
@@ -49,4 +50,5 @@ __all__ = [
     "DataPlaneBinding",
     "DeviceConfigSnapshot",
     "SnmpSettings",
+    "PlatformSettings",
 ]

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Button, Card, Input, Table, Tag } from "antd";
+import { Button, Card, Input, Table, Tag, Typography } from "antd";
 import { ReloadOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { api } from "../api/client";
@@ -12,7 +12,7 @@ const METHOD_COLOR: Record<string, string> = {
   DELETE: "red",
 };
 
-export default function Audit() {
+export default function Audit({ embedded }: { embedded?: boolean }) {
   const [rows, setRows] = useState<AuditEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [actor, setActor] = useState("");
@@ -33,20 +33,18 @@ export default function Audit() {
     return () => clearInterval(t);
   }, [actor]);
 
-  return (
-    <Card
-      title="操作审计"
-      extra={
-        <Input.Search
-          placeholder="按操作人过滤"
-          allowClear
-          style={{ width: 220 }}
-          onSearch={setActor}
-          enterButton={<ReloadOutlined />}
-        />
-      }
-    >
-      <Table
+  const search = (
+    <Input.Search
+      placeholder="按操作人过滤"
+      allowClear
+      style={{ width: 220 }}
+      onSearch={setActor}
+      enterButton={<ReloadOutlined />}
+    />
+  );
+
+  const table = (
+    <Table
         rowKey="id"
         loading={loading}
         dataSource={rows}
@@ -76,6 +74,25 @@ export default function Audit() {
           { title: "来源 IP", dataIndex: "source_ip" },
         ]}
       />
+  );
+
+  if (embedded) {
+    return (
+      <div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <Typography.Title level={5} style={{ margin: 0 }}>
+            操作审计
+          </Typography.Title>
+          {search}
+        </div>
+        {table}
+      </div>
+    );
+  }
+
+  return (
+    <Card title="操作审计" extra={search}>
+      {table}
     </Card>
   );
 }

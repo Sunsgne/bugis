@@ -99,6 +99,10 @@ async def stop() -> None:
     _task = None
 
 
+def set_interval(seconds: int) -> None:
+    _state["interval"] = seconds
+
+
 def status() -> dict:
     return {**_state, "enabled": settings.scheduler_enabled}
 

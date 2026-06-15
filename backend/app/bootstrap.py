@@ -69,3 +69,9 @@ def ensure_snmp_settings(db: Session) -> None:
     from app.services import snmp_settings
 
     snmp_settings.get_or_create(db)
+
+
+def ensure_platform_settings(db: Session) -> None:
+    from app.services import platform_settings
+
+    platform_settings.get_or_create(db)

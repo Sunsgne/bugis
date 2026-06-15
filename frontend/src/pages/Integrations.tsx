@@ -30,7 +30,7 @@ function download(filename: string, content: string) {
   URL.revokeObjectURL(url);
 }
 
-export default function Integrations() {
+export default function Integrations({ embedded }: { embedded?: boolean }) {
   const { message } = AntApp.useApp();
   const [drivers, setDrivers] = useState<Record<string, any>>({});
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
@@ -69,7 +69,7 @@ export default function Integrations() {
     ...d,
   }));
 
-  return (
+  const content = (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <Row gutter={16}>
         <Col xs={24} md={12}>
@@ -137,5 +137,13 @@ export default function Integrations() {
         />
       </Card>
     </div>
+  );
+
+  if (embedded) return content;
+
+  return (
+    <Card title="集成中心">
+      {content}
+    </Card>
   );
 }

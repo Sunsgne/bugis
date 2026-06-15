@@ -14,6 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.services import platform_settings as platform_cfg_service
 from app.services import snmp_settings as snmp_cfg_service
 from app.models.device import Device
 from app.models.enums import DeviceRole
@@ -60,8 +61,8 @@ def build_context(db: Session, device: Device) -> dict:
         "asn": asn,
         "rr_peers": _rr_peers(db, device),
         "is_rr": is_rr,
-        "ntp_server": settings.baseline_ntp_server,
-        "syslog_server": settings.baseline_syslog_server,
+        "ntp_server": platform_cfg_service.get_or_create(db).baseline_ntp_server,
+        "syslog_server": platform_cfg_service.get_or_create(db).baseline_syslog_server,
         "snmp_community": snmp_cfg_service.get_or_create(db).baseline_community,
     }
 

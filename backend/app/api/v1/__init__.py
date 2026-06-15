@@ -16,6 +16,7 @@ from app.api.v1 import (
     integrations,
     notifications,
     offerings,
+    platform_settings,
     sites,
     snmp_settings,
     stream,
@@ -59,6 +60,9 @@ api_router.include_router(
 api_router.include_router(bulk.router, prefix="/bulk", tags=["bulk"])
 api_router.include_router(stream.router, prefix="/stream", tags=["stream"])
 api_router.include_router(system.router, prefix="/system", tags=["system"])
+api_router.include_router(
+    platform_settings.router, prefix="/system/settings", tags=["platform-settings"]
+)
 api_router.include_router(
     snmp_settings.router, prefix="/system/snmp", tags=["snmp-settings"]
 )

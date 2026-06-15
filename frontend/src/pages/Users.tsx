@@ -10,6 +10,7 @@ import {
   Tag,
   App as AntApp,
   Alert,
+  Typography,
 } from "antd";
 import { PlusOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
@@ -32,7 +33,7 @@ const ROLE_COLOR: Record<string, string> = {
   viewer: "default",
 };
 
-export default function Users() {
+export default function Users({ embedded }: { embedded?: boolean }) {
   const { user } = useAuth();
   const { message } = AntApp.useApp();
   const [rows, setRows] = useState<UserRow[]>([]);
@@ -70,22 +71,30 @@ export default function Users() {
   }
 
   if (!isAdmin) {
-    return (
-      <Card title="用户与权限">
-        <Alert type="warning" message="仅管理员（admin）可管理用户。" showIcon />
-      </Card>
+    const denied = (
+      <Alert type="warning" message="仅管理员（admin）可管理用户。" showIcon />
     );
+    if (embedded) {
+      return (
+        <div>
+          <Typography.Title level={5} style={{ marginTop: 0 }}>
+            用户与权限
+          </Typography.Title>
+          {denied}
+        </div>
+      );
+    }
+    return <Card title="用户与权限">{denied}</Card>;
   }
 
-  return (
-    <Card
-      title="用户与权限 (RBAC)"
-      extra={
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>
-          新建用户
-        </Button>
-      }
-    >
+  const addBtn = (
+    <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>
+      新建用户
+    </Button>
+  );
+
+  const body = (
+    <>
       <Table
         rowKey="id"
         loading={loading}
@@ -136,6 +145,26 @@ export default function Users() {
           </Form.Item>
         </Form>
       </Modal>
+    </>
+  );
+
+  if (embedded) {
+    return (
+      <div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <Typography.Title level={5} style={{ margin: 0 }}>
+            用户与权限 (RBAC)
+          </Typography.Title>
+          {addBtn}
+        </div>
+        {body}
+      </div>
+    );
+  }
+
+  return (
+    <Card title="用户与权限 (RBAC)" extra={addBtn}>
+      {body}
     </Card>
   );
 }

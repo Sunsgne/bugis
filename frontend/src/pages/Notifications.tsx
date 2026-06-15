@@ -54,7 +54,7 @@ const SEV_COLOR: Record<string, string> = {
   info: "blue",
 };
 
-export default function Notifications() {
+export default function Notifications({ embedded }: { embedded?: boolean }) {
   const { message } = AntApp.useApp();
   const [rows, setRows] = useState<Channel[]>([]);
   const [loading, setLoading] = useState(false);
@@ -101,15 +101,14 @@ export default function Notifications() {
     load();
   }
 
-  return (
-    <Card
-      title="告警通知渠道"
-      extra={
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>
-          添加渠道
-        </Button>
-      }
-    >
+  const addBtn = (
+    <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>
+      添加渠道
+    </Button>
+  );
+
+  const body = (
+    <>
       <Typography.Paragraph type="secondary">
         当告警级别达到渠道阈值时，平台自动向该渠道外发通知（支持通用 Webhook、Slack、钉钉、企业微信）。
       </Typography.Paragraph>
@@ -180,6 +179,26 @@ export default function Notifications() {
           </Form.Item>
         </Form>
       </Modal>
+    </>
+  );
+
+  if (embedded) {
+    return (
+      <div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <Typography.Title level={5} style={{ margin: 0 }}>
+            告警通知渠道
+          </Typography.Title>
+          {addBtn}
+        </div>
+        {body}
+      </div>
+    );
+  }
+
+  return (
+    <Card title="告警通知渠道" extra={addBtn}>
+      {body}
     </Card>
   );
 }
