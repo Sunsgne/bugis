@@ -43,6 +43,7 @@ import { api } from "../api/client";
 import type { Circuit, Device, DeviceInterface, Offering, Site, SvidUsage, Tenant } from "../api/types";
 import { configPreviewModalProps, ConfigPreviewPre } from "../utils/configPreview";
 import { TenantSearchSelect, useTenantSearch } from "../components/TenantSearchSelect";
+import OfferingSearchSelect, { useOfferingSearch } from "../components/OfferingSearchSelect";
 
 const SERVICE_LABEL: Record<string, string> = {
   l2vpn_evpn: "EVPN L2VPN",
@@ -237,7 +238,6 @@ export default function Circuits() {
   const tenantSearch = useTenantSearch(selectedTenantId);
   const [sites, setSites] = useState<Site[]>([]);
   const [devices, setDevices] = useState<Device[]>([]);
-  const [offerings, setOfferings] = useState<Offering[]>([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [form] = Form.useForm();
@@ -257,7 +257,6 @@ export default function Circuits() {
       { key: "overview", req: api.get<TenantOverview>("/tenants/overview") },
       { key: "sites", req: api.get<Site[]>("/sites") },
       { key: "devices", req: api.get<Device[]>("/devices") },
-      { key: "offerings", req: api.get<Offering[]>("/offerings?active=true") },
     ];
     if (selectedTenantId) {
       tasks.push({
@@ -287,9 +286,6 @@ export default function Circuits() {
           break;
         case "devices":
           setDevices(data as Device[]);
-          break;
-        case "offerings":
-          setOfferings(data as Offering[]);
           break;
         case "summary":
           summaryLoaded = data as TenantSummary;
@@ -771,7 +767,6 @@ export default function Circuits() {
         form={form}
         devices={devices}
         sites={sites}
-        offerings={offerings}
         defaultTenantId={selectedTenantId}
         onOk={onCreate}
         onCancel={() => setOpen(false)}
@@ -882,7 +877,6 @@ function CreateModal({
   form,
   devices: devicesProp,
   sites: sitesProp,
-  offerings: offeringsProp,
   defaultTenantId,
   onOk,
   onCancel,
@@ -892,15 +886,14 @@ function CreateModal({
   const [pathPreview, setPathPreview] = useState<any>(null);
   const [formLoading, setFormLoading] = useState(false);
   const tenantSearch = useTenantSearch(open ? defaultTenantId : null);
+  const offeringSearch = useOfferingSearch();
   const [devices, setDevices] = useState<Device[]>(devicesProp);
   const [sites, setSites] = useState<Site[]>(sitesProp);
-  const [offerings, setOfferings] = useState<Offering[]>(offeringsProp);
 
   useEffect(() => {
     setDevices(devicesProp);
     setSites(sitesProp);
-    setOfferings(offeringsProp);
-  }, [devicesProp, sitesProp, offeringsProp]);
+  }, [devicesProp, sitesProp]);
 
   useEffect(() => {
     if (!open) return;
@@ -908,20 +901,17 @@ function CreateModal({
     async function ensureFormData() {
       const needDevices = !devicesProp.length;
       const needSites = !sitesProp.length;
-      const needOfferings = !offeringsProp.length;
-      if (!needDevices && !needSites && !needOfferings) return;
+      if (!needDevices && !needSites) return;
 
       setFormLoading(true);
       try {
-        const [dRes, sRes, oRes] = await Promise.allSettled([
+        const [dRes, sRes] = await Promise.allSettled([
           needDevices ? api.get<Device[]>("/devices") : Promise.resolve(null),
           needSites ? api.get<Site[]>("/sites") : Promise.resolve(null),
-          needOfferings ? api.get<Offering[]>("/offerings?active=true") : Promise.resolve(null),
         ]);
         if (cancelled) return;
         if (dRes.status === "fulfilled" && dRes.value) setDevices(dRes.value.data);
         if (sRes.status === "fulfilled" && sRes.value) setSites(sRes.value.data);
-        if (oRes.status === "fulfilled" && oRes.value) setOfferings(oRes.value.data);
         if (needDevices && dRes.status === "rejected") {
           message.error("表单数据加载失败，请刷新页面后重试");
         }
@@ -933,7 +923,7 @@ function CreateModal({
     return () => {
       cancelled = true;
     };
-  }, [open, devicesProp, sitesProp, offeringsProp, message]);
+  }, [open, devicesProp, sitesProp, message]);
 
   function deviceLabel(d: Device) {
     const sid = d.sr_node_sid ? ` SID:${d.sr_node_sid}` : "";
@@ -1006,13 +996,15 @@ function CreateModal({
     return (ifaceByDevice[deviceId] || []).find((i) => i.name === name);
   }
 
-  function applyOffering(id: number) {
-    const o = offerings.find((x: Offering) => x.id === id);
-    if (!o) return;
+  async function applyOffering(id: number) {
+    const cached = offeringSearch.options.find((o) => o.value === id)?.offering;
+    const o = cached || (await api.get<Offering>(`/offerings/${id}`)).data;
     form.setFieldsValue({
       service_type: o.service_type,
       bandwidth_mbps: o.bandwidth_mbps,
       sla_target: o.sla_target,
+      cos: o.cos,
+      mtu: o.mtu,
     });
   }
   return (
@@ -1043,14 +1035,12 @@ function CreateModal({
         </Typography.Text>
 
         <Form.Item name="offering_id" label="选择套餐 (可选)">
-          <Select
-            allowClear
-            placeholder="不使用套餐则手动填写下方参数"
-            onChange={(v) => v && applyOffering(v)}
-            options={offerings.map((o: Offering) => ({
-              value: o.id,
-              label: `${o.tier ? `[${o.tier}] ` : ""}${o.name} · ${o.bandwidth_mbps}Mbps`,
-            }))}
+          <OfferingSearchSelect
+            loading={offeringSearch.loading || formLoading}
+            options={offeringSearch.options}
+            onSearch={offeringSearch.onSearch}
+            offeringTotal={offeringSearch.total}
+            onChange={(v) => v && applyOffering(v as number)}
           />
         </Form.Item>
 

@@ -255,6 +255,40 @@ def test_offering_prefill(client, auth_headers):
     assert circuit["sla_target"] == "99.99"
 
 
+def test_offerings_pagination(client, auth_headers):
+    n = next(_seq)
+    for i in range(3):
+        client.post(
+            "/api/v1/offerings",
+            headers=auth_headers,
+            json={
+                "name": f"Pkg {i}",
+                "code": f"PKG-{n}-{i}",
+                "service_type": "l2vpn_evpn",
+                "bandwidth_mbps": 100 * (i + 1),
+                "tier": "silver",
+            },
+        )
+    r = client.get("/api/v1/offerings?page=1&page_size=2", headers=auth_headers)
+    assert r.status_code == 200
+    body = r.json()
+    assert body["total"] >= 3
+    assert len(body["items"]) == 2
+    assert "bandwidth_mbps" in body["items"][0]
+
+    r2 = client.get(
+        f"/api/v1/offerings?q=PKG-{n}&tier=silver&service_type=l2vpn_evpn",
+        headers=auth_headers,
+    )
+    assert r2.status_code == 200
+    assert r2.json()["total"] >= 3
+
+    oid = body["items"][0]["id"]
+    r3 = client.get(f"/api/v1/offerings/{oid}", headers=auth_headers)
+    assert r3.status_code == 200
+    assert r3.json()["id"] == oid
+
+
 def test_circuit_probe(client, auth_headers):
     _, tenant, dev_a, dev_z = _bootstrap_topology(client, auth_headers)
     circuit = client.post(
