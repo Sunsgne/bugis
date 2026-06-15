@@ -1,5 +1,9 @@
 import { useEffect, useState } from "react";
-import { Card, Table, Tag, Drawer, Timeline, Collapse, Empty } from "antd";
+import {
+  Card, Table, Tag, Drawer, Timeline, Collapse, Empty, Space, Button, Modal,
+  Form, Input, Popconfirm, App as AntApp,
+} from "antd";
+import { EditOutlined, DeleteOutlined, StopOutlined } from "@ant-design/icons";
 import { api } from "../api/client";
 import type { WorkOrder } from "../api/types";
 
@@ -28,9 +32,38 @@ const LEVEL_COLOR: Record<string, string> = {
 };
 
 export default function WorkOrders() {
+  const { message } = AntApp.useApp();
   const [rows, setRows] = useState<WorkOrder[]>([]);
   const [loading, setLoading] = useState(false);
   const [current, setCurrent] = useState<WorkOrder | null>(null);
+  const [editTarget, setEditTarget] = useState<WorkOrder | null>(null);
+  const [editForm] = Form.useForm();
+
+  async function doEdit() {
+    const v = await editForm.validateFields();
+    await api.patch(`/work-orders/${editTarget!.id}`, v);
+    message.success("工单已更新");
+    setEditTarget(null);
+    load();
+  }
+  async function cancelWo(id: number) {
+    try {
+      await api.post(`/work-orders/${id}/cancel`);
+      message.success("已取消");
+      load();
+    } catch (e: any) {
+      message.error(e?.response?.data?.detail || "取消失败");
+    }
+  }
+  async function deleteWo(id: number) {
+    try {
+      await api.delete(`/work-orders/${id}`);
+      message.success("已删除");
+      load();
+    } catch (e: any) {
+      message.error(e?.response?.data?.detail || "删除失败");
+    }
+  }
 
   async function load() {
     setLoading(true);
@@ -78,8 +111,38 @@ export default function WorkOrders() {
             title: "配置作业",
             render: (_, r) => <Tag color="geekblue">{r.config_jobs.length}</Tag>,
           },
+          {
+            title: "操作",
+            width: 170,
+            render: (_, r) => (
+              <Space onClick={(e) => e.stopPropagation()}>
+                <a onClick={() => { setEditTarget(r); editForm.setFieldsValue({ title: r.title, notes: r.notes }); }}>
+                  <EditOutlined /> 编辑
+                </a>
+                {!["running", "completed"].includes(r.status) && (
+                  <Popconfirm title="取消该工单?" onConfirm={() => cancelWo(r.id)}>
+                    <a style={{ color: "#fa8c16" }}><StopOutlined /></a>
+                  </Popconfirm>
+                )}
+                <Popconfirm title="删除该工单?" onConfirm={() => deleteWo(r.id)}>
+                  <a style={{ color: "#cf1322" }}><DeleteOutlined /></a>
+                </Popconfirm>
+              </Space>
+            ),
+          },
         ]}
       />
+
+      <Modal title="编辑工单" open={!!editTarget} onOk={doEdit} onCancel={() => setEditTarget(null)}>
+        <Form form={editForm} layout="vertical">
+          <Form.Item name="title" label="标题" rules={[{ required: true }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item name="notes" label="备注">
+            <Input.TextArea rows={3} />
+          </Form.Item>
+        </Form>
+      </Modal>
 
       <Drawer
         title={current ? `工单 ${current.code}` : ""}

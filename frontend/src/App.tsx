@@ -20,6 +20,7 @@ import {
   CloudServerOutlined,
   BellOutlined,
   ShareAltOutlined,
+  FileTextOutlined,
 } from "@ant-design/icons";
 import { useEffect, useState } from "react";
 import { useAuth } from "./auth";
@@ -41,6 +42,7 @@ import Users from "./pages/Users";
 import Catalog from "./pages/Catalog";
 import Controllers from "./pages/Controllers";
 import ControlPlane from "./pages/ControlPlane";
+import ConfigManagement from "./pages/ConfigManagement";
 import Notifications from "./pages/Notifications";
 
 const { Header, Sider, Content } = Layout;
@@ -55,6 +57,7 @@ const MENU = [
   { key: "/catalog", icon: <AppstoreOutlined />, label: "服务套餐" },
   { key: "/circuits", icon: <ApiOutlined />, label: "专线管理" },
   { key: "/work-orders", icon: <ProfileOutlined />, label: "工单流转" },
+  { key: "/config", icon: <FileTextOutlined />, label: "配置管理" },
   { key: "/topology", icon: <PartitionOutlined />, label: "网络拓扑" },
   { key: "/capacity", icon: <DeploymentUnitOutlined />, label: "容量管理" },
   { key: "/monitoring", icon: <LineChartOutlined />, label: "监控大屏" },
@@ -185,6 +188,7 @@ function Shell() {
             <Route path="/catalog" element={<Catalog />} />
             <Route path="/circuits" element={<Circuits />} />
             <Route path="/work-orders" element={<WorkOrders />} />
+            <Route path="/config" element={<ConfigManagement />} />
             <Route path="/topology" element={<Topology />} />
             <Route path="/capacity" element={<Capacity />} />
             <Route path="/monitoring" element={<Monitoring />} />

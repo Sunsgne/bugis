@@ -128,6 +128,7 @@ export interface WorkOrder {
   title: string;
   requested_by?: string;
   approved_by?: string;
+  notes?: string;
   events: WorkOrderEvent[];
   config_jobs: ConfigJob[];
   created_at?: string;

@@ -22,6 +22,15 @@ export default function Monitoring() {
   const [selected, setSelected] = useState<number | null>(null);
   const [health, setHealth] = useState<CircuitHealth | null>(null);
   const [samples, setSamples] = useState<TelemetrySample[]>([]);
+  const [billing, setBilling] = useState<any>(null);
+  const [billMonth, setBillMonth] = useState<string | undefined>(undefined);
+
+  async function loadBilling(id: number, period?: string) {
+    const q = period ? `?period=${period}` : "";
+    const { data } = await api.get(`/telemetry/circuits/${id}/billing${q}`);
+    setBilling(data);
+    setBillMonth(data.period);
+  }
 
   async function loadCircuits() {
     const { data } = await api.get<Circuit[]>("/circuits");
@@ -41,7 +50,10 @@ export default function Monitoring() {
     setSamples(s.data.slice().reverse());
   }
   useEffect(() => {
-    if (selected) loadData(selected);
+    if (selected) {
+      loadData(selected);
+      loadBilling(selected);
+    }
   }, [selected]);
 
   useEffect(() => {
@@ -156,6 +168,54 @@ export default function Monitoring() {
               </Card>
             </Col>
           </Row>
+
+          <Card
+            title="月 95 计费 (95th percentile)"
+            extra={
+              <Select
+                size="small"
+                style={{ width: 140 }}
+                value={billMonth}
+                placeholder="选择月份"
+                onChange={(m) => selected && loadBilling(selected, m)}
+                options={(billing?.available_months || []).map((m: string) => ({ value: m, label: m }))}
+              />
+            }
+          >
+            {billing && billing.samples > 0 ? (
+              <Row gutter={16}>
+                <Col xs={12} md={6}>
+                  <Statistic
+                    title="计费带宽 (95)"
+                    value={billing.billable_95_mbps}
+                    suffix="Mbps"
+                    valueStyle={{ color: "#1677ff", fontWeight: 700 }}
+                  />
+                </Col>
+                <Col xs={12} md={5}>
+                  <Statistic title="入向 95 (In)" value={billing.in_95_mbps} suffix="Mbps" />
+                </Col>
+                <Col xs={12} md={5}>
+                  <Statistic title="出向 95 (Out)" value={billing.out_95_mbps} suffix="Mbps" />
+                </Col>
+                <Col xs={12} md={4}>
+                  <Statistic title="峰值" value={billing.peak_mbps} suffix="Mbps" />
+                </Col>
+                <Col xs={12} md={4}>
+                  <Statistic
+                    title="计费利用率"
+                    value={billing.utilization_pct}
+                    suffix={`% / ${billing.bandwidth_mbps}M`}
+                  />
+                </Col>
+                <Col span={24} style={{ marginTop: 8, color: "#888", fontSize: 12 }}>
+                  统计周期 {billing.period} · 采样 {billing.samples} 点 · 取入/出向各自 95 百分位，按较高者计费（运营商惯例）
+                </Col>
+              </Row>
+            ) : (
+              <Empty description="本月暂无采样数据" />
+            )}
+          </Card>
 
           <Card title="流量 (Rx/Tx Mbps)">
             {chartData.length ? (
