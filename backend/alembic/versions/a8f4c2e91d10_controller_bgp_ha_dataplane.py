@@ -21,9 +21,9 @@ def upgrade() -> None:
         batch_op.add_column(
             sa.Column(
                 "encap",
-                sa.Enum("VXLAN", "MPLS", name="evpnencap"),
+                sa.String(length=16),
                 nullable=False,
-                server_default="VXLAN",
+                server_default="vxlan",
             )
         )
         batch_op.add_column(sa.Column("mpls_label", sa.Integer(), nullable=True))
