@@ -7,6 +7,7 @@ from app.models.circuit import Circuit, CircuitEndpoint, CircuitPathHop  # noqa:
 from app.models.workorder import WorkOrder, WorkOrderEvent  # noqa: F401
 from app.models.config_job import ConfigJob  # noqa: F401
 from app.models.telemetry import TelemetrySample  # noqa: F401
+from app.models.availability import CircuitAvailabilityEvent  # noqa: F401
 from app.models.alarm import Alarm  # noqa: F401
 from app.models.link import Link  # noqa: F401
 from app.models.audit import AuditLog  # noqa: F401
@@ -38,6 +39,7 @@ __all__ = [
     "WorkOrderEvent",
     "ConfigJob",
     "TelemetrySample",
+    "CircuitAvailabilityEvent",
     "Alarm",
     "Link",
     "AuditLog",

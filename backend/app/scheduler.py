@@ -39,11 +39,14 @@ def _tick() -> int:
             select(Circuit).where(Circuit.status == CircuitStatus.ACTIVE)
         ).scalars().all()
         for c in circuits:
-            telemetry_service.simulate_circuit_sample(db, c)
+            telemetry_service.collect_circuit_sample(
+                db, c, interval_sec=float(_state["interval"])
+            )
         db.flush()
         for c in circuits:
             health = telemetry_service.compute_health(db, c)
             alarm_service.evaluate_circuit_health(db, c, health)
+            alarm_service.evaluate_circuit_availability(db, c)
         link_monitor.sync_all_link_capacity(db)
         link_monitor.sample_all_links(db)
         links = db.execute(select(Link)).scalars().all()

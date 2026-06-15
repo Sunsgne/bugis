@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Button,
   Card,
@@ -26,6 +26,7 @@ import {
   Alert,
   Divider,
   Typography,
+  Tabs,
 } from "antd";
 import {
   PlusOutlined,
@@ -36,6 +37,7 @@ import {
   DownloadOutlined,
   HistoryOutlined,
   RadarChartOutlined,
+  LineChartOutlined,
   DeleteOutlined,
   WarningOutlined,
   SearchOutlined,
@@ -46,6 +48,7 @@ import { configPreviewModalProps, ConfigPreviewPre, createCircuitModalProps } fr
 import { TenantSearchSelect, useTenantSearch } from "../components/TenantSearchSelect";
 import OfferingSearchSelect, { useOfferingSearch } from "../components/OfferingSearchSelect";
 import { buildListQuery, tablePagination } from "../utils/table";
+import CircuitMonitorPanel from "../components/CircuitMonitorPanel";
 
 const SERVICE_LABEL: Record<string, string> = {
   l2vpn_evpn: "EVPN L2VPN",
@@ -229,6 +232,7 @@ function PortDetailPanel({
 
 export default function Circuits() {
   const { message, modal } = AntApp.useApp();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const tenantFilter = searchParams.get("tenant");
   const selectedTenantId = tenantFilter ? Number(tenantFilter) : null;
@@ -684,47 +688,69 @@ export default function Circuits() {
           expandedRowRender: (r) => {
             const detail = detailCache[r.id] || r;
             return (
-            <Descriptions size="small" column={3} bordered>
-              <Descriptions.Item label="VNI">{detail.vni}</Descriptions.Item>
-              <Descriptions.Item label="VLAN">{detail.vlan_id}</Descriptions.Item>
-              <Descriptions.Item label="VRF">{detail.vrf_name}</Descriptions.Item>
-              <Descriptions.Item label="RD">{detail.route_distinguisher}</Descriptions.Item>
-              <Descriptions.Item label="RT">{detail.route_target}</Descriptions.Item>
-              <Descriptions.Item label="MTU">{detail.mtu}</Descriptions.Item>
-              {detail.service_type === "remote_ipt" && (
-                <>
-                  <Descriptions.Item label="出口国家">{detail.egress_country}</Descriptions.Item>
-                  <Descriptions.Item label="出口站点">{siteName(detail.egress_site_id)}</Descriptions.Item>
-                  <Descriptions.Item label="公网 IP">{detail.ipt_public_ip}</Descriptions.Item>
-                  <Descriptions.Item label="NAT">
-                    {detail.ipt_nat_enabled ? "启用" : "关闭"}
-                  </Descriptions.Item>
-                </>
-              )}
-              <Descriptions.Item label="端点" span={3}>
-                {detail.endpoints.map((e) => (
-                  <Tag key={e.id}>
-                    {e.label}: {deviceName(e.device_id)} / {e.interface_name}
-                    {e.access_mode ? ` · ${e.access_mode}` : ""}
-                    {e.vlan_id ? ` vlan ${e.vlan_id}` : ""}
-                    {e.inner_vlan_id ? `/${e.inner_vlan_id}` : ""}
-                  </Tag>
-                ))}
-              </Descriptions.Item>
-              {(detail.path_mode === "explicit_sr" || (detail.path_hops && detail.path_hops.length > 0)) && (
-                <Descriptions.Item label="SR 路径" span={3}>
-                  <Tag color="purple">{detail.path_mode || "auto"}</Tag>
-                  {(detail.path_hops || []).map((h) => (
-                    <Tag key={h.sequence}>#{h.sequence + 1} {h.device_name || h.device_id}</Tag>
-                  ))}
-                  {detail.segment_list && detail.segment_list.length > 0 && (
-                    <span style={{ marginLeft: 8, color: "#531dab" }}>
-                      SID: {detail.segment_list.join(" → ")}
-                    </span>
-                  )}
-                </Descriptions.Item>
-              )}
-            </Descriptions>
+              <Tabs
+                size="small"
+                items={[
+                  {
+                    key: "detail",
+                    label: "参数详情",
+                    children: (
+                      <Descriptions size="small" column={3} bordered>
+                        <Descriptions.Item label="VNI">{detail.vni}</Descriptions.Item>
+                        <Descriptions.Item label="VLAN">{detail.vlan_id}</Descriptions.Item>
+                        <Descriptions.Item label="VRF">{detail.vrf_name}</Descriptions.Item>
+                        <Descriptions.Item label="RD">{detail.route_distinguisher}</Descriptions.Item>
+                        <Descriptions.Item label="RT">{detail.route_target}</Descriptions.Item>
+                        <Descriptions.Item label="MTU">{detail.mtu}</Descriptions.Item>
+                        {detail.service_type === "remote_ipt" && (
+                          <>
+                            <Descriptions.Item label="出口国家">{detail.egress_country}</Descriptions.Item>
+                            <Descriptions.Item label="出口站点">{siteName(detail.egress_site_id)}</Descriptions.Item>
+                            <Descriptions.Item label="公网 IP">{detail.ipt_public_ip}</Descriptions.Item>
+                            <Descriptions.Item label="NAT">
+                              {detail.ipt_nat_enabled ? "启用" : "关闭"}
+                            </Descriptions.Item>
+                          </>
+                        )}
+                        <Descriptions.Item label="端点" span={3}>
+                          {detail.endpoints.map((e) => (
+                            <Tag key={e.id}>
+                              {e.label}: {deviceName(e.device_id)} / {e.interface_name}
+                              {e.access_mode ? ` · ${e.access_mode}` : ""}
+                              {e.vlan_id ? ` vlan ${e.vlan_id}` : ""}
+                              {e.inner_vlan_id ? `/${e.inner_vlan_id}` : ""}
+                            </Tag>
+                          ))}
+                        </Descriptions.Item>
+                        {(detail.path_mode === "explicit_sr" || (detail.path_hops && detail.path_hops.length > 0)) && (
+                          <Descriptions.Item label="SR 路径" span={3}>
+                            <Tag color="purple">{detail.path_mode || "auto"}</Tag>
+                            {(detail.path_hops || []).map((h) => (
+                              <Tag key={h.sequence}>#{h.sequence + 1} {h.device_name || h.device_id}</Tag>
+                            ))}
+                            {detail.segment_list && detail.segment_list.length > 0 && (
+                              <span style={{ marginLeft: 8, color: "#531dab" }}>
+                                SID: {detail.segment_list.join(" → ")}
+                              </span>
+                            )}
+                          </Descriptions.Item>
+                        )}
+                      </Descriptions>
+                    ),
+                  },
+                  {
+                    key: "monitor",
+                    label: "流量监控",
+                    children: (
+                      r.status === "active" ? (
+                        <CircuitMonitorPanel circuitId={r.id} compact pollSec={0} />
+                      ) : (
+                        <Alert type="info" showIcon message="专线激活后可查看 SNMP 流量、95 值、时延与中断记录" />
+                      )
+                    ),
+                  },
+                ]}
+              />
             );
           },
         }}
@@ -791,6 +817,15 @@ export default function Circuits() {
                 <Tooltip title="预览各厂商配置">
                   <Button size="small" icon={<EyeOutlined />} onClick={() => preview(r)} />
                 </Tooltip>
+                {r.status === "active" && (
+                  <Tooltip title="流量 / 95 / 时延 / 中断监控">
+                    <Button
+                      size="small"
+                      icon={<LineChartOutlined />}
+                      onClick={() => navigate(`/monitoring?circuit=${r.id}`)}
+                    />
+                  </Tooltip>
+                )}
                 {r.status === "active" && (
                   <Tooltip title="端到端拨测">
                     <Button

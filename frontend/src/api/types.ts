@@ -200,6 +200,7 @@ export interface CircuitHealth {
   bandwidth_mbps: number;
   samples: number;
   health_score: number;
+  tunnel_down?: boolean;
 }
 
 export interface TelemetrySample {
@@ -211,7 +212,45 @@ export interface TelemetrySample {
   latency_ms: number;
   jitter_ms: number;
   packet_loss_pct: number;
+  tunnel_state?: string;
   created_at?: string;
+}
+
+export interface TrafficP95 {
+  in_95_mbps: number;
+  out_95_mbps: number;
+  billable_95_mbps: number;
+}
+
+export interface TrafficSummary {
+  circuit_id: number;
+  samples: TelemetrySample[];
+  p95: TrafficP95;
+  bandwidth_mbps: number;
+}
+
+export interface AvailabilityEvent {
+  id: number;
+  circuit_id: number;
+  kind: string;
+  started_at: string;
+  ended_at?: string;
+  duration_sec?: number;
+  source: string;
+  detail?: string;
+}
+
+export interface CircuitAvailability {
+  circuit_id: number;
+  circuit_code: string;
+  hours: number;
+  uptime_pct: number;
+  interruption_count: number;
+  flash_count: number;
+  total_downtime_sec: number;
+  avg_latency_ms: number;
+  flap_count: number;
+  events: AvailabilityEvent[];
 }
 
 export interface Alarm {

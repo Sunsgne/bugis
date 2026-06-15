@@ -887,6 +887,48 @@ def test_telemetry_and_health(client, auth_headers):
     assert 0 <= health["health_score"] <= 100
 
 
+def test_circuit_monitoring_apis(client, auth_headers):
+    _, tenant, dev_a, _ = _bootstrap_topology(client, auth_headers)
+    circuit = client.post(
+        "/api/v1/circuits",
+        headers=auth_headers,
+        json={
+            "name": "Mon2", "tenant_id": tenant["id"],
+            "service_type": "l2vpn_evpn", "bandwidth_mbps": 1000,
+            "endpoints": [{"label": "A", "device_id": dev_a["id"], "interface_name": "GE1/0/2"}],
+        },
+    ).json()
+    client.post(f"/api/v1/work-orders/provision/{circuit['id']}", headers=auth_headers)
+    for i in range(10):
+        client.post(
+            "/api/v1/telemetry/samples",
+            headers=auth_headers,
+            json={
+                "circuit_id": circuit["id"],
+                "rx_mbps": 100 + i,
+                "tx_mbps": 200 + i,
+                "latency_ms": 5 + i * 0.1,
+                "jitter_ms": 0.5,
+                "packet_loss_pct": 0.01,
+                "tunnel_state": "down" if i == 5 else "up",
+            },
+        )
+
+    traffic = client.get(
+        f"/api/v1/telemetry/circuits/{circuit['id']}/traffic-summary?hours=24",
+        headers=auth_headers,
+    ).json()
+    assert len(traffic["samples"]) >= 1
+    assert traffic["p95"]["billable_95_mbps"] > 0
+
+    avail = client.get(
+        f"/api/v1/telemetry/circuits/{circuit['id']}/availability?hours=24",
+        headers=auth_headers,
+    ).json()
+    assert "uptime_pct" in avail
+    assert isinstance(avail["events"], list)
+
+
 def test_delete_decommissioned_circuit(client, auth_headers):
     _, tenant, dev_a, _ = _bootstrap_topology(client, auth_headers)
     circuit = client.post(

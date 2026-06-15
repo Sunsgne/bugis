@@ -7,6 +7,7 @@ SNMP/gNMI collector wired up.
 from __future__ import annotations
 
 import random
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -15,6 +16,7 @@ from app.models.circuit import Circuit
 from app.models.enums import CircuitStatus
 from app.models.telemetry import TelemetrySample
 from app.schemas.telemetry import CircuitHealth
+from app.services import availability_service, snmp_telemetry
 
 
 def record_sample(db: Session, **kwargs) -> TelemetrySample:
@@ -22,6 +24,88 @@ def record_sample(db: Session, **kwargs) -> TelemetrySample:
     db.add(sample)
     db.flush()
     return sample
+
+
+def collect_circuit_sample(
+    db: Session,
+    circuit: Circuit,
+    *,
+    interval_sec: float = 30.0,
+) -> TelemetrySample:
+    """Collect one sample via SNMP (or simulation) including traffic and latency."""
+    traffic = snmp_telemetry.poll_circuit_traffic(
+        db, circuit, interval_sec=interval_sec
+    )
+    loss = round(random.uniform(0, 0.4), 3) if traffic.tunnel_up else round(
+        random.uniform(50, 100), 3
+    )
+    latency = round(random.uniform(1.5, 18.0), 2) if traffic.tunnel_up else 0.0
+    jitter = round(random.uniform(0.1, 2.5), 2) if traffic.tunnel_up else 0.0
+    state = "up" if traffic.tunnel_up else "down"
+
+    sample = record_sample(
+        db,
+        circuit_id=circuit.id,
+        rx_mbps=traffic.rx_mbps,
+        tx_mbps=traffic.tx_mbps,
+        utilization_pct=traffic.utilization_pct,
+        latency_ms=latency,
+        jitter_ms=jitter,
+        packet_loss_pct=loss,
+        errors=traffic.errors,
+        tunnel_state=state,
+    )
+    availability_service.process_tunnel_state(
+        db,
+        circuit,
+        tunnel_up=traffic.tunnel_up,
+        source=traffic.source,
+        at=sample.created_at,
+    )
+    return sample
+
+
+def list_circuit_samples(
+    db: Session,
+    circuit_id: int,
+    *,
+    limit: int = 120,
+    hours: int | None = None,
+) -> list[TelemetrySample]:
+    """Return samples oldest-first for charting."""
+    limit = max(1, min(limit, 2000))
+    stmt = (
+        select(TelemetrySample)
+        .where(TelemetrySample.circuit_id == circuit_id)
+        .order_by(TelemetrySample.id.desc())
+        .limit(limit)
+    )
+    if hours is not None:
+        since = datetime.now(timezone.utc) - timedelta(hours=max(1, min(hours, 24 * 30)))
+        stmt = (
+            select(TelemetrySample)
+            .where(
+                TelemetrySample.circuit_id == circuit_id,
+                TelemetrySample.created_at >= since,
+            )
+            .order_by(TelemetrySample.id.desc())
+            .limit(limit)
+        )
+    rows = list(db.execute(stmt).scalars().all())
+    rows.reverse()
+    return rows
+
+
+def chart_p95(samples: list[TelemetrySample]) -> dict:
+    rx = [s.rx_mbps for s in samples]
+    tx = [s.tx_mbps for s in samples]
+    rx95 = _percentile(rx, 95)
+    tx95 = _percentile(tx, 95)
+    return {
+        "in_95_mbps": rx95,
+        "out_95_mbps": tx95,
+        "billable_95_mbps": max(rx95, tx95),
+    }
 
 
 def simulate_circuit_sample(db: Session, circuit: Circuit) -> TelemetrySample:
@@ -160,6 +244,8 @@ def compute_health(db: Session, circuit: Circuit, limit: int = 100) -> CircuitHe
     avg_loss = sum(s.packet_loss_pct for s in samples) / n
     avg_util = sum(s.utilization_pct for s in samples) / n
     peak_util = max(s.utilization_pct for s in samples)
+    latest = samples[0]
+    tunnel_down = latest.tunnel_state == "down"
 
     # Simple weighted health score (0-100).
     score = 100.0
@@ -169,6 +255,8 @@ def compute_health(db: Session, circuit: Circuit, limit: int = 100) -> CircuitHe
     score -= min(max(peak_util - 90, 0) * 1.0, 15)
     if circuit.status != CircuitStatus.ACTIVE:
         score = min(score, 50)
+    if tunnel_down:
+        score = min(score, 30)
     score = max(0.0, round(score, 1))
 
     return CircuitHealth(
@@ -184,4 +272,5 @@ def compute_health(db: Session, circuit: Circuit, limit: int = 100) -> CircuitHe
         bandwidth_mbps=circuit.bandwidth_mbps,
         samples=n,
         health_score=score,
+        tunnel_down=tunnel_down,
     )

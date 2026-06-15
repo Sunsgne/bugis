@@ -83,7 +83,9 @@ def probe_circuit(db: Session, circuit: Circuit) -> dict:
     loss = round(total_loss, 3) if reachable else 100.0
 
     # Record as a telemetry sample for SLA history.
-    telemetry_service.record_sample(
+    from app.services import availability_service
+
+    sample = telemetry_service.record_sample(
         db,
         circuit_id=circuit.id,
         latency_ms=rtt or 0.0,
@@ -91,6 +93,13 @@ def probe_circuit(db: Session, circuit: Circuit) -> dict:
         packet_loss_pct=loss,
         utilization_pct=0.0,
         tunnel_state="up" if reachable else "down",
+    )
+    availability_service.process_tunnel_state(
+        db,
+        circuit,
+        tunnel_up=reachable,
+        source="probe",
+        at=sample.created_at,
     )
 
     return {

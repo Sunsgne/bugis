@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models.alarm import Alarm
+from app.models.availability import CircuitAvailabilityEvent
 from app.models.circuit import Circuit
 from app.models.enums import AlarmSeverity, AlarmStatus, CircuitStatus
 from app.models.link import Link
@@ -77,9 +78,10 @@ def evaluate_circuit_health(db: Session, circuit: Circuit, health: CircuitHealth
     """Raise/clear alarms for one circuit based on its computed health."""
     cid = circuit.id
 
-    # Tunnel / status down
+    # Tunnel / status down — also check latest telemetry tunnel_state
     key_down = f"circuit:{cid}:down"
-    if circuit.status in (CircuitStatus.FAILED, CircuitStatus.DEGRADED):
+    latest_down = health.tunnel_down
+    if circuit.status in (CircuitStatus.FAILED, CircuitStatus.DEGRADED) or latest_down:
         raise_alarm(
             db, "tunnel_down", AlarmSeverity.CRITICAL,
             f"专线 {circuit.code} 状态异常 ({circuit.status.value})",
@@ -135,6 +137,47 @@ def evaluate_circuit_health(db: Session, circuit: Circuit, health: CircuitHealth
         )
     else:
         clear_by_key(db, key_health)
+
+
+def evaluate_circuit_availability(db: Session, circuit: Circuit) -> None:
+    """Raise/clear interruption and flap alarms from availability events."""
+    from app.services import availability_service
+
+    cid = circuit.id
+    open_ev = db.execute(
+        select(CircuitAvailabilityEvent).where(
+            CircuitAvailabilityEvent.circuit_id == cid,
+            CircuitAvailabilityEvent.ended_at.is_(None),
+        )
+    ).scalar_one_or_none()
+
+    key_interrupt = f"circuit:{cid}:interruption"
+    if open_ev and open_ev.kind == "interruption":
+        raise_alarm(
+            db,
+            "circuit_interruption",
+            AlarmSeverity.CRITICAL,
+            f"专线 {circuit.code} 中断中",
+            key_interrupt,
+            detail=open_ev.detail,
+            circuit_id=cid,
+        )
+    else:
+        clear_by_key(db, key_interrupt)
+
+    flaps = availability_service.flap_count(db, cid)
+    key_flap = f"circuit:{cid}:flap"
+    if flaps >= availability_service.FLAP_COUNT_THRESHOLD:
+        raise_alarm(
+            db,
+            "circuit_flap",
+            AlarmSeverity.MAJOR,
+            f"专线 {circuit.code} 闪断频繁 ({flaps} 次/{availability_service.FLAP_WINDOW_MIN}min)",
+            key_flap,
+            circuit_id=cid,
+        )
+    else:
+        clear_by_key(db, key_flap)
 
 
 def evaluate_link_health(db: Session, link: Link, health) -> None:

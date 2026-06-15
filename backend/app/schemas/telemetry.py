@@ -37,3 +37,4 @@ class CircuitHealth(BaseModel):
     bandwidth_mbps: int = 0
     samples: int = 0
     health_score: float = 100.0
+    tunnel_down: bool = False

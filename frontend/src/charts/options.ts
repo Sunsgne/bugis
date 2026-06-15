@@ -26,6 +26,133 @@ function fmtMbps(v: number): string {
   return `${Math.round(v)}`;
 }
 
+/** Dual Rx/Tx area chart with optional 95th percentile reference lines. */
+export function trafficWithP95Option(
+  data: SeriesPoint[],
+  xKey: string,
+  p95?: { in_95_mbps?: number; out_95_mbps?: number; billable_95_mbps?: number },
+  rxKey = "rx",
+  txKey = "tx",
+): EChartsOption {
+  const base = trafficAreaOption(data, xKey, rxKey, txKey);
+  if (!p95) return base;
+
+  const markLines: { name: string; yAxis: number; color: string }[] = [];
+  if (p95.in_95_mbps) {
+    markLines.push({ name: "入向 95", yAxis: p95.in_95_mbps, color: chartGradients.rx.from });
+  }
+  if (p95.out_95_mbps) {
+    markLines.push({ name: "出向 95", yAxis: p95.out_95_mbps, color: chartGradients.tx.from });
+  }
+  if (p95.billable_95_mbps) {
+    markLines.push({
+      name: "计费 95",
+      yAxis: p95.billable_95_mbps,
+      color: "#1677ff",
+    });
+  }
+
+  if (!markLines.length || !base.series) return base;
+
+  const series = (base.series as EChartsOption["series"]) as Record<string, unknown>[];
+  return {
+    ...base,
+    legend: {
+      ...baseLegend(),
+      data: ["Rx", "Tx", ...markLines.map((m) => m.name)],
+    },
+    series: series.map((s, i) =>
+      i === 0
+        ? {
+            ...s,
+            markLine: {
+              symbol: "none",
+              label: { formatter: "{b}", color: chartText.secondary, fontSize: 11 },
+              lineStyle: { type: "dashed", width: 1.5 },
+              data: markLines.map((m) => ({
+                name: m.name,
+                yAxis: m.yAxis,
+                lineStyle: { color: m.color },
+              })),
+            },
+          }
+        : s,
+    ),
+  };
+}
+
+/** Latency, jitter and packet loss with time/category axis. */
+export function latencyJitterOption(data: SeriesPoint[], xKey = "t"): EChartsOption {
+  const categories = data.map((d) => String(d[xKey]));
+  return {
+    animationDuration: 800,
+    grid: baseGrid({ bottom: 36 }),
+    tooltip: {
+      ...baseTooltip(),
+      formatter: (params) => {
+        const list = (Array.isArray(params) ? params : [params]) as CallbackDataParams[];
+        const rows = list
+          .map((p) => {
+            const unit = p.seriesName?.includes("丢包") ? "%" : " ms";
+            return `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color};margin-right:6px"></span>${p.seriesName}: <b>${p.value}${unit}</b>`;
+          })
+          .join("<br/>");
+        return `<div style="font-weight:600;margin-bottom:6px">${list[0]?.name ?? ""}</div>${rows}`;
+      },
+    },
+    legend: { ...baseLegend(), data: ["时延 (ms)", "抖动 (ms)", "丢包 (%)"] },
+    xAxis: categoryAxis(categories),
+    yAxis: [
+      {
+        ...valueAxis(),
+        name: "时延/抖动",
+        nameTextStyle: { color: chartGradients.warn.from, fontSize: 11 },
+        axisLabel: { color: chartText.muted, formatter: "{value}" },
+      },
+      {
+        ...valueAxis(),
+        name: "丢包",
+        nameTextStyle: { color: severityColors.critical, fontSize: 11 },
+        splitLine: { show: false },
+        axisLabel: { color: chartText.muted, formatter: "{value}%" },
+      },
+    ],
+    series: [
+      {
+        name: "时延 (ms)",
+        type: "line",
+        smooth: 0.35,
+        showSymbol: false,
+        yAxisIndex: 0,
+        lineStyle: { width: 2.5, color: chartGradients.warn.from },
+        areaStyle: {
+          color: linearGradient("lat", chartGradients.warn.from, chartGradients.warn.to),
+          opacity: 0.12,
+        },
+        data: data.map((d) => Number(d.latency ?? 0)),
+      },
+      {
+        name: "抖动 (ms)",
+        type: "line",
+        smooth: 0.35,
+        showSymbol: false,
+        yAxisIndex: 0,
+        lineStyle: { width: 2, color: "#722ed1", type: "dotted" },
+        data: data.map((d) => Number(d.jitter ?? 0)),
+      },
+      {
+        name: "丢包 (%)",
+        type: "line",
+        smooth: 0.35,
+        showSymbol: false,
+        yAxisIndex: 1,
+        lineStyle: { width: 2, color: severityColors.critical, type: "dashed" },
+        data: data.map((d) => Number(d.loss ?? 0)),
+      },
+    ],
+  };
+}
+
 /** Dual Rx/Tx area chart for network traffic. */
 export function trafficAreaOption(
   data: SeriesPoint[],

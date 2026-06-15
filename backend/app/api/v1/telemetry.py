@@ -14,6 +14,7 @@ from app.models.telemetry import TelemetrySample
 from app.models.tenant import Tenant
 from app.models.user import User
 from app.models.workorder import WorkOrder
+from app.schemas.availability import CircuitAvailabilityOut
 from app.schemas.telemetry import (
     CircuitHealth,
     TelemetrySampleIn,
@@ -39,16 +40,60 @@ def push_sample(
 @router.get("/circuits/{circuit_id}/samples", response_model=list[TelemetrySampleOut])
 def circuit_samples(
     circuit_id: int,
-    limit: int = 100,
+    limit: int = 120,
+    hours: int | None = None,
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
-    return db.execute(
-        select(TelemetrySample)
-        .where(TelemetrySample.circuit_id == circuit_id)
-        .order_by(TelemetrySample.id.desc())
-        .limit(limit)
-    ).scalars().all()
+    circuit = db.get(Circuit, circuit_id)
+    if not circuit:
+        raise HTTPException(status_code=404, detail="circuit not found")
+    return telemetry_service.list_circuit_samples(
+        db, circuit_id, limit=limit, hours=hours
+    )
+
+
+@router.get("/circuits/{circuit_id}/traffic-summary")
+def circuit_traffic_summary(
+    circuit_id: int,
+    limit: int = 120,
+    hours: int | None = 24,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    """Traffic samples plus in-window 95th percentile for chart overlay."""
+    circuit = db.get(Circuit, circuit_id)
+    if not circuit:
+        raise HTTPException(status_code=404, detail="circuit not found")
+    samples = telemetry_service.list_circuit_samples(
+        db, circuit_id, limit=limit, hours=hours
+    )
+    p95 = telemetry_service.chart_p95(samples) if samples else {
+        "in_95_mbps": 0.0,
+        "out_95_mbps": 0.0,
+        "billable_95_mbps": 0.0,
+    }
+    return {
+        "circuit_id": circuit_id,
+        "samples": samples,
+        "p95": p95,
+        "bandwidth_mbps": circuit.bandwidth_mbps,
+    }
+
+
+@router.get("/circuits/{circuit_id}/availability", response_model=CircuitAvailabilityOut)
+def circuit_availability(
+    circuit_id: int,
+    hours: int = 24,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    from app.services import availability_service
+
+    circuit = db.get(Circuit, circuit_id)
+    if not circuit:
+        raise HTTPException(status_code=404, detail="circuit not found")
+    return availability_service.compute_availability(db, circuit, hours=hours)
 
 
 @router.get("/circuits/{circuit_id}/billing")
@@ -88,13 +133,14 @@ def simulate(
     ).scalars().all()
     count = 0
     for c in circuits:
-        telemetry_service.simulate_circuit_sample(db, c)
+        telemetry_service.collect_circuit_sample(db, c)
         count += 1
     db.flush()
     # Re-evaluate SLA alarms against the fresh samples.
     for c in circuits:
         health = telemetry_service.compute_health(db, c)
         alarm_service.evaluate_circuit_health(db, c, health)
+        alarm_service.evaluate_circuit_availability(db, c)
     db.commit()
     return {"generated": count}
 
