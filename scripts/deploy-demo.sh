@@ -38,6 +38,8 @@ POSTGRES_DB="${POSTGRES_DB:-bugis}"
 BUGIS_SECRET_KEY="${BUGIS_SECRET_KEY:-demo-change-me-use-long-random-string}"
 BUGIS_DRY_RUN="${BUGIS_DRY_RUN:-false}"
 GRAFANA_ADMIN_PASSWORD="${GRAFANA_ADMIN_PASSWORD:-admin}"
+BUGIS_DEMO_USER="${BUGIS_DEMO_USER:-admin}"
+BUGIS_DEMO_PASS="${BUGIS_DEMO_PASS:-admin123}"
 
 SSH_OPTS=(-o StrictHostKeyChecking=accept-new -p "$PORT")
 SCP_OPTS=(-o StrictHostKeyChecking=accept-new -P "$PORT")
@@ -101,13 +103,15 @@ run_ssh "cd '$REMOTE_DIR' && \
   rm -f bugis-demo-src.tar.gz && \
   docker compose -f docker-compose.demo.yml --env-file .env build && \
   docker compose -f docker-compose.demo.yml --env-file .env up -d && \
-  docker compose -f docker-compose.demo.yml --env-file .env exec -T backend python -m scripts.ensure_demo"
+  docker compose -f docker-compose.demo.yml --env-file .env exec -T backend python -m scripts.ensure_demo && \
+  docker compose -f docker-compose.demo.yml --env-file .env exec -T backend \
+    python -m scripts.reset_admin_password '${BUGIS_DEMO_USER}' '${BUGIS_DEMO_PASS}'"
 
 echo "==> Health check (allow time for migrations + seed on first boot)"
 for i in $(seq 1 20); do
   if curl -fsS "http://${HOST}:3300/health" >/dev/null 2>&1; then
     TOKEN=$(curl -sS -X POST "http://${HOST}:3300/api/v1/auth/login" \
-      -d 'username=admin&password=admin123' | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null || true)
+      -d "username=${BUGIS_DEMO_USER}&password=${BUGIS_DEMO_PASS}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null || true)
     if [[ -n "$TOKEN" ]]; then
       CODE=$(curl -sS -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $TOKEN" \
         "http://${HOST}:3300/api/v1/circuits")
@@ -118,7 +122,7 @@ for i in $(seq 1 20); do
         fi
         if [[ -x "$ROOT/scripts/verify-demo.sh" ]]; then
           echo "==> Running post-deploy smoke tests"
-          BUGIS_DEMO_USER=admin BUGIS_DEMO_PASS=admin123 \
+          BUGIS_DEMO_USER="${BUGIS_DEMO_USER}" BUGIS_DEMO_PASS="${BUGIS_DEMO_PASS}" \
             "$ROOT/scripts/verify-demo.sh" "http://${HOST}:3300" || {
             echo "WARN: smoke tests failed (stack may still be starting)"
           }

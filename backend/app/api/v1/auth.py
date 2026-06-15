@@ -10,7 +10,7 @@ from app.api.deps import get_current_user, require_admin
 from app.core.database import get_db
 from app.core.security import create_access_token, hash_password, verify_password
 from app.models.user import User
-from app.schemas.auth import Token, UserCreate, UserOut
+from app.schemas.auth import PasswordChangeRequest, Token, UserCreate, UserOut
 
 router = APIRouter()
 
@@ -37,6 +37,21 @@ def login(
 @router.get("/me", response_model=UserOut)
 def me(user: User = Depends(get_current_user)):
     return user
+
+
+@router.post("/change-password", status_code=204)
+def change_password(
+    payload: PasswordChangeRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    if not verify_password(payload.current_password, user.hashed_password):
+        raise HTTPException(status_code=400, detail="当前密码不正确")
+    if len(payload.new_password) < 8:
+        raise HTTPException(status_code=400, detail="新密码至少 8 位")
+    user.hashed_password = hash_password(payload.new_password)
+    db.add(user)
+    db.commit()
 
 
 @router.post("/users", response_model=UserOut, status_code=201)

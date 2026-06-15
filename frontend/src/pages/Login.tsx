@@ -31,7 +31,7 @@ export default function Login() {
   const { brand } = useBrand();
   const [loading, setLoading] = useState(false);
   const [username, setUsername] = useState("admin");
-  const [password, setPassword] = useState("admin123");
+  const [password, setPassword] = useState("");
 
   useEffect(() => {
     document.body.classList.add("login-route");
@@ -235,7 +235,7 @@ export default function Login() {
                 <span className="rounded border border-slate-700 bg-slate-800/60 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
                   Demo
                 </span>
-                <span>体验环境 · admin / admin123</span>
+                <span>体验环境 · 账号 admin · 密码请联系管理员</span>
               </p>
             </CardContent>
           </Card>

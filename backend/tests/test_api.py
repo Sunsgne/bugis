@@ -27,6 +27,29 @@ def test_drivers_catalog(client, auth_headers):
     assert "srmpls_evpn" in data["overlay_tech"]
 
 
+def test_change_password(client, auth_headers):
+    assert client.post(
+        "/api/v1/auth/change-password",
+        headers=auth_headers,
+        json={"current_password": "admin123", "new_password": "newpass12"},
+    ).status_code == 204
+    assert client.post(
+        "/api/v1/auth/login",
+        data={"username": "admin", "password": "admin123"},
+    ).status_code == 401
+    login = client.post(
+        "/api/v1/auth/login",
+        data={"username": "admin", "password": "newpass12"},
+    )
+    assert login.status_code == 200
+    headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+    assert client.post(
+        "/api/v1/auth/change-password",
+        headers=headers,
+        json={"current_password": "newpass12", "new_password": "admin123"},
+    ).status_code == 204
+
+
 def test_frr_provisioning(client, auth_headers):
     site = client.post(
         "/api/v1/sites", headers=auth_headers,

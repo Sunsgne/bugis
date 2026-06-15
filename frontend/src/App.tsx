@@ -17,6 +17,7 @@ import {
   LogOut,
   Menu,
   ChevronRight,
+  KeyRound,
 } from "lucide-react";
 import { useMemo, useState, useEffect } from "react";
 import { useAuth } from "./auth";
@@ -50,6 +51,7 @@ import IntegrationSettings from "./pages/settings/IntegrationSettings";
 import { nav, action } from "./constants/uiCopy";
 import { useBrand } from "./context/BrandContext";
 import { BrandLogo } from "./components/BrandLogo";
+import ChangePasswordDialog from "./components/ChangePasswordDialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -177,6 +179,7 @@ function Shell() {
   const { brand } = useBrand();
   const selected = useMemo(() => selectedMenuKey(loc.pathname), [loc.pathname]);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
 
   const sidebar = (
     <aside className="flex h-full w-60 shrink-0 flex-col border-r border-white/10 bg-slate-950 text-slate-100">
@@ -251,12 +254,17 @@ function Shell() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => setChangePasswordOpen(true)}>
+                  <KeyRound className="mr-2 h-4 w-4" />
+                  修改密码
+                </DropdownMenuItem>
                 <DropdownMenuItem onClick={logout}>
                   <LogOut className="mr-2 h-4 w-4" />
                   {action.logout}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+            <ChangePasswordDialog open={changePasswordOpen} onClose={() => setChangePasswordOpen(false)} />
           </div>
         </header>
 
