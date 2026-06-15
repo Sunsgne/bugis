@@ -19,11 +19,6 @@ vsi vsi_{{ circuit.code }}
 interface {{ endpoint.interface_name }}
  port link-mode bridge
  description CUST_{{ circuit.tenant_id }}_{{ circuit.code }}
-{% if circuit.bandwidth_mbps %}
- # rate-limit (CAR), cir unit = kbps
- qos car inbound any cir {{ circuit.bandwidth_mbps * 1000 }} cbs {{ circuit.bandwidth_mbps * 1000 * 25 }}
- qos car outbound any cir {{ circuit.bandwidth_mbps * 1000 }} cbs {{ circuit.bandwidth_mbps * 1000 * 25 }}
-{% endif %}
  service-instance {{ svid or 1 }}
 {% if mode == 'access' %}
   encapsulation untagged
@@ -31,6 +26,11 @@ interface {{ endpoint.interface_name }}
   encapsulation s-vid {{ svid }} c-vid {{ cvid }}
 {% else %}
   encapsulation s-vid {{ svid }}
+{% endif %}
+{% if circuit.bandwidth_mbps %}
+  # rate-limit per service-instance (CAR), cir unit = kbps
+  qos car inbound any cir {{ circuit.bandwidth_mbps * 1000 }} cbs {{ circuit.bandwidth_mbps * 1000 * 25 }}
+  qos car outbound any cir {{ circuit.bandwidth_mbps * 1000 }} cbs {{ circuit.bandwidth_mbps * 1000 * 25 }}
 {% endif %}
   xconnect vsi vsi_{{ circuit.code }}
 #

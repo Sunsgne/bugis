@@ -30,5 +30,5 @@ set interfaces {{ endpoint.interface_name }} esi {{ circuit.esi }}
 set interfaces {{ endpoint.interface_name }} esi all-active
 {% endif %}
 {% if circuit.bandwidth_mbps %}
-set class-of-service interfaces {{ endpoint.interface_name }} shaping-rate {{ circuit.bandwidth_mbps }}m
+set class-of-service interfaces {{ endpoint.interface_name }} unit 0 shaping-rate {{ circuit.bandwidth_mbps }}m
 {% endif %}

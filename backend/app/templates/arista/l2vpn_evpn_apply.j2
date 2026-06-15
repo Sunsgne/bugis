@@ -13,6 +13,19 @@ router general
 vlan {{ svid }}
    name CUST_{{ circuit.code }}
 !
+{% if circuit.bandwidth_mbps %}
+class-map type qos match-all CUST_{{ circuit.code }}
+ match vlan {{ svid }}
+!
+policy-map type qos CUST_{{ circuit.code }}_IN
+ class CUST_{{ circuit.code }}
+  police rate {{ circuit.bandwidth_mbps }} mbps burst-size 1 mbytes
+!
+policy-map type qos CUST_{{ circuit.code }}_OUT
+ class CUST_{{ circuit.code }}
+  shape average {{ circuit.bandwidth_mbps }} mbps
+!
+{% endif %}
 interface {{ endpoint.interface_name }}
    description CUST_{{ circuit.tenant_id }}_{{ circuit.code }}
    mtu {{ circuit.mtu }}
@@ -26,6 +39,10 @@ interface {{ endpoint.interface_name }}
    switchport trunk allowed vlan {{ svid }}
    switchport mode trunk
 {% endif %}
+{% if circuit.bandwidth_mbps %}
+   service-policy type qos input CUST_{{ circuit.code }}_IN
+   service-policy type qos output CUST_{{ circuit.code }}_OUT
+{% endif %}
 !
 router bgp {{ device.bgp_asn }}
    vlan {{ svid }}
@@ -33,8 +50,3 @@ router bgp {{ device.bgp_asn }}
       route-target both {{ circuit.route_target }}
       redistribute learned
 !
-{% if circuit.bandwidth_mbps %}
-interface {{ endpoint.interface_name }}
-   ! egress shaping, rate unit = kbps
-   shape rate {{ circuit.bandwidth_mbps * 1000 }}
-{% endif %}

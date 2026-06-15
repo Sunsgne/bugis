@@ -663,9 +663,13 @@ def test_rate_limit_rendering(client, auth_headers):
     cfgs = {j["device_id"]: j["rendered_config"] for j in wo["config_jobs"]}
     h3c = cfgs[dev_h3c["id"]]
     hw = cfgs[huawei["id"]]
-    # H3C CAR in kbps (200 Mbps -> 200000 kbps), inside interface (before service-instance)
+    # H3C CAR in kbps (200 Mbps -> 200000 kbps), inside service-instance
     assert "qos car inbound any cir 200000" in h3c
-    assert h3c.index("qos car") < h3c.index("service-instance")
+    si = h3c.index("service-instance")
+    car = h3c.index("qos car")
+    xconn = h3c.index("xconnect")
+    assert si < car < xconn
+    assert h3c.index("encapsulation") < car
     # Huawei line-rate qos lr in kbps with direction keyword
     assert "qos lr cir 200000 inbound" in hw
     assert "qos lr cir 200000 outbound" in hw
