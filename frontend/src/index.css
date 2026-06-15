@@ -734,3 +734,63 @@ body.login-route {
   border: 1px dashed rgba(148, 163, 184, 0.35);
   background: #fafbfc;
 }
+
+.topology-page-card > .ant-card-body {
+  padding-top: 12px;
+}
+
+.topology-graph {
+  border-radius: 12px;
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 0%, rgba(99, 102, 241, 0.06), transparent 70%),
+    linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+}
+
+.topology-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.topology-legend__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #64748b;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #f8fafc;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.topology-legend__item::before {
+  content: "";
+  width: 22px;
+  height: 3px;
+  border-radius: 2px;
+  background: #6366f1;
+}
+
+.topology-legend__item--dci::before {
+  background: #ef4444;
+  background-image: repeating-linear-gradient(
+    90deg,
+    #ef4444 0 5px,
+    transparent 5px 8px
+  );
+}
+
+.topology-legend__item--intra_dc::before {
+  background: #6366f1;
+}
+
+.topology-legend__item--access::before {
+  background: #10b981;
+}
+
+.topology-legend__item--uplink::before {
+  background: #8b5cf6;
+}

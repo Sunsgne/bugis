@@ -373,5 +373,6 @@ export interface Topology {
     target: number;
     capacity_mbps: number;
     reserved_mbps: number;
+    utilization_pct?: number;
   }[];
 }

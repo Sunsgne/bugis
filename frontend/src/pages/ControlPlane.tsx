@@ -13,6 +13,7 @@ import {
   Typography,
   Button,
   message,
+  Space,
 } from "antd";
 import {
   ClusterOutlined,
@@ -22,84 +23,27 @@ import {
   CloudServerOutlined,
 } from "@ant-design/icons";
 import { api } from "../api/client";
+import TopologyGraph from "../components/TopologyGraph";
+import { overlayTopologyOption } from "../charts/topologyGraph";
 import { empty, page } from "../constants/uiCopy";
 
-const VNI_COLORS = ["#1677ff", "#52c41a", "#fa8c16", "#722ed1", "#13c2c2", "#eb2f96"];
+const { Text } = Typography;
 
 function OverlayMap({ topo }: { topo: any }) {
-  const layout = useMemo(() => {
-    if (!topo || !topo.nodes?.length) return null;
-    const n = topo.nodes.length;
-    const cx = 320;
-    const cy = 220;
-    const r = Math.min(170, 60 + n * 16);
-    const pos: Record<number, { x: number; y: number }> = {};
-    topo.nodes.forEach((node: any, i: number) => {
-      const angle = (2 * Math.PI * i) / n - Math.PI / 2;
-      pos[node.id] = { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) };
-    });
-    return { pos, width: 640, height: 440 };
-  }, [topo]);
+  const chartOpt = useMemo(() => overlayTopologyOption(topo), [topo]);
 
-  if (!topo || !topo.nodes?.length || !layout) {
+  if (!topo || !topo.nodes?.length || !chartOpt) {
     return <Empty description="Overlay 尚未建立 · 开通控制器托管专线后自动呈现" />;
   }
-  const vniColor = (vni: number) =>
-    VNI_COLORS[(topo.vnis.indexOf(vni) + VNI_COLORS.length) % VNI_COLORS.length];
 
   return (
-    <div style={{ overflow: "auto" }}>
-      <svg width={layout.width} height={layout.height} style={{ minWidth: "100%" }}>
-        {topo.edges.map((e: any, i: number) => {
-          const a = layout.pos[e.source];
-          const b = layout.pos[e.target];
-          if (!a || !b) return null;
-          return (
-            <line
-              key={i}
-              x1={a.x}
-              y1={a.y}
-              x2={b.x}
-              y2={b.y}
-              stroke={vniColor(e.vni)}
-              strokeWidth={1.5}
-              strokeDasharray="5 4"
-              opacity={0.6}
-            />
-          );
-        })}
-        {topo.nodes.map((node: any) => {
-          const p = layout.pos[node.id];
-          return (
-            <g key={node.id}>
-              <circle
-                cx={p.x}
-                cy={p.y}
-                r={22}
-                fill="#fff"
-                stroke={node.status === "up" ? "#52c41a" : "#bfbfbf"}
-                strokeWidth={3}
-              />
-              <text x={p.x} y={p.y + 4} fontSize={11} textAnchor="middle">
-                VTEP
-              </text>
-              <text x={p.x} y={p.y - 30} fontSize={11} fontWeight={600} textAnchor="middle">
-                {node.name}
-              </text>
-              <text x={p.x} y={p.y + 38} fontSize={10} fill="#888" textAnchor="middle">
-                {node.vtep_ip}
-              </text>
-            </g>
-          );
-        })}
-      </svg>
-      <div style={{ marginTop: 8 }}>
-        {topo.vnis.map((v: number) => (
-          <Tag key={v} color={vniColor(v)}>
-            VNI {v}
-          </Tag>
-        ))}
-      </div>
+    <div>
+      <Space style={{ marginBottom: 8 }} wrap>
+        <Text type="secondary" style={{ fontSize: 12 }}>
+          滚轮缩放 · 拖拽平移 · 按 VNI 着色
+        </Text>
+      </Space>
+      <TopologyGraph option={chartOpt} height={520} />
     </div>
   );
 }
