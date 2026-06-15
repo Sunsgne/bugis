@@ -4,7 +4,7 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision = "a1b2c3d9044_management_interfaces"
+revision = "a1b2c3d9044_mgmt_ifaces"
 down_revision = "f9a0b1c2d3e4"
 branch_labels = None
 depends_on = None
