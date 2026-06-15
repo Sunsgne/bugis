@@ -18,13 +18,10 @@ from app.models.device import Device, DeviceInterface
 from app.models.enums import CircuitStatus
 from app.models.snmp_settings import SnmpSettings
 from app.services import snmp_device, snmp_settings as snmp_cfg
+from app.services.mib_registry import IF_MIB
 
 # (device_id, ifindex) -> (in_octets, out_octets, monotonic_ts)
 _counter_cache: dict[tuple[int, int], tuple[int, int, float]] = {}
-
-IF_HC_IN = "1.3.6.1.2.1.31.1.1.1.6"
-IF_HC_OUT = "1.3.6.1.2.1.31.1.1.1.10"
-IF_OPER = "1.3.6.1.2.1.2.2.1.8"
 
 
 @dataclass
@@ -115,9 +112,9 @@ def _poll_iface_counters(
 
     community = snmp_cfg.effective_community(db, device)
     port = device_snmp["port"]
-    in_oid = f"{IF_HC_IN}.{ifindex}"
-    out_oid = f"{IF_HC_OUT}.{ifindex}"
-    oper_oid = f"{IF_OPER}.{ifindex}"
+    in_oid = IF_MIB.ifHCInOctets.column(ifindex)
+    out_oid = IF_MIB.ifHCOutOctets.column(ifindex)
+    oper_oid = IF_MIB.ifOperStatus.column(ifindex)
 
     try:
         in_oct = _get_oid(device, in_oid, cfg, community, port=port)

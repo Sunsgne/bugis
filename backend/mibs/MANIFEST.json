@@ -1,0 +1,43 @@
+{
+  "updated": "2026-06-15",
+  "source": "https://github.com/net-snmp/net-snmp/tree/master/mibs",
+  "notes": "IETF standard MIBs for IF-MIB interface discovery and HC counter polling. Vendor MIBs (H3C HH3C-IF-EXT, etc.) may be placed under vendor/.",
+  "mibs": [
+    {
+      "file": "ietf/SNMPv2-SMI.txt",
+      "mib": "SNMPv2-SMI",
+      "rfc": "RFC2578"
+    },
+    {
+      "file": "ietf/SNMPv2-TC.txt",
+      "mib": "SNMPv2-TC",
+      "rfc": "RFC2579"
+    },
+    {
+      "file": "ietf/SNMPv2-MIB.txt",
+      "mib": "SNMPv2-MIB",
+      "rfc": "RFC3418"
+    },
+    {
+      "file": "ietf/INET-ADDRESS-MIB.txt",
+      "mib": "INET-ADDRESS-MIB",
+      "rfc": "RFC4001"
+    },
+    {
+      "file": "ietf/IF-MIB.txt",
+      "mib": "IF-MIB",
+      "rfc": "RFC2863",
+      "lastUpdated": "200006140000Z"
+    },
+    {
+      "file": "ietf/IF-INVERTED-STACK-MIB.txt",
+      "mib": "IF-INVERTED-STACK-MIB",
+      "rfc": "RFC2864"
+    },
+    {
+      "file": "ietf/IANAifType-MIB.txt",
+      "mib": "IANAifType-MIB",
+      "rfc": "IANA"
+    }
+  ]
+}

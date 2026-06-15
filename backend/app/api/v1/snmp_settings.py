@@ -23,6 +23,28 @@ from app.services import snmp, snmp_settings
 router = APIRouter()
 
 
+@router.get("/mibs")
+def list_snmp_mibs(_: User = Depends(get_current_user)):
+    """Bundled IETF MIB files and OIDs used for IF-MIB walks."""
+    from app.services.mib_registry import IF_MIB, list_bundled_mibs
+
+    return {
+        "manifest": list_bundled_mibs(),
+        "oids_in_use": [
+            {"symbol": o.symbol, "oid": o.oid, "mib": o.mib, "rfc": o.rfc}
+            for o in (
+                IF_MIB.ifDescr,
+                IF_MIB.ifName,
+                IF_MIB.ifAlias,
+                IF_MIB.ifHighSpeed,
+                IF_MIB.ifOperStatus,
+                IF_MIB.ifHCInOctets,
+                IF_MIB.ifHCOutOctets,
+            )
+        ],
+    }
+
+
 @router.get("", response_model=SnmpSettingsOut)
 def get_snmp_settings(
     db: Session = Depends(get_db),

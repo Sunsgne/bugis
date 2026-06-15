@@ -23,6 +23,7 @@ from app.models.enums import Vendor
 from app.models.snmp_settings import SnmpSettings
 from app.services import snmp_device
 from app.services import snmp_settings as snmp_cfg
+from app.services.mib_registry import IF_MIB, IF_OPER_STATUS
 
 # Vendor interface naming conventions: (access_pattern, count, uplink_pattern, uplink_count, speed)
 VENDOR_INTERFACES: dict[Vendor, list[tuple[str, int, int]]] = {
@@ -41,7 +42,7 @@ VENDOR_INTERFACES: dict[Vendor, list[tuple[str, int, int]]] = {
     Vendor.FRR: [("swp{i}", 32, 25000)],
 }
 
-OPER_MAP = {1: "up", 2: "down", 3: "testing", 4: "unknown", 5: "dormant", 6: "notPresent", 7: "lowerLayerDown"}
+OPER_MAP = IF_OPER_STATUS
 
 
 def preview_discovery(device: Device) -> list[dict]:
@@ -181,26 +182,31 @@ def _walk_real(
         ) from exc
 
     walk_port = port or cfg.port
-    names = (
-        _walk_oid(device, "1.3.6.1.2.1.2.2.1.2", cfg, community, port=walk_port)
+    names_descr = (
+        _walk_oid(device, IF_MIB.ifDescr.oid, cfg, community, port=walk_port)
         if cfg.walk_if_descr
         else {}
     )
+    names_canonical = _walk_oid(device, IF_MIB.ifName.oid, cfg, community, port=walk_port)
+    names = names_descr.copy()
+    for ifindex, if_name in names_canonical.items():
+        if if_name.strip():
+            names[ifindex] = if_name.strip()
     if not names:
-        raise RuntimeError("未采集到 ifDescr，请检查 community / 网络可达性 / SNMP 版本")
+        raise RuntimeError("未采集到 ifDescr/ifName，请检查 community / 网络可达性 / SNMP 版本")
 
     aliases = (
-        _walk_oid(device, "1.3.6.1.2.1.31.1.1.1.18", cfg, community, port=walk_port)
+        _walk_oid(device, IF_MIB.ifAlias.oid, cfg, community, port=walk_port)
         if cfg.walk_if_alias
         else {}
     )
     speeds = (
-        _walk_oid(device, "1.3.6.1.2.1.31.1.1.1.15", cfg, community, port=walk_port)
+        _walk_oid(device, IF_MIB.ifHighSpeed.oid, cfg, community, port=walk_port)
         if cfg.walk_if_high_speed
         else {}
     )
     opers = (
-        _walk_oid(device, "1.3.6.1.2.1.2.2.1.8", cfg, community, port=walk_port)
+        _walk_oid(device, IF_MIB.ifOperStatus.oid, cfg, community, port=walk_port)
         if cfg.walk_if_oper_status
         else {}
     )

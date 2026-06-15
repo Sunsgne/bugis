@@ -197,7 +197,8 @@ export default function SnmpSettingsPanel() {
         message="作用于全平台 SNMP 发现"
         description={
           <Paragraph style={{ marginBottom: 0 }}>
-            设备「SNMP 发现」与检测时的 IF-MIB 采集均读取此处。单台设备密码字段可覆盖只读 community。
+            设备「SNMP 发现」与检测时的 IF-MIB（RFC 2863）采集均读取此处；接口名优先使用 ifName，回退 ifDescr。
+            单台设备密码字段可覆盖只读 community。MIB 源文件见后端 <Typography.Text code>mibs/ietf/</Typography.Text>。
           </Paragraph>
         }
       />
