@@ -1,11 +1,14 @@
 import { useEffect, useState } from "react";
 import {
-  Card, Table, Tag, Drawer, Timeline, Collapse, Empty, Space, Button, Modal,
+  Button,
+  Card, Table, Tag, Drawer, Timeline, Collapse, Empty, Space, Modal,
   Form, Input, Popconfirm, App as AntApp,
 } from "antd";
 import { EditOutlined, DeleteOutlined, StopOutlined } from "@ant-design/icons";
 import { api } from "../api/client";
 import type { WorkOrder } from "../api/types";
+import PageCard from "../components/PageCard";
+import { dataTableProps } from "../utils/table";
 import { action, empty, page, toast } from "../constants/uiCopy";
 
 const STATUS_COLOR: Record<string, string> = {
@@ -87,46 +90,60 @@ export default function WorkOrders() {
   }
 
   return (
-    <Card title={page.workOrders}>
+    <PageCard title={page.workOrders}>
       <Table
         rowKey="id"
         loading={loading}
         dataSource={rows}
+        {...dataTableProps()}
         onRow={(r) => ({ onClick: () => openDetail(r.id), style: { cursor: "pointer" } })}
         columns={[
-          { title: "工单号", dataIndex: "code" },
-          { title: "标题", dataIndex: "title" },
+          { title: "工单号", dataIndex: "code", width: "12%", ellipsis: true },
+          { title: "标题", dataIndex: "title", width: "22%", ellipsis: true },
           {
             title: "类型",
             dataIndex: "type",
+            width: "8%",
             render: (t) => <Tag>{TYPE_LABEL[t] || t}</Tag>,
           },
           {
             title: "状态",
             dataIndex: "status",
+            width: "10%",
             render: (s) => <Tag color={STATUS_COLOR[s]}>{s}</Tag>,
           },
-          { title: "申请人", dataIndex: "requested_by" },
-          { title: "审批人", dataIndex: "approved_by" },
+          { title: "申请人", dataIndex: "requested_by", width: "10%", ellipsis: true, render: (v) => v || "—" },
+          { title: "审批人", dataIndex: "approved_by", width: "10%", ellipsis: true, render: (v) => v || "—" },
           {
             title: "配置作业",
+            width: "8%",
+            align: "center",
             render: (_, r) => <Tag color="geekblue">{r.config_jobs.length}</Tag>,
           },
           {
             title: "操作",
-            width: 170,
+            width: "20%",
+            className: "table-actions",
             render: (_, r) => (
-              <Space onClick={(e) => e.stopPropagation()}>
-                <a onClick={() => { setEditTarget(r); editForm.setFieldsValue({ title: r.title, notes: r.notes }); }}>
-                  <EditOutlined /> 编辑
-                </a>
+              <Space size={4} onClick={(e) => e.stopPropagation()}>
+                <Button
+                  type="link"
+                  size="small"
+                  icon={<EditOutlined />}
+                  onClick={() => {
+                    setEditTarget(r);
+                    editForm.setFieldsValue({ title: r.title, notes: r.notes });
+                  }}
+                >
+                  编辑
+                </Button>
                 {!["running", "completed"].includes(r.status) && (
                   <Popconfirm title="撤销该工单？" onConfirm={() => cancelWo(r.id)}>
-                    <a style={{ color: "#fa8c16" }}><StopOutlined /></a>
+                    <Button type="link" size="small" icon={<StopOutlined />} />
                   </Popconfirm>
                 )}
                 <Popconfirm title={`${action.confirm}${action.delete}该工单？`} onConfirm={() => deleteWo(r.id)}>
-                  <a style={{ color: "#cf1322" }}><DeleteOutlined /></a>
+                  <Button type="link" size="small" danger icon={<DeleteOutlined />} />
                 </Popconfirm>
               </Space>
             ),
@@ -194,6 +211,6 @@ export default function WorkOrders() {
           </>
         )}
       </Drawer>
-    </Card>
+    </PageCard>
   );
 }

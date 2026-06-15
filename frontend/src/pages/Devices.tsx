@@ -37,7 +37,9 @@ import { api } from "../api/client";
 import type { Device, DeviceInterface, Paginated, Site, SnmpDefaults, SvidUsage } from "../api/types";
 import { configPreviewModalProps, ConfigPreviewPre } from "../utils/configPreview";
 import { action, page as pageCopy, toast } from "../constants/uiCopy";
-import { buildListQuery, tablePagination } from "../utils/table";
+import { buildListQuery, dataTableProps, tablePagination } from "../utils/table";
+import PageCard from "../components/PageCard";
+import ListToolbar from "../components/ListToolbar";
 
 const VENDOR_COLOR: Record<string, string> = {
   h3c: "blue",
@@ -394,7 +396,7 @@ export default function Devices() {
   const siteName = (id?: number) => sites.find((s) => s.id === id)?.code || "-";
 
   return (
-    <Card
+    <PageCard
       title={pageCopy.devices}
       extra={
         <Space>
@@ -421,27 +423,29 @@ export default function Devices() {
         </Space>
       }
     >
-      <Space style={{ marginBottom: 16 }} wrap>
-        <Input.Search
-          allowClear
-          placeholder="搜索设备名称、主机名或管理 IP"
-          style={{ width: 320 }}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          onSearch={() => {
-            setPage(1);
-            load(1, pageSize, search);
-          }}
-          enterButton={<SearchOutlined />}
-        />
-        <Typography.Text type="secondary">共 {total.toLocaleString()} 台设备</Typography.Text>
-      </Space>
+      <ListToolbar
+        summary={`共 ${total.toLocaleString()} 台设备`}
+        left={
+          <Input.Search
+            allowClear
+            placeholder="搜索设备名称、主机名或管理 IP"
+            style={{ width: 320 }}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            onSearch={() => {
+              setPage(1);
+              load(1, pageSize, search);
+            }}
+            enterButton={<SearchOutlined />}
+          />
+        }
+      />
 
       <Table
         rowKey="id"
         loading={loading}
         dataSource={rows}
-        scroll={{ x: 1200 }}
+        {...dataTableProps(1500)}
         pagination={tablePagination(total, page, pageSize, (p, ps) => {
           setPage(p);
           setPageSize(ps);
@@ -498,10 +502,10 @@ export default function Devices() {
           },
           {
             title: "操作",
-            width: 280,
-            fixed: "right",
+            width: 300,
+            className: "table-actions",
             render: (_, r) => (
-              <Space wrap size="small">
+              <Space wrap size={4}>
                 <a onClick={() => openPorts(r)}>端口</a>
                 <a onClick={() => openCredEdit(r)}>
                   <KeyOutlined /> 凭证
@@ -765,6 +769,6 @@ export default function Devices() {
           </Space>
         </Form>
       </Modal>
-    </Card>
+    </PageCard>
   );
 }

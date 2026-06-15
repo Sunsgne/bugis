@@ -4,6 +4,8 @@ import { ReloadOutlined, ThunderboltOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { api } from "../api/client";
 import type { Alarm } from "../api/types";
+import PageCard from "../components/PageCard";
+import { dataTableProps } from "../utils/table";
 import { action, empty, page } from "../constants/uiCopy";
 
 const SEV_COLOR: Record<string, string> = {
@@ -56,10 +58,10 @@ export default function Alarms() {
   }
 
   return (
-    <Card
+    <PageCard
       title={page.alarms}
       extra={
-        <Space>
+        <Space wrap>
           <Segmented
             value={filter}
             onChange={(v) => setFilter(v as string)}
@@ -81,44 +83,50 @@ export default function Alarms() {
         rowKey="id"
         loading={loading}
         dataSource={rows}
+        {...dataTableProps()}
         locale={{ emptyText: filter === "active" ? empty.alarms : empty.default }}
         columns={[
           {
             title: "级别",
             dataIndex: "severity",
-            width: 90,
+            width: "8%",
             render: (s) => <Tag color={SEV_COLOR[s]}>{s.toUpperCase()}</Tag>,
           },
-          { title: "类型", dataIndex: "kind", width: 130, render: (k) => <Tag>{k}</Tag> },
-          { title: "标题", dataIndex: "title" },
-          { title: "详情", dataIndex: "detail" },
+          { title: "类型", dataIndex: "kind", width: "12%", ellipsis: true, render: (k) => <Tag>{k}</Tag> },
+          { title: "标题", dataIndex: "title", width: "24%", ellipsis: true },
+          { title: "详情", dataIndex: "detail", width: "22%", ellipsis: true, render: (v) => v || "—" },
           {
             title: "时间",
             dataIndex: "created_at",
-            width: 170,
-            render: (t) => (t ? dayjs(t).format("MM-DD HH:mm:ss") : "-"),
+            width: "14%",
+            render: (t) => (t ? dayjs(t).format("MM-DD HH:mm:ss") : "—"),
           },
           {
             title: "状态",
             dataIndex: "status",
-            width: 100,
+            width: "8%",
             render: (s) => <Tag color={STATUS_COLOR[s]}>{s}</Tag>,
           },
           {
             title: "操作",
-            width: 150,
+            width: "12%",
+            className: "table-actions",
             render: (_, r) =>
-              r.status !== "cleared" && (
-                <Space>
-                  {r.status === "active" && <a onClick={() => ack(r.id)}>{action.confirm}</a>}
-                  <a style={{ color: "#52c41a" }} onClick={() => clear(r.id)}>
+              r.status !== "cleared" ? (
+                <Space size={4}>
+                  {r.status === "active" && (
+                    <Button type="link" size="small" onClick={() => ack(r.id)}>
+                      {action.confirm}
+                    </Button>
+                  )}
+                  <Button type="link" size="small" onClick={() => clear(r.id)}>
                     清除
-                  </a>
+                  </Button>
                 </Space>
-              ),
+              ) : null,
           },
         ]}
       />
-    </Card>
+    </PageCard>
   );
 }

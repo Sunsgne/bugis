@@ -512,3 +512,81 @@ body,
   font-size: 14px;
   color: #1e293b;
 }
+
+.page-content {
+  max-width: 1600px;
+  margin: 0 auto;
+}
+
+.page-card.ant-card {
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.page-card > .ant-card-head {
+  border-bottom: 1px solid #f0f0f0;
+  min-height: 54px;
+  padding: 0 20px;
+}
+
+.page-card > .ant-card-head-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.page-card > .ant-card-body {
+  padding: 16px 20px 20px;
+}
+
+.list-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.list-toolbar__left,
+.list-toolbar__right {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.data-table.ant-table-wrapper {
+  width: 100%;
+}
+
+.data-table .ant-table-thead > tr > th {
+  background: #f8fafc !important;
+  font-weight: 600;
+  font-size: 13px;
+  color: #475569;
+  white-space: nowrap;
+}
+
+.data-table .ant-table-tbody > tr > td {
+  font-size: 13px;
+  vertical-align: middle;
+}
+
+.data-table .ant-table-tbody > tr:hover > td {
+  background: #f8fafc !important;
+}
+
+.data-table .ant-table-cell-ellipsis {
+  max-width: 0;
+}
+
+.data-table .table-actions {
+  white-space: nowrap;
+}
+
+.data-table .table-actions .ant-btn-link {
+  padding-inline: 4px;
+  height: auto;
+}

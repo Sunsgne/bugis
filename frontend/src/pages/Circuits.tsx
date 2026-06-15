@@ -47,7 +47,9 @@ import type { Circuit, Device, DeviceInterface, Offering, Paginated, Site, SvidU
 import { configPreviewModalProps, ConfigPreviewPre, createCircuitModalProps } from "../utils/configPreview";
 import { TenantSearchSelect, useTenantSearch } from "../components/TenantSearchSelect";
 import OfferingSearchSelect, { useOfferingSearch } from "../components/OfferingSearchSelect";
-import { buildListQuery, tablePagination } from "../utils/table";
+import { buildListQuery, dataTableProps, tablePagination } from "../utils/table";
+import PageCard from "../components/PageCard";
+import ListToolbar from "../components/ListToolbar";
 import CircuitMonitorPanel from "../components/CircuitMonitorPanel";
 
 const SERVICE_LABEL: Record<string, string> = {
@@ -584,7 +586,7 @@ export default function Circuits() {
   }
 
   return (
-    <Card
+    <PageCard
       title="客户服务 · 专线"
       extra={
         <Space>
@@ -612,24 +614,43 @@ export default function Circuits() {
         </Space>
       }
     >
-      <Space style={{ marginBottom: 16 }} wrap align="start">
-        <TenantSearchSelect
-          value={selectedTenantId ?? undefined}
-          onChange={(v) => setTenantFilter(v ?? null)}
-          options={tenantSearch.options}
-          loading={tenantSearch.loading}
-          onSearch={tenantSearch.onSearch}
-          tenantTotal={tenantSearch.total}
-        />
-        {selectedTenantId && (
-          <Button onClick={() => setTenantFilter(null)}>查看全部客户</Button>
-        )}
-        {overview && (
-          <Typography.Text type="secondary">
-            平台共 {overview.tenants_total.toLocaleString()} 个客户 · {overview.circuits_total.toLocaleString()} 条专线
-          </Typography.Text>
-        )}
-      </Space>
+      <ListToolbar
+        summary={`当前 ${total.toLocaleString()} 条专线${total > pageSize ? " · 已分页" : ""}`}
+        left={
+          <>
+            <TenantSearchSelect
+              value={selectedTenantId ?? undefined}
+              onChange={(v) => setTenantFilter(v ?? null)}
+              options={tenantSearch.options}
+              loading={tenantSearch.loading}
+              onSearch={tenantSearch.onSearch}
+              tenantTotal={tenantSearch.total}
+            />
+            {selectedTenantId && (
+              <Button onClick={() => setTenantFilter(null)}>查看全部客户</Button>
+            )}
+            <Input.Search
+              allowClear
+              placeholder="搜索专线编码或名称"
+              style={{ width: 260 }}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onSearch={() => {
+                setPage(1);
+                loadCircuits(1, pageSize, search);
+              }}
+              enterButton={<SearchOutlined />}
+            />
+          </>
+        }
+        right={
+          overview ? (
+            <Typography.Text type="secondary">
+              平台 {overview.tenants_total.toLocaleString()} 客户 · {overview.circuits_total.toLocaleString()} 专线
+            </Typography.Text>
+          ) : undefined
+        }
+      />
 
       {stats && (
         <Row gutter={16} style={{ marginBottom: 16 }}>
@@ -661,30 +682,12 @@ export default function Circuits() {
         </Row>
       )}
 
-      <Space style={{ marginBottom: 16 }} wrap>
-        <Input.Search
-          allowClear
-          placeholder="搜索专线编码或名称"
-          style={{ width: 280 }}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          onSearch={() => {
-            setPage(1);
-            loadCircuits(1, pageSize, search);
-          }}
-          enterButton={<SearchOutlined />}
-        />
-        <Typography.Text type="secondary">
-          当前 {total.toLocaleString()} 条专线
-          {total > pageSize ? " · 已分页加载" : ""}
-        </Typography.Text>
-      </Space>
 
       <Table
         rowKey="id"
         loading={loading}
         dataSource={rows}
-        scroll={{ x: 1100 }}
+        {...dataTableProps(1280)}
         pagination={tablePagination(total, page, pageSize, (p, ps) => {
           setPage(p);
           setPageSize(ps);
@@ -764,42 +767,51 @@ export default function Circuits() {
           },
         }}
         columns={[
-          { title: "编码", dataIndex: "code" },
-          { title: "名称", dataIndex: "name" },
+          { title: "编码", dataIndex: "code", width: 120, ellipsis: true },
+          { title: "名称", dataIndex: "name", width: 160, ellipsis: true },
           ...(!selectedTenantId
-            ? [{ title: "租户", render: (_: unknown, r: Circuit) => tenantName(r.tenant_id) }]
+            ? [{ title: "租户", width: 100, ellipsis: true, render: (_: unknown, r: Circuit) => tenantName(r.tenant_id) }]
             : []),
           {
             title: "业务类型",
             dataIndex: "service_type",
+            width: 120,
             render: (s: string) => (
               <Tag color={s === "remote_ipt" ? "purple" : "geekblue"}>
                 {SERVICE_LABEL[s] || s}
               </Tag>
             ),
           },
-          { title: "VNI", dataIndex: "vni", width: 90 },
+          { title: "VNI", dataIndex: "vni", width: 80 },
           {
             title: "VSI",
             dataIndex: "vsi_name",
-            width: 140,
+            width: 130,
             ellipsis: true,
-            render: (v) => v || "-",
+            render: (v) => v || "—",
           },
           {
             title: "带宽",
             dataIndex: "bandwidth_mbps",
+            width: 100,
             render: (b) => `${b} Mbps`,
           },
-          { title: "SLA", dataIndex: "sla_target", render: (s) => s && <Tag>{s}%</Tag> },
+          {
+            title: "SLA",
+            dataIndex: "sla_target",
+            width: 80,
+            render: (s) => (s ? <Tag>{s}%</Tag> : "—"),
+          },
           {
             title: "状态",
             dataIndex: "status",
+            width: 90,
             render: (s) => <Tag color={STATUS_COLOR[s]}>{s}</Tag>,
           },
           {
             title: "操作",
-            width: 280,
+            width: 300,
+            className: "table-actions",
             render: (_, r) => (
               <Space wrap>
                 <Tooltip
@@ -979,7 +991,7 @@ export default function Circuits() {
           />
         )}
       </Drawer>
-    </Card>
+    </PageCard>
   );
 }
 

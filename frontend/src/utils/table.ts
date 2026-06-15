@@ -1,4 +1,4 @@
-import type { TablePaginationConfig } from "antd";
+import type { TablePaginationConfig, TableProps } from "antd";
 
 export function buildListQuery(params: Record<string, string | number | boolean | undefined | null>) {
   const sp = new URLSearchParams();
@@ -16,6 +16,19 @@ export function pageRangeLabel(total: number, page: number, pageSize: number): s
   const start = (page - 1) * pageSize + 1;
   const end = Math.min(page * pageSize, total);
   return `第 ${start.toLocaleString()}–${end.toLocaleString()} 条，共 ${total.toLocaleString()} 条`;
+}
+
+/** Consistent table layout: fixed columns, no stray gaps from pinned actions. */
+export function dataTableProps(scrollX?: number): Pick<
+  TableProps<unknown>,
+  "size" | "tableLayout" | "className" | "scroll"
+> {
+  return {
+    size: "middle",
+    tableLayout: "fixed",
+    className: "data-table",
+    ...(scrollX ? { scroll: { x: scrollX } } : {}),
+  };
 }
 
 export function tablePagination(

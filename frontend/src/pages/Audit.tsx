@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
-import { Card, Input, Table, Tag, Typography } from "antd";
+import { Input, Table, Tag, Typography } from "antd";
 import { ReloadOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { api } from "../api/client";
 import type { AuditEntry } from "../api/types";
+import PageCard from "../components/PageCard";
+import { dataTableProps } from "../utils/table";
 import { empty, page } from "../constants/uiCopy";
 
 const METHOD_COLOR: Record<string, string> = {
@@ -49,31 +51,32 @@ export default function Audit({ embedded }: { embedded?: boolean }) {
       rowKey="id"
       loading={loading}
       dataSource={rows}
+      {...dataTableProps()}
       locale={{ emptyText: empty.default }}
       columns={[
         {
           title: "时间",
           dataIndex: "created_at",
-          width: 180,
-          render: (t) => (t ? dayjs(t).format("MM-DD HH:mm:ss") : "-"),
+          width: "14%",
+          render: (t) => (t ? dayjs(t).format("MM-DD HH:mm:ss") : "—"),
         },
-        { title: "操作人", dataIndex: "actor", render: (a) => <Tag>{a}</Tag> },
+        { title: "操作人", dataIndex: "actor", width: "12%", render: (a) => <Tag>{a}</Tag> },
         {
           title: "方法",
           dataIndex: "method",
-          width: 90,
+          width: "8%",
           render: (m) => <Tag color={METHOD_COLOR[m]}>{m}</Tag>,
         },
-        { title: "路径", dataIndex: "path" },
+        { title: "路径", dataIndex: "path", width: "32%", ellipsis: true },
         {
           title: "状态码",
           dataIndex: "status_code",
-          width: 90,
+          width: "8%",
           render: (c) => (
             <Tag color={c < 300 ? "green" : c < 500 ? "orange" : "red"}>{c}</Tag>
           ),
         },
-        { title: "来源 IP", dataIndex: "source_ip" },
+        { title: "来源 IP", dataIndex: "source_ip", width: "14%", ellipsis: true, render: (v) => v || "—" },
       ]}
     />
   );
@@ -93,8 +96,8 @@ export default function Audit({ embedded }: { embedded?: boolean }) {
   }
 
   return (
-    <Card title={page.audit} extra={search}>
+    <PageCard title={page.audit} extra={search}>
       {table}
-    </Card>
+    </PageCard>
   );
 }

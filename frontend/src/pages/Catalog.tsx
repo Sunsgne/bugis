@@ -22,7 +22,9 @@ import { EyeOutlined, PlusOutlined, SearchOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { api } from "../api/client";
 import type { Offering, Paginated } from "../api/types";
-import { buildListQuery, PAGE_SIZE_OPTIONS, pageRangeLabel, tablePagination } from "../utils/table";
+import { buildListQuery, dataTableProps, PAGE_SIZE_OPTIONS, pageRangeLabel, tablePagination } from "../utils/table";
+import PageCard from "../components/PageCard";
+import ListToolbar from "../components/ListToolbar";
 
 const { Text, Paragraph } = Typography;
 
@@ -131,7 +133,7 @@ export default function Catalog() {
   }
 
   return (
-    <Card
+    <PageCard
       title="服务套餐"
       extra={
         <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>
@@ -154,83 +156,74 @@ export default function Catalog() {
       />
 
 
-      <Space style={{ marginBottom: 16 }} wrap>
-        <Input.Search
-          allowClear
-          placeholder="搜索套餐名称或编码"
-          style={{ width: 260 }}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          onSearch={applyFilters}
-          enterButton={<SearchOutlined />}
-        />
-        <Select
-          allowClear
-          placeholder="业务类型"
-          style={{ width: 150 }}
-          value={serviceType}
-          onChange={setServiceType}
-          options={Object.entries(SERVICE_LABEL).map(([value, label]) => ({ value, label }))}
-        />
-        <Select
-          allowClear
-          placeholder="等级"
-          style={{ width: 120 }}
-          value={tier}
-          onChange={setTier}
-          options={[
-            { value: "gold", label: "金牌 gold" },
-            { value: "silver", label: "银牌 silver" },
-            { value: "bronze", label: "铜牌 bronze" },
-          ]}
-        />
-        <Select
-          allowClear
-          placeholder="上架状态"
-          style={{ width: 120 }}
-          value={activeFilter}
-          onChange={setActiveFilter}
-          options={[
-            { value: true, label: "已上架" },
-            { value: false, label: "已下架" },
-          ]}
-        />
-        <Button type="primary" onClick={applyFilters}>
-          筛选
-        </Button>
-        <Button onClick={resetFilters}>重置</Button>
-      </Space>
-
-      <div
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 12,
-          marginBottom: 12,
-        }}
-      >
-        <Text type="secondary">{pageRangeLabel(total, page, pageSize)}</Text>
-        <Space size={8}>
-          <Text type="secondary">每页</Text>
+      <ListToolbar
+        summary={pageRangeLabel(total, page, pageSize)}
+        left={
+          <>
+            <Input.Search
+              allowClear
+              placeholder="搜索套餐名称或编码"
+              style={{ width: 260 }}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onSearch={applyFilters}
+              enterButton={<SearchOutlined />}
+            />
+            <Select
+              allowClear
+              placeholder="业务类型"
+              style={{ width: 150 }}
+              value={serviceType}
+              onChange={setServiceType}
+              options={Object.entries(SERVICE_LABEL).map(([value, label]) => ({ value, label }))}
+            />
+            <Select
+              allowClear
+              placeholder="等级"
+              style={{ width: 120 }}
+              value={tier}
+              onChange={setTier}
+              options={[
+                { value: "gold", label: "金牌 gold" },
+                { value: "silver", label: "银牌 silver" },
+                { value: "bronze", label: "铜牌 bronze" },
+              ]}
+            />
+            <Select
+              allowClear
+              placeholder="上架状态"
+              style={{ width: 120 }}
+              value={activeFilter}
+              onChange={setActiveFilter}
+              options={[
+                { value: true, label: "已上架" },
+                { value: false, label: "已下架" },
+              ]}
+            />
+            <Button type="primary" onClick={applyFilters}>
+              筛选
+            </Button>
+            <Button onClick={resetFilters}>重置</Button>
+          </>
+        }
+        right={
           <Select
             value={pageSize}
             style={{ width: 96 }}
-            options={PAGE_SIZE_OPTIONS.map((n) => ({ value: n, label: `${n} 条` }))}
+            options={PAGE_SIZE_OPTIONS.map((n) => ({ value: n, label: `${n} 条/页` }))}
             onChange={(ps) => {
               setPage(1);
               setPageSize(ps);
             }}
           />
-        </Space>
-      </div>
+        }
+      />
 
       <Table
         rowKey="id"
         loading={loading}
         dataSource={rows}
-        size="middle"
+        {...dataTableProps()}
         pagination={tablePagination(total, page, pageSize, (p, ps) => {
           setPage(p);
           setPageSize(ps);
@@ -241,42 +234,42 @@ export default function Catalog() {
             width: 64,
             render: (_, __, index) => (page - 1) * pageSize + index + 1,
           },
-          { title: "套餐名称", dataIndex: "name", ellipsis: true },
+          { title: "套餐名称", dataIndex: "name", width: "18%", ellipsis: true },
           {
             title: "编码",
             dataIndex: "code",
-            width: 120,
+            width: "12%",
             render: (c) => <Tag>{c}</Tag>,
           },
           {
             title: "业务类型",
             dataIndex: "service_type",
-            width: 130,
+            width: "14%",
             render: (s) => <Tag color="geekblue">{SERVICE_LABEL[s] || s}</Tag>,
           },
           {
             title: "带宽",
             dataIndex: "bandwidth_mbps",
-            width: 110,
+            width: "10%",
             render: (b) => `${Number(b).toLocaleString()} Mbps`,
           },
           {
             title: "等级",
             dataIndex: "tier",
-            width: 110,
+            width: "12%",
             render: (t) =>
               t ? (
                 <Tag color={TIER_COLOR[t]}>
                   {TIER_LABEL[t] || t} {t}
                 </Tag>
               ) : (
-                "-"
+                "—"
               ),
           },
           {
             title: "状态",
             dataIndex: "active",
-            width: 100,
+            width: "10%",
             render: (active, r) => (
               <Switch
                 checked={active}
@@ -288,7 +281,8 @@ export default function Catalog() {
           },
           {
             title: "操作",
-            width: 120,
+            width: "14%",
+            className: "table-actions",
             render: (_, r) => (
               <Space>
                 <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => setDetail(r)}>
@@ -421,6 +415,6 @@ export default function Catalog() {
           </Form.Item>
         </Form>
       </Modal>
-    </Card>
+    </PageCard>
   );
 }

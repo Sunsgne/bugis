@@ -16,6 +16,8 @@ import { PlusOutlined } from "@ant-design/icons";
 import { Select } from "antd";
 import { api } from "../api/client";
 import type { Controller, Site } from "../api/types";
+import PageCard from "../components/PageCard";
+import { dataTableProps } from "../utils/table";
 import { action, page, toast } from "../constants/uiCopy";
 
 export default function Sites() {
@@ -67,7 +69,7 @@ export default function Sites() {
   }
 
   return (
-    <Card
+    <PageCard
       title={page.sites}
       extra={
         <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>
@@ -79,15 +81,29 @@ export default function Sites() {
         rowKey="id"
         loading={loading}
         dataSource={rows}
+        {...dataTableProps()}
         columns={[
-          { title: "编码", dataIndex: "code" },
-          { title: "名称", dataIndex: "name" },
-          { title: "区域", dataIndex: "region" },
-          { title: "BGP ASN", dataIndex: "bgp_asn", render: (v) => v && <Tag>{v}</Tag> },
-          { title: "Underlay 网段", dataIndex: "underlay_prefix" },
+          { title: "编码", dataIndex: "code", width: "10%", ellipsis: true },
+          { title: "名称", dataIndex: "name", width: "14%", ellipsis: true },
+          { title: "区域", dataIndex: "region", width: "10%", render: (v) => v || "—" },
+          {
+            title: "BGP ASN",
+            dataIndex: "bgp_asn",
+            width: "10%",
+            render: (v) => (v ? <Tag>{v}</Tag> : "—"),
+          },
+          {
+            title: "Underlay 网段",
+            dataIndex: "underlay_prefix",
+            width: "14%",
+            ellipsis: true,
+            render: (v) => v || "—",
+          },
           {
             title: "下发模式",
             dataIndex: "delivery_mode",
+            width: "18%",
+            ellipsis: true,
             render: (m, r) =>
               m === "controller" ? (
                 <Tag color="purple">控制器: {controllerName(r.controller_id) || "?"}</Tag>
@@ -97,12 +113,14 @@ export default function Sites() {
           },
           {
             title: "操作",
+            width: "10%",
+            className: "table-actions",
             render: (_, r) => (
-              <Space>
-                <Popconfirm title="确认删除该站点?" onConfirm={() => remove(r.id)}>
-                  <a style={{ color: "#cf1322" }}>{action.delete}</a>
-                </Popconfirm>
-              </Space>
+              <Popconfirm title="确认删除该站点?" onConfirm={() => remove(r.id)}>
+                <Button type="link" size="small" danger>
+                  {action.delete}
+                </Button>
+              </Popconfirm>
             ),
           },
         ]}
@@ -147,6 +165,6 @@ export default function Sites() {
           )}
         </Form>
       </Modal>
-    </Card>
+    </PageCard>
   );
 }

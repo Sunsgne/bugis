@@ -224,7 +224,7 @@ function Shell() {
             </Dropdown>
           </Space>
         </Header>
-        <Content style={{ margin: 16, overflow: "auto" }}>
+        <Content className="page-content" style={{ margin: 16, overflow: "auto" }}>
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/tenants" element={<Tenants />} />

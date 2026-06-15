@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { Button, Card, Col, Row, Select, Space, App as AntApp } from "antd";
+import { Button, Col, Row, Select, Space, App as AntApp } from "antd";
 import { ExperimentOutlined, ReloadOutlined } from "@ant-design/icons";
 import { useSearchParams } from "react-router-dom";
 import { api } from "../api/client";
 import type { Circuit, Paginated } from "../api/types";
 import CircuitMonitorPanel from "../components/CircuitMonitorPanel";
+import PageCard from "../components/PageCard";
 import { action } from "../constants/uiCopy";
 
 export default function Monitoring() {
@@ -41,7 +42,7 @@ export default function Monitoring() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <Card>
+      <PageCard>
         <Row align="middle" gutter={16}>
           <Col flex="auto">
             <Select
@@ -68,7 +69,7 @@ export default function Monitoring() {
             </Space>
           </Col>
         </Row>
-      </Card>
+      </PageCard>
 
       {selected ? (
         <CircuitMonitorPanel key={`${selected}-${refreshKey}`} circuitId={selected} pollSec={15} />

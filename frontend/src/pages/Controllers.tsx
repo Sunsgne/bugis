@@ -19,6 +19,8 @@ import { PlusOutlined, ShareAltOutlined } from "@ant-design/icons";
 import { api } from "../api/client";
 import type { Controller } from "../api/types";
 import { action, empty, page, toast } from "../constants/uiCopy";
+import PageCard from "../components/PageCard";
+import { dataTableProps } from "../utils/table";
 
 const TYPE_LABEL: Record<string, string> = {
   bugis: "Bugis SDN 控制器 (内置)",
@@ -107,23 +109,27 @@ export default function Controllers() {
         }
       />
 
-      <Card title="内置控制器">
+      <PageCard title="内置控制器">
         <Table
           rowKey="id"
           loading={loading}
           dataSource={builtin ? [builtin] : []}
           pagination={false}
           locale={{ emptyText: empty.data }}
+          {...dataTableProps()}
           columns={[
-            { title: "名称", dataIndex: "name" },
+            { title: "名称", dataIndex: "name", width: "14%", ellipsis: true },
             {
               title: "类型",
               dataIndex: "type",
+              width: "18%",
               render: (t) => <Tag color={TYPE_COLOR[t]}>{TYPE_LABEL[t] || t}</Tag>,
             },
             {
               title: "北向地址",
               dataIndex: "base_url",
+              width: "28%",
+              ellipsis: true,
               render: (url) => (
                 <Typography.Text code copyable>
                   {url}
@@ -133,10 +139,14 @@ export default function Controllers() {
             {
               title: "说明",
               dataIndex: "description",
+              width: "28%",
+              ellipsis: true,
               render: (d) => d || "平台内置 · 自动注册",
             },
             {
               title: "操作",
+              width: "12%",
+              className: "table-actions",
               render: () => (
                 <Link to="/control-plane">
                   <ShareAltOutlined /> 进入控制面
@@ -145,9 +155,9 @@ export default function Controllers() {
             },
           ]}
         />
-      </Card>
+      </PageCard>
 
-      <Card
+      <PageCard
         title="北向控制器"
         extra={
           <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>
@@ -163,27 +173,33 @@ export default function Controllers() {
           loading={loading}
           dataSource={external}
           locale={{ emptyText: empty.default }}
+          {...dataTableProps()}
           columns={[
-            { title: "名称", dataIndex: "name" },
+            { title: "名称", dataIndex: "name", width: "16%", ellipsis: true },
             {
               title: "类型",
               dataIndex: "type",
+              width: "18%",
               render: (t) => <Tag color={TYPE_COLOR[t]}>{TYPE_LABEL[t] || t}</Tag>,
             },
-            { title: "北向地址", dataIndex: "base_url" },
-            { title: "账号", dataIndex: "username" },
-            { title: "描述", dataIndex: "description" },
+            { title: "北向地址", dataIndex: "base_url", width: "24%", ellipsis: true },
+            { title: "账号", dataIndex: "username", width: "12%", ellipsis: true, render: (v) => v || "—" },
+            { title: "描述", dataIndex: "description", width: "22%", ellipsis: true, render: (v) => v || "—" },
             {
               title: "操作",
+              width: "8%",
+              className: "table-actions",
               render: (_, r) => (
                 <Popconfirm title={`${action.confirm}${action.delete}？`} onConfirm={() => remove(r.id)}>
-                  <a style={{ color: "#cf1322" }}>{action.delete}</a>
+                  <Button type="link" size="small" danger>
+                    {action.delete}
+                  </Button>
                 </Popconfirm>
               ),
             },
           ]}
         />
-      </Card>
+      </PageCard>
 
       <Modal title="纳管外部控制器" open={open} onOk={onCreate} onCancel={() => setOpen(false)}>
         <Form form={form} layout="vertical" initialValues={{ type: "nce_fabric" }}>

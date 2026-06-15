@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   Button,
-  Card,
   Form,
   Input,
   Modal,
@@ -16,7 +15,9 @@ import {
 import { PlusOutlined, SearchOutlined } from "@ant-design/icons";
 import { api } from "../api/client";
 import type { Paginated, Tenant } from "../api/types";
-import { tablePagination } from "../utils/table";
+import ListToolbar from "../components/ListToolbar";
+import PageCard from "../components/PageCard";
+import { dataTableProps, PAGE_SIZE_OPTIONS, pageRangeLabel, tablePagination } from "../utils/table";
 
 const TYPE_LABEL: Record<string, string> = {
   enterprise: "企业专线",
@@ -79,7 +80,7 @@ export default function Tenants() {
   }
 
   return (
-    <Card
+    <PageCard
       title="客户服务"
       extra={
         <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>
@@ -87,63 +88,97 @@ export default function Tenants() {
         </Button>
       }
     >
-      <Space style={{ marginBottom: 16 }} wrap>
-        <Input.Search
-          allowClear
-          placeholder="搜索客户名称或编码"
-          style={{ width: 300 }}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          onSearch={() => {
-            setPage(1);
-            load(1, pageSize, search);
-          }}
-          enterButton={<SearchOutlined />}
-        />
-        <span style={{ color: "#888" }}>共 {total.toLocaleString()} 个客户</span>
-      </Space>
+      <ListToolbar
+        summary={pageRangeLabel(total, page, pageSize)}
+        left={
+          <Input.Search
+            allowClear
+            placeholder="搜索客户名称或编码"
+            style={{ width: 280 }}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            onSearch={() => {
+              setPage(1);
+              load(1, pageSize, search);
+            }}
+            enterButton={<SearchOutlined />}
+          />
+        }
+        right={
+          <Select
+            value={pageSize}
+            style={{ width: 96 }}
+            options={PAGE_SIZE_OPTIONS.map((n) => ({ value: n, label: `${n} 条/页` }))}
+            onChange={(ps) => {
+              setPage(1);
+              setPageSize(ps);
+            }}
+          />
+        }
+      />
 
       <Table
         rowKey="id"
         loading={loading}
         dataSource={rows}
-        scroll={{ x: 960 }}
+        {...dataTableProps()}
         pagination={tablePagination(total, page, pageSize, (p, ps) => {
           setPage(p);
           setPageSize(ps);
         })}
         columns={[
-          { title: "名称", dataIndex: "name", width: 180, ellipsis: true },
-          { title: "编码", dataIndex: "code", width: 120, render: (c) => <Tag>{c}</Tag> },
+          { title: "名称", dataIndex: "name", width: "16%", ellipsis: true },
+          {
+            title: "编码",
+            dataIndex: "code",
+            width: "10%",
+            render: (c) => <Tag>{c}</Tag>,
+          },
           {
             title: "类型",
             dataIndex: "type",
-            width: 120,
+            width: "12%",
+            ellipsis: true,
             render: (t) => TYPE_LABEL[t] || t,
           },
           {
             title: "状态",
             dataIndex: "status",
-            width: 90,
+            width: "8%",
             render: (s) => <Tag color={STATUS_COLOR[s]}>{s}</Tag>,
           },
           {
             title: "专线数",
             dataIndex: "circuits_total",
-            width: 90,
+            width: "8%",
+            align: "right",
             render: (n) => n ?? 0,
           },
-          { title: "联系人", dataIndex: "contact_name", width: 120, ellipsis: true },
-          { title: "邮箱", dataIndex: "contact_email", ellipsis: true },
+          {
+            title: "联系人",
+            dataIndex: "contact_name",
+            width: "12%",
+            ellipsis: true,
+            render: (v) => v || "—",
+          },
+          {
+            title: "邮箱",
+            dataIndex: "contact_email",
+            width: "18%",
+            ellipsis: true,
+            render: (v) => v || "—",
+          },
           {
             title: "操作",
-            width: 160,
-            fixed: "right",
+            width: "16%",
+            className: "table-actions",
             render: (_, r) => (
-              <Space>
+              <Space size={4} className="table-actions">
                 <Link to={`/circuits?tenant=${r.id}`}>查看专线</Link>
                 <Popconfirm title="确认删除?" onConfirm={() => remove(r.id)}>
-                  <a style={{ color: "#cf1322" }}>删除</a>
+                  <Button type="link" size="small" danger>
+                    删除
+                  </Button>
                 </Popconfirm>
               </Space>
             ),
@@ -170,6 +205,6 @@ export default function Tenants() {
           </Form.Item>
         </Form>
       </Modal>
-    </Card>
+    </PageCard>
   );
 }

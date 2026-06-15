@@ -17,6 +17,8 @@ import dayjs from "dayjs";
 import { api } from "../api/client";
 import { useAuth } from "../auth";
 import { page, toast } from "../constants/uiCopy";
+import PageCard from "../components/PageCard";
+import { dataTableProps } from "../utils/table";
 
 interface UserRow {
   id: number;
@@ -85,7 +87,7 @@ export default function Users({ embedded }: { embedded?: boolean }) {
         </div>
       );
     }
-    return <Card title={page.users}>{denied}</Card>;
+    return <PageCard title={page.users}>{denied}</PageCard>;
   }
 
   const addBtn = (
@@ -100,24 +102,28 @@ export default function Users({ embedded }: { embedded?: boolean }) {
         rowKey="id"
         loading={loading}
         dataSource={rows}
+        {...dataTableProps()}
         columns={[
-          { title: "用户名", dataIndex: "username" },
-          { title: "姓名", dataIndex: "full_name" },
-          { title: "邮箱", dataIndex: "email" },
+          { title: "用户名", dataIndex: "username", width: "14%", ellipsis: true },
+          { title: "姓名", dataIndex: "full_name", width: "14%", ellipsis: true, render: (v) => v || "—" },
+          { title: "邮箱", dataIndex: "email", width: "22%", ellipsis: true, render: (v) => v || "—" },
           {
             title: "角色",
             dataIndex: "role",
+            width: "10%",
             render: (r) => <Tag color={ROLE_COLOR[r]}>{r}</Tag>,
           },
           {
             title: "状态",
             dataIndex: "is_active",
+            width: "10%",
             render: (a) => <Tag color={a ? "green" : "default"}>{a ? "启用" : "禁用"}</Tag>,
           },
           {
             title: "创建时间",
             dataIndex: "created_at",
-            render: (t) => (t ? dayjs(t).format("YYYY-MM-DD HH:mm") : "-"),
+            width: "18%",
+            render: (t) => (t ? dayjs(t).format("YYYY-MM-DD HH:mm") : "—"),
           },
         ]}
       />
@@ -164,8 +170,8 @@ export default function Users({ embedded }: { embedded?: boolean }) {
   }
 
   return (
-    <Card title={`${page.users} · RBAC`} extra={addBtn}>
+    <PageCard title={`${page.users} · RBAC`} extra={addBtn}>
       {body}
-    </Card>
+    </PageCard>
   );
 }

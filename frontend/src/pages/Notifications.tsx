@@ -17,6 +17,8 @@ import { PlusOutlined, SendOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { api } from "../api/client";
 import { action, page, toast } from "../constants/uiCopy";
+import PageCard from "../components/PageCard";
+import { dataTableProps } from "../utils/table";
 
 interface Channel {
   id: number;
@@ -117,38 +119,47 @@ export default function Notifications({ embedded }: { embedded?: boolean }) {
         rowKey="id"
         loading={loading}
         dataSource={rows}
+        {...dataTableProps()}
         columns={[
-          { title: "名称", dataIndex: "name" },
+          { title: "名称", dataIndex: "name", width: "14%", ellipsis: true },
           {
             title: "类型",
             dataIndex: "type",
+            width: "14%",
             render: (t) => <Tag color="blue">{TYPE_LABEL[t] || t}</Tag>,
           },
           {
             title: "触发阈值",
             dataIndex: "min_severity",
+            width: "10%",
             render: (s) => <Tag color={SEV_COLOR[s]}>{s}</Tag>,
           },
           {
             title: "状态",
             dataIndex: "active",
+            width: "8%",
             render: (a) => <Tag color={a ? "green" : "default"}>{a ? "启用" : "停用"}</Tag>,
           },
-          { title: "最近结果", dataIndex: "last_status", ellipsis: true },
+          { title: "最近结果", dataIndex: "last_status", width: "18%", ellipsis: true, render: (v) => v || "—" },
           {
             title: "最近发送",
             dataIndex: "last_dispatch_at",
-            render: (t) => (t ? dayjs(t).format("MM-DD HH:mm:ss") : "-"),
+            width: "14%",
+            render: (t) => (t ? dayjs(t).format("MM-DD HH:mm:ss") : "—"),
           },
           {
             title: "操作",
+            width: "14%",
+            className: "table-actions",
             render: (_, r) => (
-              <Space>
-                <a onClick={() => testSend(r.id)}>
-                  <SendOutlined /> 测试
-                </a>
+              <Space size={4}>
+                <Button type="link" size="small" icon={<SendOutlined />} onClick={() => testSend(r.id)}>
+                  测试
+                </Button>
                 <Popconfirm title={`${action.confirm}${action.delete}？`} onConfirm={() => remove(r.id)}>
-                  <a style={{ color: "#cf1322" }}>{action.delete}</a>
+                  <Button type="link" size="small" danger>
+                    {action.delete}
+                  </Button>
                 </Popconfirm>
               </Space>
             ),
@@ -198,8 +209,8 @@ export default function Notifications({ embedded }: { embedded?: boolean }) {
   }
 
   return (
-    <Card title={page.notifications} extra={addBtn}>
+    <PageCard title={page.notifications} extra={addBtn}>
       {body}
-    </Card>
+    </PageCard>
   );
 }
