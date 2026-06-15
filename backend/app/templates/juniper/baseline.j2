@@ -1,0 +1,26 @@
+## Juniper Junos - 设备初始化基线 (baseline)  {{ device.name }}
+## role={{ device.role }} loopback={{ device.loopback_ip }} asn={{ asn }} node-sid={{ device.sr_node_sid }}
+set system host-name {{ device.name }}
+set system time-zone Asia/Shanghai
+set system ntp server {{ ntp_server }}
+set system syslog host {{ syslog_server }} any notice
+set snmp community {{ snmp_community }} authorization read-only
+set interfaces lo0 unit 0 family inet address {{ device.loopback_ip }}/32
+set interfaces lo0 unit 0 family iso
+## ---- Underlay IS-IS + Segment Routing ----
+set protocols isis level 1 disable
+set protocols isis interface lo0.0 passive
+set protocols mpls interface all
+set protocols isis source-packet-routing node-segment ipv4-index {{ device.sr_node_sid or 0 }}
+set routing-options router-id {{ device.loopback_ip }}
+set routing-options autonomous-system {{ asn }}
+## ---- BGP EVPN overlay ----
+set protocols bgp group EVPN-OVERLAY type internal
+set protocols bgp group EVPN-OVERLAY local-address {{ device.loopback_ip }}
+set protocols bgp group EVPN-OVERLAY family evpn signaling
+{% for rr in rr_peers %}
+set protocols bgp group EVPN-OVERLAY neighbor {{ rr }}
+{% endfor %}
+{% if is_rr %}
+set protocols bgp group EVPN-OVERLAY cluster {{ device.loopback_ip }}
+{% endif %}

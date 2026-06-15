@@ -1,0 +1,36 @@
+! Arista EOS - 设备初始化基线 (baseline)  {{ device.name }}
+! role={{ device.role }} loopback={{ device.loopback_ip }} asn={{ asn }} node-sid={{ device.sr_node_sid }}
+hostname {{ device.name }}
+clock timezone Asia/Shanghai
+ntp server {{ ntp_server }}
+logging host {{ syslog_server }}
+snmp-server community {{ snmp_community }} ro
+!
+interface Loopback0
+   ip address {{ device.loopback_ip }}/32
+!
+! ---- Underlay IS-IS + Segment Routing ----
+router isis CORE
+   net 49.0001.{{ '%04d' % (device.sr_node_sid or 0) }}.0000.0000.0001.00
+   is-type level-2
+   address-family ipv4 unicast
+   segment-routing mpls
+      router-id {{ device.loopback_ip }}
+!
+mpls ip
+!
+! ---- BGP EVPN overlay ----
+router bgp {{ asn }}
+   router-id {{ device.loopback_ip }}
+   neighbor EVPN-OVERLAY peer group
+   neighbor EVPN-OVERLAY remote-as {{ asn }}
+   neighbor EVPN-OVERLAY update-source Loopback0
+{% for rr in rr_peers %}
+   neighbor {{ rr }} peer group EVPN-OVERLAY
+{% endfor %}
+   address-family evpn
+      neighbor EVPN-OVERLAY activate
+{% if is_rr %}
+      neighbor EVPN-OVERLAY route-reflector-client
+{% endif %}
+!

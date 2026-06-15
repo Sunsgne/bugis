@@ -32,6 +32,11 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 60 * 24
     algorithm: str = "HS256"
 
+    # --- Device baseline (initialization) defaults ---
+    baseline_ntp_server: str = "10.0.0.1"
+    baseline_syslog_server: str = "10.0.0.2"
+    baseline_snmp_community: str = "bugis-ro"
+
     # --- Provisioning ---
     # When True, configuration is rendered but NOT pushed to real devices.
     # This lets the whole platform run end-to-end without lab hardware.

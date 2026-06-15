@@ -1,0 +1,43 @@
+! Cisco IOS-XR - 设备初始化基线 (baseline)  {{ device.name }}
+! role={{ device.role }} loopback={{ device.loopback_ip }} asn={{ asn }} node-sid={{ device.sr_node_sid }}
+hostname {{ device.name }}
+!
+clock timezone BJ 8
+ntp server {{ ntp_server }}
+logging {{ syslog_server }}
+snmp-server community {{ snmp_community }} RO
+!
+interface Loopback0
+ ipv4 address {{ device.loopback_ip }} 255.255.255.255
+!
+! ---- Underlay IS-IS + Segment Routing ----
+router isis CORE
+ is-type level-2-only
+ net 49.0001.{{ '%04d' % (device.sr_node_sid or 0) }}.0000.0000.0001.00
+ address-family ipv4 unicast
+  metric-style wide
+  segment-routing mpls
+ interface Loopback0
+  passive
+  address-family ipv4 unicast
+   prefix-sid index {{ device.sr_node_sid or 0 }}
+!
+mpls oam
+!
+! ---- BGP EVPN overlay ----
+router bgp {{ asn }}
+ bgp router-id {{ device.loopback_ip }}
+ address-family l2vpn evpn
+{% for rr in rr_peers %}
+ neighbor {{ rr }}
+  remote-as {{ asn }}
+  update-source Loopback0
+  address-family l2vpn evpn
+{% endfor %}
+{% if is_rr %}
+ ! Route Reflector
+ neighbor-group RRC
+  address-family l2vpn evpn
+   route-reflector-client
+{% endif %}
+!

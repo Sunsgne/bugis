@@ -1,0 +1,46 @@
+#
+# Huawei VRP (Datacom) - 设备初始化基线 (baseline)  {{ device.name }}
+# role={{ device.role }} loopback={{ device.loopback_ip }} asn={{ asn }}
+#
+sysname {{ device.name }}
+#
+clock timezone BJ add 08:00:00
+ntp unicast-server {{ ntp_server }}
+#
+info-center loghost {{ syslog_server }}
+snmp-agent
+snmp-agent sys-info version v2c v3
+snmp-agent community read {{ snmp_community }}
+#
+interface LoopBack0
+ ip address {{ device.loopback_ip }} 255.255.255.255
+#
+# ---- Underlay (OSPF) ----
+ospf 1 router-id {{ device.loopback_ip }}
+ area 0.0.0.0
+  network {{ device.loopback_ip }} 0.0.0.0
+#
+# ---- VXLAN / EVPN global ----
+evpn-overlay enable
+#
+interface Nve1
+ source {{ device.loopback_ip }}
+#
+# ---- BGP EVPN overlay ----
+bgp {{ asn }}
+ router-id {{ device.loopback_ip }}
+ group EVPN-RR internal
+{% for rr in rr_peers %}
+ peer {{ rr }} as-number {{ asn }}
+ peer {{ rr }} connect-interface LoopBack0
+ peer {{ rr }} group EVPN-RR
+{% endfor %}
+ l2vpn-family evpn
+  policy vpn-target
+  peer EVPN-RR enable
+{% if is_rr %}
+  peer EVPN-RR reflect-client
+  undo policy vpn-target
+{% endif %}
+#
+return

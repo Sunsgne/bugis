@@ -10,6 +10,7 @@ import random
 from app.api.deps import get_current_user, require_operator
 from app.core.config import settings
 from app.core.database import get_db
+from app.drivers import get_driver
 from app.models.device import Device, DeviceInterface
 from app.models.enums import DeviceStatus, Vendor
 from app.models.user import User
@@ -20,7 +21,7 @@ from app.schemas.device import (
     DeviceOut,
     DeviceUpdate,
 )
-from app.services import snmp
+from app.services import baseline, config_mgmt, snmp
 
 router = APIRouter()
 
@@ -156,6 +157,48 @@ def list_interfaces(
     return db.execute(
         select(DeviceInterface).where(DeviceInterface.device_id == device_id)
     ).scalars().all()
+
+
+@router.get("/{device_id}/baseline")
+def device_baseline(
+    device_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_user)
+):
+    """Preview the standard initialization (baseline) config for a device."""
+    device = db.get(Device, device_id)
+    if not device:
+        raise HTTPException(status_code=404, detail="device not found")
+    return {"device": device.name, "vendor": device.vendor.value,
+            "content": baseline.render_baseline(db, device)}
+
+
+@router.post("/{device_id}/initialize")
+def initialize_device(
+    device_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_operator),
+):
+    """Render + (dry-run) push the baseline config and snapshot it as 'init'."""
+    device = db.get(Device, device_id)
+    if not device:
+        raise HTTPException(status_code=404, detail="device not found")
+    config = baseline.render_baseline(db, device)
+    driver = get_driver(device.vendor)
+    result = driver.push(device, config, dry_run=settings.dry_run)
+    snap = config_mgmt.add_snapshot(
+        db, device, config, source="init",
+        note="device initialization", created_by=user.username,
+    )
+    if device.status == DeviceStatus.UNKNOWN:
+        device.status = DeviceStatus.ONLINE
+    db.commit()
+    return {
+        "device": device.name,
+        "transport": driver.transport,
+        "dry_run": result.dry_run,
+        "success": result.success,
+        "version": snap.version,
+        "content": config,
+    }
 
 
 @router.post("/{device_id}/discover-interfaces", response_model=list[DeviceInterfaceOut])

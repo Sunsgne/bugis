@@ -313,6 +313,39 @@ def test_config_history_and_diff(client, auth_headers):
     assert "500" in diff["diff"]  # new bandwidth appears in the diff
 
 
+def test_device_baseline_initialize(client, auth_headers):
+    site, _, _, _ = _bootstrap_topology(client, auth_headers)
+    n = next(_seq)
+    # a route reflector so the baseline has an overlay peer
+    rr = client.post(
+        "/api/v1/devices", headers=auth_headers,
+        json={"name": f"RR-{n}", "vendor": "huawei", "role": "spine",
+              "overlay_tech": "vxlan_evpn", "status": "online",
+              "mgmt_ip": f"10.66.{n}.1", "loopback_ip": f"10.66.{n}.255",
+              "bgp_asn": 65010, "is_route_reflector": True, "site_id": site["id"]},
+    ).json()
+    leaf = client.post(
+        "/api/v1/devices", headers=auth_headers,
+        json={"name": f"LEAF-{n}", "vendor": "huawei", "role": "leaf",
+              "overlay_tech": "vxlan_evpn", "status": "unknown",
+              "mgmt_ip": f"10.66.{n}.2", "loopback_ip": f"10.66.{n}.11",
+              "bgp_asn": 65010, "site_id": site["id"]},
+    ).json()
+    # preview baseline
+    bl = client.get(f"/api/v1/devices/{leaf['id']}/baseline", headers=auth_headers).json()
+    assert "sysname" in bl["content"]  # huawei
+    assert "bgp 65010" in bl["content"]
+    assert rr["loopback_ip"] in bl["content"]  # RR overlay peer present
+    # initialize (push + snapshot)
+    init = client.post(f"/api/v1/devices/{leaf['id']}/initialize", headers=auth_headers).json()
+    assert init["success"] and init["version"] >= 1
+    snaps = client.get(f"/api/v1/config/devices/{leaf['id']}/snapshots", headers=auth_headers).json()
+    assert any(s["source"] == "init" for s in snaps)
+    # baseline appears in assembled running config
+    running = client.get(f"/api/v1/config/devices/{leaf['id']}/running", headers=auth_headers).json()
+    assert "baseline (init)" in running["content"]
+
+
 def test_snmp_interface_discovery(client, auth_headers):
     site, _, _, _ = _bootstrap_topology(client, auth_headers)
     n = next(_seq)

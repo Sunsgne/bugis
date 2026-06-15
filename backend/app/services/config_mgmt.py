@@ -21,8 +21,38 @@ from app.models.enums import CircuitStatus
 from app.models.workorder import WorkOrder
 
 
+def latest_baseline(db: Session, device_id: int) -> DeviceConfigSnapshot | None:
+    return db.execute(
+        select(DeviceConfigSnapshot)
+        .where(
+            DeviceConfigSnapshot.device_id == device_id,
+            DeviceConfigSnapshot.source == "init",
+        )
+        .order_by(DeviceConfigSnapshot.version.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+
+
+def add_snapshot(
+    db: Session, device: Device, content: str, source: str = "backup",
+    note: str | None = None, created_by: str | None = None,
+) -> DeviceConfigSnapshot:
+    version = (db.scalar(
+        select(func.coalesce(func.max(DeviceConfigSnapshot.version), 0)).where(
+            DeviceConfigSnapshot.device_id == device.id
+        )
+    ) or 0) + 1
+    snap = DeviceConfigSnapshot(
+        device_id=device.id, version=version, source=source,
+        content=content, note=note, created_by=created_by,
+    )
+    db.add(snap)
+    db.flush()
+    return snap
+
+
 def build_running_config(db: Session, device: Device) -> str:
-    """Assemble the device's running config from its latest pushed jobs."""
+    """Assemble the device's running config: baseline (init) + service blocks."""
     header = [
         f"! ===== running-config: {device.name} ({device.vendor.value}) =====",
         f"! mgmt={device.mgmt_ip} loopback={device.loopback_ip or '-'} "
@@ -30,6 +60,11 @@ def build_running_config(db: Session, device: Device) -> str:
         f"! generated={datetime.now(timezone.utc).isoformat(timespec='seconds')}",
         "!",
     ]
+    baseline = latest_baseline(db, device.id)
+    baseline_block = (
+        "! ---- baseline (init) ----\n" + baseline.content.strip() + "\n!\n"
+        if baseline else ""
+    )
     # Active circuits that attach on this device.
     circuit_ids = db.execute(
         select(CircuitEndpoint.circuit_id)
@@ -62,7 +97,7 @@ def build_running_config(db: Session, device: Device) -> str:
             )
     if not blocks:
         blocks.append("! (no active service configuration on this device)")
-    return "\n".join(header) + "\n" + "\n!\n".join(blocks) + "\n"
+    return "\n".join(header) + "\n" + baseline_block + "\n!\n".join(blocks) + "\n"
 
 
 def snapshot_device(
