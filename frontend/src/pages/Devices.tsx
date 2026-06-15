@@ -126,7 +126,16 @@ export default function Devices() {
         `/devices/${deviceId}/discover-interfaces`,
       );
       hide();
-      message.success(`发现 ${data.length} 个接口`);
+      const simCount = data.filter((i) => i.discovered_via === "snmp-sim").length;
+      if (simCount === data.length) {
+        message.warning(
+          "返回的是模拟数据（设备 SNMP 不可达或 Community 错误）。请检查管理 IP、UDP 161 与 Community 后重试",
+        );
+      } else if (simCount > 0) {
+        message.warning(`部分接口为模拟数据（${simCount}/${data.length}），请检查 SNMP 配置`);
+      } else {
+        message.success(`SNMP 发现 ${data.length} 个接口`);
+      }
       setIfaces(data);
     } catch (e: any) {
       hide();
@@ -566,6 +575,15 @@ export default function Devices() {
           )
         }
       >
+        {ifaces.some((i) => i.discovered_via === "snmp-sim") && (
+          <Alert
+            type="warning"
+            showIcon
+            style={{ marginBottom: 12 }}
+            message="部分端口为模拟数据"
+            description="发现方式显示 snmp-sim 表示未从设备读到真实 IF-MIB（常见于 Community 错误或 UDP 161 不可达）。Dry-run 仅影响配置下发，不影响 SNMP 采集。请确认设备 SNMP Community 与平台「SNMP 采集」设置一致后重新发现。"
+          />
+        )}
         <Table
           size="small"
           rowKey={(r) => `${r.device_id}-${r.name}`}
@@ -640,8 +658,8 @@ export default function Devices() {
             description={
               <Typography.Paragraph style={{ marginBottom: 0 }}>
                 <strong>配置下发 / 初始化</strong> 使用 NETCONF（或 SSH CLI）的 <strong>用户名 + 密码</strong>。
-                <strong> SNMP 发现</strong> 默认读全局 SNMP 设置；若开启「优先设备凭证」，本页密码字段同时作为该设备的只读 Community。
-                Demo 环境默认 <strong>Dry-run</strong>，检测仅模拟可达；关闭 Dry-run 后才会真实登录设备。
+                <strong> SNMP 发现</strong> 走真实 IF-MIB 采集（与 Dry-run 无关）；请填写正确的只读 Community。
+                Demo 环境 <strong>Dry-run</strong> 仅模拟配置下发，不会阻止 SNMP 端口发现。
               </Typography.Paragraph>
             }
           />

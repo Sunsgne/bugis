@@ -258,12 +258,18 @@ def discover_interfaces(
     from app.services import snmp_device
 
     cfg = snmp_device.effective_snmp(device)
-    if not settings.dry_run and not cfg["enabled"]:
-        raise HTTPException(status_code=400, detail="该设备未启用 SNMP，请在设备设置中开启或保持 Dry-run 模式")
-    ifaces = snmp.discover_interfaces(db, device)
+    if not cfg["enabled"]:
+        raise HTTPException(status_code=400, detail="该设备未启用 SNMP，请在设备设置中开启")
+    try:
+        ifaces = snmp.discover_interfaces(db, device)
+    except (RuntimeError, ImportError, ModuleNotFoundError) as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
     port_inventory.scan_device(db, device)
     db.commit()
-    return sorted(ifaces, key=lambda i: (i.ifindex or 0))
+    all_ifaces = db.execute(
+        select(DeviceInterface).where(DeviceInterface.device_id == device.id)
+    ).scalars().all()
+    return sorted(all_ifaces, key=lambda i: (i.ifindex or 0, i.name))
 
 
 @router.post("/{device_id}/learn")

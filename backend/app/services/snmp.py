@@ -1,9 +1,10 @@
 """SNMP interface discovery.
 
 Discovers a device's interfaces so they become selectable when provisioning
-circuits. In dry-run mode it synthesizes a vendor-appropriate interface set;
-in live mode it walks IF-MIB (ifDescr/ifAlias/ifHighSpeed/ifOperStatus) via
-pysnmp (optional dependency), using platform-wide SNMP settings.
+circuits. Walks IF-MIB (ifDescr/ifAlias/ifHighSpeed/ifOperStatus) via pysnmp
+when SNMP is enabled. Dry-run only affects config push — not read-only SNMP.
+If a live walk fails while dry-run is on, falls back to vendor-shaped simulation
+for demo / CI; otherwise the error is raised to the caller.
 
 Port descriptions may contain contracted bandwidth tags like ``bw(100Mbps)``;
 these are stored on ``DeviceInterface.description`` and synced to backbone
@@ -231,11 +232,17 @@ def discover_interfaces(db: Session, device: Device) -> list[DeviceInterface]:
 
     cfg = snmp_cfg.get_or_create(db)
     device_snmp = snmp_device.effective_snmp(device)
-    if settings.dry_run or not cfg.enabled or not device_snmp["enabled"]:
-        discovered = _synthesize(device) if settings.dry_run else []
+    if not cfg.enabled or not device_snmp["enabled"]:
+        discovered: list[dict] = []
     else:
         community = snmp_cfg.effective_community(db, device)
-        discovered = _walk_real(device, cfg, community, port=device_snmp["port"])
+        try:
+            discovered = _walk_real(device, cfg, community, port=device_snmp["port"])
+        except (RuntimeError, ImportError, ModuleNotFoundError):
+            if settings.dry_run:
+                discovered = _synthesize(device)
+            else:
+                raise
 
     existing = {
         i.name: i
@@ -243,6 +250,16 @@ def discover_interfaces(db: Session, device: Device) -> list[DeviceInterface]:
             select(DeviceInterface).where(DeviceInterface.device_id == device.id)
         ).scalars().all()
     }
+
+    if discovered and discovered[0].get("discovered_via") == "snmp":
+        for name, iface in list(existing.items()):
+            if iface.discovered_via != "snmp-sim":
+                continue
+            if iface.allocated or iface.used_s_vids:
+                continue
+            db.delete(iface)
+            del existing[name]
+
     for d in discovered:
         iface = existing.get(d["name"])
         if iface is None:

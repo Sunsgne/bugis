@@ -439,16 +439,19 @@ def test_snmp_interface_discovery(client, auth_headers):
               "overlay_tech": "vxlan_evpn", "status": "online",
               "mgmt_ip": f"10.55.{n}.1", "site_id": site["id"]},
     ).json()
-    # Discover interfaces via SNMP (simulated in dry-run).
+    # Discover interfaces via SNMP (IF-MIB) and persist them.
     r = client.post(
         f"/api/v1/devices/{dev['id']}/discover-interfaces", headers=auth_headers
     )
     assert r.status_code == 200
     ifaces = r.json()
     assert len(ifaces) > 0
-    # Huawei naming convention discovered
+    # Huawei naming convention discovered (real SNMP or dry-run fallback)
     assert any(i["name"].startswith("GE1/0/") for i in ifaces)
-    assert all(i["discovered_via"] for i in ifaces)
+    assert all(
+        i["discovered_via"] in ("snmp", "snmp-sim", "running-config", "link-sync")
+        for i in ifaces
+    )
     # Listing returns the same set
     listed = client.get(
         f"/api/v1/devices/{dev['id']}/interfaces", headers=auth_headers

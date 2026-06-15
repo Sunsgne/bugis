@@ -22,7 +22,12 @@ passlib[bcrypt]==1.7.4
 bcrypt==4.0.1
 python-jose[cryptography]==3.3.0
 
-# Telemetry
+# Telemetry / SNMP (IF-MIB walks)
+pyasn1==0.4.8
+pyasn1-modules==0.2.8
+pysnmp==4.4.12
+
+# Metrics
 prometheus-client==0.21.1
 
 # Optional southbound device drivers (real device interaction).
