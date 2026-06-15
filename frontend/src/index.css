@@ -594,8 +594,8 @@ body.login-route {
 }
 
 .page-content {
-  max-width: 1600px;
-  margin: 0 auto;
+  width: 100%;
+  min-width: 0;
 }
 
 .page-card.ant-card {

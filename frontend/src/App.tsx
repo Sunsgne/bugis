@@ -197,7 +197,7 @@ function Shell() {
           onClick={(e) => navTo(e.key)}
         />
       </Sider>
-      <Layout>
+      <Layout style={{ flex: 1, minWidth: 0 }}>
         <Header
           style={{
             background: "#fff",
@@ -226,7 +226,10 @@ function Shell() {
             </Dropdown>
           </Space>
         </Header>
-        <Content className="page-content" style={{ margin: 16, overflow: "auto" }}>
+        <Content
+          className="page-content"
+          style={{ margin: 16, overflow: "auto", flex: 1, minWidth: 0 }}
+        >
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/tenants" element={<Tenants />} />
