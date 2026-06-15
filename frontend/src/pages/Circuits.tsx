@@ -49,6 +49,7 @@ import { formModalProps } from "../utils/formModal";
 import { TenantSearchSelect, useTenantSearch } from "../components/TenantSearchSelect";
 import OfferingSearchSelect, { useOfferingSearch } from "../components/OfferingSearchSelect";
 import { buildListQuery, dataTableProps, tablePagination } from "../utils/table";
+import { fetchAllPages } from "../utils/pagination";
 import PageCard from "../components/PageCard";
 import ListToolbar from "../components/ListToolbar";
 import CircuitMonitorPanel from "../components/CircuitMonitorPanel";
@@ -159,7 +160,7 @@ export default function Circuits() {
     const tasks: Array<{ key: string; req: Promise<{ data: unknown }> }> = [
       { key: "overview", req: api.get<TenantOverview>("/tenants/overview") },
       { key: "sites", req: api.get<Site[]>("/sites") },
-      { key: "devices", req: api.get<Paginated<Device>>("/devices?page=1&page_size=500") },
+      { key: "devices", req: fetchAllPages<Device>("/devices").then((items) => ({ data: items })) },
     ];
     const results = await Promise.allSettled(tasks.map((t) => t.req));
     const failed: string[] = [];
@@ -178,7 +179,7 @@ export default function Circuits() {
           setSites(data as Site[]);
           break;
         case "devices":
-          setDevices((data as Paginated<Device>).items);
+          setDevices(data as Device[]);
           break;
       }
     });
@@ -218,6 +219,11 @@ export default function Circuits() {
   useEffect(() => {
     loadMeta();
   }, []);
+
+  useEffect(() => {
+    if (!editEndpointsTarget || devices.length) return;
+    fetchAllPages<Device>("/devices").then(setDevices).catch(() => {});
+  }, [editEndpointsTarget, devices.length]);
 
   useEffect(() => {
     loadTenantSummary();
@@ -1027,22 +1033,19 @@ function CreateModal({
     if (!open) return;
     let cancelled = false;
     async function ensureFormData() {
-      const needDevices = !devicesProp.length;
-      const needSites = !sitesProp.length;
-      if (!needDevices && !needSites) return;
-
       setFormLoading(true);
       try {
-        const [dRes, sRes] = await Promise.allSettled([
-          needDevices ? api.get<Paginated<Device>>("/devices?page=1&page_size=500") : Promise.resolve(null),
-          needSites ? api.get<Site[]>("/sites") : Promise.resolve(null),
+        const [deviceRows, siteRows] = await Promise.all([
+          fetchAllPages<Device>("/devices"),
+          sitesProp.length
+            ? Promise.resolve(sitesProp)
+            : api.get<Site[]>("/sites").then((r) => r.data),
         ]);
         if (cancelled) return;
-        if (dRes.status === "fulfilled" && dRes.value) setDevices(dRes.value.data.items);
-        if (sRes.status === "fulfilled" && sRes.value) setSites(sRes.value.data);
-        if (needDevices && dRes.status === "rejected") {
-          message.error("表单数据加载失败，请刷新页面后重试");
-        }
+        setDevices(deviceRows);
+        if (!sitesProp.length) setSites(siteRows);
+      } catch {
+        if (!cancelled) message.error("表单数据加载失败，请刷新页面后重试");
       } finally {
         if (!cancelled) setFormLoading(false);
       }
@@ -1051,7 +1054,7 @@ function CreateModal({
     return () => {
       cancelled = true;
     };
-  }, [open, devicesProp, sitesProp, message]);
+  }, [open, sitesProp, message]);
 
   async function previewPath() {
     const values = form.getFieldsValue();

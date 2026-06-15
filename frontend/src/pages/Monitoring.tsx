@@ -3,10 +3,11 @@ import { Button, Col, Row, Select, Space, App as AntApp } from "antd";
 import { ExperimentOutlined, ReloadOutlined } from "@ant-design/icons";
 import { useSearchParams } from "react-router-dom";
 import { api } from "../api/client";
-import type { Circuit, Paginated } from "../api/types";
+import type { Circuit } from "../api/types";
 import CircuitMonitorPanel from "../components/CircuitMonitorPanel";
 import PageCard from "../components/PageCard";
 import { action } from "../constants/uiCopy";
+import { fetchAllPages } from "../utils/pagination";
 
 export default function Monitoring() {
   const { message } = AntApp.useApp();
@@ -16,13 +17,13 @@ export default function Monitoring() {
   const [refreshKey, setRefreshKey] = useState(0);
 
   async function loadCircuits() {
-    const { data } = await api.get<Paginated<Circuit>>("/circuits?page=1&page_size=500&status=active");
-    setCircuits(data.items);
+    const items = await fetchAllPages<Circuit>("/circuits", { status: "active" });
+    setCircuits(items);
     const fromUrl = Number(params.get("circuit"));
-    if (fromUrl && data.items.some((c) => c.id === fromUrl)) {
+    if (fromUrl && items.some((c) => c.id === fromUrl)) {
       setSelected(fromUrl);
-    } else if (!selected && data.items.length) {
-      setSelected(data.items[0].id);
+    } else if (!selected && items.length) {
+      setSelected(items[0].id);
     }
   }
 

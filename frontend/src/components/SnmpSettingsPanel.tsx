@@ -20,6 +20,7 @@ import {
 import { SaveOutlined, ExperimentOutlined } from "@ant-design/icons";
 import { api } from "../api/client";
 import type { Device } from "../api/types";
+import { fetchAllPages } from "../utils/pagination";
 
 const { Text, Paragraph } = Typography;
 
@@ -94,7 +95,7 @@ export default function SnmpSettingsPanel() {
 
   useEffect(() => {
     load();
-    api.get<Device[]>("/devices").then(({ data }) => setDevices(data)).catch(() => setDevices([]));
+    fetchAllPages<Device>("/devices").then(setDevices).catch(() => setDevices([]));
   }, []);
 
   async function save() {
