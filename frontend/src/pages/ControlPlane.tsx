@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
-  Alert,
   Card,
   Col,
   Row,
@@ -12,8 +11,16 @@ import {
   Empty,
   Descriptions,
   Typography,
+  Button,
+  message,
 } from "antd";
-import { ClusterOutlined, NodeIndexOutlined, ShareAltOutlined } from "@ant-design/icons";
+import {
+  ClusterOutlined,
+  NodeIndexOutlined,
+  ShareAltOutlined,
+  ApiOutlined,
+  CloudServerOutlined,
+} from "@ant-design/icons";
 import { api } from "../api/client";
 
 const VNI_COLORS = ["#1677ff", "#52c41a", "#fa8c16", "#722ed1", "#13c2c2", "#eb2f96"];
@@ -115,34 +122,70 @@ const CAP_STATUS: Record<string, { color: string; label: string }> = {
   planned: { color: "default", label: "规划中" },
 };
 
+const BGP_COLOR: Record<string, string> = {
+  established: "green",
+  connect: "blue",
+  idle: "default",
+};
+
+const DP_COLOR: Record<string, string> = {
+  applied: "green",
+  rendered: "blue",
+  pending: "orange",
+  failed: "red",
+};
+
 export default function ControlPlane() {
   const [status, setStatus] = useState<any>(null);
   const [vteps, setVteps] = useState<any[]>([]);
   const [routes, setRoutes] = useState<any[]>([]);
   const [topo, setTopo] = useState<any>(null);
+  const [bgp, setBgp] = useState<any[]>([]);
+  const [cluster, setCluster] = useState<any>(null);
+  const [bindings, setBindings] = useState<any[]>([]);
   const [vni, setVni] = useState<number | undefined>(undefined);
+  const [syncing, setSyncing] = useState(false);
 
   async function load() {
-    const [s, v, r, t] = await Promise.all([
+    const [s, v, r, t, b, c, d] = await Promise.all([
       api.get("/controller/status"),
       api.get("/controller/vteps"),
       api.get("/controller/routes" + (vni != null ? `?vni=${vni}` : "")),
       api.get("/controller/topology"),
+      api.get("/controller/bgp/sessions"),
+      api.get("/controller/cluster"),
+      api.get("/controller/dataplane/bindings"),
     ]);
     setStatus(s.data);
     setVteps(v.data);
     setRoutes(r.data);
     setTopo(t.data);
+    setBgp(b.data);
+    setCluster(c.data);
+    setBindings(d.data);
   }
+
+  async function syncBgp() {
+    setSyncing(true);
+    try {
+      await api.post("/controller/bgp/sync");
+      message.success("BGP 会话已同步");
+      load();
+    } finally {
+      setSyncing(false);
+    }
+  }
+
   useEffect(() => {
     load();
     const t = setInterval(load, 10000);
     return () => clearInterval(t);
   }, [vni]);
 
-  const allVnis = Array.from(new Set(vteps.flatMap((v) => v.vnis))).sort(
-    (a, b) => a - b
-  );
+  const allVnis = Array.from(new Set(vteps.flatMap((v) => v.vnis))).sort((a, b) => a - b);
+  const allReady =
+    status?.capabilities_ready === status?.capabilities_total &&
+    status?.capabilities_total > 0;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -153,31 +196,25 @@ export default function ControlPlane() {
               <ShareAltOutlined /> {status?.name || "Bugis SDN 控制器"}
             </span>
             <Tag color="geekblue" style={{ marginLeft: 8 }}>内置 · 自研</Tag>
-            {status?.version && (
-              <Tag style={{ marginLeft: 4 }}>v{status.version}</Tag>
-            )}
+            {status?.version && <Tag style={{ marginLeft: 4 }}>v{status.version}</Tag>}
+            {allReady && <Tag color="green">能力矩阵 全部就绪</Tag>}
+          </Col>
+          <Col>
+            <Button loading={syncing} onClick={syncBgp}>
+              同步 BGP 会话
+            </Button>
           </Col>
         </Row>
-        <Descriptions size="small" style={{ marginTop: 16 }} column={{ xs: 1, sm: 2, md: 3 }}>
-          <Descriptions.Item label="类型">平台内嵌 EVPN 控制平面</Descriptions.Item>
-          <Descriptions.Item label="北向地址">
-            <Typography.Text code>{status?.base_url || "internal://bugis"}</Typography.Text>
-          </Descriptions.Item>
-          <Descriptions.Item label="状态版本化">
-            RIB 路由带时间戳；设备配置见{" "}
-            <Link to="/config-management">配置管理</Link>
+        <Descriptions size="small" style={{ marginTop: 16 }} column={{ xs: 1, sm: 2, md: 4 }}>
+          <Descriptions.Item label="RIB 版本">v{status?.rib_version ?? 0}</Descriptions.Item>
+          <Descriptions.Item label="BGP 会话在线">{status?.bgp_sessions_up ?? 0}</Descriptions.Item>
+          <Descriptions.Item label="集群模式">{cluster?.mode || "-"}</Descriptions.Item>
+          <Descriptions.Item label="Leader">{cluster?.leader || "-"}</Descriptions.Item>
+          <Descriptions.Item label="配置版本化">
+            设备配置见 <Link to="/config-management">配置管理</Link>
           </Descriptions.Item>
         </Descriptions>
       </Card>
-
-      <Alert
-        type="warning"
-        showIcon
-        message="功能完备度说明"
-        description="内置控制器已覆盖 VTEP 注册、EVPN RIB 计算与 Overlay 拓扑，适合演示与编排验证。
-          与物理设备的真实 BGP EVPN 会话、SR-MPLS 控制面、控制器 HA 等能力仍在规划中；
-          数据面配置下发当前仍经南向驱动 (NETCONF/CLI) 完成。"
-      />
 
       <Card title="能力矩阵" size="small">
         <Table
@@ -209,31 +246,116 @@ export default function ControlPlane() {
         </Col>
         <Col xs={12} md={6}>
           <Card>
-            <Statistic title="VTEP 在线" value={status?.vteps_up || 0} valueStyle={{ color: "#52c41a" }} />
-          </Card>
-        </Col>
-        <Col xs={12} md={6}>
-          <Card>
             <Statistic title="EVPN 路由" value={status?.route_count || 0} prefix={<NodeIndexOutlined />} />
           </Card>
         </Col>
         <Col xs={12} md={6}>
           <Card>
-            <Statistic title="管理 VNI 数" value={status?.vni_count || 0} />
+            <Statistic
+              title="BGP 会话"
+              value={status?.bgp_sessions_up || 0}
+              suffix={`/ ${bgp.length}`}
+              prefix={<ApiOutlined />}
+            />
+          </Card>
+        </Col>
+        <Col xs={12} md={6}>
+          <Card>
+            <Statistic
+              title="数据面绑定"
+              value={bindings.filter((b) => b.state === "applied").length}
+              suffix={`/ ${bindings.length}`}
+              prefix={<CloudServerOutlined />}
+            />
           </Card>
         </Col>
       </Row>
 
-      <Card title="VXLAN Overlay 拓扑 (控制器计算 · 按 VNI 全互联隧道)">
+      <Card title="控制器集群 (HA)" size="small">
+        <Table
+          rowKey="node_id"
+          dataSource={cluster?.nodes || []}
+          pagination={false}
+          size="small"
+          locale={{ emptyText: <Empty description="集群节点加载中" /> }}
+          columns={[
+            { title: "节点", dataIndex: "node_id" },
+            { title: "主机", dataIndex: "hostname" },
+            {
+              title: "角色",
+              dataIndex: "role",
+              render: (r) => (
+                <Tag color={r === "leader" ? "blue" : r === "standby" ? "purple" : "default"}>
+                  {r}
+                </Tag>
+              ),
+            },
+            { title: "RIB 版本", dataIndex: "rib_version" },
+            {
+              title: "本机",
+              dataIndex: "is_local",
+              render: (v) => (v ? <Tag color="green">是</Tag> : "-"),
+            },
+            { title: "最近心跳", dataIndex: "last_heartbeat" },
+          ]}
+        />
+      </Card>
+
+      <Card title="BGP EVPN 对等会话" size="small">
+        <Table
+          rowKey="id"
+          dataSource={bgp}
+          pagination={false}
+          size="small"
+          locale={{ emptyText: <Empty description="开通控制器托管专线后自动建立" /> }}
+          columns={[
+            { title: "设备", dataIndex: "device_name" },
+            { title: "对端 IP", dataIndex: "peer_ip" },
+            { title: "本地 ASN", dataIndex: "local_asn" },
+            { title: "对端 ASN", dataIndex: "remote_asn" },
+            {
+              title: "状态",
+              dataIndex: "state",
+              render: (s) => <Tag color={BGP_COLOR[s] || "default"}>{s}</Tag>,
+            },
+            { title: "收路由", dataIndex: "routes_received" },
+            { title: "发路由", dataIndex: "routes_sent" },
+          ]}
+        />
+      </Card>
+
+      <Card title="数据面编排绑定" size="small">
+        <Table
+          rowKey="id"
+          dataSource={bindings.slice(0, 50)}
+          pagination={false}
+          size="small"
+          locale={{ emptyText: <Empty description="暂无数据面绑定" /> }}
+          columns={[
+            { title: "专线 ID", dataIndex: "circuit_id", width: 90 },
+            { title: "设备 ID", dataIndex: "device_id", width: 90 },
+            { title: "操作", dataIndex: "operation", width: 80 },
+            { title: "传输", dataIndex: "transport", width: 90 },
+            {
+              title: "状态",
+              dataIndex: "state",
+              render: (s) => <Tag color={DP_COLOR[s] || "default"}>{s}</Tag>,
+            },
+            { title: "时间", dataIndex: "created_at" },
+          ]}
+        />
+      </Card>
+
+      <Card title="VXLAN / SR-MPLS Overlay 拓扑">
         <OverlayMap topo={topo} />
       </Card>
 
-      <Card title="VTEP 邻居表 (Bugis 控制器视图)">
+      <Card title="VTEP 邻居表">
         <Table
           rowKey="id"
           dataSource={vteps}
           pagination={false}
-          locale={{ emptyText: <Empty description="暂无 VTEP，开通由本控制器托管的专线后出现" /> }}
+          locale={{ emptyText: <Empty description="暂无 VTEP" /> }}
           columns={[
             { title: "设备", dataIndex: "name" },
             { title: "VTEP IP", dataIndex: "vtep_ip" },
@@ -272,16 +394,20 @@ export default function ControlPlane() {
           locale={{ emptyText: <Empty description="控制器 RIB 为空" /> }}
           columns={[
             {
-              title: "路由类型",
+              title: "类型",
               dataIndex: "type",
               render: (t) => <Tag color={RT_COLOR[t]}>{RT_LABEL[t] || t}</Tag>,
             },
-            { title: "VNI", dataIndex: "vni" },
+            { title: "VNI", dataIndex: "vni", width: 70 },
+            {
+              title: "封装",
+              dataIndex: "encap",
+              width: 80,
+              render: (e) => <Tag>{e || "vxlan"}</Tag>,
+            },
+            { title: "MPLS 标签", dataIndex: "mpls_label", render: (v) => v || "-" },
             { title: "RD", dataIndex: "rd" },
-            { title: "RT", dataIndex: "rt" },
-            { title: "MAC", dataIndex: "mac", render: (m) => m || "-" },
-            { title: "IP", dataIndex: "ip", render: (i) => i || "-" },
-            { title: "VTEP/下一跳", dataIndex: "next_hop" },
+            { title: "下一跳", dataIndex: "next_hop" },
           ]}
         />
       </Card>

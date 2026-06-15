@@ -22,6 +22,7 @@ from app.models.circuit import Circuit, CircuitEndpoint
 from app.models.config_job import ConfigJob
 from app.models.device import Device
 from app.controller import controller as bugis_controller
+from app.controller import dataplane as ctrl_dataplane
 from app.models.controller import Controller
 from app.models.enums import (
     AccessMode,
@@ -270,9 +271,13 @@ def _deliver_via_bugis(
     db.flush()
     try:
         if operation == "remove":
-            result = bugis_controller.withdraw_circuit(db, circuit, endpoints)
+            result = bugis_controller.withdraw_circuit(
+                db, circuit, endpoints, work_order_id=wo.id
+            )
         else:
-            result = bugis_controller.install_circuit(db, circuit, endpoints)
+            result = bugis_controller.install_circuit(
+                db, circuit, endpoints, work_order_id=wo.id
+            )
         job.rendered_config = result["summary"]
         job.status = ConfigJobStatus.SUCCEEDED
         _log(
@@ -397,6 +402,9 @@ def _render_and_push(
         rendered = driver.render(service_type.value, operation, context)
         job.rendered_config = rendered
         job.status = ConfigJobStatus.RENDERED
+        ctrl_dataplane.mark_rendered(
+            db, circuit.id, device.id, operation, rendered
+        )
         # Render the inverse op as rollback config (best-effort).
         inverse = "remove" if operation == "apply" else "apply"
         try:
@@ -410,6 +418,9 @@ def _render_and_push(
             ConfigJobStatus.DRY_RUN if result.dry_run and result.success
             else ConfigJobStatus.SUCCEEDED if result.success
             else ConfigJobStatus.FAILED
+        )
+        ctrl_dataplane.mark_applied(
+            db, circuit.id, device.id, operation, job.output or "", result.success
         )
         tag = "[GW] " if is_gateway else ""
         _log(

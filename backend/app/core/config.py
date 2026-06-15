@@ -53,6 +53,10 @@ class Settings(BaseSettings):
     scheduler_enabled: bool = True
     scheduler_interval_seconds: int = 30
 
+    # --- Built-in Bugis SDN controller ---
+    controller_bgp_asn: int = 65000
+    controller_node_id: str = "bugis-1"
+
     # --- Alarm thresholds (SLA / capacity) ---
     threshold_packet_loss_pct: float = 0.5
     threshold_latency_ms: float = 50.0

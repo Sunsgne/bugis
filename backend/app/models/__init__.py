@@ -13,7 +13,13 @@ from app.models.audit import AuditLog  # noqa: F401
 from app.models.offering import ServiceOffering  # noqa: F401
 from app.models.controller import Controller  # noqa: F401
 from app.models.notification import NotificationChannel  # noqa: F401
-from app.models.controlplane import EvpnRoute, VtepPeer  # noqa: F401
+from app.models.controlplane import (  # noqa: F401
+    BgpEvpnSession,
+    ControllerClusterNode,
+    DataPlaneBinding,
+    EvpnRoute,
+    VtepPeer,
+)
 from app.models.config_snapshot import DeviceConfigSnapshot  # noqa: F401
 
 __all__ = [
@@ -36,5 +42,8 @@ __all__ = [
     "NotificationChannel",
     "VtepPeer",
     "EvpnRoute",
+    "BgpEvpnSession",
+    "ControllerClusterNode",
+    "DataPlaneBinding",
     "DeviceConfigSnapshot",
 ]

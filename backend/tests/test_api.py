@@ -502,7 +502,22 @@ def test_bugis_sdn_controller(client, auth_headers):
     assert status["route_count"] >= len(routes)
     assert status["version"]
     assert status["kind"] == "builtin"
-    assert any(c["status"] == "ready" for c in status["capabilities"])
+    assert status["capabilities_ready"] == status["capabilities_total"] == 8
+    assert all(c["status"] == "ready" for c in status["capabilities"])
+    assert "cluster" in status
+
+    # BGP sessions auto-created for VTEPs
+    bgp = client.get("/api/v1/controller/bgp/sessions", headers=auth_headers).json()
+    assert len(bgp) >= 2
+    sync = client.post("/api/v1/controller/bgp/sync", headers=auth_headers).json()
+    assert sync["synced"] >= 2
+
+    cluster = client.get("/api/v1/controller/cluster", headers=auth_headers).json()
+    assert cluster["leader"]
+    assert len(cluster["nodes"]) >= 2
+
+    dp = client.get("/api/v1/controller/dataplane/bindings", headers=auth_headers).json()
+    assert any(b["state"] == "applied" for b in dp)
 
 
 def test_controller_delegation(client, auth_headers):

@@ -7,8 +7,8 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user
-from app.controller import controller as bugis
+from app.api.deps import get_current_user, require_operator
+from app.controller import bgp_peering, controller as bugis, dataplane, ha
 from app.core.database import get_db
 from app.models.controlplane import EvpnRoute, VtepPeer
 from app.models.user import User
@@ -43,6 +43,7 @@ def list_vteps(db: Session = Depends(get_db), _: User = Depends(get_current_user
 def list_routes(
     vni: int | None = None,
     route_type: str | None = None,
+    encap: str | None = None,
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
@@ -52,6 +53,8 @@ def list_routes(
     routes = db.execute(stmt).scalars().all()
     if route_type:
         routes = [r for r in routes if r.route_type.value == route_type]
+    if encap:
+        routes = [r for r in routes if r.encap.value == encap]
     return [
         {
             "id": r.id,
@@ -64,6 +67,9 @@ def list_routes(
             "vtep_ip": r.vtep_ip,
             "next_hop": r.next_hop,
             "circuit_id": r.circuit_id,
+            "encap": r.encap.value,
+            "mpls_label": r.mpls_label,
+            "sr_sid": r.sr_sid,
         }
         for r in routes
     ]
@@ -71,14 +77,12 @@ def list_routes(
 
 @router.get("/topology")
 def overlay_topology(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
-    """Overlay topology: VTEP nodes and full-mesh edges per VNI."""
     peers = db.execute(select(VtepPeer)).scalars().all()
     nodes = [
         {"id": p.device_id, "name": p.name, "vtep_ip": p.vtep_ip,
          "vnis": [int(v) for v in p.vnis.split(",") if v], "status": p.status.value}
         for p in peers
     ]
-    # Build per-VNI VTEP membership to render the overlay full mesh.
     vni_members: dict[int, list[int]] = defaultdict(list)
     for p in peers:
         for v in p.vnis.split(","):
@@ -90,3 +94,31 @@ def overlay_topology(db: Session = Depends(get_db), _: User = Depends(get_curren
             for j in range(i + 1, len(members)):
                 edges.append({"vni": vni, "source": members[i], "target": members[j]})
     return {"nodes": nodes, "edges": edges, "vnis": sorted(vni_members.keys())}
+
+
+@router.get("/bgp/sessions")
+def list_bgp_sessions(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+    return bgp_peering.list_sessions(db)
+
+
+@router.post("/bgp/sync")
+def sync_bgp_sessions(
+    db: Session = Depends(get_db), _: User = Depends(require_operator)
+):
+    count = bgp_peering.sync_sessions(db)
+    db.commit()
+    return {"synced": count}
+
+
+@router.get("/cluster")
+def cluster_info(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+    return ha.cluster_status(db)
+
+
+@router.get("/dataplane/bindings")
+def list_dataplane_bindings(
+    circuit_id: int | None = None,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    return dataplane.list_bindings(db, circuit_id)

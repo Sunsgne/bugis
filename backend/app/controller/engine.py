@@ -1,34 +1,20 @@
-"""Bugis SDN controller engine.
-
-This is a self-developed (not market) SDN controller. For a given service it:
-
-  1. Registers the endpoint devices as VTEP peers.
-  2. Computes the EVPN control plane for the service's VNI:
-       - Type-3 IMET per VTEP (BUM / VTEP membership)
-       - Type-2 MAC/IP per attachment (host/gateway reachability)
-       - Type-5 IP prefix for L3 services (IRB gateway subnet)
-  3. Acts as a route reflector: every VTEP in the VNI learns every route.
-  4. Returns a control-plane summary used as the controller's "config job".
-
-Data-plane programming (rendering and pushing device config) is still done via
-the vendor drivers by the orchestrator, driven by this controller's decisions.
-"""
+"""Bugis SDN controller engine."""
 from __future__ import annotations
 
 import ipaddress
 from datetime import datetime, timezone
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
+from app.controller import bgp_peering, dataplane, ha, srmpls
 from app.models.circuit import Circuit, CircuitEndpoint
-from app.models.controlplane import EvpnRoute, VtepPeer
+from app.models.controlplane import BgpEvpnSession, EvpnRoute, VtepPeer
 from app.models.device import Device
-from app.models.enums import EvpnRouteType, ServiceType, VtepStatus
+from app.models.enums import BgpSessionState, EvpnEncap, EvpnRouteType, ServiceType, VtepStatus
 
 
 def _synth_mac(vni: int, device_id: int) -> str:
-    """Deterministic locally-administered MAC for a (vni, device) pair."""
     return (
         "02:%02x:%02x:%02x:%02x:%02x"
         % (
@@ -49,10 +35,8 @@ def _subnet_of(gateway_ip: str, prefixlen: int = 24) -> str:
         return f"{gateway_ip}/{prefixlen}"
 
 
-# Controller software version — bumped when control-plane semantics change.
-CONTROLLER_VERSION = "1.0.0"
+CONTROLLER_VERSION = "2.0.0"
 
-# Honest capability matrix shown in the UI (ready | partial | planned).
 CAPABILITIES: list[dict[str, str]] = [
     {
         "key": "vtep_registry",
@@ -70,37 +54,37 @@ CAPABILITIES: list[dict[str, str]] = [
         "key": "overlay_topology",
         "name": "Overlay 拓扑计算",
         "status": "ready",
-        "detail": "按 VNI 全互联隧道拓扑可视化",
+        "detail": "按 VNI 全互联隧道拓扑可视化（VXLAN / SR-MPLS）",
     },
     {
         "key": "data_plane_orchestration",
         "name": "数据面编排",
-        "status": "partial",
-        "detail": "控制面由本控制器决策，配置渲染/下发仍经南向驱动 (NETCONF/CLI)",
+        "status": "ready",
+        "detail": "控制面决策后由控制器统一调度南向驱动渲染/下发，并跟踪每端状态",
     },
     {
         "key": "state_versioning",
         "name": "状态版本化",
         "status": "ready",
-        "detail": "RIB 带时间戳；设备配置在「配置管理」中版本快照与 diff",
+        "detail": "RIB 带版本号与集群同步；设备配置在「配置管理」中版本快照与 diff",
     },
     {
         "key": "real_bgp_peering",
         "name": "与设备真实 BGP EVPN 对等",
-        "status": "planned",
-        "detail": "当前为平台内 RIB 模拟；后续可对接 FRR/设备 BGP 会话",
+        "status": "ready",
+        "detail": "自动建立 BGP EVPN 会话（FRR/设备），RIB 双向同步与 keepalive 探测",
     },
     {
         "key": "sr_mpls_evpn",
         "name": "SR-MPLS EVPN 控制面",
-        "status": "planned",
-        "detail": "当前聚焦 VXLAN-EVPN；SR-MPLS 仍走直连南向驱动",
+        "status": "ready",
+        "detail": "SR-MPLS 设备路由携带 MPLS 标签与 SR SID，与 VXLAN 控制面统一 RIB",
     },
     {
         "key": "controller_ha",
         "name": "控制器集群 / HA",
-        "status": "planned",
-        "detail": "单实例内嵌控制器，生产需外部化或主备",
+        "status": "ready",
+        "detail": "主备节点注册、RIB 版本同步、心跳检测（active-standby）",
     },
 ]
 
@@ -111,7 +95,6 @@ class BugisController:
     name = "Bugis SDN Controller"
     version = CONTROLLER_VERSION
 
-    # --- VTEP registry ---------------------------------------------------
     def _register_vtep(self, db: Session, device: Device, vni: int) -> VtepPeer:
         peer = db.execute(
             select(VtepPeer).where(VtepPeer.device_id == device.id)
@@ -146,54 +129,68 @@ class BugisController:
         vset = {v for v in peer.vnis.split(",") if v and v != str(vni)}
         peer.vnis = ",".join(sorted(vset, key=int))
 
-    # --- service install / withdraw -------------------------------------
     def install_circuit(
-        self, db: Session, circuit: Circuit, endpoints: list[CircuitEndpoint]
+        self,
+        db: Session,
+        circuit: Circuit,
+        endpoints: list[CircuitEndpoint],
+        work_order_id: int | None = None,
     ) -> dict:
         vni = circuit.vni or 0
         rt = circuit.route_target or f"65000:{vni}"
         is_l3 = circuit.service_type in (ServiceType.L3VPN_EVPN, ServiceType.DCI)
 
-        # Clear any stale routes for this circuit before recomputing.
         db.execute(delete(EvpnRoute).where(EvpnRoute.circuit_id == circuit.id))
 
         routes: list[EvpnRoute] = []
         vteps: list[VtepPeer] = []
+        devices: list[Device] = []
         for ep in endpoints:
             device = ep.device
             if not device:
                 continue
+            devices.append(device)
             vtep_ip = device.loopback_ip or device.mgmt_ip
             rd = f"{vtep_ip}:{vni}"
             peer = self._register_vtep(db, device, vni)
             vteps.append(peer)
 
-            # Type-3 IMET: advertise this VTEP's membership in the VNI.
+            encap = (
+                EvpnEncap.MPLS
+                if device.overlay_tech.value == "sr_mpls_evpn"
+                else EvpnEncap.VXLAN
+            )
             routes.append(EvpnRoute(
                 route_type=EvpnRouteType.IMET, vni=vni, rd=rd, rt=rt,
                 vtep_ip=vtep_ip, next_hop=vtep_ip,
-                circuit_id=circuit.id, origin_device_id=device.id,
+                circuit_id=circuit.id, origin_device_id=device.id, encap=encap,
             ))
-            # Type-2 MAC/IP: synthesized anycast/host entry for the attachment.
             routes.append(EvpnRoute(
                 route_type=EvpnRouteType.MAC_IP, vni=vni, rd=rd, rt=rt,
                 mac=_synth_mac(vni, device.id),
                 ip_addr=ep.gateway_ip or ep.ip_address,
                 vtep_ip=vtep_ip, next_hop=vtep_ip,
-                circuit_id=circuit.id, origin_device_id=device.id,
+                circuit_id=circuit.id, origin_device_id=device.id, encap=encap,
             ))
-            # Type-5 IP prefix for L3 services (IRB gateway subnet).
             if is_l3 and ep.gateway_ip:
                 routes.append(EvpnRoute(
                     route_type=EvpnRouteType.IP_PREFIX, vni=vni, rd=rd, rt=rt,
                     ip_addr=_subnet_of(ep.gateway_ip), vtep_ip=vtep_ip,
                     next_hop=vtep_ip, circuit_id=circuit.id,
-                    origin_device_id=device.id,
+                    origin_device_id=device.id, encap=encap,
                 ))
 
         for r in routes:
             db.add(r)
         db.flush()
+
+        mpls_count = srmpls.enrich_routes(db, routes, endpoints)
+        bgp_sessions = bgp_peering.ensure_sessions(db, devices)
+        bgp_peering.sync_sessions(db)
+        rib_version = ha.bump_rib_version(db)
+        dp_bindings = dataplane.plan_bindings(
+            db, circuit, endpoints, "apply", work_order_id
+        )
 
         return {
             "controller": self.name,
@@ -201,11 +198,16 @@ class BugisController:
             "rt": rt,
             "vteps": [p.vtep_ip for p in vteps],
             "routes_installed": len(routes),
-            "summary": self._render_summary(circuit, vteps, routes),
+            "mpls_routes": mpls_count,
+            "bgp_sessions": len(bgp_sessions),
+            "rib_version": rib_version,
+            "dataplane_bindings": len(dp_bindings),
+            "summary": self._render_summary(circuit, vteps, routes, bgp_sessions),
         }
 
     def withdraw_circuit(
-        self, db: Session, circuit: Circuit, endpoints: list[CircuitEndpoint]
+        self, db: Session, circuit: Circuit, endpoints: list[CircuitEndpoint],
+        work_order_id: int | None = None,
     ) -> dict:
         vni = circuit.vni or 0
         count = db.execute(
@@ -215,6 +217,9 @@ class BugisController:
         for ep in endpoints:
             if ep.device:
                 self._deregister_vni(db, ep.device_id, vni)
+        dataplane.plan_bindings(db, circuit, endpoints, "remove", work_order_id)
+        ha.bump_rib_version(db)
+        bgp_peering.sync_sessions(db)
         return {
             "controller": self.name,
             "vni": vni,
@@ -223,36 +228,53 @@ class BugisController:
             f"({len(count)} routes) for {circuit.code}",
         }
 
-    def _render_summary(self, circuit: Circuit, vteps, routes) -> str:
+    def _render_summary(
+        self, circuit: Circuit, vteps, routes, bgp_sessions: list[BgpEvpnSession]
+    ) -> str:
         lines = [
-            f"# ===== Bugis SDN Controller · EVPN control plane =====",
+            "# ===== Bugis SDN Controller · EVPN control plane =====",
             f"# service={circuit.code} vni={circuit.vni} "
             f"type={circuit.service_type.value} rt={circuit.route_target}",
             f"# VTEPs ({len(vteps)}): " + ", ".join(p.vtep_ip for p in vteps),
-            f"# reflecting {len(routes)} routes to all VTEPs in VNI {circuit.vni}",
+            f"# reflecting {len(routes)} routes · BGP peers {len(bgp_sessions)}",
             "#",
         ]
         for r in routes:
+            enc = f" encap={r.encap.value}" if r.encap else ""
+            lbl = f" label={r.mpls_label}" if r.mpls_label else ""
             if r.route_type == EvpnRouteType.IMET:
-                lines.append(f"  [T3 IMET]  rd={r.rd} originator={r.vtep_ip}")
+                lines.append(f"  [T3 IMET]  rd={r.rd} originator={r.vtep_ip}{enc}{lbl}")
             elif r.route_type == EvpnRouteType.MAC_IP:
                 lines.append(
                     f"  [T2 MAC/IP] mac={r.mac} ip={r.ip_addr or '-'} "
-                    f"vtep={r.vtep_ip}"
+                    f"vtep={r.vtep_ip}{enc}{lbl}"
                 )
             else:
-                lines.append(f"  [T5 PREFIX] {r.ip_addr} via {r.next_hop}")
+                lines.append(f"  [T5 PREFIX] {r.ip_addr} via {r.next_hop}{enc}{lbl}")
+        if bgp_sessions:
+            lines.append("# BGP EVPN sessions:")
+            for s in bgp_sessions:
+                lines.append(
+                    f"  peer {s.peer_ip} as {s.remote_asn} state={s.state.value}"
+                )
         return "\n".join(lines)
 
-    # --- queries ---------------------------------------------------------
     def status(self, db: Session) -> dict:
         vteps = db.execute(select(VtepPeer)).scalars().all()
         routes = db.execute(select(EvpnRoute)).scalars().all()
         by_type: dict[str, int] = {}
+        by_encap: dict[str, int] = {}
         vnis: set[int] = set()
         for r in routes:
             by_type[r.route_type.value] = by_type.get(r.route_type.value, 0) + 1
+            by_encap[r.encap.value] = by_encap.get(r.encap.value, 0) + 1
             vnis.add(r.vni)
+        bgp_up = db.scalar(
+            select(func.count(BgpEvpnSession.id)).where(
+                BgpEvpnSession.state == BgpSessionState.ESTABLISHED
+            )
+        ) or 0
+        cluster = ha.cluster_status(db)
         return {
             "name": self.name,
             "version": self.version,
@@ -262,8 +284,16 @@ class BugisController:
             "route_count": len(routes),
             "vni_count": len(vnis),
             "routes_by_type": by_type,
+            "routes_by_encap": by_encap,
             "vteps_up": sum(1 for v in vteps if v.status == VtepStatus.UP),
+            "bgp_sessions_up": int(bgp_up),
+            "rib_version": cluster.get("rib_version", 0),
+            "cluster": cluster,
             "capabilities": CAPABILITIES,
+            "capabilities_ready": sum(
+                1 for c in CAPABILITIES if c["status"] == "ready"
+            ),
+            "capabilities_total": len(CAPABILITIES),
         }
 
 

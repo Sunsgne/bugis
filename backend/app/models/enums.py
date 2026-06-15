@@ -170,6 +170,32 @@ class VtepStatus(str, enum.Enum):
     INIT = "init"
 
 
+class BgpSessionState(str, enum.Enum):
+    """BGP EVPN session state between controller and a fabric device."""
+
+    IDLE = "idle"
+    CONNECT = "connect"
+    ESTABLISHED = "established"
+
+
+class ControllerNodeRole(str, enum.Enum):
+    LEADER = "leader"
+    STANDBY = "standby"
+    CANDIDATE = "candidate"
+
+
+class EvpnEncap(str, enum.Enum):
+    VXLAN = "vxlan"
+    MPLS = "mpls"
+
+
+class DataPlaneState(str, enum.Enum):
+    PENDING = "pending"
+    RENDERED = "rendered"
+    APPLIED = "applied"
+    FAILED = "failed"
+
+
 class DeliveryMode(str, enum.Enum):
     """How configuration reaches the network for a site."""
 

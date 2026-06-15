@@ -41,6 +41,13 @@ def ensure_bugis_controller(db: Session) -> Controller:
     return controller
 
 
+def ensure_cluster_node(db: Session) -> None:
+    from app.controller import ha
+
+    ha.ensure_local_node(db, node_id=settings.controller_node_id)
+    db.commit()
+
+
 def ensure_superuser(db: Session) -> None:
     existing = db.execute(
         select(User).where(User.username == settings.first_superuser)
