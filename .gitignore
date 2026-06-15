@@ -26,3 +26,4 @@ deploy/demo.env
 .idea/
 .vscode/
 *.log
+frontend/tsconfig.tsbuildinfo

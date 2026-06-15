@@ -3,7 +3,7 @@
 Discovers a device's interfaces so they become selectable when provisioning
 circuits. In dry-run mode it synthesizes a vendor-appropriate interface set;
 in live mode it walks IF-MIB (ifDescr/ifAlias/ifHighSpeed/ifOperStatus) via
-pysnmp (optional dependency).
+pysnmp (optional dependency), using platform-wide SNMP settings.
 
 Port descriptions may contain contracted bandwidth tags like ``bw(100Mbps)``;
 these are stored on ``DeviceInterface.description`` and synced to backbone
@@ -12,6 +12,7 @@ these are stored on ``DeviceInterface.description`` and synced to backbone
 from __future__ import annotations
 
 import random
+import time
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -19,6 +20,8 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.models.device import Device, DeviceInterface
 from app.models.enums import Vendor
+from app.models.snmp_settings import SnmpSettings
+from app.services import snmp_settings as snmp_cfg
 
 # Vendor interface naming conventions: (access_pattern, count, uplink_pattern, uplink_count, speed)
 VENDOR_INTERFACES: dict[Vendor, list[tuple[str, int, int]]] = {
@@ -38,6 +41,11 @@ VENDOR_INTERFACES: dict[Vendor, list[tuple[str, int, int]]] = {
 }
 
 OPER_MAP = {1: "up", 2: "down", 3: "testing", 4: "unknown", 5: "dormant", 6: "notPresent", 7: "lowerLayerDown"}
+
+
+def preview_discovery(device: Device) -> list[dict]:
+    """Return synthesized interfaces without persisting (for SNMP test in dry-run)."""
+    return _synthesize(device)
 
 
 def _synthesize(device: Device) -> list[dict]:
@@ -61,9 +69,51 @@ def _synthesize(device: Device) -> list[dict]:
     return ifaces
 
 
-def _walk_oid(device: Device, oid: str) -> dict[int, str]:
+def _auth_proto(name: str | None):
     from pysnmp.hlapi import (  # pragma: no cover
-        CommunityData,
+        usmAesCfb128Protocol,
+        usmAesCfb192Protocol,
+        usmAesCfb256Protocol,
+        usmDESPrivProtocol,
+        usmHMACMD5AuthProtocol,
+        usmHMACSHAAuthProtocol,
+    )
+
+    mapping = {
+        "MD5": usmHMACMD5AuthProtocol,
+        "SHA": usmHMACSHAAuthProtocol,
+        "DES": usmDESPrivProtocol,
+        "AES": usmAesCfb128Protocol,
+        "AES128": usmAesCfb128Protocol,
+        "AES192": usmAesCfb192Protocol,
+        "AES256": usmAesCfb256Protocol,
+    }
+    return mapping.get((name or "").upper())
+
+
+def _build_credentials(cfg: SnmpSettings, community: str):
+    from pysnmp.hlapi import CommunityData, UsmUserData  # pragma: no cover
+
+    if cfg.version == "3":
+        auth_key = cfg.v3_auth_password if cfg.v3_security_level != "noAuthNoPriv" else None
+        priv_key = cfg.v3_priv_password if cfg.v3_security_level == "authPriv" else None
+        return UsmUserData(
+            cfg.v3_username or "",
+            authKey=auth_key,
+            privKey=priv_key,
+            authProtocol=_auth_proto(cfg.v3_auth_protocol),
+            privProtocol=_auth_proto(cfg.v3_priv_protocol),
+        )
+    return CommunityData(community, mpModel=1 if cfg.version == "2c" else 0)
+
+
+def _walk_oid(
+    device: Device,
+    oid: str,
+    cfg: SnmpSettings,
+    community: str,
+) -> dict[int, str]:
+    from pysnmp.hlapi import (  # pragma: no cover
         ContextData,
         ObjectIdentity,
         ObjectType,
@@ -72,15 +122,21 @@ def _walk_oid(device: Device, oid: str) -> dict[int, str]:
         nextCmd,
     )
 
-    community = device.password or "public"
     out: dict[int, str] = {}
+    creds = _build_credentials(cfg, community)
+    ctx = ContextData(cfg.v3_context_name) if cfg.version == "3" and cfg.v3_context_name else ContextData()
     for (errInd, errStat, _idx, varBinds) in nextCmd(
         SnmpEngine(),
-        CommunityData(community),
-        UdpTransportTarget((device.mgmt_ip, 161), timeout=2, retries=1),
-        ContextData(),
+        creds,
+        UdpTransportTarget(
+            (device.mgmt_ip, cfg.port),
+            timeout=cfg.timeout_sec,
+            retries=cfg.retries,
+        ),
+        ctx,
         ObjectType(ObjectIdentity(oid)),
         lexicographicMode=False,
+        maxRepetitions=cfg.max_repetitions,
     ):
         if errInd or errStat:
             break
@@ -90,7 +146,21 @@ def _walk_oid(device: Device, oid: str) -> dict[int, str]:
     return out
 
 
-def _walk_real(device: Device) -> list[dict]:  # pragma: no cover - needs device
+def probe_interfaces(
+    db: Session,
+    device: Device,
+    *,
+    community_override: str | None = None,
+) -> list[dict]:
+    """Walk IF-MIB once and return raw interface dicts (no DB write)."""
+    cfg = snmp_cfg.get_or_create(db)
+    if not cfg.enabled:
+        raise RuntimeError("SNMP 采集已在平台设置中关闭")
+    community = snmp_cfg.effective_community(db, device, community_override)
+    return _walk_real(device, cfg, community)
+
+
+def _walk_real(device: Device, cfg: SnmpSettings, community: str) -> list[dict]:  # pragma: no cover
     try:
         import pysnmp  # noqa: F401
     except ImportError as exc:
@@ -98,13 +168,30 @@ def _walk_real(device: Device) -> list[dict]:  # pragma: no cover - needs device
             "pysnmp not installed; install it or run in dry-run mode"
         ) from exc
 
-    names = _walk_oid(device, "1.3.6.1.2.1.2.2.1.2")  # ifDescr
-    aliases = _walk_oid(device, "1.3.6.1.2.1.31.1.1.1.18")  # ifAlias
-    speeds = _walk_oid(device, "1.3.6.1.2.1.31.1.1.1.15")  # ifHighSpeed (Mbps)
-    opers = _walk_oid(device, "1.3.6.1.2.1.2.2.1.8")  # ifOperStatus
+    names = _walk_oid(device, "1.3.6.1.2.1.2.2.1.2", cfg, community) if cfg.walk_if_descr else {}
+    if not names:
+        raise RuntimeError("未采集到 ifDescr，请检查 community / 网络可达性 / SNMP 版本")
+
+    aliases = (
+        _walk_oid(device, "1.3.6.1.2.1.31.1.1.1.18", cfg, community)
+        if cfg.walk_if_alias
+        else {}
+    )
+    speeds = (
+        _walk_oid(device, "1.3.6.1.2.1.31.1.1.1.15", cfg, community)
+        if cfg.walk_if_high_speed
+        else {}
+    )
+    opers = (
+        _walk_oid(device, "1.3.6.1.2.1.2.2.1.8", cfg, community)
+        if cfg.walk_if_oper_status
+        else {}
+    )
 
     results: list[dict] = []
     for ifindex, name in names.items():
+        if not snmp_cfg.interface_allowed(name, cfg):
+            continue
         alias = aliases.get(ifindex, "")
         description = alias.strip() or None
         speed_raw = speeds.get(ifindex)
@@ -126,7 +213,12 @@ def discover_interfaces(db: Session, device: Device) -> list[DeviceInterface]:
     """Discover and upsert a device's interfaces. Returns the current set."""
     from app.services import link_monitor
 
-    discovered = _synthesize(device) if settings.dry_run else _walk_real(device)
+    cfg = snmp_cfg.get_or_create(db)
+    if settings.dry_run or not cfg.enabled:
+        discovered = _synthesize(device)
+    else:
+        community = snmp_cfg.effective_community(db, device)
+        discovered = _walk_real(device, cfg, community)
 
     existing = {
         i.name: i
@@ -148,6 +240,7 @@ def discover_interfaces(db: Session, device: Device) -> list[DeviceInterface]:
         iface.discovered_via = d.get("discovered_via")
 
     db.flush()
-    link_monitor.enrich_interface_descriptions(db, device)
-    link_monitor.sync_all_link_capacity(db)
+    if cfg.sync_link_capacity:
+        link_monitor.enrich_interface_descriptions(db, device)
+        link_monitor.sync_all_link_capacity(db)
     return list(existing.values())

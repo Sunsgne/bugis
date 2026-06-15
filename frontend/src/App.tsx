@@ -20,6 +20,7 @@ import {
   CloudServerOutlined,
   BellOutlined,
   ShareAltOutlined,
+  SettingOutlined,
   FileTextOutlined,
 } from "@ant-design/icons";
 import { useEffect, useState } from "react";
@@ -44,6 +45,7 @@ import Controllers from "./pages/Controllers";
 import ControlPlane from "./pages/ControlPlane";
 import ConfigManagement from "./pages/ConfigManagement";
 import Notifications from "./pages/Notifications";
+import SnmpSettingsPage from "./pages/SnmpSettings";
 
 const { Header, Sider, Content } = Layout;
 
@@ -52,6 +54,7 @@ const MENU = [
   { key: "/tenants", icon: <TeamOutlined />, label: "客户服务" },
   { key: "/sites", icon: <EnvironmentOutlined />, label: "数据中心" },
   { key: "/devices", icon: <ClusterOutlined />, label: "设备管理" },
+  { key: "/settings/snmp", icon: <SettingOutlined />, label: "SNMP 设置" },
   { key: "/controllers", icon: <CloudServerOutlined />, label: "控制器" },
   { key: "/control-plane", icon: <ShareAltOutlined />, label: "SDN 控制平面" },
   { key: "/catalog", icon: <AppstoreOutlined />, label: "服务套餐" },
@@ -183,6 +186,7 @@ function Shell() {
             <Route path="/tenants" element={<Tenants />} />
             <Route path="/sites" element={<Sites />} />
             <Route path="/devices" element={<Devices />} />
+            <Route path="/settings/snmp" element={<SnmpSettingsPage />} />
             <Route path="/controllers" element={<Controllers />} />
             <Route path="/control-plane" element={<ControlPlane />} />
             <Route path="/catalog" element={<Catalog />} />

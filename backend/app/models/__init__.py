@@ -20,6 +20,7 @@ from app.models.controlplane import (  # noqa: F401
     EvpnRoute,
     VtepPeer,
 )
+from app.models.snmp_settings import SnmpSettings  # noqa: F401
 from app.models.config_snapshot import DeviceConfigSnapshot  # noqa: F401
 
 __all__ = [
@@ -47,4 +48,5 @@ __all__ = [
     "ControllerClusterNode",
     "DataPlaneBinding",
     "DeviceConfigSnapshot",
+    "SnmpSettings",
 ]

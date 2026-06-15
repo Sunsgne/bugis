@@ -63,3 +63,9 @@ def ensure_superuser(db: Session) -> None:
     )
     db.add(user)
     db.commit()
+
+
+def ensure_snmp_settings(db: Session) -> None:
+    from app.services import snmp_settings
+
+    snmp_settings.get_or_create(db)

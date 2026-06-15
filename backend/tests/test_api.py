@@ -1126,3 +1126,31 @@ def test_device_check_svid_scan(client, auth_headers, monkeypatch):
     )
     assert conflict.status_code == 409
 
+
+def test_snmp_settings_crud(client, auth_headers):
+    r = client.get("/api/v1/system/snmp", headers=auth_headers)
+    assert r.status_code == 200
+    body = r.json()
+    assert body["community"]
+    assert body["port"] == 161
+
+    r2 = client.patch(
+        "/api/v1/system/snmp",
+        headers=auth_headers,
+        json={"community": "test-ro", "timeout_sec": 3, "retries": 2},
+    )
+    assert r2.status_code == 200
+    assert r2.json()["community"] == "test-ro"
+    assert r2.json()["timeout_sec"] == 3
+
+    devs = client.get("/api/v1/devices", headers=auth_headers).json()
+    if devs:
+        t = client.post(
+            "/api/v1/system/snmp/test",
+            headers=auth_headers,
+            json={"device_id": devs[0]["id"]},
+        )
+        assert t.status_code == 200
+        assert t.json()["ok"] is True
+        assert t.json()["interfaces_found"] > 0
+

@@ -22,7 +22,7 @@ from app.schemas.device import (
     DeviceOut,
     DeviceUpdate,
 )
-from app.services import baseline, config_mgmt, port_inventory, snmp
+from app.services import baseline, config_mgmt, port_inventory, snmp, snmp_settings as snmp_cfg
 
 router = APIRouter()
 
@@ -127,6 +127,9 @@ def check_device(
     svid_scan: dict | None = None
     if reachable:
         svid_scan = port_inventory.scan_device(db, device)
+        cfg = snmp_cfg.get_or_create(db)
+        if cfg.auto_discover_on_check:
+            snmp.discover_interfaces(db, device)
     db.commit()
     return {
         "device": device.name,

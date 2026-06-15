@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   Button,
   Card,
@@ -16,7 +17,7 @@ import {
   App as AntApp,
   Popconfirm,
 } from "antd";
-import { PlusOutlined, DownloadOutlined, UploadOutlined, ApiOutlined, RocketOutlined } from "@ant-design/icons";
+import { PlusOutlined, DownloadOutlined, UploadOutlined, ApiOutlined, RocketOutlined, SettingOutlined } from "@ant-design/icons";
 import { api } from "../api/client";
 import type { Device, DeviceInterface, Site, SvidUsage } from "../api/types";
 
@@ -240,6 +241,9 @@ export default function Devices() {
       title="设备管理"
       extra={
         <Space>
+          <Link to="/settings/snmp">
+            <Button icon={<SettingOutlined />}>SNMP 全局设置</Button>
+          </Link>
           <Button icon={<DownloadOutlined />} onClick={exportCsv}>
             导出 CSV
           </Button>
