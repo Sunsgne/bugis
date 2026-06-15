@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Alert } from "antd";
 import { api } from "../api/client";
 import type { Topology as Topo } from "../api/types";
 import PageCard from "@/components/PageCard";
@@ -41,11 +42,22 @@ export default function Topology() {
         <>
           <Badge variant="destructive">DCI {linkStats.dci}</Badge>
           <Badge variant="info">Fabric {linkStats.fabric}</Badge>
-          <span className="text-xs text-muted-foreground">滚轮缩放 · 拖拽平移 · 悬停高亮邻居</span>
+          <span className="text-xs text-muted-foreground">滚轮缩放 · 拖拽平移</span>
         </>
       }
     >
-      <PhysicalTopologyFlow topo={topo} />
+      {topo.edges.length === 0 && (
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 12 }}
+          message="尚未配置站点间链路"
+          description="当前按站点泳道展示纳管设备。在「容量规划」中添加 DCI / Fabric 链路后，拓扑图将自动绘制互联关系与带宽利用率。"
+        />
+      )}
+      <div className="topology-page-body">
+        <PhysicalTopologyFlow topo={topo} />
+      </div>
     </PageCard>
   );
 }
