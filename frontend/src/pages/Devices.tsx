@@ -1,79 +1,103 @@
-import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { ColumnDef } from "@tanstack/react-table";
 import {
-  Alert,
-  Button,
-  Card,
-  Col,
-  Collapse,
-  Divider,
-  Drawer,
-  Form,
-  Input,
-  InputNumber,
-  Modal,
-  Row,
-  Select,
-  Space,
-  Switch,
-  Table,
-  Tag,
-  Tooltip,
+  AlertTriangle,
+  BookOpen,
+  Cable,
+  Download,
+  KeyRound,
+  Network,
+  Plus,
+  Rocket,
+  Search,
+  Settings,
+  Trash2,
   Upload,
-  App as AntApp,
-  Popconfirm,
-  Typography,
-} from "antd";
-import {
-  PlusOutlined,
-  DownloadOutlined,
-  UploadOutlined,
-  ApiOutlined,
-  RocketOutlined,
-  SettingOutlined,
-  KeyOutlined,
-  BookOutlined,
-  SearchOutlined,
-} from "@ant-design/icons";
+} from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useForm, type Resolver } from "react-hook-form";
+import { Link } from "react-router-dom";
+import { toast } from "sonner";
+import { z } from "zod";
 import { api } from "../api/client";
-import type { Device, DeviceInterface, ManagementDefaults, Paginated, Site, SnmpDefaults, SvidUsage } from "../api/types";
-import { configPreviewModalProps, ConfigPreviewPre } from "../utils/configPreview";
-import { formModalProps } from "../utils/formModal";
+import type {
+  Device,
+  DeviceInterface,
+  ManagementDefaults,
+  Paginated,
+  Site,
+  SnmpDefaults,
+  SvidUsage,
+} from "../api/types";
+import { ConfigPreviewPre } from "../utils/configPreview";
 import {
   DEVICE_ROLE_OPTIONS,
   labelForOption,
   MANAGEMENT_TRANSPORT_OPTIONS,
-  OVERLAY_OPTIONS,
   SNMP_V3_SECURITY_OPTIONS,
   SNMP_VERSION_OPTIONS,
   VENDOR_OPTIONS,
 } from "../constants/formOptions";
-import { action, page as pageCopy, toast } from "../constants/uiCopy";
-import { buildListQuery, dataTableProps, tablePagination } from "../utils/table";
-import PageCard from "../components/PageCard";
-import ListToolbar from "../components/ListToolbar";
+import { action, page as pageCopy, toast as toastCopy } from "../constants/uiCopy";
+import { buildListQuery } from "../utils/table";
+import { PageCard, ListToolbar } from "@/components";
+import DataTable from "@/components/DataTable";
+import DeviceFormDialog, { type DeviceFormValues } from "@/components/DeviceFormDialog";
+import FormSelect from "@/components/FormSelect";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Switch } from "@/components/ui/switch";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
-const VENDOR_COLOR: Record<string, string> = {
-  h3c: "blue",
-  huawei: "red",
-  juniper: "green",
-  arista: "orange",
-  cisco: "purple",
-  frr: "cyan",
+const VENDOR_VARIANT: Record<string, "info" | "destructive" | "success" | "warning" | "secondary"> = {
+  h3c: "info",
+  huawei: "destructive",
+  juniper: "success",
+  arista: "warning",
+  cisco: "secondary",
+  frr: "info",
 };
-const STATUS_COLOR: Record<string, string> = {
-  online: "green",
-  offline: "red",
-  maintenance: "orange",
-  unknown: "default",
+
+const STATUS_VARIANT: Record<string, "success" | "destructive" | "warning" | "secondary"> = {
+  online: "success",
+  offline: "destructive",
+  maintenance: "warning",
+  unknown: "secondary",
 };
-const VENDOR_AUTH_HINT: Record<string, string> = {
-  h3c: "默认 NETCONF 830 / SSH 22；账号常为 admin 或 netconf",
-  huawei: "默认 NETCONF 830；账号常为 netconf 或 huawei",
-  juniper: "默认 NETCONF 830；账号常为 netconf",
-  arista: "默认 SSH/eAPI；部分场景用 admin",
-  cisco: "IOS-XR NETCONF 830；账号常为 admin / cisco",
-  frr: "SSH 22，vtysh CLI；账号为 Linux 用户",
+
+const SVID_SOURCE_VARIANT: Record<string, "destructive" | "warning" | "info"> = {
+  legacy: "destructive",
+  device: "warning",
 };
 
 const FALLBACK_SNMP: SnmpDefaults = {
@@ -93,8 +117,348 @@ const FALLBACK_MGMT: ManagementDefaults = {
   snmp: FALLBACK_SNMP,
 };
 
+const credSchema = z.object({
+  management_transport: z.string(),
+  username: z.string().optional(),
+  password: z.string().optional(),
+  enable_password: z.string().optional(),
+  netconf_port: z.coerce.number(),
+  ssh_port: z.coerce.number(),
+  netmiko_device_type: z.string().optional(),
+  snmp_enabled: z.boolean(),
+  snmp_community: z.string().optional(),
+  snmp_port: z.coerce.number(),
+  snmp_version: z.string(),
+  snmp_v3_username: z.string().optional(),
+  snmp_v3_security_level: z.string().optional(),
+  snmp_v3_auth_password: z.string().optional(),
+  snmp_v3_priv_password: z.string().optional(),
+});
+
+type CredFormValues = z.infer<typeof credSchema>;
+
+function renderSvidUsage(list?: SvidUsage[] | null) {
+  if (!list?.length) return <span className="text-muted-foreground">-</span>;
+  return (
+    <div className="flex flex-wrap gap-1">
+      {list.map((u, idx) => {
+        const label =
+          u.access_mode === "access"
+            ? "untagged"
+            : u.c_vid
+              ? `S:${u.s_vid}/C:${u.c_vid}`
+              : `S:${u.s_vid}`;
+        const tip = [u.circuit_code && `专线 ${u.circuit_code}`, u.source && `来源 ${u.source}`, u.note]
+          .filter(Boolean)
+          .join(" · ");
+        return (
+          <Tooltip key={idx}>
+            <TooltipTrigger asChild>
+              <Badge variant={SVID_SOURCE_VARIANT[u.source || ""] || "info"}>{label}</Badge>
+            </TooltipTrigger>
+            <TooltipContent>{tip || label}</TooltipContent>
+          </Tooltip>
+        );
+      })}
+    </div>
+  );
+}
+
+type CredentialEditDialogProps = {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  device: Device | null;
+  mgmtDefaults: ManagementDefaults;
+  snmpDefaults: SnmpDefaults;
+  onSave: (deviceId: number, values: CredFormValues) => Promise<void>;
+};
+
+function CredentialEditDialog({
+  open,
+  onOpenChange,
+  device,
+  mgmtDefaults,
+  snmpDefaults,
+  onSave,
+}: CredentialEditDialogProps) {
+  const form = useForm<CredFormValues>({
+    resolver: zodResolver(credSchema) as Resolver<CredFormValues>,
+    defaultValues: {
+      management_transport: "auto",
+      snmp_enabled: true,
+      snmp_port: snmpDefaults.port,
+      snmp_version: snmpDefaults.version,
+      snmp_v3_security_level: "authPriv",
+      netconf_port: mgmtDefaults.netconf_port,
+      ssh_port: mgmtDefaults.ssh_port,
+    },
+  });
+
+  const watchSnmpVersion = form.watch("snmp_version");
+
+  useEffect(() => {
+    if (open && device) {
+      form.reset({
+        management_transport: device.management_transport || "auto",
+        username: device.username || "",
+        netconf_port: device.netconf_port ?? mgmtDefaults.netconf_port,
+        ssh_port: device.ssh_port ?? mgmtDefaults.ssh_port,
+        netmiko_device_type: device.netmiko_device_type || "",
+        password: "",
+        enable_password: "",
+        snmp_enabled: device.snmp_enabled !== false,
+        snmp_community: "",
+        snmp_port: device.snmp_port ?? snmpDefaults.port,
+        snmp_version: device.snmp_version || snmpDefaults.version,
+        snmp_v3_username: device.snmp_v3_username || "",
+        snmp_v3_security_level: device.snmp_v3_security_level || "authPriv",
+        snmp_v3_auth_password: "",
+        snmp_v3_priv_password: "",
+      });
+    }
+  }, [open, device, mgmtDefaults, snmpDefaults, form]);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="flex max-h-[90vh] max-w-xl flex-col gap-0 overflow-hidden p-0 sm:max-w-xl">
+        <DialogHeader className="space-y-1 border-b px-6 py-4 text-left">
+          <DialogTitle>{device ? `设备凭证 · ${device.name}` : "设备凭证"}</DialogTitle>
+          <DialogDescription>留空密码则保持原值，SNMP Community 与登录密码相互独立。</DialogDescription>
+        </DialogHeader>
+
+        <ScrollArea className="max-h-[calc(90vh-8rem)] flex-1">
+          <Form {...form}>
+            <form
+              id="device-cred-form"
+              className="space-y-4 px-6 py-5"
+              onSubmit={form.handleSubmit(async (v) => {
+                if (device) await onSave(device.id, v);
+              })}
+            >
+              <Alert variant="warning">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle>敏感字段不会回显</AlertTitle>
+                <AlertDescription>留空密码则保持原值。SNMP Community 与登录密码已分离，可分别配置。</AlertDescription>
+              </Alert>
+
+              <FormField
+                control={form.control}
+                name="management_transport"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>配置下发传输</FormLabel>
+                    <FormControl>
+                      <FormSelect value={field.value} onValueChange={field.onChange} options={MANAGEMENT_TRANSPORT_OPTIONS} />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="username"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>用户名</FormLabel>
+                    <FormControl>
+                      <Input placeholder="admin / netconf" {...field} />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="password"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>登录密码 (NETCONF / SSH)</FormLabel>
+                    <FormControl>
+                      <Input type="password" autoComplete="new-password" placeholder="留空不修改" {...field} />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="enable_password"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Enable 密码</FormLabel>
+                    <FormControl>
+                      <Input type="password" autoComplete="new-password" placeholder="留空不修改" {...field} />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+              <div className="grid gap-4 sm:grid-cols-2">
+                <FormField
+                  control={form.control}
+                  name="netconf_port"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>NETCONF 端口</FormLabel>
+                      <FormControl>
+                        <Input type="number" min={1} max={65535} {...field} />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="ssh_port"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>SSH 端口</FormLabel>
+                      <FormControl>
+                        <Input type="number" min={1} max={65535} {...field} />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+              </div>
+              <FormField
+                control={form.control}
+                name="netmiko_device_type"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Netmiko 设备类型 (可选)</FormLabel>
+                    <FormControl>
+                      <Input placeholder="留空则按厂商自动选择" {...field} />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+
+              <Separator />
+
+              <FormField
+                control={form.control}
+                name="snmp_enabled"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
+                    <FormLabel className="mt-0">启用 SNMP</FormLabel>
+                    <FormControl>
+                      <Switch checked={field.value} onCheckedChange={field.onChange} />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+              <div className="grid gap-4 sm:grid-cols-2">
+                <FormField
+                  control={form.control}
+                  name="snmp_community"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Community (v2c)</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder={
+                            device?.snmp_community_set ? "已配置 · 留空不修改" : snmpDefaults.community
+                          }
+                          {...field}
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="snmp_port"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>UDP 端口</FormLabel>
+                      <FormControl>
+                        <Input type="number" min={1} max={65535} {...field} />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="snmp_version"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>版本</FormLabel>
+                      <FormControl>
+                        <FormSelect value={field.value} onValueChange={field.onChange} options={SNMP_VERSION_OPTIONS} />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+              </div>
+              {watchSnmpVersion === "3" ? (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <FormField
+                    control={form.control}
+                    name="snmp_v3_username"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>SNMPv3 用户名</FormLabel>
+                        <FormControl>
+                          <Input {...field} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="snmp_v3_security_level"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>安全级别</FormLabel>
+                        <FormControl>
+                          <FormSelect
+                            value={field.value || "authPriv"}
+                            onValueChange={field.onChange}
+                            options={SNMP_V3_SECURITY_OPTIONS}
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="snmp_v3_auth_password"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>认证密码</FormLabel>
+                        <FormControl>
+                          <Input type="password" autoComplete="new-password" placeholder="留空不修改" {...field} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="snmp_v3_priv_password"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>加密密码</FormLabel>
+                        <FormControl>
+                          <Input type="password" autoComplete="new-password" placeholder="留空不修改" {...field} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              ) : null}
+            </form>
+          </Form>
+        </ScrollArea>
+
+        <DialogFooter className="border-t px-6 py-4">
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            {action.cancel}
+          </Button>
+          <Button type="submit" form="device-cred-form">
+            {action.save}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function Devices() {
-  const { message, modal } = AntApp.useApp();
   const [rows, setRows] = useState<Device[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -107,16 +471,18 @@ export default function Devices() {
   const [credDevice, setCredDevice] = useState<Device | null>(null);
   const [snmpDefaults, setSnmpDefaults] = useState<SnmpDefaults>(FALLBACK_SNMP);
   const [mgmtDefaults, setMgmtDefaults] = useState<ManagementDefaults>(FALLBACK_MGMT);
-  const [form] = Form.useForm();
-  const [credForm] = Form.useForm();
   const [learnOnImport, setLearnOnImport] = useState(true);
-  const watchVendor = Form.useWatch("vendor", form);
-  const watchSnmpEnabled = Form.useWatch("snmp_enabled", form);
-  const watchSnmpVersion = Form.useWatch("snmp_version", form);
-  const watchCredSnmpVersion = Form.useWatch("snmp_version", credForm);
   const [drawerDevice, setDrawerDevice] = useState<Device | null>(null);
   const [ifaces, setIfaces] = useState<DeviceInterface[]>([]);
   const [ifacesLoading, setIfacesLoading] = useState(false);
+  const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [initOpen, setInitOpen] = useState(false);
+  const [initDevice, setInitDevice] = useState<Device | null>(null);
+  const [initBaseline, setInitBaseline] = useState("");
+  const [initLoading, setInitLoading] = useState(false);
+  const importRef = useRef<HTMLInputElement>(null);
+
+  const siteName = useCallback((id?: number) => sites.find((s) => s.id === id)?.code || "-", [sites]);
 
   async function loadIfaces(deviceId: number) {
     setIfacesLoading(true);
@@ -132,30 +498,6 @@ export default function Devices() {
     setDrawerDevice(device);
     setIfaces([]);
     await loadIfaces(device.id);
-  }
-
-  async function discover(deviceId: number) {
-    const hide = message.loading("SNMP 接口扫描中…", 0);
-    try {
-      const { data } = await api.post<DeviceInterface[]>(
-        `/devices/${deviceId}/discover-interfaces`,
-      );
-      hide();
-      const simCount = data.filter((i) => i.discovered_via === "snmp-sim").length;
-      if (simCount === data.length) {
-        message.warning(
-          "返回的是模拟数据（设备 SNMP 不可达或 Community 错误）。请检查管理 IP、UDP 161 与 Community 后重试",
-        );
-      } else if (simCount > 0) {
-        message.warning(`部分接口为模拟数据（${simCount}/${data.length}），请检查 SNMP 配置`);
-      } else {
-        message.success(`SNMP 发现 ${data.length} 个接口`);
-      }
-      setIfaces(data);
-    } catch (e: any) {
-      hide();
-      message.error(e?.response?.data?.detail || toast.failed);
-    }
   }
 
   async function load(p = page, ps = pageSize, q = search) {
@@ -188,26 +530,11 @@ export default function Devices() {
       setMgmtDefaults(FALLBACK_MGMT);
       setSnmpDefaults(FALLBACK_SNMP);
     }
-    form.setFieldsValue({
-      vendor: "h3c",
-      role: "leaf",
-      overlay_tech: "vxlan_evpn",
-      status: "unknown",
-      management_transport: mgmt.management_transport,
-      netconf_port: mgmt.netconf_port,
-      ssh_port: mgmt.ssh_port,
-      username: mgmt.username,
-      snmp_enabled: mgmt.snmp.enabled,
-      snmp_port: mgmt.snmp.port,
-      snmp_community: mgmt.snmp.community,
-      snmp_version: mgmt.snmp.version,
-    });
     setOpen(true);
   }
 
-  async function onCreate() {
-    const values = await form.validateFields();
-    const payload = { ...values };
+  async function onCreate(values: DeviceFormValues) {
+    const payload: Record<string, unknown> = { ...values };
     if (!payload.password) delete payload.password;
     if (!payload.snmp_enabled) {
       payload.snmp_community = null;
@@ -216,43 +543,22 @@ export default function Devices() {
     }
     try {
       await api.post("/devices", payload);
-      message.success("设备已纳管");
+      toast.success("设备已纳管");
       setOpen(false);
-      form.resetFields();
-      load(1);
       setPage(1);
-    } catch (e: any) {
-      message.error(e?.response?.data?.detail || toast.failed);
+      load(1);
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { detail?: string } } };
+      toast.error(err?.response?.data?.detail || toastCopy.failed);
     }
   }
 
   function openCredEdit(d: Device) {
     setCredDevice(d);
-    credForm.setFieldsValue({
-      management_transport: d.management_transport || "auto",
-      username: d.username || "",
-      netconf_port: d.netconf_port ?? mgmtDefaults.netconf_port,
-      ssh_port: d.ssh_port ?? mgmtDefaults.ssh_port,
-      netmiko_device_type: d.netmiko_device_type || "",
-      password: "",
-      enable_password: "",
-      snmp_enabled: d.snmp_enabled !== false,
-      snmp_community: "",
-      snmp_port: d.snmp_port ?? snmpDefaults.port,
-      snmp_version: d.snmp_version || snmpDefaults.version,
-      snmp_v3_username: d.snmp_v3_username || "",
-      snmp_v3_security_level: d.snmp_v3_security_level || "authPriv",
-      snmp_v3_auth_protocol: d.snmp_v3_auth_protocol || "SHA",
-      snmp_v3_priv_protocol: d.snmp_v3_priv_protocol || "AES",
-      snmp_v3_auth_password: "",
-      snmp_v3_priv_password: "",
-    });
     setCredOpen(true);
   }
 
-  async function saveCred() {
-    if (!credDevice) return;
-    const v = await credForm.validateFields();
+  async function saveCred(deviceId: number, v: CredFormValues) {
     const payload: Record<string, unknown> = {
       management_transport: v.management_transport,
       username: v.username || null,
@@ -264,8 +570,8 @@ export default function Devices() {
       snmp_version: v.snmp_version,
       snmp_v3_username: v.snmp_v3_username || null,
       snmp_v3_security_level: v.snmp_v3_security_level || null,
-      snmp_v3_auth_protocol: v.snmp_v3_auth_protocol || null,
-      snmp_v3_priv_protocol: v.snmp_v3_priv_protocol || null,
+      snmp_v3_auth_protocol: credDevice?.snmp_v3_auth_protocol || "SHA",
+      snmp_v3_priv_protocol: credDevice?.snmp_v3_priv_protocol || "AES",
     };
     if (v.password) payload.password = v.password;
     if (v.enable_password) payload.enable_password = v.enable_password;
@@ -273,18 +579,20 @@ export default function Devices() {
     if (v.snmp_v3_auth_password) payload.snmp_v3_auth_password = v.snmp_v3_auth_password;
     if (v.snmp_v3_priv_password) payload.snmp_v3_priv_password = v.snmp_v3_priv_password;
     try {
-      await api.patch(`/devices/${credDevice.id}`, payload);
-      message.success(toast.saved);
+      await api.patch(`/devices/${deviceId}`, payload);
+      toast.success(toastCopy.saved);
       setCredOpen(false);
       load();
-    } catch (e: any) {
-      message.error(e?.response?.data?.detail || toast.failed);
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { detail?: string } } };
+      toast.error(err?.response?.data?.detail || toastCopy.failed);
     }
   }
 
   async function remove(id: number) {
     await api.delete(`/devices/${id}`);
-    message.success(toast.deleted);
+    toast.success(toastCopy.deleted);
+    setDeleteId(null);
     load();
   }
 
@@ -310,77 +618,107 @@ export default function Devices() {
         data.learn_enabled && data.learn
           ? ` · 现网学习 ${data.learn.success}/${data.learn.total} 成功`
           : "";
-      message.success(`导入完成 · 新增 ${data.created} · 跳过 ${data.skipped}${learnMsg}`);
-      if (data.errors?.length) message.warning(`${data.errors.length} 行需修正`);
-      load(1);
+      toast.success(`导入完成 · 新增 ${data.created} · 跳过 ${data.skipped}${learnMsg}`);
+      if (data.errors?.length) toast.warning(`${data.errors.length} 行需修正`);
       setPage(1);
-    } catch (e: any) {
-      message.error(e?.response?.data?.detail || toast.failed);
+      load(1);
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { detail?: string } } };
+      toast.error(err?.response?.data?.detail || toastCopy.failed);
     }
-    return false;
+  }
+
+  async function discover(deviceId: number) {
+    const tid = toast.loading("SNMP 接口扫描中…");
+    try {
+      const { data } = await api.post<DeviceInterface[]>(`/devices/${deviceId}/discover-interfaces`);
+      toast.dismiss(tid);
+      const simCount = data.filter((i) => i.discovered_via === "snmp-sim").length;
+      if (simCount === data.length) {
+        toast.warning(
+          "返回的是模拟数据（设备 SNMP 不可达或 Community 错误）。请检查管理 IP、UDP 161 与 Community 后重试",
+        );
+      } else if (simCount > 0) {
+        toast.warning(`部分接口为模拟数据（${simCount}/${data.length}），请检查 SNMP 配置`);
+      } else {
+        toast.success(`SNMP 发现 ${data.length} 个接口`);
+      }
+      setIfaces(data);
+    } catch (e: unknown) {
+      toast.dismiss(tid);
+      const err = e as { response?: { data?: { detail?: string } } };
+      toast.error(err?.response?.data?.detail || toastCopy.failed);
+    }
   }
 
   async function learnConfig(d: Device) {
-    const hide = message.loading(`现网配置学习中 · ${d.name}...`, 0);
+    const tid = toast.loading(`现网配置学习中 · ${d.name}...`);
     try {
       const { data } = await api.post(`/devices/${d.id}/learn`);
-      hide();
+      toast.dismiss(tid);
       if (data.success) {
         const inv = data.inventory;
-        message.success(
-          `${d.name} 学习完成 · ${inv?.service_count ?? 0} 个业务 · v${data.snapshot_version}`
+        toast.success(
+          `${d.name} 学习完成 · ${inv?.service_count ?? 0} 个业务 · v${data.snapshot_version}`,
         );
         if (data.svid_scan?.ports_scanned) {
           loadIfaces(d.id);
         }
       } else {
-        message.error(data.error || toast.failed);
+        toast.error(data.error || toastCopy.failed);
       }
       load();
-    } catch (e: any) {
-      hide();
-      message.error(e?.response?.data?.detail || toast.failed);
+    } catch (e: unknown) {
+      toast.dismiss(tid);
+      const err = e as { response?: { data?: { detail?: string } } };
+      toast.error(err?.response?.data?.detail || toastCopy.failed);
     }
   }
 
   async function initialize(d: Device) {
-    const { data: bl } = await api.get(`/devices/${d.id}/baseline`);
-    modal.confirm({
-      title: `基线初始化 · ${d.name} (${d.vendor})`,
-      ...configPreviewModalProps,
-      icon: null,
-      content: (
-        <div>
-          <div style={{ marginBottom: 8, color: "#888" }}>
-            标准基线预览（管理 / Loopback / Underlay / EVPN Overlay）· 确认后 dry-run 下发并归档初始化快照
-          </div>
-          <ConfigPreviewPre>{bl.content}</ConfigPreviewPre>
-        </div>
-      ),
-      okText: "下发基线配置",
-      onOk: async () => {
-        const { data } = await api.post(`/devices/${d.id}/initialize`);
-        message.success(`${data.device} 初始化完成 · v${data.version} · ${data.transport}`);
-        load();
-      },
-    });
+    try {
+      const { data: bl } = await api.get<{ content: string }>(`/devices/${d.id}/baseline`);
+      setInitDevice(d);
+      setInitBaseline(bl.content);
+      setInitOpen(true);
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { detail?: string } } };
+      toast.error(err?.response?.data?.detail || toastCopy.failed);
+    }
+  }
+
+  async function confirmInitialize() {
+    if (!initDevice) return;
+    setInitLoading(true);
+    try {
+      const { data } = await api.post(`/devices/${initDevice.id}/initialize`);
+      toast.success(`${data.device} 初始化完成 · v${data.version} · ${data.transport}`);
+      setInitOpen(false);
+      setInitDevice(null);
+      load();
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { detail?: string } } };
+      toast.error(err?.response?.data?.detail || toastCopy.failed);
+    } finally {
+      setInitLoading(false);
+    }
   }
 
   async function check(id: number) {
-    const hide = message.loading("可达性探测 · S-VID 扫描中…", 0);
+    const tid = toast.loading("可达性探测 · S-VID 扫描中…");
     try {
       const { data } = await api.post(`/devices/${id}/check`);
-      hide();
+      toast.dismiss(tid);
       if (data.reachable) {
         const scan = data.svid_scan;
         const svidCount = scan?.total_s_vids ?? 0;
         const conflictCount = scan?.conflicts?.length ?? 0;
         if (conflictCount > 0) {
-          message.warning(
+          toast.warning(
             `${data.device} 可达 · 发现 ${svidCount} 个 S-VID · ${conflictCount} 处冲突`,
           );
         } else {
-          message.success(
+          toast.success(
             `${data.device} 可达 (${data.latency_ms}ms) · 已扫描 ${svidCount} 个 S-VID 占用`,
           );
         }
@@ -413,593 +751,445 @@ export default function Devices() {
           });
         }
       } else {
-        message.error(`${data.device} 不可达 (${data.mgmt_ip})`);
+        toast.error(`${data.device} 不可达 (${data.mgmt_ip})`);
       }
       load();
-    } catch (e: any) {
-      hide();
-      message.error(e?.response?.data?.detail || toast.failed);
+    } catch (e: unknown) {
+      toast.dismiss(tid);
+      const err = e as { response?: { data?: { detail?: string } } };
+      toast.error(err?.response?.data?.detail || toastCopy.failed);
     }
   }
 
-  function renderSvidUsage(list?: SvidUsage[] | null) {
-    if (!list?.length) return "-";
-    return (
-      <Space size={[4, 4]} wrap>
-        {list.map((u, idx) => {
-          const label =
-            u.access_mode === "access"
-              ? "untagged"
-              : u.c_vid
-                ? `S:${u.s_vid}/C:${u.c_vid}`
-                : `S:${u.s_vid}`;
-          const color =
-            u.source === "legacy" ? "red" : u.source === "device" ? "orange" : "blue";
-          const tip = [
-            u.circuit_code && `专线 ${u.circuit_code}`,
-            u.source && `来源 ${u.source}`,
-            u.note,
-          ]
-            .filter(Boolean)
-            .join(" · ");
+  const ifaceColumns = useMemo<ColumnDef<DeviceInterface, unknown>[]>(
+    () => [
+      { accessorKey: "name", header: "接口", size: 120 },
+      {
+        accessorKey: "description",
+        header: "描述",
+        cell: ({ row }) => {
+          const d = row.original.description;
+          if (!d) return "-";
+          if (d.includes("bw(")) {
+            return (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Badge variant="secondary">{d}</Badge>
+                </TooltipTrigger>
+                <TooltipContent>{d}</TooltipContent>
+              </Tooltip>
+            );
+          }
           return (
-            <Tooltip key={idx} title={tip || label}>
-              <Tag color={color}>{label}</Tag>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="block max-w-[200px] truncate">{d}</span>
+              </TooltipTrigger>
+              <TooltipContent>{d}</TooltipContent>
             </Tooltip>
           );
-        })}
-      </Space>
-    );
-  }
+        },
+      },
+      {
+        accessorKey: "speed_mbps",
+        header: "速率",
+        size: 80,
+        cell: ({ row }) => {
+          const s = row.original.speed_mbps;
+          if (!s) return "-";
+          return s >= 1000 ? `${s / 1000}G` : `${s}M`;
+        },
+      },
+      {
+        accessorKey: "oper_status",
+        header: "Oper",
+        size: 70,
+        cell: ({ row }) => {
+          const s = row.original.oper_status;
+          return (
+            <Badge variant={s === "up" ? "success" : "secondary"}>{s || "-"}</Badge>
+          );
+        },
+      },
+      { accessorKey: "ifindex", header: "ifIndex", size: 70 },
+      {
+        accessorKey: "discovered_via",
+        header: "发现方式",
+        size: 90,
+        cell: ({ row }) => {
+          const d = row.original.discovered_via;
+          return d ? <Badge variant="outline">{d}</Badge> : null;
+        },
+      },
+      {
+        accessorKey: "used_s_vids",
+        header: "S-VID 占用",
+        cell: ({ row }) => renderSvidUsage(row.original.used_s_vids),
+      },
+      {
+        accessorKey: "allocated",
+        header: "占用",
+        size: 70,
+        cell: ({ row }) => {
+          const a = row.original.allocated;
+          const hasSvid = row.original.used_s_vids?.length;
+          return a || hasSvid ? <Badge variant="warning">已占用</Badge> : "-";
+        },
+      },
+    ],
+    [],
+  );
 
-  const siteName = (id?: number) => sites.find((s) => s.id === id)?.code || "-";
+  const columns = useMemo<ColumnDef<Device, unknown>[]>(
+    () => [
+      {
+        accessorKey: "name",
+        header: "名称",
+        size: 140,
+        cell: ({ row }) => <span className="block max-w-[140px] truncate">{row.original.name}</span>,
+      },
+      {
+        accessorKey: "vendor",
+        header: "厂商",
+        size: 120,
+        cell: ({ row }) => {
+          const v = row.original.vendor;
+          return (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Badge variant={VENDOR_VARIANT[v] || "secondary"}>
+                  {labelForOption(VENDOR_OPTIONS, v)}
+                </Badge>
+              </TooltipTrigger>
+              <TooltipContent>{labelForOption(VENDOR_OPTIONS, v)}</TooltipContent>
+            </Tooltip>
+          );
+        },
+      },
+      {
+        accessorKey: "model",
+        header: "型号",
+        size: 120,
+        cell: ({ row }) => (
+          <span className="block max-w-[120px] truncate">{row.original.model || "-"}</span>
+        ),
+      },
+      {
+        accessorKey: "role",
+        header: "角色",
+        size: 120,
+        cell: ({ row }) => {
+          const r = row.original.role;
+          return (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Badge variant="outline">{labelForOption(DEVICE_ROLE_OPTIONS, r)}</Badge>
+              </TooltipTrigger>
+              <TooltipContent>{labelForOption(DEVICE_ROLE_OPTIONS, r)}</TooltipContent>
+            </Tooltip>
+          );
+        },
+      },
+      {
+        accessorKey: "overlay_tech",
+        header: "Overlay",
+        size: 130,
+        cell: ({ row }) => {
+          const o = row.original.overlay_tech;
+          return (
+            <Badge variant={o === "vxlan_evpn" ? "info" : "secondary"}>
+              {o === "vxlan_evpn" ? "VXLAN-EVPN" : "SR-MPLS-EVPN"}
+            </Badge>
+          );
+        },
+      },
+      { accessorKey: "mgmt_ip", header: "管理IP", size: 120 },
+      {
+        id: "transport",
+        header: "南向",
+        size: 96,
+        cell: ({ row }) => (
+          <Badge variant="outline">
+            {labelForOption(MANAGEMENT_TRANSPORT_OPTIONS, row.original.management_transport || "auto")}
+          </Badge>
+        ),
+      },
+      {
+        id: "credentials",
+        header: "凭证",
+        size: 88,
+        cell: ({ row }) =>
+          row.original.password_set || row.original.username ? (
+            <Badge variant="success">已配置</Badge>
+          ) : (
+            <Badge variant="secondary">未配置</Badge>
+          ),
+      },
+      {
+        id: "snmp",
+        header: "SNMP",
+        size: 88,
+        cell: ({ row }) =>
+          row.original.snmp_enabled === false ? (
+            <Badge variant="secondary">关闭</Badge>
+          ) : (
+            <Badge variant="info">{row.original.snmp_version || "2c"}</Badge>
+          ),
+      },
+      { accessorKey: "loopback_ip", header: "Loopback", size: 120 },
+      { accessorKey: "bgp_asn", header: "ASN", size: 80 },
+      {
+        id: "site",
+        header: "站点",
+        size: 80,
+        cell: ({ row }) => siteName(row.original.site_id),
+      },
+      {
+        accessorKey: "status",
+        header: "状态",
+        size: 90,
+        cell: ({ row }) => {
+          const s = row.original.status;
+          return <Badge variant={STATUS_VARIANT[s] || "secondary"}>{s}</Badge>;
+        },
+      },
+      {
+        id: "actions",
+        header: "操作",
+        size: 300,
+        cell: ({ row }) => {
+          const r = row.original;
+          return (
+            <div className="flex flex-wrap gap-x-2 gap-y-1">
+              <Button variant="link" size="sm" className="h-auto p-0" onClick={() => openPorts(r)}>
+                端口
+              </Button>
+              <Button variant="link" size="sm" className="h-auto gap-1 p-0" onClick={() => openCredEdit(r)}>
+                <KeyRound className="h-3.5 w-3.5" />
+                凭证
+              </Button>
+              <Button variant="link" size="sm" className="h-auto gap-1 p-0" onClick={() => learnConfig(r)}>
+                <BookOpen className="h-3.5 w-3.5" />
+                现网学习
+              </Button>
+              <Button variant="link" size="sm" className="h-auto gap-1 p-0" onClick={() => initialize(r)}>
+                <Rocket className="h-3.5 w-3.5" />
+                初始化
+              </Button>
+              <Button variant="link" size="sm" className="h-auto p-0" onClick={() => check(r.id)}>
+                检测
+              </Button>
+              <Button variant="link" size="sm" className="h-auto gap-1 p-0" onClick={() => discover(r.id)}>
+                <Network className="h-3.5 w-3.5" />
+                SNMP 发现
+              </Button>
+              <Button
+                variant="link"
+                size="sm"
+                className="h-auto p-0 text-destructive hover:text-destructive"
+                onClick={() => setDeleteId(r.id)}
+              >
+                {action.delete}
+              </Button>
+            </div>
+          );
+        },
+      },
+    ],
+    [siteName],
+  );
+
+  function runSearch() {
+    setPage(1);
+    load(1, pageSize, search);
+  }
 
   return (
     <PageCard
       title={pageCopy.devices}
       extra={
-        <Space>
-          <Link to="/settings/management">
-            <Button icon={<SettingOutlined />}>南向接口设置</Button>
-          </Link>
-          <Link to="/settings/snmp">
-            <Button icon={<SettingOutlined />}>SNMP 全局设置</Button>
-          </Link>
-          <Button icon={<DownloadOutlined />} onClick={exportCsv}>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" size="sm" asChild>
+            <Link to="/settings/management">
+              <Settings className="mr-1.5 h-4 w-4" />
+              南向接口设置
+            </Link>
+          </Button>
+          <Button variant="outline" size="sm" asChild>
+            <Link to="/settings/snmp">
+              <Settings className="mr-1.5 h-4 w-4" />
+              SNMP 全局设置
+            </Link>
+          </Button>
+          <Button variant="outline" size="sm" onClick={exportCsv}>
+            <Download className="mr-1.5 h-4 w-4" />
             {action.export} CSV
           </Button>
-          <Upload accept=".csv" showUploadList={false} beforeUpload={importCsv}>
-            <Button icon={<UploadOutlined />}>{action.import} CSV</Button>
-          </Upload>
-          <Tooltip title="导入后自动拉取现网 running-config 并解析业务/VLAN 占用">
-            <Switch
-              checkedChildren="导入即学习"
-              unCheckedChildren="仅导入"
-              checked={learnOnImport}
-              onChange={setLearnOnImport}
-            />
+          <input
+            ref={importRef}
+            type="file"
+            accept=".csv"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) void importCsv(file);
+              e.target.value = "";
+            }}
+          />
+          <Button variant="outline" size="sm" onClick={() => importRef.current?.click()}>
+            <Upload className="mr-1.5 h-4 w-4" />
+            {action.import} CSV
+          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="flex items-center gap-2 rounded-md border px-3 py-1.5">
+                <Switch checked={learnOnImport} onCheckedChange={setLearnOnImport} id="learn-import" />
+                <label htmlFor="learn-import" className="cursor-pointer text-sm">
+                  {learnOnImport ? "导入即学习" : "仅导入"}
+                </label>
+              </div>
+            </TooltipTrigger>
+            <TooltipContent>导入后自动拉取现网 running-config 并解析业务/VLAN 占用</TooltipContent>
           </Tooltip>
-          <Button type="primary" icon={<PlusOutlined />} onClick={openCreateModal}>
+          <Button size="sm" onClick={openCreateModal}>
+            <Plus className="mr-1.5 h-4 w-4" />
             纳管设备
           </Button>
-        </Space>
+        </div>
       }
     >
       <ListToolbar
         summary={`共 ${total.toLocaleString()} 台设备`}
         left={
-          <Input.Search
-            allowClear
-            placeholder="搜索设备名称、主机名或管理 IP"
-            style={{ width: 320 }}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            onSearch={() => {
-              setPage(1);
-              load(1, pageSize, search);
-            }}
-            enterButton={<SearchOutlined />}
-          />
+          <div className="flex w-full max-w-sm items-center gap-2">
+            <Input
+              placeholder="搜索设备名称、主机名或管理 IP"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && runSearch()}
+            />
+            <Button variant="outline" size="icon" onClick={runSearch}>
+              <Search className="h-4 w-4" />
+            </Button>
+          </div>
         }
       />
 
-      <Table
-        rowKey="id"
+      <DataTable
+        columns={columns}
+        data={rows}
         loading={loading}
-        dataSource={rows}
-        {...dataTableProps(1500, rows.length > 0)}
-        pagination={tablePagination(total, page, pageSize, (p, ps) => {
-          setPage(p);
-          setPageSize(ps);
-        })}
-        columns={[
-          { title: "名称", dataIndex: "name", width: 140, ellipsis: true },
-          {
-            title: "厂商",
-            dataIndex: "vendor",
-            width: 120,
-            ellipsis: true,
-            render: (v) => (
-              <Tooltip title={labelForOption(VENDOR_OPTIONS, v)}>
-                <Tag color={VENDOR_COLOR[v]}>{labelForOption(VENDOR_OPTIONS, v)}</Tag>
-              </Tooltip>
-            ),
-          },
-          { title: "型号", dataIndex: "model", width: 120, ellipsis: true },
-          {
-            title: "角色",
-            dataIndex: "role",
-            width: 120,
-            ellipsis: true,
-            render: (r) => (
-              <Tooltip title={labelForOption(DEVICE_ROLE_OPTIONS, r)}>
-                <Tag>{labelForOption(DEVICE_ROLE_OPTIONS, r)}</Tag>
-              </Tooltip>
-            ),
-          },
-          {
-            title: "Overlay",
-            dataIndex: "overlay_tech",
-            width: 130,
-            render: (o) => (
-              <Tag color={o === "vxlan_evpn" ? "blue" : "purple"}>
-                {o === "vxlan_evpn" ? "VXLAN-EVPN" : "SR-MPLS-EVPN"}
-              </Tag>
-            ),
-          },
-          { title: "管理IP", dataIndex: "mgmt_ip", width: 120 },
-          {
-            title: "南向",
-            width: 96,
-            render: (_, r) => (
-              <Tag>{labelForOption(MANAGEMENT_TRANSPORT_OPTIONS, r.management_transport || "auto")}</Tag>
-            ),
-          },
-          {
-            title: "凭证",
-            width: 88,
-            render: (_, r) =>
-              r.password_set || r.username ? (
-                <Tag color="green">已配置</Tag>
-              ) : (
-                <Tag>未配置</Tag>
-              ),
-          },
-          {
-            title: "SNMP",
-            width: 88,
-            render: (_, r) =>
-              r.snmp_enabled === false ? (
-                <Tag>关闭</Tag>
-              ) : (
-                <Tag color="blue">{r.snmp_version || "2c"}</Tag>
-              ),
-          },
-          { title: "Loopback", dataIndex: "loopback_ip", width: 120 },
-          { title: "ASN", dataIndex: "bgp_asn", width: 80 },
-          { title: "站点", width: 80, render: (_, r) => siteName(r.site_id) },
-          {
-            title: "状态",
-            dataIndex: "status",
-            width: 90,
-            render: (s) => <Tag color={STATUS_COLOR[s]}>{s}</Tag>,
-          },
-          {
-            title: "操作",
-            width: 300,
-            className: "table-actions",
-            render: (_, r) => (
-              <Space wrap size={4}>
-                <a onClick={() => openPorts(r)}>端口</a>
-                <a onClick={() => openCredEdit(r)}>
-                  <KeyOutlined /> 凭证
-                </a>
-                <a onClick={() => learnConfig(r)}>
-                  <BookOutlined /> 现网学习
-                </a>
-                <a onClick={() => initialize(r)}>
-                  <RocketOutlined /> 初始化
-                </a>
-                <a onClick={() => check(r.id)}>检测</a>
-                <a onClick={() => discover(r.id)}>
-                  <ApiOutlined /> SNMP 发现
-                </a>
-                <Popconfirm title={`${action.confirm}${action.delete}？`} onConfirm={() => remove(r.id)}>
-                  <a style={{ color: "#cf1322" }}>{action.delete}</a>
-                </Popconfirm>
-              </Space>
-            ),
-          },
-        ]}
+        total={total}
+        page={page}
+        pageSize={pageSize}
+        onPageChange={setPage}
+        onPageSizeChange={setPageSize}
+        emptyText="暂无设备 · 从导入或纳管开始"
       />
 
-      <Drawer
-        title={drawerDevice ? `端口清单 · ${drawerDevice.name}` : "端口清单"}
-        width={880}
-        open={!!drawerDevice}
-        onClose={() => setDrawerDevice(null)}
-        extra={
-          drawerDevice && (
-            <Space>
-              <Button onClick={() => check(drawerDevice.id)}>检测 S-VID</Button>
-              <Button type="primary" onClick={() => discover(drawerDevice.id)}>
+      <Sheet open={!!drawerDevice} onOpenChange={(o) => !o && setDrawerDevice(null)}>
+        <SheetContent side="right" className="flex w-full flex-col sm:max-w-3xl">
+          <SheetHeader className="space-y-0 pb-4">
+            <SheetTitle>{drawerDevice ? `端口清单 · ${drawerDevice.name}` : "端口清单"}</SheetTitle>
+          </SheetHeader>
+          {drawerDevice ? (
+            <div className="mb-4 flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => check(drawerDevice.id)}>
+                <Cable className="mr-1.5 h-4 w-4" />
+                检测 S-VID
+              </Button>
+              <Button size="sm" onClick={() => discover(drawerDevice.id)}>
+                <Network className="mr-1.5 h-4 w-4" />
                 SNMP 发现
               </Button>
-            </Space>
-          )
-        }
-      >
-        {ifaces.some((i) => i.discovered_via === "snmp-sim") && (
-          <Alert
-            type="warning"
-            showIcon
-            style={{ marginBottom: 12 }}
-            message="部分端口为模拟数据"
-            description="发现方式显示 snmp-sim 表示未从设备读到真实 IF-MIB（常见于 Community 错误或 UDP 161 不可达）。Dry-run 仅影响配置下发，不影响 SNMP 采集。请确认设备 SNMP Community 与平台「SNMP 采集」设置一致后重新发现。"
-          />
-        )}
-        <Table
-          size="small"
-          rowKey={(r) => `${r.device_id}-${r.name}`}
-          loading={ifacesLoading}
-          dataSource={ifaces}
-          pagination={{ pageSize: 20, showSizeChanger: true, showTotal: (t) => `共 ${t} 个端口` }}
-          columns={[
-            { title: "接口", dataIndex: "name", width: 120 },
-            {
-              title: "描述",
-              dataIndex: "description",
-              ellipsis: true,
-              render: (d: string) =>
-                d ? (
-                  <Tooltip title={d}>
-                    {d.includes("bw(") ? <Tag color="purple">{d}</Tag> : d}
-                  </Tooltip>
-                ) : (
-                  "-"
-                ),
-            },
-            {
-              title: "速率",
-              dataIndex: "speed_mbps",
-              width: 80,
-              render: (s) => (s ? `${s >= 1000 ? s / 1000 + "G" : s + "M"}` : "-"),
-            },
-            {
-              title: "Oper",
-              dataIndex: "oper_status",
-              width: 70,
-              render: (s) => <Tag color={s === "up" ? "green" : "default"}>{s || "-"}</Tag>,
-            },
-            { title: "ifIndex", dataIndex: "ifindex", width: 70 },
-            {
-              title: "发现方式",
-              dataIndex: "discovered_via",
-              width: 90,
-              render: (d) => d && <Tag>{d}</Tag>,
-            },
-            {
-              title: "S-VID 占用",
-              dataIndex: "used_s_vids",
-              render: (v: SvidUsage[] | null) => renderSvidUsage(v),
-            },
-            {
-              title: "占用",
-              dataIndex: "allocated",
-              width: 70,
-              render: (a, row) =>
-                a || row.used_s_vids?.length ? <Tag color="orange">已占用</Tag> : "-",
-            },
-          ]}
-        />
-      </Drawer>
+            </div>
+          ) : null}
+          {ifaces.some((i) => i.discovered_via === "snmp-sim") ? (
+            <Alert variant="warning" className="mb-4">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>部分端口为模拟数据</AlertTitle>
+              <AlertDescription>
+                发现方式显示 snmp-sim 表示未从设备读到真实 IF-MIB（常见于 Community 错误或 UDP 161 不可达）。Dry-run
+                仅影响配置下发，不影响 SNMP 采集。请确认设备 SNMP Community 与平台「SNMP 采集」设置一致后重新发现。
+              </AlertDescription>
+            </Alert>
+          ) : null}
+          <div className="min-h-0 flex-1 overflow-auto">
+            <DataTable
+              columns={ifaceColumns}
+              data={ifaces}
+              loading={ifacesLoading}
+              pageSize={20}
+              pageSizeOptions={[20, 50, 100]}
+              emptyText="暂无端口数据"
+            />
+          </div>
+        </SheetContent>
+      </Sheet>
 
-      <Modal
-        title="纳管设备"
+      <DeviceFormDialog
         open={open}
-        onOk={onCreate}
-        onCancel={() => setOpen(false)}
-        okText={action.create}
-        {...formModalProps}
-        width={840}
-      >
-        <Form form={form} layout="vertical" className="app-form">
-          <Alert
-            type="info"
-            showIcon
-            style={{ marginBottom: 16 }}
-            message="远程登录凭证说明"
-            description={
-              <Typography.Paragraph style={{ marginBottom: 0 }}>
-                <strong>配置下发 / 初始化</strong> 使用 NETCONF 或 SSH CLI（可在下方自定义传输方式与端口）。
-                <strong> SNMP 发现</strong> 独立配置 Community / v3 认证；与登录密码分离。
-                全局默认见 <Link to="/settings/management">南向接口</Link> 与 <Link to="/settings/snmp">SNMP 采集</Link>。
-              </Typography.Paragraph>
-            }
-          />
-          <Row gutter={16}>
-            <Col xs={24} sm={14}>
-              <Form.Item name="name" label="名称" rules={[{ required: true }]}>
-                <Input placeholder="BJ-LEAF-01" />
-              </Form.Item>
-            </Col>
-            <Col xs={24} sm={10}>
-              <Form.Item name="vendor" label="厂商">
-                <Select options={VENDOR_OPTIONS} />
-              </Form.Item>
-            </Col>
-          </Row>
-          <Row gutter={16}>
-            <Col xs={24} sm={10}>
-              <Form.Item name="model" label="型号">
-                <Input placeholder="S6850 / CE12800 / MX204 ..." />
-              </Form.Item>
-            </Col>
-            <Col xs={24} sm={7}>
-              <Form.Item name="role" label="角色">
-                <Select options={DEVICE_ROLE_OPTIONS} />
-              </Form.Item>
-            </Col>
-            <Col xs={24} sm={7}>
-              <Form.Item name="overlay_tech" label="Overlay">
-                <Select options={OVERLAY_OPTIONS} />
-              </Form.Item>
-            </Col>
-          </Row>
-          <Row gutter={16}>
-            <Col xs={24} sm={8}>
-              <Form.Item name="mgmt_ip" label="管理 IP" rules={[{ required: true }]}>
-                <Input placeholder="10.1.0.11" />
-              </Form.Item>
-            </Col>
-            <Col xs={24} sm={8}>
-              <Form.Item name="loopback_ip" label="Loopback">
-                <Input placeholder="10.1.255.11" />
-              </Form.Item>
-            </Col>
-            <Col xs={24} sm={8}>
-              <Form.Item name="bgp_asn" label="BGP ASN">
-                <InputNumber style={{ width: "100%" }} />
-              </Form.Item>
-            </Col>
-          </Row>
-          <Row gutter={16} align="bottom">
-            <Col xs={24} sm={10}>
-              <Form.Item name="site_id" label="数据中心">
-                <Select
-                  allowClear
-                  showSearch
-                  optionFilterProp="label"
-                  options={sites.map((s) => ({ value: s.id, label: `${s.code} · ${s.name}` }))}
-                />
-              </Form.Item>
-            </Col>
-            <Col xs={24} sm={8}>
-              <Form.Item name="sr_node_sid" label="SR Node-SID">
-                <InputNumber style={{ width: "100%" }} />
-              </Form.Item>
-            </Col>
-            <Col xs={24} sm={6}>
-              <Form.Item name="is_route_reflector" label="路由反射器" valuePropName="checked">
-                <Switch />
-              </Form.Item>
-            </Col>
-          </Row>
+        onOpenChange={setOpen}
+        sites={sites}
+        mgmtDefaults={mgmtDefaults}
+        snmpDefaults={snmpDefaults}
+        onSubmit={onCreate}
+      />
 
-          <Divider orientation="left" style={{ margin: "8px 0 16px" }}>
-            南向登录凭证
-          </Divider>
-          {watchVendor && VENDOR_AUTH_HINT[watchVendor] && (
-            <Typography.Text type="secondary" style={{ display: "block", marginBottom: 12 }}>
-              {VENDOR_AUTH_HINT[watchVendor]}
-            </Typography.Text>
-          )}
-          <Row gutter={16}>
-            <Col xs={24} sm={8}>
-              <Form.Item name="management_transport" label="配置下发传输">
-                <Select options={MANAGEMENT_TRANSPORT_OPTIONS} />
-              </Form.Item>
-            </Col>
-            <Col xs={24} sm={8}>
-              <Form.Item name="username" label="用户名 (NETCONF / SSH)">
-                <Input placeholder="admin / netconf" />
-              </Form.Item>
-            </Col>
-            <Col xs={24} sm={8}>
-              <Form.Item name="password" label="登录密码">
-                <Input.Password placeholder="NETCONF / SSH 密码" autoComplete="new-password" />
-              </Form.Item>
-            </Col>
-          </Row>
-          <Row gutter={16}>
-            <Col xs={24} sm={8}>
-              <Form.Item name="enable_password" label="Enable 密码 (可选)">
-                <Input.Password placeholder="部分 CLI 设备需要" autoComplete="new-password" />
-              </Form.Item>
-            </Col>
-            <Col xs={24} sm={8}>
-              <Form.Item name="netconf_port" label="NETCONF 端口">
-                <InputNumber min={1} max={65535} style={{ width: "100%" }} />
-              </Form.Item>
-            </Col>
-            <Col xs={24} sm={8}>
-              <Form.Item name="ssh_port" label="SSH 端口">
-                <InputNumber min={1} max={65535} style={{ width: "100%" }} />
-              </Form.Item>
-            </Col>
-          </Row>
-          <Row gutter={16}>
-            <Col xs={24} sm={12}>
-              <Form.Item
-                name="netmiko_device_type"
-                label="Netmiko 设备类型 (可选)"
-                extra="覆盖 SSH CLI 驱动类型，如 hp_comware、cisco_xr"
-              >
-                <Input placeholder="留空则按厂商自动选择" />
-              </Form.Item>
-            </Col>
-          </Row>
-
-          <Divider orientation="left" style={{ margin: "8px 0 12px" }}>
-            SNMP 采集（可选）
-          </Divider>
-          <Typography.Paragraph type="secondary" style={{ marginTop: 0, marginBottom: 12 }}>
-            默认继承平台配置（Community <Typography.Text code>{snmpDefaults.community}</Typography.Text> · UDP {snmpDefaults.port}）。
-            关闭后跳过 SNMP 接口发现（Dry-run 下仍可模拟）。
-          </Typography.Paragraph>
-          <Form.Item name="snmp_enabled" label="启用 SNMP" valuePropName="checked">
-            <Switch checkedChildren="开" unCheckedChildren="关" />
-          </Form.Item>
-          <Collapse
-            ghost
-            activeKey={watchSnmpEnabled ? ["snmp"] : []}
-            items={[
-              {
-                key: "snmp",
-                label: "高级参数（留空则使用平台默认）",
-                children: (
-                  <Row gutter={16}>
-                    <Col xs={24} sm={12}>
-                      <Form.Item name="snmp_community" label="Community">
-                        <Input placeholder={snmpDefaults.community} disabled={!watchSnmpEnabled} allowClear />
-                      </Form.Item>
-                    </Col>
-                    <Col xs={24} sm={6}>
-                      <Form.Item name="snmp_port" label="UDP 端口">
-                        <InputNumber min={1} max={65535} style={{ width: "100%" }} disabled={!watchSnmpEnabled} />
-                      </Form.Item>
-                    </Col>
-                    <Col xs={24} sm={6}>
-                      <Form.Item name="snmp_version" label="版本">
-                        <Select disabled={!watchSnmpEnabled} options={SNMP_VERSION_OPTIONS} />
-                      </Form.Item>
-                    </Col>
-                    {watchSnmpVersion === "3" && (
-                      <>
-                        <Col xs={24} sm={12}>
-                          <Form.Item name="snmp_v3_username" label="SNMPv3 用户名">
-                            <Input disabled={!watchSnmpEnabled} />
-                          </Form.Item>
-                        </Col>
-                        <Col xs={24} sm={12}>
-                          <Form.Item name="snmp_v3_security_level" label="安全级别">
-                            <Select disabled={!watchSnmpEnabled} options={SNMP_V3_SECURITY_OPTIONS} />
-                          </Form.Item>
-                        </Col>
-                        <Col xs={24} sm={12}>
-                          <Form.Item name="snmp_v3_auth_password" label="认证密码">
-                            <Input.Password disabled={!watchSnmpEnabled} autoComplete="new-password" />
-                          </Form.Item>
-                        </Col>
-                        <Col xs={24} sm={12}>
-                          <Form.Item name="snmp_v3_priv_password" label="加密密码">
-                            <Input.Password disabled={!watchSnmpEnabled} autoComplete="new-password" />
-                          </Form.Item>
-                        </Col>
-                      </>
-                    )}
-                  </Row>
-                ),
-              },
-            ]}
-          />
-        </Form>
-      </Modal>
-
-      <Modal
-        title={credDevice ? `设备凭证 · ${credDevice.name}` : "设备凭证"}
+      <CredentialEditDialog
         open={credOpen}
-        onOk={saveCred}
-        onCancel={() => setCredOpen(false)}
-        okText={action.save}
-        {...formModalProps}
-        width={640}
-      >
-        <Alert
-          type="warning"
-          showIcon
-          style={{ marginBottom: 16 }}
-          message="敏感字段不会回显"
-          description="留空密码则保持原值。SNMP Community 与登录密码已分离，可分别配置。"
-        />
-        <Form form={credForm} layout="vertical" className="app-form">
-          <Form.Item name="management_transport" label="配置下发传输">
-            <Select options={MANAGEMENT_TRANSPORT_OPTIONS} />
-          </Form.Item>
-          <Form.Item name="username" label="用户名">
-            <Input placeholder="admin / netconf" />
-          </Form.Item>
-          <Form.Item name="password" label="登录密码 (NETCONF / SSH)">
-            <Input.Password placeholder="留空不修改" autoComplete="new-password" />
-          </Form.Item>
-          <Form.Item name="enable_password" label="Enable 密码">
-            <Input.Password placeholder="留空不修改" autoComplete="new-password" />
-          </Form.Item>
-          <Row gutter={16}>
-            <Col xs={24} sm={12}>
-              <Form.Item name="netconf_port" label="NETCONF 端口">
-                <InputNumber min={1} max={65535} style={{ width: "100%" }} />
-              </Form.Item>
-            </Col>
-            <Col xs={24} sm={12}>
-              <Form.Item name="ssh_port" label="SSH 端口">
-                <InputNumber min={1} max={65535} style={{ width: "100%" }} />
-              </Form.Item>
-            </Col>
-          </Row>
-          <Form.Item name="netmiko_device_type" label="Netmiko 设备类型 (可选)">
-            <Input placeholder="留空则按厂商自动选择" allowClear />
-          </Form.Item>
+        onOpenChange={setCredOpen}
+        device={credDevice}
+        mgmtDefaults={mgmtDefaults}
+        snmpDefaults={snmpDefaults}
+        onSave={saveCred}
+      />
 
-          <Divider orientation="left" style={{ margin: "8px 0 12px" }}>
-            SNMP 采集
-          </Divider>
-          <Form.Item name="snmp_enabled" label="启用 SNMP" valuePropName="checked">
-            <Switch checkedChildren="开" unCheckedChildren="关" />
-          </Form.Item>
-          <Row gutter={16}>
-            <Col xs={24} sm={12}>
-              <Form.Item name="snmp_community" label="Community (v2c)">
-                <Input placeholder={credDevice?.snmp_community_set ? "已配置 · 留空不修改" : snmpDefaults.community} />
-              </Form.Item>
-            </Col>
-            <Col xs={24} sm={6}>
-              <Form.Item name="snmp_port" label="UDP 端口">
-                <InputNumber min={1} max={65535} style={{ width: "100%" }} />
-              </Form.Item>
-            </Col>
-            <Col xs={24} sm={6}>
-              <Form.Item name="snmp_version" label="版本">
-                <Select options={SNMP_VERSION_OPTIONS} />
-              </Form.Item>
-            </Col>
-          </Row>
-          {watchCredSnmpVersion === "3" && (
-            <Row gutter={16}>
-              <Col xs={24} sm={12}>
-                <Form.Item name="snmp_v3_username" label="SNMPv3 用户名">
-                  <Input />
-                </Form.Item>
-              </Col>
-              <Col xs={24} sm={12}>
-                <Form.Item name="snmp_v3_security_level" label="安全级别">
-                  <Select options={SNMP_V3_SECURITY_OPTIONS} />
-                </Form.Item>
-              </Col>
-              <Col xs={24} sm={12}>
-                <Form.Item name="snmp_v3_auth_password" label="认证密码">
-                  <Input.Password placeholder="留空不修改" autoComplete="new-password" />
-                </Form.Item>
-              </Col>
-              <Col xs={24} sm={12}>
-                <Form.Item name="snmp_v3_priv_password" label="加密密码">
-                  <Input.Password placeholder="留空不修改" autoComplete="new-password" />
-                </Form.Item>
-              </Col>
-            </Row>
-          )}
-        </Form>
-      </Modal>
+      <Dialog open={initOpen} onOpenChange={(o) => !o && !initLoading && setInitOpen(o)}>
+        <DialogContent className="flex max-h-[90vh] max-w-4xl flex-col gap-0 overflow-hidden p-0 sm:max-w-4xl">
+          <DialogHeader className="space-y-1 border-b px-6 py-4 text-left">
+            <DialogTitle>
+              {initDevice ? `基线初始化 · ${initDevice.name} (${initDevice.vendor})` : "基线初始化"}
+            </DialogTitle>
+            <DialogDescription>
+              标准基线预览（管理 / Loopback / Underlay / EVPN Overlay）· 确认后 dry-run 下发并归档初始化快照
+            </DialogDescription>
+          </DialogHeader>
+          <ScrollArea className="max-h-[calc(82vh-108px)] flex-1 px-6 py-4">
+            <ConfigPreviewPre>{initBaseline}</ConfigPreviewPre>
+          </ScrollArea>
+          <DialogFooter className="border-t px-6 py-4">
+            <Button type="button" variant="outline" disabled={initLoading} onClick={() => setInitOpen(false)}>
+              {action.cancel}
+            </Button>
+            <Button type="button" disabled={initLoading} onClick={confirmInitialize}>
+              {initLoading ? "下发中…" : "下发基线配置"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={deleteId != null} onOpenChange={(o) => !o && setDeleteId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {action.confirm}
+              {action.delete}？
+            </AlertDialogTitle>
+            <AlertDialogDescription>此操作不可撤销，将永久删除该设备及其关联数据。</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{action.cancel}</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => deleteId != null && void remove(deleteId)}
+            >
+              <Trash2 className="mr-1.5 h-4 w-4" />
+              {action.delete}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </PageCard>
   );
 }
