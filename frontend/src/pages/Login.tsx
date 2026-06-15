@@ -7,7 +7,7 @@ import {
   NodeIndexOutlined,
   SafetyCertificateOutlined,
 } from "@ant-design/icons";
-import { useState, type CSSProperties } from "react";
+import { useState, useEffect, type CSSProperties } from "react";
 import { login } from "../api/client";
 import { useAuth } from "../auth";
 import { BrandLogo } from "../components/BrandLogo";
@@ -25,6 +25,11 @@ export default function Login() {
   const { message } = AntApp.useApp();
   const { brand } = useBrand();
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    document.body.classList.add("login-route");
+    return () => document.body.classList.remove("login-route");
+  }, []);
 
   async function onFinish(v: { username: string; password: string }) {
     setLoading(true);
@@ -109,10 +114,10 @@ export default function Login() {
           <div className="login-page__card">
             <header className="login-page__card-header">
               <Typography.Title level={3} className="login-page__card-title">
-                {brand.login_title}
+                欢迎回来
               </Typography.Title>
               <Typography.Text className="login-page__card-sub">
-                {brand.login_subtitle}
+                登录以进入 {brand.product_name || "运营控制台"}
               </Typography.Text>
             </header>
 
@@ -163,7 +168,7 @@ export default function Login() {
 
             <p className="login-page__demo-hint">
               <span className="login-page__demo-badge">Demo</span>
-              体验环境 · admin / admin123
+              <span>体验账号 admin · 密码 admin123</span>
             </p>
           </div>
         </section>
