@@ -18,6 +18,7 @@ import { api } from "../api/client";
 import type { Controller, Site } from "../api/types";
 import PageCard from "../components/PageCard";
 import { dataTableProps } from "../utils/table";
+import { formModalProps } from "../utils/formModal";
 import { action, page, toast } from "../constants/uiCopy";
 
 export default function Sites() {
@@ -125,8 +126,15 @@ export default function Sites() {
           },
         ]}
       />
-      <Modal title="新建 Fabric 站点" open={open} onOk={onCreate} onCancel={() => setOpen(false)} okText={action.create}>
-        <Form form={form} layout="vertical">
+      <Modal
+        title="新建 Fabric 站点"
+        open={open}
+        onOk={onCreate}
+        onCancel={() => setOpen(false)}
+        okText={action.create}
+        {...formModalProps}
+      >
+        <Form form={form} layout="vertical" className="app-form">
           <Form.Item name="name" label="站点名称" rules={[{ required: true }]}>
             <Input placeholder="例如 北京 Fabric PoP" />
           </Form.Item>

@@ -9,6 +9,7 @@ import { api } from "../api/client";
 import type { WorkOrder } from "../api/types";
 import PageCard from "../components/PageCard";
 import { dataTableProps } from "../utils/table";
+import { formModalProps } from "../utils/formModal";
 import { action, empty, page, toast } from "../constants/uiCopy";
 
 const STATUS_COLOR: Record<string, string> = {
@@ -151,8 +152,15 @@ export default function WorkOrders() {
         ]}
       />
 
-      <Modal title="编辑工单" open={!!editTarget} onOk={doEdit} onCancel={() => setEditTarget(null)}>
-        <Form form={editForm} layout="vertical">
+      <Modal
+        title="编辑工单"
+        open={!!editTarget}
+        onOk={doEdit}
+        onCancel={() => setEditTarget(null)}
+        okText={action.save}
+        {...formModalProps}
+      >
+        <Form form={editForm} layout="vertical" className="app-form">
           <Form.Item name="title" label="标题" rules={[{ required: true }]}>
             <Input />
           </Form.Item>

@@ -13,11 +13,13 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <ConfigProvider
       locale={zhCN}
+      popupMatchSelectWidth={false}
       theme={{
         token: { colorPrimary: "#1677ff", borderRadius: 8, colorBgLayout: "#f0f2f5" },
         components: {
           Layout: { siderBg: "#001529", headerBg: "#ffffff" },
           Menu: { itemBorderRadius: 8, itemMarginInline: 8 },
+          Select: { optionPadding: "8px 12px" },
         },
       }}
     >

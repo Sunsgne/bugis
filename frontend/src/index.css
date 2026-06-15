@@ -639,3 +639,31 @@ body.login-route {
   padding-inline: 4px;
   height: auto;
 }
+
+/* Forms & selects — full label text, dropdown not clipped to trigger width */
+.app-form-modal .ant-form-item-label > label,
+.create-circuit-modal .ant-form-item-label > label {
+  white-space: normal;
+  line-height: 1.45;
+  height: auto;
+}
+
+.app-form .ant-form-item-label > label {
+  white-space: normal;
+  line-height: 1.45;
+}
+
+.ant-select-dropdown .ant-select-item-option-content {
+  white-space: normal;
+  line-height: 1.45;
+}
+
+.ant-select-dropdown {
+  min-width: 160px;
+}
+
+.ant-form-item .ant-select,
+.ant-form-item .ant-input-number,
+.ant-form-item .ant-input-affix-wrapper {
+  width: 100%;
+}

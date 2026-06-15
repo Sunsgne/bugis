@@ -19,6 +19,7 @@ import { api } from "../api/client";
 import { action, page, toast } from "../constants/uiCopy";
 import PageCard from "../components/PageCard";
 import { dataTableProps } from "../utils/table";
+import { formModalProps } from "../utils/formModal";
 
 interface Channel {
   id: number;
@@ -48,6 +49,13 @@ const URL_HINT: Record<string, string> = {
   slack: "https://hooks.slack.com/services/...",
   teams: "https://outlook.office.com/webhook/...",
   email: "收件人邮箱 noc@example.com",
+};
+const SEV_LABEL: Record<string, string> = {
+  critical: "Critical 严重",
+  major: "Major 重要",
+  minor: "Minor 次要",
+  warning: "Warning 警告",
+  info: "Info 信息",
 };
 const SEV_COLOR: Record<string, string> = {
   critical: "red",
@@ -132,7 +140,7 @@ export default function Notifications({ embedded }: { embedded?: boolean }) {
             title: "触发阈值",
             dataIndex: "min_severity",
             width: "10%",
-            render: (s) => <Tag color={SEV_COLOR[s]}>{s}</Tag>,
+            render: (s) => <Tag color={SEV_COLOR[s]}>{SEV_LABEL[s] || s}</Tag>,
           },
           {
             title: "状态",
@@ -166,8 +174,15 @@ export default function Notifications({ embedded }: { embedded?: boolean }) {
           },
         ]}
       />
-      <Modal title="新建通知渠道" open={open} onOk={onCreate} onCancel={() => setOpen(false)}>
-        <Form form={form} layout="vertical" initialValues={{ type: "dingtalk", min_severity: "major" }}>
+      <Modal
+        title="新建通知渠道"
+        open={open}
+        onOk={onCreate}
+        onCancel={() => setOpen(false)}
+        okText={action.create}
+        {...formModalProps}
+      >
+        <Form form={form} layout="vertical" className="app-form" initialValues={{ type: "dingtalk", min_severity: "major" }}>
           <Form.Item name="name" label="名称" rules={[{ required: true }]}>
             <Input placeholder="例如 NOC 运维群" />
           </Form.Item>
@@ -183,9 +198,9 @@ export default function Notifications({ embedded }: { embedded?: boolean }) {
           </Form.Item>
           <Form.Item name="min_severity" label="触发阈值 (达到该级别及以上发送)">
             <Select
-              options={["critical", "major", "minor", "warning", "info"].map((v) => ({
-                value: v,
-                label: v,
+              options={Object.entries(SEV_LABEL).map(([value, label]) => ({
+                value,
+                label,
               }))}
             />
           </Form.Item>

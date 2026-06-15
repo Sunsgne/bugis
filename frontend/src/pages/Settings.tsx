@@ -112,7 +112,7 @@ export default function Settings() {
 
       <Row gutter={24}>
         <Col xs={24} lg={14}>
-          <Form form={form} layout="vertical" disabled={!canEdit}>
+          <Form form={form} layout="vertical" className="app-form" disabled={!canEdit}>
             <Title level={5} style={{ marginTop: 0 }}>
               全局品牌
             </Title>

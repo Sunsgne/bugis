@@ -16,9 +16,10 @@ import { PlusOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { api } from "../api/client";
 import { useAuth } from "../auth";
-import { page, toast } from "../constants/uiCopy";
+import { action, page, toast } from "../constants/uiCopy";
 import PageCard from "../components/PageCard";
 import { dataTableProps } from "../utils/table";
+import { formModalProps } from "../utils/formModal";
 
 interface UserRow {
   id: number;
@@ -127,8 +128,15 @@ export default function Users({ embedded }: { embedded?: boolean }) {
           },
         ]}
       />
-      <Modal title="新建用户" open={open} onOk={onCreate} onCancel={() => setOpen(false)}>
-        <Form form={form} layout="vertical" initialValues={{ role: "operator" }}>
+      <Modal
+        title="新建用户"
+        open={open}
+        onOk={onCreate}
+        onCancel={() => setOpen(false)}
+        okText={action.create}
+        {...formModalProps}
+      >
+        <Form form={form} layout="vertical" className="app-form" initialValues={{ role: "operator" }}>
           <Form.Item name="username" label="用户名" rules={[{ required: true }]}>
             <Input />
           </Form.Item>

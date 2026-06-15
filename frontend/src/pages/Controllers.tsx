@@ -4,11 +4,12 @@ import {
   Alert,
   Button,
   Card,
+  Col,
   Form,
   Input,
   Modal,
+  Row,
   Select,
-  Space,
   Table,
   Tag,
   App as AntApp,
@@ -21,6 +22,7 @@ import type { Controller } from "../api/types";
 import { action, empty, page, toast } from "../constants/uiCopy";
 import PageCard from "../components/PageCard";
 import { dataTableProps } from "../utils/table";
+import { formModalProps } from "../utils/formModal";
 
 const TYPE_LABEL: Record<string, string> = {
   bugis: "Bugis SDN 控制器 (内置)",
@@ -201,8 +203,16 @@ export default function Controllers() {
         />
       </PageCard>
 
-      <Modal title="纳管外部控制器" open={open} onOk={onCreate} onCancel={() => setOpen(false)}>
-        <Form form={form} layout="vertical" initialValues={{ type: "nce_fabric" }}>
+      <Modal
+        title="纳管外部控制器"
+        open={open}
+        onOk={onCreate}
+        onCancel={() => setOpen(false)}
+        okText={action.create}
+        {...formModalProps}
+        width={560}
+      >
+        <Form form={form} layout="vertical" className="app-form" initialValues={{ type: "nce_fabric" }}>
           <Form.Item name="name" label="名称" rules={[{ required: true }]}>
             <Input placeholder="例如 华为 iMaster NCE-Fabric" />
           </Form.Item>
@@ -212,14 +222,18 @@ export default function Controllers() {
           <Form.Item name="base_url" label="北向地址" rules={[{ required: true }]}>
             <Input placeholder="https://nce.example.com" />
           </Form.Item>
-          <Space style={{ display: "flex" }}>
-            <Form.Item name="username" label="账号" style={{ flex: 1 }}>
-              <Input />
-            </Form.Item>
-            <Form.Item name="password" label="密码" style={{ flex: 1 }}>
-              <Input.Password />
-            </Form.Item>
-          </Space>
+          <Row gutter={16}>
+            <Col xs={24} sm={12}>
+              <Form.Item name="username" label="账号">
+                <Input />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12}>
+              <Form.Item name="password" label="密码">
+                <Input.Password />
+              </Form.Item>
+            </Col>
+          </Row>
           <Form.Item name="description" label="描述">
             <Input />
           </Form.Item>

@@ -45,6 +45,7 @@ import {
 import { api } from "../api/client";
 import type { Circuit, Device, DeviceInterface, Offering, Paginated, Site, SvidUsage, Tenant } from "../api/types";
 import { configPreviewModalProps, ConfigPreviewPre, createCircuitModalProps } from "../utils/configPreview";
+import { formModalProps } from "../utils/formModal";
 import { TenantSearchSelect, useTenantSearch } from "../components/TenantSearchSelect";
 import OfferingSearchSelect, { useOfferingSearch } from "../components/OfferingSearchSelect";
 import { buildListQuery, dataTableProps, tablePagination } from "../utils/table";
@@ -901,8 +902,10 @@ export default function Circuits() {
         onOk={doModify}
         onCancel={() => setModifyTarget(null)}
         okText="提交变更并下发"
+        {...formModalProps}
+        width={480}
       >
-        <Form form={modifyForm} layout="vertical">
+        <Form form={modifyForm} layout="vertical" className="app-form">
           <Form.Item
             name="bandwidth_mbps"
             label="新带宽 (Mbps)"
@@ -1144,6 +1147,7 @@ function CreateModal({
       <Form
         form={form}
         layout="vertical"
+        className="app-form"
         initialValues={{
           service_type: "l2vpn_evpn",
           bandwidth_mbps: 100,
@@ -1279,34 +1283,38 @@ function CreateModal({
                   客户通过专线接入本地端口，流量经 EVPN 隧道送至对端国家 PoP，
                   在边界网关 NAT 后使用当地公网 (IPT)。
                 </div>
-                <Space size="middle" style={{ display: "flex", flexWrap: "wrap" }}>
-                  <Form.Item
-                    name="egress_country"
-                    label="公网出口国家/地区"
-                    rules={[{ required: true, message: "请选择出口国家" }]}
-                    style={{ minWidth: 200 }}
-                  >
-                    <Select options={EGRESS_COUNTRIES} placeholder="例如 US" />
-                  </Form.Item>
-                  <Form.Item
-                    name="egress_site_id"
-                    label="出口 PoP 站点"
-                    rules={[{ required: true, message: "请选择出口站点" }]}
-                    style={{ minWidth: 220 }}
-                  >
-                    <Select
-                      showSearch
-                      optionFilterProp="label"
-                      options={sites.map((s: Site) => ({
-                        value: s.id,
-                        label: `${s.name} (${s.region || s.code})`,
-                      }))}
-                    />
-                  </Form.Item>
-                  <Form.Item name="ipt_nat_enabled" label="出口 NAT" valuePropName="checked">
-                    <Switch checkedChildren="开" unCheckedChildren="关" />
-                  </Form.Item>
-                </Space>
+                <Row gutter={16}>
+                  <Col xs={24} sm={8}>
+                    <Form.Item
+                      name="egress_country"
+                      label="公网出口国家/地区"
+                      rules={[{ required: true, message: "请选择出口国家" }]}
+                    >
+                      <Select options={EGRESS_COUNTRIES} placeholder="例如 US" />
+                    </Form.Item>
+                  </Col>
+                  <Col xs={24} sm={10}>
+                    <Form.Item
+                      name="egress_site_id"
+                      label="出口 PoP 站点"
+                      rules={[{ required: true, message: "请选择出口站点" }]}
+                    >
+                      <Select
+                        showSearch
+                        optionFilterProp="label"
+                        options={sites.map((s: Site) => ({
+                          value: s.id,
+                          label: `${s.name} (${s.region || s.code})`,
+                        }))}
+                      />
+                    </Form.Item>
+                  </Col>
+                  <Col xs={24} sm={6}>
+                    <Form.Item name="ipt_nat_enabled" label="出口 NAT" valuePropName="checked">
+                      <Switch checkedChildren="开" unCheckedChildren="关" />
+                    </Form.Item>
+                  </Col>
+                </Row>
               </div>
             ) : null
           }

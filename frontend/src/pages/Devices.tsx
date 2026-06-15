@@ -4,6 +4,7 @@ import {
   Alert,
   Button,
   Card,
+  Col,
   Collapse,
   Divider,
   Drawer,
@@ -11,6 +12,7 @@ import {
   Input,
   InputNumber,
   Modal,
+  Row,
   Select,
   Space,
   Switch,
@@ -36,6 +38,14 @@ import {
 import { api } from "../api/client";
 import type { Device, DeviceInterface, Paginated, Site, SnmpDefaults, SvidUsage } from "../api/types";
 import { configPreviewModalProps, ConfigPreviewPre } from "../utils/configPreview";
+import { formModalProps } from "../utils/formModal";
+import {
+  DEVICE_ROLE_OPTIONS,
+  labelForOption,
+  OVERLAY_OPTIONS,
+  SNMP_VERSION_OPTIONS,
+  VENDOR_OPTIONS,
+} from "../constants/formOptions";
 import { action, page as pageCopy, toast } from "../constants/uiCopy";
 import { buildListQuery, dataTableProps, tablePagination } from "../utils/table";
 import PageCard from "../components/PageCard";
@@ -55,10 +65,6 @@ const STATUS_COLOR: Record<string, string> = {
   maintenance: "orange",
   unknown: "default",
 };
-const ROLES = ["spine", "leaf", "border_leaf", "vtep", "pe", "p", "rr", "dci_gw", "cpe"];
-const OVERLAYS = ["vxlan_evpn", "srmpls_evpn"];
-const VENDORS = ["h3c", "huawei", "juniper", "arista", "cisco", "frr"];
-
 const VENDOR_AUTH_HINT: Record<string, string> = {
   h3c: "默认 NETCONF 830 / SSH 22；账号常为 admin 或 netconf",
   huawei: "默认 NETCONF 830；账号常为 netconf 或 huawei",
@@ -455,11 +461,26 @@ export default function Devices() {
           {
             title: "厂商",
             dataIndex: "vendor",
-            width: 90,
-            render: (v) => <Tag color={VENDOR_COLOR[v]}>{v.toUpperCase()}</Tag>,
+            width: 120,
+            ellipsis: true,
+            render: (v) => (
+              <Tooltip title={labelForOption(VENDOR_OPTIONS, v)}>
+                <Tag color={VENDOR_COLOR[v]}>{labelForOption(VENDOR_OPTIONS, v)}</Tag>
+              </Tooltip>
+            ),
           },
           { title: "型号", dataIndex: "model", width: 120, ellipsis: true },
-          { title: "角色", dataIndex: "role", width: 100, render: (r) => <Tag>{r}</Tag> },
+          {
+            title: "角色",
+            dataIndex: "role",
+            width: 120,
+            ellipsis: true,
+            render: (r) => (
+              <Tooltip title={labelForOption(DEVICE_ROLE_OPTIONS, r)}>
+                <Tag>{labelForOption(DEVICE_ROLE_OPTIONS, r)}</Tag>
+              </Tooltip>
+            ),
+          },
           {
             title: "Overlay",
             dataIndex: "overlay_tech",
@@ -606,10 +627,11 @@ export default function Devices() {
         open={open}
         onOk={onCreate}
         onCancel={() => setOpen(false)}
-        width={720}
         okText={action.create}
+        {...formModalProps}
+        width={840}
       >
-        <Form form={form} layout="vertical">
+        <Form form={form} layout="vertical" className="app-form">
           <Alert
             type="info"
             showIcon
@@ -623,50 +645,74 @@ export default function Devices() {
               </Typography.Paragraph>
             }
           />
-          <Space size="middle" style={{ display: "flex", flexWrap: "wrap" }}>
-            <Form.Item name="name" label="名称" rules={[{ required: true }]} style={{ flex: "1 1 200px" }}>
-              <Input placeholder="BJ-LEAF-01" />
-            </Form.Item>
-            <Form.Item name="vendor" label="厂商" style={{ flex: "0 1 140px" }}>
-              <Select options={VENDORS.map((v) => ({ value: v, label: v.toUpperCase() }))} />
-            </Form.Item>
-          </Space>
-          <Space size="middle" style={{ display: "flex", flexWrap: "wrap" }}>
-            <Form.Item name="model" label="型号" style={{ flex: "1 1 200px" }}>
-              <Input placeholder="S6850 / CE12800 / MX204 ..." />
-            </Form.Item>
-            <Form.Item name="role" label="角色" style={{ flex: "0 1 140px" }}>
-              <Select options={ROLES.map((v) => ({ value: v, label: v }))} />
-            </Form.Item>
-            <Form.Item name="overlay_tech" label="Overlay" style={{ flex: "0 1 160px" }}>
-              <Select options={OVERLAYS.map((v) => ({ value: v, label: v }))} />
-            </Form.Item>
-          </Space>
-          <Space size="middle" style={{ display: "flex", flexWrap: "wrap" }}>
-            <Form.Item name="mgmt_ip" label="管理 IP" rules={[{ required: true }]} style={{ flex: "1 1 180px" }}>
-              <Input placeholder="10.1.0.11" />
-            </Form.Item>
-            <Form.Item name="loopback_ip" label="Loopback" style={{ flex: "1 1 180px" }}>
-              <Input placeholder="10.1.255.11" />
-            </Form.Item>
-            <Form.Item name="bgp_asn" label="BGP ASN" style={{ flex: "0 1 120px" }}>
-              <InputNumber style={{ width: "100%" }} />
-            </Form.Item>
-          </Space>
-          <Space size="middle" style={{ display: "flex", flexWrap: "wrap" }}>
-            <Form.Item name="site_id" label="数据中心" style={{ flex: "1 1 200px" }}>
-              <Select
-                allowClear
-                options={sites.map((s) => ({ value: s.id, label: `${s.code} ${s.name}` }))}
-              />
-            </Form.Item>
-            <Form.Item name="sr_node_sid" label="SR Node-SID" style={{ flex: "0 1 140px" }}>
-              <InputNumber style={{ width: "100%" }} />
-            </Form.Item>
-            <Form.Item name="is_route_reflector" label="路由反射器" valuePropName="checked">
-              <Switch />
-            </Form.Item>
-          </Space>
+          <Row gutter={16}>
+            <Col xs={24} sm={14}>
+              <Form.Item name="name" label="名称" rules={[{ required: true }]}>
+                <Input placeholder="BJ-LEAF-01" />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={10}>
+              <Form.Item name="vendor" label="厂商">
+                <Select options={VENDOR_OPTIONS} />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Row gutter={16}>
+            <Col xs={24} sm={10}>
+              <Form.Item name="model" label="型号">
+                <Input placeholder="S6850 / CE12800 / MX204 ..." />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={7}>
+              <Form.Item name="role" label="角色">
+                <Select options={DEVICE_ROLE_OPTIONS} />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={7}>
+              <Form.Item name="overlay_tech" label="Overlay">
+                <Select options={OVERLAY_OPTIONS} />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Row gutter={16}>
+            <Col xs={24} sm={8}>
+              <Form.Item name="mgmt_ip" label="管理 IP" rules={[{ required: true }]}>
+                <Input placeholder="10.1.0.11" />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={8}>
+              <Form.Item name="loopback_ip" label="Loopback">
+                <Input placeholder="10.1.255.11" />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={8}>
+              <Form.Item name="bgp_asn" label="BGP ASN">
+                <InputNumber style={{ width: "100%" }} />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Row gutter={16} align="bottom">
+            <Col xs={24} sm={10}>
+              <Form.Item name="site_id" label="数据中心">
+                <Select
+                  allowClear
+                  showSearch
+                  optionFilterProp="label"
+                  options={sites.map((s) => ({ value: s.id, label: `${s.code} · ${s.name}` }))}
+                />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={8}>
+              <Form.Item name="sr_node_sid" label="SR Node-SID">
+                <InputNumber style={{ width: "100%" }} />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={6}>
+              <Form.Item name="is_route_reflector" label="路由反射器" valuePropName="checked">
+                <Switch />
+              </Form.Item>
+            </Col>
+          </Row>
 
           <Divider orientation="left" style={{ margin: "8px 0 16px" }}>
             南向登录凭证
@@ -676,27 +722,34 @@ export default function Devices() {
               {VENDOR_AUTH_HINT[watchVendor]}
             </Typography.Text>
           )}
-          <Space size="middle" style={{ display: "flex", flexWrap: "wrap" }}>
-            <Form.Item name="username" label="用户名 (NETCONF / SSH)" style={{ flex: "1 1 200px" }}>
-              <Input placeholder="admin / netconf" />
-            </Form.Item>
-            <Form.Item
-              name="password"
-              label="密码 / SNMP Community"
-              extra="SNMP 可在「系统设置 → SNMP 采集」配置全局 Community；此处可覆盖单台设备"
-              style={{ flex: "1 1 200px" }}
-            >
-              <Input.Password placeholder="登录密码或只读 community" autoComplete="new-password" />
-            </Form.Item>
-          </Space>
-          <Space size="middle" style={{ display: "flex", flexWrap: "wrap" }}>
-            <Form.Item name="netconf_port" label="NETCONF 端口" style={{ flex: "0 1 120px" }}>
-              <InputNumber min={1} max={65535} style={{ width: "100%" }} />
-            </Form.Item>
-            <Form.Item name="ssh_port" label="SSH 端口" style={{ flex: "0 1 120px" }}>
-              <InputNumber min={1} max={65535} style={{ width: "100%" }} />
-            </Form.Item>
-          </Space>
+          <Row gutter={16}>
+            <Col xs={24} sm={12}>
+              <Form.Item name="username" label="用户名 (NETCONF / SSH)">
+                <Input placeholder="admin / netconf" />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12}>
+              <Form.Item
+                name="password"
+                label="密码 / SNMP Community"
+                extra="SNMP 可在「系统设置 → SNMP 采集」配置全局 Community；此处可覆盖单台设备"
+              >
+                <Input.Password placeholder="登录密码或只读 community" autoComplete="new-password" />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Row gutter={16}>
+            <Col xs={24} sm={12}>
+              <Form.Item name="netconf_port" label="NETCONF 端口">
+                <InputNumber min={1} max={65535} style={{ width: "100%" }} />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12}>
+              <Form.Item name="ssh_port" label="SSH 端口">
+                <InputNumber min={1} max={65535} style={{ width: "100%" }} />
+              </Form.Item>
+            </Col>
+          </Row>
 
           <Divider orientation="left" style={{ margin: "8px 0 12px" }}>
             SNMP 采集（可选）
@@ -716,20 +769,23 @@ export default function Devices() {
                 key: "snmp",
                 label: "高级参数（留空则使用平台默认）",
                 children: (
-                  <Space size="middle" style={{ display: "flex", flexWrap: "wrap", width: "100%" }}>
-                    <Form.Item name="snmp_community" label="Community" style={{ flex: "1 1 200px" }}>
-                      <Input placeholder={snmpDefaults.community} disabled={!watchSnmpEnabled} allowClear />
-                    </Form.Item>
-                    <Form.Item name="snmp_port" label="UDP 端口" style={{ width: 120 }}>
-                      <InputNumber min={1} max={65535} style={{ width: "100%" }} disabled={!watchSnmpEnabled} />
-                    </Form.Item>
-                    <Form.Item name="snmp_version" label="版本" style={{ width: 100 }}>
-                      <Select
-                        disabled={!watchSnmpEnabled}
-                        options={[{ value: "2c", label: "v2c" }]}
-                      />
-                    </Form.Item>
-                  </Space>
+                  <Row gutter={16}>
+                    <Col xs={24} sm={12}>
+                      <Form.Item name="snmp_community" label="Community">
+                        <Input placeholder={snmpDefaults.community} disabled={!watchSnmpEnabled} allowClear />
+                      </Form.Item>
+                    </Col>
+                    <Col xs={24} sm={6}>
+                      <Form.Item name="snmp_port" label="UDP 端口">
+                        <InputNumber min={1} max={65535} style={{ width: "100%" }} disabled={!watchSnmpEnabled} />
+                      </Form.Item>
+                    </Col>
+                    <Col xs={24} sm={6}>
+                      <Form.Item name="snmp_version" label="版本">
+                        <Select disabled={!watchSnmpEnabled} options={SNMP_VERSION_OPTIONS} />
+                      </Form.Item>
+                    </Col>
+                  </Row>
                 ),
               },
             ]}
@@ -742,8 +798,9 @@ export default function Devices() {
         open={credOpen}
         onOk={saveCred}
         onCancel={() => setCredOpen(false)}
-        width={520}
         okText={action.save}
+        {...formModalProps}
+        width={520}
       >
         <Alert
           type="warning"
@@ -752,21 +809,25 @@ export default function Devices() {
           message="密码不会回显"
           description="留空密码则保持原值不变。修改后可用于 NETCONF/SSH 下发与 SNMP（若启用设备凭证优先）。"
         />
-        <Form form={credForm} layout="vertical">
+        <Form form={credForm} layout="vertical" className="app-form">
           <Form.Item name="username" label="用户名">
             <Input placeholder="admin / netconf" />
           </Form.Item>
           <Form.Item name="password" label="密码 / SNMP Community">
             <Input.Password placeholder="留空不修改" autoComplete="new-password" />
           </Form.Item>
-          <Space size="middle" style={{ display: "flex" }}>
-            <Form.Item name="netconf_port" label="NETCONF 端口" style={{ flex: 1 }}>
-              <InputNumber min={1} max={65535} style={{ width: "100%" }} />
-            </Form.Item>
-            <Form.Item name="ssh_port" label="SSH 端口" style={{ flex: 1 }}>
-              <InputNumber min={1} max={65535} style={{ width: "100%" }} />
-            </Form.Item>
-          </Space>
+          <Row gutter={16}>
+            <Col xs={24} sm={12}>
+              <Form.Item name="netconf_port" label="NETCONF 端口">
+                <InputNumber min={1} max={65535} style={{ width: "100%" }} />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12}>
+              <Form.Item name="ssh_port" label="SSH 端口">
+                <InputNumber min={1} max={65535} style={{ width: "100%" }} />
+              </Form.Item>
+            </Col>
+          </Row>
         </Form>
       </Modal>
     </PageCard>

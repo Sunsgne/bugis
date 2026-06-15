@@ -18,6 +18,7 @@ import type { Paginated, Tenant } from "../api/types";
 import ListToolbar from "../components/ListToolbar";
 import PageCard from "../components/PageCard";
 import { dataTableProps, PAGE_SIZE_OPTIONS, pageRangeLabel, tablePagination } from "../utils/table";
+import { formModalProps } from "../utils/formModal";
 
 const TYPE_LABEL: Record<string, string> = {
   enterprise: "企业专线",
@@ -186,8 +187,15 @@ export default function Tenants() {
         ]}
       />
 
-      <Modal title="新建客户" open={open} onOk={onCreate} onCancel={() => setOpen(false)}>
-        <Form form={form} layout="vertical" initialValues={{ type: "enterprise", status: "active" }}>
+      <Modal
+        title="新建客户"
+        open={open}
+        onOk={onCreate}
+        onCancel={() => setOpen(false)}
+        okText="创建"
+        {...formModalProps}
+      >
+        <Form form={form} layout="vertical" className="app-form" initialValues={{ type: "enterprise", status: "active" }}>
           <Form.Item name="name" label="客户名称" rules={[{ required: true }]}>
             <Input />
           </Form.Item>

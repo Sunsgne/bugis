@@ -25,6 +25,8 @@ import type { Offering, Paginated } from "../api/types";
 import { buildListQuery, dataTableProps, PAGE_SIZE_OPTIONS, pageRangeLabel, tablePagination } from "../utils/table";
 import PageCard from "../components/PageCard";
 import ListToolbar from "../components/ListToolbar";
+import { formModalProps } from "../utils/formModal";
+import { action } from "../constants/uiCopy";
 
 const { Text, Paragraph } = Typography;
 
@@ -358,10 +360,19 @@ export default function Catalog() {
         )}
       </Drawer>
 
-      <Modal title="新建套餐" open={open} onOk={onCreate} onCancel={() => setOpen(false)} width={560}>
+      <Modal
+        title="新建套餐"
+        open={open}
+        onOk={onCreate}
+        onCancel={() => setOpen(false)}
+        okText={action.create}
+        {...formModalProps}
+        width={600}
+      >
         <Form
           form={form}
           layout="vertical"
+          className="app-form"
           initialValues={{
             service_type: "l2vpn_evpn",
             bandwidth_mbps: 1000,
