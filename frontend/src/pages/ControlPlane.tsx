@@ -116,12 +116,6 @@ const RT_COLOR: Record<string, string> = {
   type4_es: "orange",
 };
 
-const CAP_STATUS: Record<string, { color: string; label: string }> = {
-  ready: { color: "green", label: "已就绪" },
-  partial: { color: "orange", label: "部分实现" },
-  planned: { color: "default", label: "规划中" },
-};
-
 const BGP_COLOR: Record<string, string> = {
   established: "green",
   connect: "blue",
@@ -183,9 +177,6 @@ export default function ControlPlane() {
   }, [vni]);
 
   const allVnis = Array.from(new Set(vteps.flatMap((v) => v.vnis))).sort((a, b) => a - b);
-  const allReady =
-    status?.capabilities_ready === status?.capabilities_total &&
-    status?.capabilities_total > 0;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -197,7 +188,6 @@ export default function ControlPlane() {
             </span>
             <Tag color="geekblue" style={{ marginLeft: 8 }}>内置 · 自研</Tag>
             {status?.version && <Tag style={{ marginLeft: 4 }}>v{status.version}</Tag>}
-            {allReady && <Tag color="green">能力矩阵 全部就绪</Tag>}
           </Col>
           <Col>
             <Button loading={syncing} onClick={syncBgp}>
@@ -214,28 +204,6 @@ export default function ControlPlane() {
             设备配置见 <Link to="/config">配置管理</Link>
           </Descriptions.Item>
         </Descriptions>
-      </Card>
-
-      <Card title="能力矩阵" size="small">
-        <Table
-          rowKey="key"
-          dataSource={status?.capabilities || []}
-          pagination={false}
-          size="small"
-          columns={[
-            { title: "能力", dataIndex: "name", width: 200 },
-            {
-              title: "状态",
-              dataIndex: "status",
-              width: 120,
-              render: (s: string) => {
-                const meta = CAP_STATUS[s] || CAP_STATUS.planned;
-                return <Tag color={meta.color}>{meta.label}</Tag>;
-              },
-            },
-            { title: "说明", dataIndex: "detail" },
-          ]}
-        />
       </Card>
 
       <Row gutter={16}>
