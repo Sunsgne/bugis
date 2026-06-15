@@ -610,6 +610,12 @@ body.login-route {
   width: 100%;
 }
 
+/* Empty list: no horizontal scrollbar from scroll.x min-width */
+.data-table.ant-table-empty .ant-table-body,
+.data-table.ant-table-empty .ant-table-content {
+  overflow-x: hidden !important;
+}
+
 .data-table .ant-table-thead > tr > th {
   background: #f8fafc !important;
   font-weight: 600;

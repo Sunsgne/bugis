@@ -19,15 +19,16 @@ export function pageRangeLabel(total: number, page: number, pageSize: number): s
 }
 
 /** Consistent table layout: fixed columns, no stray gaps from pinned actions. */
-export function dataTableProps(scrollX?: number): Pick<
-  TableProps<unknown>,
-  "size" | "tableLayout" | "className" | "scroll"
-> {
+export function dataTableProps(
+  scrollX?: number,
+  /** When false, skip horizontal scroll (e.g. empty table — avoids a stray scrollbar). */
+  enableScroll = true,
+): Pick<TableProps<unknown>, "size" | "tableLayout" | "className" | "scroll"> {
   return {
     size: "middle",
     tableLayout: "fixed",
     className: "data-table",
-    ...(scrollX ? { scroll: { x: scrollX } } : {}),
+    ...(scrollX && enableScroll ? { scroll: { x: scrollX } } : {}),
   };
 }
 

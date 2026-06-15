@@ -634,7 +634,7 @@ export default function Circuits() {
         rowKey="id"
         loading={loading}
         dataSource={rows}
-        {...dataTableProps(1280)}
+        {...dataTableProps(1280, rows.length > 0)}
         pagination={tablePagination(total, page, pageSize, (p, ps) => {
           setPage(p);
           setPageSize(ps);

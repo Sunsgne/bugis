@@ -460,7 +460,7 @@ export default function Devices() {
         rowKey="id"
         loading={loading}
         dataSource={rows}
-        {...dataTableProps(1500)}
+        {...dataTableProps(1500, rows.length > 0)}
         pagination={tablePagination(total, page, pageSize, (p, ps) => {
           setPage(p);
           setPageSize(ps);
