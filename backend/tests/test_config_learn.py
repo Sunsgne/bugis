@@ -108,7 +108,7 @@ def test_bulk_import_with_learn(client, auth_headers):
     assert body["learn"]["success"] == 1
 
     devices = client.get("/api/v1/devices", headers=auth_headers).json()
-    dev = next(d for d in devices if d["name"] == f"LAB-LEAF-{site['code']}")
+    dev = next(d for d in devices["items"] if d["name"] == f"LAB-LEAF-{site['code']}")
     state = client.get(
         f"/api/v1/devices/{dev['id']}/learned-state", headers=auth_headers
     ).json()
