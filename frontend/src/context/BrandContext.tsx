@@ -67,7 +67,7 @@ export function BrandProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const save = useCallback(async (payload: Partial<BrandConfig>) => {
-    const { data } = await api.patch<BrandConfig>("/settings/platform", payload);
+    const { data } = await api.patch<BrandConfig>("/system/settings/platform", payload);
     const merged = { ...FALLBACK, ...data };
     setBrand(merged);
     applyDocumentBrand(merged);

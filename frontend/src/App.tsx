@@ -47,6 +47,7 @@ import AlarmSettings from "./pages/settings/AlarmSettings";
 import BaselineSettings from "./pages/settings/BaselineSettings";
 import SmtpSettings from "./pages/settings/SmtpSettings";
 import SnmpSettingsTab from "./pages/settings/SnmpSettingsTab";
+import BrandSettings from "./pages/settings/BrandSettings";
 import IntegrationSettings from "./pages/settings/IntegrationSettings";
 import { nav, action } from "./constants/uiCopy";
 import { useBrand } from "./context/BrandContext";
@@ -241,7 +242,8 @@ function Shell() {
             <Route path="/monitoring" element={<Monitoring />} />
             <Route path="/alarms" element={<Alarms />} />
             <Route path="/settings" element={<SettingsLayout />}>
-              <Route index element={<Navigate to="general" replace />} />
+              <Route index element={<Navigate to="brand" replace />} />
+              <Route path="brand" element={<BrandSettings />} />
               <Route path="general" element={<GeneralSettings />} />
               <Route path="alarms" element={<AlarmSettings />} />
               <Route path="baseline" element={<BaselineSettings />} />

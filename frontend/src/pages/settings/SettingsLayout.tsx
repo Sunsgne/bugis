@@ -11,12 +11,14 @@ import {
   SafetyOutlined,
   AuditOutlined,
   RadarChartOutlined,
+  BgColorsOutlined,
 } from "@ant-design/icons";
 
 const { Sider, Content } = Layout;
 const { Paragraph } = Typography;
 
 const NAV = [
+  { key: "/settings/brand", icon: <BgColorsOutlined />, label: "品牌外观" },
   { key: "/settings/general", icon: <ThunderboltOutlined />, label: "平台运行" },
   { key: "/settings/alarms", icon: <AlertOutlined />, label: "告警阈值" },
   { key: "/settings/baseline", icon: <CloudServerOutlined />, label: "设备基线" },
@@ -43,7 +45,7 @@ export default function SettingsLayout() {
       }
     >
       <Paragraph type="secondary" style={{ marginTop: 0 }}>
-        集中管理平台运行参数、告警策略、SNMP/邮件、北向集成与用户权限。修改后即时生效。
+        集中管理品牌外观、平台运行参数、告警策略、SNMP/邮件、北向集成与用户权限。修改后即时生效。
       </Paragraph>
       <Layout style={{ background: "transparent", minHeight: 520 }}>
         <Sider width={200} theme="light" style={{ borderRight: "1px solid #f0f0f0", background: "#fafafa" }}>
