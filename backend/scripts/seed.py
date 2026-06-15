@@ -9,7 +9,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.bootstrap import ensure_superuser  # noqa: E402
+from app.bootstrap import (  # noqa: E402
+    ensure_platform_settings,
+    ensure_snmp_settings,
+    ensure_superuser,
+)
 from app.core.database import SessionLocal, init_db  # noqa: E402
 from app.models.circuit import Circuit, CircuitEndpoint  # noqa: E402
 from app.models.controller import Controller  # noqa: E402
@@ -38,6 +42,8 @@ def run() -> None:
     db = SessionLocal()
     try:
         ensure_superuser(db)
+        ensure_snmp_settings(db)
+        ensure_platform_settings(db)
         if db.query(Site).count() > 0:
             print("Data already seeded; skipping.")
             return
@@ -172,15 +178,19 @@ def run() -> None:
                     return d.bgp_asn
             return 65000
 
-        make_circuit("银行北京-上海二层专线", t_bank, ServiceType.L2VPN_EVPN,
+        c_bank = make_circuit("银行北京-上海二层专线", t_bank, ServiceType.L2VPN_EVPN,
                      [("A", "BJ-LEAF-01", "GE1/0/1"),
                       ("Z", "SH-LEAF-01", "GE1/0/1")], 1000)
-        make_circuit("云公司混合云三层互联", t_cloud, ServiceType.L3VPN_EVPN,
+        c_cloud = make_circuit("云公司混合云三层互联", t_cloud, ServiceType.L3VPN_EVPN,
                      [("A", "SH-PE-01", "GE1/0/2"),
                       ("Z", "GZ-PE-01", "GE1/0/2")], 2000)
         make_circuit("政务DCI数据中心互联", t_gov, ServiceType.DCI,
                      [("A", "BJ-BORDER-01", "GE1/0/3"),
                       ("Z", "SH-BORDER-01", "GE1/0/3")], 5000, sla="99.99")
+
+        # Demo: keep two circuits active so monitoring / traffic pages have data.
+        c_bank.status = CircuitStatus.ACTIVE
+        c_cloud.status = CircuitStatus.ACTIVE
 
         # Remote IPT demo: bank in CN accesses US public internet via SH egress
         c_ript = Circuit(

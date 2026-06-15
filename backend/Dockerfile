@@ -19,4 +19,4 @@ HEALTHCHECK --interval=30s --timeout=5s --retries=5 \
     CMD curl -fsS http://localhost:8000/health || exit 1
 
 # Apply migrations, seed demo data, then launch the API.
-CMD ["sh", "-c", "alembic upgrade head && python -m scripts.seed && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+CMD ["sh", "-c", "alembic upgrade head && python -m scripts.seed && python -m scripts.ensure_demo && uvicorn app.main:app --host 0.0.0.0 --port 8000"]

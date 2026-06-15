@@ -113,6 +113,13 @@ for i in $(seq 1 20); do
         if curl -fsS "http://${HOST}:3309/-/ready" >/dev/null 2>&1; then
           PROM_OK=" Prometheus OK;"
         fi
+        if [[ -x "$ROOT/scripts/verify-demo.sh" ]]; then
+          echo "==> Running post-deploy smoke tests"
+          BUGIS_DEMO_USER=admin BUGIS_DEMO_PASS=admin123 \
+            "$ROOT/scripts/verify-demo.sh" "http://${HOST}:3300" || {
+            echo "WARN: smoke tests failed (stack may still be starting)"
+          }
+        fi
         echo "Demo is up: http://${HOST}:3300/ (circuits API OK;${PROM_OK} Grafana http://${HOST}:3303/)"
         exit 0
       fi
