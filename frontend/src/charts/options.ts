@@ -20,10 +20,16 @@ import {
 type Point = { name: string; value: number };
 type SeriesPoint = Record<string, string | number>;
 
-function fmtMbps(v: number): string {
+function fmtTrafficAxis(v: number): string {
   if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}T`;
   if (v >= 1000) return `${(v / 1000).toFixed(1)}G`;
   return `${Math.round(v)}`;
+}
+
+function fmtTrafficRate(v: number): string {
+  if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1)} Tbps`;
+  if (v >= 1000) return `${(v / 1000).toFixed(1)} Gbps`;
+  return `${Math.round(v)} Mbps`;
 }
 
 /** Dual Rx/Tx area chart with optional 95th percentile reference lines. */
@@ -172,7 +178,7 @@ export function trafficAreaOption(
         const rows = list
           .map((p) => {
             const v = Number(p.value);
-            return `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color};margin-right:6px"></span>${p.seriesName}: <b>${fmtMbps(v)} Mbps</b>`;
+            return `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color};margin-right:6px"></span>${p.seriesName}: <b>${fmtTrafficRate(v)}</b>`;
           })
           .join("<br/>");
         const axis = list[0]?.name ?? "";
@@ -181,7 +187,7 @@ export function trafficAreaOption(
     },
     legend: { ...baseLegend(), data: ["Rx", "Tx"] },
     xAxis: categoryAxis(categories),
-    yAxis: valueAxis(fmtMbps),
+    yAxis: valueAxis(fmtTrafficAxis),
     series: [
       {
         name: "Rx",

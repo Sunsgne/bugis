@@ -3,7 +3,10 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
+from sqlalchemy.orm import joinedload
+
 from app.models.circuit import Circuit, CircuitEndpoint
+from app.models.controlplane import EvpnRoute
 from app.models.device import Device
 from app.models.enums import CircuitStatus, LinkType, ServiceType, TenantType
 from app.models.link import Link
@@ -211,6 +214,42 @@ def backfill_demo_circuits(db: Session) -> int:
 
     db.commit()
     return created
+
+
+def sync_active_circuit_controlplane(db: Session) -> int:
+    """Install EVPN RIB entries for active circuits missing controller state."""
+    from app.controller.engine import controller
+
+    active = (
+        db.query(Circuit)
+        .options(joinedload(Circuit.endpoints).joinedload(CircuitEndpoint.device))
+        .filter(Circuit.status == CircuitStatus.ACTIVE)
+        .all()
+    )
+    synced = 0
+    for circuit in active:
+        has_routes = (
+            db.query(EvpnRoute.id)
+            .filter(EvpnRoute.circuit_id == circuit.id)
+            .first()
+            is not None
+        )
+        if has_routes:
+            continue
+        endpoints = [ep for ep in circuit.endpoints if ep.device]
+        if not endpoints:
+            continue
+        if circuit.vni is None:
+            by_name = {ep.device.name: ep.device for ep in endpoints if ep.device}
+            eps_spec = [(ep.label, ep.device.name, ep.interface_name) for ep in endpoints]
+            allocation.auto_allocate_circuit_fields(
+                db, circuit, _tenant_asn(by_name, eps_spec)
+            )
+        controller.install_circuit(db, circuit, endpoints)
+        synced += 1
+    if synced:
+        db.commit()
+    return synced
 
 
 def activate_draft_circuits(db: Session, limit: int = 2) -> int:

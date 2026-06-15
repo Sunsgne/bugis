@@ -8,7 +8,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.bootstrap import ensure_platform_settings, ensure_snmp_settings, ensure_superuser
 from app.core.database import SessionLocal, init_db
-from scripts.demo_data import activate_draft_circuits, backfill_demo_circuits
+from scripts.demo_data import (
+    activate_draft_circuits,
+    backfill_demo_circuits,
+    sync_active_circuit_controlplane,
+)
 
 
 def run() -> None:
@@ -27,6 +31,13 @@ def run() -> None:
         activated = activate_draft_circuits(db)
         if activated:
             print(f"Activated {activated} draft circuits for demo monitoring.")
+
+        synced = sync_active_circuit_controlplane(db)
+        if synced:
+            print(f"Synced EVPN control plane for {synced} active circuits.")
+            return
+
+        if activated:
             return
 
         print("Demo state OK.")

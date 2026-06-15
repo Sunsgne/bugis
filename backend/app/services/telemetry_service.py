@@ -132,41 +132,69 @@ def simulate_circuit_sample(db: Session, circuit: Circuit) -> TelemetrySample:
     )
 
 
-def overview_traffic(db: Session, sample_limit: int = 800) -> list[dict]:
-    """Aggregate recent telemetry samples into a per-minute traffic trend.
-
-    DB-agnostic: buckets the most recent samples by minute in Python.
-    """
-    rows = db.execute(
-        select(TelemetrySample)
-        .order_by(TelemetrySample.id.desc())
-        .limit(sample_limit)
-    ).scalars().all()
-    buckets: dict[str, dict] = {}
+def _aggregate_overview_traffic(rows: list[TelemetrySample]) -> list[dict]:
+    """Bucket samples by minute and circuit, then sum per-circuit averages."""
+    per_circuit: dict[tuple[str, int], dict] = {}
     for s in rows:
-        if not s.created_at:
+        if not s.created_at or s.circuit_id is None:
             continue
-        key = s.created_at.strftime("%H:%M")
-        b = buckets.setdefault(
-            key, {"t": key, "rx": 0.0, "tx": 0.0, "lat": 0.0, "loss": 0.0, "n": 0}
+        minute = s.created_at.strftime("%Y-%m-%d %H:%M")
+        key = (minute, s.circuit_id)
+        b = per_circuit.setdefault(
+            key, {"rx": 0.0, "tx": 0.0, "lat": 0.0, "loss": 0.0, "n": 0}
         )
         b["rx"] += s.rx_mbps
         b["tx"] += s.tx_mbps
         b["lat"] += s.latency_ms
         b["loss"] += s.packet_loss_pct
         b["n"] += 1
+
+    buckets: dict[str, dict] = {}
+    for (minute, _), vals in per_circuit.items():
+        n = max(vals["n"], 1)
+        b = buckets.setdefault(
+            minute,
+            {"rx": 0.0, "tx": 0.0, "lat": 0.0, "loss": 0.0, "n": 0},
+        )
+        b["rx"] += vals["rx"] / n
+        b["tx"] += vals["tx"] / n
+        b["lat"] += vals["lat"]
+        b["loss"] += vals["loss"]
+        b["n"] += vals["n"]
+
     out = []
-    for b in buckets.values():
+    for minute in sorted(buckets):
+        b = buckets[minute]
         n = max(b["n"], 1)
         out.append({
-            "t": b["t"],
+            "t": minute[11:],
             "rx": round(b["rx"], 1),
             "tx": round(b["tx"], 1),
             "latency": round(b["lat"] / n, 2),
             "loss": round(b["loss"] / n, 3),
         })
-    out.sort(key=lambda x: x["t"])
-    return out[-40:]
+    return out
+
+
+def overview_traffic(
+    db: Session,
+    *,
+    sample_limit: int = 2000,
+    hours: int = 24,
+) -> list[dict]:
+    """Aggregate recent telemetry into a per-minute network-wide traffic trend.
+
+    Each circuit contributes its per-minute average; minutes are keyed by full
+    timestamp so samples from different days are never merged.
+    """
+    since = datetime.now(timezone.utc) - timedelta(hours=max(1, min(hours, 24 * 7)))
+    rows = db.execute(
+        select(TelemetrySample)
+        .where(TelemetrySample.created_at >= since)
+        .order_by(TelemetrySample.id.desc())
+        .limit(sample_limit)
+    ).scalars().all()
+    return _aggregate_overview_traffic(rows)[-40:]
 
 
 def _percentile(values: list[float], pct: float) -> float:
