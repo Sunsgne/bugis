@@ -1,7 +1,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Info } from "lucide-react";
 import { useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, type Resolver } from "react-hook-form";
 import { Link } from "react-router-dom";
 import { z } from "zod";
 import FormSelect from "@/components/FormSelect";
@@ -31,7 +31,6 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -45,6 +44,8 @@ import {
 import type { ManagementDefaults, Site, SnmpDefaults } from "@/api/types";
 import { action } from "@/constants/uiCopy";
 
+const portField = z.coerce.number().int().min(1, "端口范围 1–65535").max(65535, "端口范围 1–65535");
+
 const schema = z.object({
   name: z.string().min(1, "请输入设备名称"),
   vendor: z.string(),
@@ -53,20 +54,20 @@ const schema = z.object({
   overlay_tech: z.string(),
   mgmt_ip: z.string().min(1, "请输入管理 IP"),
   loopback_ip: z.string().optional(),
-  bgp_asn: z.number().nullable().optional(),
-  site_id: z.number().nullable().optional(),
-  sr_node_sid: z.number().nullable().optional(),
+  bgp_asn: z.coerce.number().nullable().optional(),
+  site_id: z.coerce.number().nullable().optional(),
+  sr_node_sid: z.coerce.number().nullable().optional(),
   is_route_reflector: z.boolean().optional(),
   management_transport: z.string(),
   username: z.string().optional(),
   password: z.string().optional(),
   enable_password: z.string().optional(),
-  netconf_port: z.number(),
-  ssh_port: z.number(),
+  netconf_port: portField,
+  ssh_port: portField,
   netmiko_device_type: z.string().optional(),
   snmp_enabled: z.boolean(),
   snmp_community: z.string().optional(),
-  snmp_port: z.number().optional(),
+  snmp_port: portField.optional(),
   snmp_version: z.string().optional(),
   snmp_v3_username: z.string().optional(),
   snmp_v3_security_level: z.string().optional(),
@@ -103,7 +104,7 @@ export default function DeviceFormDialog({
   onSubmit,
 }: Props) {
   const form = useForm<DeviceFormValues>({
-    resolver: zodResolver(schema),
+    resolver: zodResolver(schema) as Resolver<DeviceFormValues>,
     defaultValues: {
       vendor: "h3c",
       role: "leaf",
@@ -147,13 +148,13 @@ export default function DeviceFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[90vh] max-w-3xl flex-col gap-0 overflow-hidden p-0 sm:max-w-3xl">
-        <DialogHeader className="space-y-1 border-b px-6 py-4 text-left">
+      <DialogContent className="flex max-h-[min(90vh,900px)] max-w-3xl flex-col gap-0 overflow-hidden p-0 sm:max-w-3xl">
+        <DialogHeader className="shrink-0 space-y-1 border-b px-6 py-4 text-left">
           <DialogTitle>纳管设备</DialogTitle>
           <DialogDescription>填写设备基础信息与南向凭证，SNMP 与登录密码相互独立。</DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="max-h-[calc(90vh-8rem)] flex-1">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
           <Form {...form}>
             <form
               id="device-create-form"
@@ -273,7 +274,11 @@ export default function DeviceFormDialog({
                     <FormItem>
                       <FormLabel>BGP ASN</FormLabel>
                       <FormControl>
-                        <Input type="number" {...field} value={field.value ?? ""} />
+                        <Input
+                          type="number"
+                          value={field.value ?? ""}
+                          onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
+                        />
                       </FormControl>
                     </FormItem>
                   )}
@@ -303,7 +308,11 @@ export default function DeviceFormDialog({
                     <FormItem>
                       <FormLabel>SR Node-SID</FormLabel>
                       <FormControl>
-                        <Input type="number" {...field} value={field.value ?? ""} />
+                        <Input
+                          type="number"
+                          value={field.value ?? ""}
+                          onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
+                        />
                       </FormControl>
                     </FormItem>
                   )}
@@ -389,8 +398,17 @@ export default function DeviceFormDialog({
                       <FormItem>
                         <FormLabel>NETCONF 端口</FormLabel>
                         <FormControl>
-                          <Input type="number" {...field} />
+                          <Input
+                            type="number"
+                            min={1}
+                            max={65535}
+                            value={field.value ?? ""}
+                            onChange={(e) =>
+                              field.onChange(e.target.value === "" ? undefined : Number(e.target.value))
+                            }
+                          />
                         </FormControl>
+                        <FormMessage />
                       </FormItem>
                     )}
                   />
@@ -401,8 +419,17 @@ export default function DeviceFormDialog({
                       <FormItem>
                         <FormLabel>SSH 端口</FormLabel>
                         <FormControl>
-                          <Input type="number" {...field} />
+                          <Input
+                            type="number"
+                            min={1}
+                            max={65535}
+                            value={field.value ?? ""}
+                            onChange={(e) =>
+                              field.onChange(e.target.value === "" ? undefined : Number(e.target.value))
+                            }
+                          />
                         </FormControl>
+                        <FormMessage />
                       </FormItem>
                     )}
                   />
@@ -474,8 +501,17 @@ export default function DeviceFormDialog({
                               <FormItem>
                                 <FormLabel>UDP 端口</FormLabel>
                                 <FormControl>
-                                  <Input type="number" {...field} />
+                                  <Input
+                                    type="number"
+                                    min={1}
+                                    max={65535}
+                                    value={field.value ?? ""}
+                                    onChange={(e) =>
+                                      field.onChange(e.target.value === "" ? undefined : Number(e.target.value))
+                                    }
+                                  />
                                 </FormControl>
+                                <FormMessage />
                               </FormItem>
                             )}
                           />
@@ -559,9 +595,9 @@ export default function DeviceFormDialog({
               </div>
             </form>
           </Form>
-        </ScrollArea>
+        </div>
 
-        <DialogFooter className="border-t px-6 py-4">
+        <DialogFooter className="shrink-0 border-t px-6 py-4">
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             {action.cancel}
           </Button>

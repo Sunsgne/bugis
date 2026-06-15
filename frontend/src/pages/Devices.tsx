@@ -230,13 +230,13 @@ function CredentialEditDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[90vh] max-w-xl flex-col gap-0 overflow-hidden p-0 sm:max-w-xl">
-        <DialogHeader className="space-y-1 border-b px-6 py-4 text-left">
+      <DialogContent className="flex max-h-[min(90vh,900px)] max-w-xl flex-col gap-0 overflow-hidden p-0 sm:max-w-xl">
+        <DialogHeader className="shrink-0 space-y-1 border-b px-6 py-4 text-left">
           <DialogTitle>{device ? `设备凭证 · ${device.name}` : "设备凭证"}</DialogTitle>
           <DialogDescription>留空密码则保持原值，SNMP Community 与登录密码相互独立。</DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="max-h-[calc(90vh-8rem)] flex-1">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
           <Form {...form}>
             <form
               id="device-cred-form"
@@ -453,9 +453,9 @@ function CredentialEditDialog({
               ) : null}
             </form>
           </Form>
-        </ScrollArea>
+        </div>
 
-        <DialogFooter className="border-t px-6 py-4">
+        <DialogFooter className="shrink-0 border-t px-6 py-4">
           <UiButton type="button" variant="outline" onClick={() => onOpenChange(false)}>
             {action.cancel}
           </UiButton>
