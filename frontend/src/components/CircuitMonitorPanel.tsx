@@ -2,10 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Card,
-  Col,
   Empty,
   Progress,
-  Row,
   Select,
   Space,
   Statistic,
@@ -112,7 +110,12 @@ export default function CircuitMonitorPanel({ circuitId, compact = false, pollSe
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: compact ? 12 : 16 }}>
+    <div
+      className={["circuit-monitor-panel", compact ? "circuit-monitor-panel--compact" : undefined]
+        .filter(Boolean)
+        .join(" ")}
+      style={{ display: "flex", flexDirection: "column", gap: compact ? 12 : 16, flex: compact ? undefined : 1, minHeight: 0 }}
+    >
       <Space wrap style={{ justifyContent: "space-between", width: "100%" }}>
         <Space wrap>
           <Text type="secondary">监控窗口</Text>
@@ -133,56 +136,46 @@ export default function CircuitMonitorPanel({ circuitId, compact = false, pollSe
       </Space>
 
       {health && (
-        <Row gutter={[12, 12]}>
+        <div className={`monitor-kpi-row${compact ? " monitor-kpi-row--compact" : ""}`}>
           {!compact && (
-            <Col xs={12} md={4}>
-              <Card size="small" className="chart-card">
-                <div style={{ textAlign: "center" }}>
-                  <Progress
-                    type="dashboard"
-                    size={compact ? 80 : 100}
-                    percent={health.health_score}
-                    strokeColor={scoreColor(health.health_score)}
-                    format={(p) => `${p}`}
-                  />
-                  <div style={{ color: "#888", fontSize: 12 }}>健康指数</div>
-                </div>
-              </Card>
-            </Col>
+            <Card size="small" className="chart-card">
+              <div style={{ textAlign: "center" }}>
+                <Progress
+                  type="dashboard"
+                  size={compact ? 80 : 100}
+                  percent={health.health_score}
+                  strokeColor={scoreColor(health.health_score)}
+                  format={(p) => `${p}`}
+                />
+                <div style={{ color: "#888", fontSize: 12 }}>健康指数</div>
+              </div>
+            </Card>
           )}
-          <Col xs={12} md={compact ? 6 : 4}>
-            <Card size="small" className="chart-card">
-              <Statistic title="平均时延" value={health.avg_latency_ms} suffix="ms" />
-            </Card>
-          </Col>
-          <Col xs={12} md={compact ? 6 : 4}>
-            <Card size="small" className="chart-card">
-              <Statistic title="抖动" value={health.avg_jitter_ms} suffix="ms" />
-            </Card>
-          </Col>
-          <Col xs={12} md={compact ? 6 : 4}>
-            <Card size="small" className="chart-card">
-              <Statistic
-                title="可用率"
-                value={availability?.uptime_pct ?? 100}
-                suffix="%"
-                valueStyle={{
-                  color: (availability?.uptime_pct ?? 100) < 99.9 ? "#cf1322" : "#52c41a",
-                }}
-              />
-            </Card>
-          </Col>
-          <Col xs={12} md={compact ? 6 : 4}>
-            <Card size="small" className="chart-card">
-              <Statistic
-                title="窗口 95 计费"
-                value={traffic?.p95?.billable_95_mbps ?? 0}
-                suffix="Mbps"
-                valueStyle={{ color: "#1677ff" }}
-              />
-            </Card>
-          </Col>
-        </Row>
+          <Card size="small" className="chart-card">
+            <Statistic title="平均时延" value={health.avg_latency_ms} suffix="ms" />
+          </Card>
+          <Card size="small" className="chart-card">
+            <Statistic title="抖动" value={health.avg_jitter_ms} suffix="ms" />
+          </Card>
+          <Card size="small" className="chart-card">
+            <Statistic
+              title="可用率"
+              value={availability?.uptime_pct ?? 100}
+              suffix="%"
+              valueStyle={{
+                color: (availability?.uptime_pct ?? 100) < 99.9 ? "#cf1322" : "#52c41a",
+              }}
+            />
+          </Card>
+          <Card size="small" className="chart-card">
+            <Statistic
+              title="窗口 95 计费"
+              value={traffic?.p95?.billable_95_mbps ?? 0}
+              suffix="Mbps"
+              valueStyle={{ color: "#1677ff" }}
+            />
+          </Card>
+        </div>
       )}
 
       {availability && (availability.interruption_count > 0 || availability.flash_count > 0) && (
@@ -202,26 +195,28 @@ export default function CircuitMonitorPanel({ circuitId, compact = false, pollSe
         />
       )}
 
-      <Card
-        size="small"
-        className="chart-card"
-        title="流量 · Rx / Tx（含 95 参考线）"
-        loading={loading}
-      >
-        {chartData.length ? (
-          <EChart option={trafficOpt} height={compact ? 220 : 280} />
-        ) : (
-          <Empty description={empty.traffic} />
-        )}
-      </Card>
+      <div className={compact ? undefined : "monitor-charts"}>
+        <Card
+          size="small"
+          className="chart-card"
+          title="流量 · Rx / Tx（含 95 参考线）"
+          loading={loading}
+        >
+          {chartData.length ? (
+            <EChart option={trafficOpt} height={compact ? 220 : "auto"} />
+          ) : (
+            <Empty description={empty.traffic} />
+          )}
+        </Card>
 
-      <Card size="small" className="chart-card" title="时延 · 抖动 · 丢包" loading={loading}>
-        {chartData.length ? (
-          <EChart option={latencyOpt} height={compact ? 200 : 260} />
-        ) : (
-          <Empty description={empty.traffic} />
-        )}
-      </Card>
+        <Card size="small" className="chart-card" title="时延 · 抖动 · 丢包" loading={loading}>
+          {chartData.length ? (
+            <EChart option={latencyOpt} height={compact ? 200 : "auto"} />
+          ) : (
+            <Empty description={empty.traffic} />
+          )}
+        </Card>
+      </div>
 
       {availability && availability.events.length > 0 && (
         <Card size="small" title="中断 / 闪断事件">

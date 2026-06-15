@@ -99,7 +99,7 @@ export default function Monitoring() {
   const showInactiveHint = current && current.status !== "active";
 
   return (
-    <div className="monitoring-page" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <div className="monitoring-page" style={{ display: "flex", flexDirection: "column", gap: 16, flex: 1, minHeight: 0 }}>
       <PageCard title={page.monitoring}>
         <Spin spinning={loading}>
           <Row align="middle" gutter={[16, 12]}>

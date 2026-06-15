@@ -183,7 +183,7 @@ function Shell() {
   const selected = useMemo(() => selectedMenuKey(loc.pathname), [loc.pathname]);
 
   return (
-    <Layout style={{ height: "100vh" }}>
+    <Layout className="app-shell" style={{ height: "100vh", width: "100%", overflow: "hidden" }}>
       <Sider breakpoint="lg" collapsedWidth="0" theme="dark">
         <div className="app-logo">
           <BrandLogo brand={brand} variant="sidebar" height={24} />
@@ -197,7 +197,7 @@ function Shell() {
           onClick={(e) => navTo(e.key)}
         />
       </Sider>
-      <Layout style={{ flex: 1, minWidth: 0 }}>
+      <Layout style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column" }}>
         <Header
           style={{
             background: "#fff",
@@ -228,7 +228,7 @@ function Shell() {
         </Header>
         <Content
           className="page-content"
-          style={{ margin: 16, overflow: "auto", flex: 1, minWidth: 0 }}
+          style={{ padding: 16, overflow: "auto", flex: 1, minWidth: 0, minHeight: 0 }}
         >
           <Routes>
             <Route path="/" element={<Dashboard />} />

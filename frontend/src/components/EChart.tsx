@@ -23,7 +23,7 @@ echarts.use([
 
 type Props = {
   option: EChartsOption;
-  height?: number;
+  height?: number | "auto";
   className?: string;
 };
 
@@ -49,13 +49,20 @@ export default function EChart({ option, height = 280, className }: Props) {
   useEffect(() => {
     if (!chart.current) return;
     chart.current.setOption(option, { notMerge: true });
+    chart.current.resize();
   }, [option]);
+
+  const auto = height === "auto";
 
   return (
     <div
       ref={host}
-      className={className}
-      style={{ width: "100%", height, minHeight: height }}
+      className={["echart-host", className].filter(Boolean).join(" ")}
+      style={
+        auto
+          ? { width: "100%", height: "100%", minHeight: 200 }
+          : { width: "100%", height, minHeight: height }
+      }
     />
   );
 }
