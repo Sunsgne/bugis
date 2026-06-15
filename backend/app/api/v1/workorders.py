@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -239,9 +240,32 @@ def export_ansible(
     wo = db.get(WorkOrder, wo_id)
     if not wo:
         raise HTTPException(status_code=404, detail="work order not found")
-    if not wo.config_jobs:
+    try:
+        return ansible_export.export_work_order(db, wo)
+    except ValueError:
         raise HTTPException(
             status_code=400,
-            detail="work order has no rendered config jobs (execute it first)",
-        )
-    return ansible_export.export_work_order(db, wo)
+            detail="该工单没有可导出的配置（需已完成执行且含 rendered config）",
+        ) from None
+
+
+@router.get("/{wo_id}/ansible/download")
+def download_ansible_archive(
+    wo_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_user)
+):
+    """Download inventory + playbook + per-device configs as a zip archive."""
+    wo = db.get(WorkOrder, wo_id)
+    if not wo:
+        raise HTTPException(status_code=404, detail="work order not found")
+    try:
+        payload, filename = ansible_export.export_work_order_zip(db, wo)
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail="该工单没有可导出的配置（需已完成执行且含 rendered config）",
+        ) from None
+    return Response(
+        content=payload,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

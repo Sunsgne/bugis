@@ -7,6 +7,9 @@ northbound automation path (Ansible / StackStorm).
 """
 from __future__ import annotations
 
+import io
+import zipfile
+
 from sqlalchemy.orm import Session
 
 from app.models.device import Device
@@ -107,6 +110,8 @@ def export_work_order(db: Session, wo: WorkOrder) -> dict:
         if device.id not in seen:
             devices.append(device)
             seen.add(device.id)
+    if not jobs:
+        raise ValueError("no rendered config jobs")
     return {
         "work_order": wo.code,
         "inventory": build_inventory(devices),
@@ -115,6 +120,27 @@ def export_work_order(db: Session, wo: WorkOrder) -> dict:
             d.name: cfg for d, _, cfg in jobs
         },
     }
+
+
+def export_work_order_zip(db: Session, wo: WorkOrder) -> tuple[bytes, str]:
+    """Return (zip bytes, filename) for ansible bundle download."""
+    data = export_work_order(db, wo)
+    code = data["work_order"]
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr(f"inventory-{code}.ini", data["inventory"])
+        zf.writestr(f"playbook-{code}.yml", data["playbook"])
+        readme = (
+            f"# Bugis Ansible bundle · work order {code}\n\n"
+            "Usage:\n"
+            f"  ansible-playbook -i inventory-{code}.ini playbook-{code}.yml\n\n"
+            "Requires vendor collections listed in inventory group vars.\n"
+        )
+        zf.writestr("README.txt", readme)
+        for host, cfg in data["configs"].items():
+            safe = host.replace("/", "_")
+            zf.writestr(f"configs/{safe}.cfg", cfg)
+    return buf.getvalue(), f"ansible-{code}.zip"
 
 
 def export_inventory(db: Session) -> str:

@@ -442,6 +442,13 @@ def test_webhook_provision_and_ansible(client, auth_headers):
     assert "h3c.comware" in data["inventory"]
     assert "tasks:" in data["playbook"]
 
+    zip_r = client.get(
+        f"/api/v1/work-orders/{wo['id']}/ansible/download", headers=auth_headers
+    )
+    assert zip_r.status_code == 200
+    assert zip_r.headers["content-type"] == "application/zip"
+    assert len(zip_r.content) > 100
+
     # Wrong webhook token (with valid body) is rejected.
     bad = client.post(
         "/api/v1/integrations/webhook/provision",
