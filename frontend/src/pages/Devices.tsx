@@ -1,27 +1,43 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ColumnDef } from "@tanstack/react-table";
 import {
-  CheckCircle2,
-  Circle,
-  Activity,
-  AlertTriangle,
-  BookOpen,
-  Cable,
-  Download,
-  KeyRound,
-  MoreHorizontal,
-  Network,
-  Plus,
-  Rocket,
-  Search,
-  Settings,
-  Trash2,
-  Upload,
-} from "lucide-react";
+  ApiOutlined,
+  BookOutlined,
+  CheckCircleOutlined,
+  CloseCircleOutlined,
+  DeleteOutlined,
+  DownloadOutlined,
+  KeyOutlined,
+  NodeIndexOutlined,
+  PlusOutlined,
+  RadarChartOutlined,
+  RocketOutlined,
+  SearchOutlined,
+  SettingOutlined,
+  UploadOutlined,
+} from "@ant-design/icons";
+import {
+  Alert,
+  App as AntApp,
+  Button,
+  Card,
+  Col,
+  Drawer,
+  Input,
+  Modal,
+  Popconfirm,
+  Row,
+  Space,
+  Statistic,
+  Switch,
+  Table,
+  Tag,
+  Tooltip,
+  Typography,
+} from "antd";
+import { AlertTriangle } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useForm, type Resolver } from "react-hook-form";
 import { Link } from "react-router-dom";
-import { toast } from "sonner";
 import { z } from "zod";
 import { api } from "../api/client";
 import type {
@@ -42,32 +58,12 @@ import {
   SNMP_VERSION_OPTIONS,
 } from "../constants/formOptions";
 import { action, page as pageCopy, toast as toastCopy } from "../constants/uiCopy";
-import { buildListQuery } from "../utils/table";
+import { buildListQuery, dataTableProps, tablePagination } from "../utils/table";
 import { PageCard } from "@/components";
-import DataTable from "@/components/DataTable";
-import StatusDot from "@/components/StatusDot";
+import ListToolbar from "../components/ListToolbar";
 import DeviceFormDialog, { type DeviceFormValues } from "@/components/DeviceFormDialog";
 import FormSelect from "@/components/FormSelect";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Alert as UiAlert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   Dialog,
   DialogContent,
@@ -83,12 +79,11 @@ import {
   FormItem,
   FormLabel,
 } from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
+import { Input as UiInput } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Switch } from "@/components/ui/switch";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Switch as UiSwitch } from "@/components/ui/switch";
+import { Button as UiButton } from "@/components/ui/button";
 
 const VENDOR_SHORT: Record<string, string> = {
   h3c: "H3C",
@@ -99,9 +94,23 @@ const VENDOR_SHORT: Record<string, string> = {
   frr: "FRR",
 };
 
-const SVID_SOURCE_VARIANT: Record<string, "destructive" | "warning" | "info"> = {
-  legacy: "destructive",
-  device: "warning",
+const DEVICE_STATUS_COLOR: Record<string, string> = {
+  online: "green",
+  offline: "red",
+  maintenance: "orange",
+  unknown: "default",
+};
+
+const DEVICE_STATUS_LABEL: Record<string, string> = {
+  online: "在线",
+  offline: "离线",
+  maintenance: "维护",
+  unknown: "未知",
+};
+
+const SVID_SOURCE_COLOR: Record<string, string> = {
+  legacy: "red",
+  device: "orange",
 };
 
 const FALLBACK_SNMP: SnmpDefaults = {
@@ -142,9 +151,9 @@ const credSchema = z.object({
 type CredFormValues = z.infer<typeof credSchema>;
 
 function renderSvidUsage(list?: SvidUsage[] | null) {
-  if (!list?.length) return <span className="text-muted-foreground">-</span>;
+  if (!list?.length) return <Typography.Text type="secondary">—</Typography.Text>;
   return (
-    <div className="flex flex-wrap gap-1">
+    <Space size={[4, 4]} wrap>
       {list.map((u, idx) => {
         const label =
           u.access_mode === "access"
@@ -156,15 +165,12 @@ function renderSvidUsage(list?: SvidUsage[] | null) {
           .filter(Boolean)
           .join(" · ");
         return (
-          <Tooltip key={idx}>
-            <TooltipTrigger asChild>
-              <Badge variant={SVID_SOURCE_VARIANT[u.source || ""] || "info"}>{label}</Badge>
-            </TooltipTrigger>
-            <TooltipContent>{tip || label}</TooltipContent>
+          <Tooltip key={idx} title={tip || label}>
+            <Tag color={SVID_SOURCE_COLOR[u.source || ""] || "blue"}>{label}</Tag>
           </Tooltip>
         );
       })}
-    </div>
+    </Space>
   );
 }
 
@@ -239,11 +245,11 @@ function CredentialEditDialog({
                 if (device) await onSave(device.id, v);
               })}
             >
-              <Alert variant="warning">
+              <UiAlert variant="warning">
                 <AlertTriangle className="h-4 w-4" />
                 <AlertTitle>敏感字段不会回显</AlertTitle>
                 <AlertDescription>留空密码则保持原值。SNMP Community 与登录密码已分离，可分别配置。</AlertDescription>
-              </Alert>
+              </UiAlert>
 
               <FormField
                 control={form.control}
@@ -264,7 +270,7 @@ function CredentialEditDialog({
                   <FormItem>
                     <FormLabel>用户名</FormLabel>
                     <FormControl>
-                      <Input placeholder="admin / netconf" {...field} />
+                      <UiInput placeholder="admin / netconf" {...field} />
                     </FormControl>
                   </FormItem>
                 )}
@@ -276,7 +282,7 @@ function CredentialEditDialog({
                   <FormItem>
                     <FormLabel>登录密码 (NETCONF / SSH)</FormLabel>
                     <FormControl>
-                      <Input type="password" autoComplete="new-password" placeholder="留空不修改" {...field} />
+                      <UiInput type="password" autoComplete="new-password" placeholder="留空不修改" {...field} />
                     </FormControl>
                   </FormItem>
                 )}
@@ -288,7 +294,7 @@ function CredentialEditDialog({
                   <FormItem>
                     <FormLabel>Enable 密码</FormLabel>
                     <FormControl>
-                      <Input type="password" autoComplete="new-password" placeholder="留空不修改" {...field} />
+                      <UiInput type="password" autoComplete="new-password" placeholder="留空不修改" {...field} />
                     </FormControl>
                   </FormItem>
                 )}
@@ -301,7 +307,7 @@ function CredentialEditDialog({
                     <FormItem>
                       <FormLabel>NETCONF 端口</FormLabel>
                       <FormControl>
-                        <Input type="number" min={1} max={65535} {...field} />
+                        <UiInput type="number" min={1} max={65535} {...field} />
                       </FormControl>
                     </FormItem>
                   )}
@@ -313,7 +319,7 @@ function CredentialEditDialog({
                     <FormItem>
                       <FormLabel>SSH 端口</FormLabel>
                       <FormControl>
-                        <Input type="number" min={1} max={65535} {...field} />
+                        <UiInput type="number" min={1} max={65535} {...field} />
                       </FormControl>
                     </FormItem>
                   )}
@@ -326,7 +332,7 @@ function CredentialEditDialog({
                   <FormItem>
                     <FormLabel>Netmiko 设备类型 (可选)</FormLabel>
                     <FormControl>
-                      <Input placeholder="留空则按厂商自动选择" {...field} />
+                      <UiInput placeholder="留空则按厂商自动选择" {...field} />
                     </FormControl>
                   </FormItem>
                 )}
@@ -341,7 +347,7 @@ function CredentialEditDialog({
                   <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
                     <FormLabel className="mt-0">启用 SNMP</FormLabel>
                     <FormControl>
-                      <Switch checked={field.value} onCheckedChange={field.onChange} />
+                      <UiSwitch checked={field.value} onCheckedChange={field.onChange} />
                     </FormControl>
                   </FormItem>
                 )}
@@ -354,7 +360,7 @@ function CredentialEditDialog({
                     <FormItem>
                       <FormLabel>Community (v2c)</FormLabel>
                       <FormControl>
-                        <Input
+                        <UiInput
                           placeholder={
                             device?.snmp_community_set ? "已配置 · 留空不修改" : snmpDefaults.community
                           }
@@ -371,7 +377,7 @@ function CredentialEditDialog({
                     <FormItem>
                       <FormLabel>UDP 端口</FormLabel>
                       <FormControl>
-                        <Input type="number" min={1} max={65535} {...field} />
+                        <UiInput type="number" min={1} max={65535} {...field} />
                       </FormControl>
                     </FormItem>
                   )}
@@ -398,7 +404,7 @@ function CredentialEditDialog({
                       <FormItem>
                         <FormLabel>SNMPv3 用户名</FormLabel>
                         <FormControl>
-                          <Input {...field} />
+                          <UiInput {...field} />
                         </FormControl>
                       </FormItem>
                     )}
@@ -426,7 +432,7 @@ function CredentialEditDialog({
                       <FormItem>
                         <FormLabel>认证密码</FormLabel>
                         <FormControl>
-                          <Input type="password" autoComplete="new-password" placeholder="留空不修改" {...field} />
+                          <UiInput type="password" autoComplete="new-password" placeholder="留空不修改" {...field} />
                         </FormControl>
                       </FormItem>
                     )}
@@ -438,7 +444,7 @@ function CredentialEditDialog({
                       <FormItem>
                         <FormLabel>加密密码</FormLabel>
                         <FormControl>
-                          <Input type="password" autoComplete="new-password" placeholder="留空不修改" {...field} />
+                          <UiInput type="password" autoComplete="new-password" placeholder="留空不修改" {...field} />
                         </FormControl>
                       </FormItem>
                     )}
@@ -450,12 +456,12 @@ function CredentialEditDialog({
         </ScrollArea>
 
         <DialogFooter className="border-t px-6 py-4">
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+          <UiButton type="button" variant="outline" onClick={() => onOpenChange(false)}>
             {action.cancel}
-          </Button>
-          <Button type="submit" form="device-cred-form">
+          </UiButton>
+          <UiButton type="submit" form="device-cred-form">
             {action.save}
-          </Button>
+          </UiButton>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -463,6 +469,7 @@ function CredentialEditDialog({
 }
 
 export default function Devices() {
+  const { message } = AntApp.useApp();
   const [rows, setRows] = useState<Device[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -479,7 +486,6 @@ export default function Devices() {
   const [drawerDevice, setDrawerDevice] = useState<Device | null>(null);
   const [ifaces, setIfaces] = useState<DeviceInterface[]>([]);
   const [ifacesLoading, setIfacesLoading] = useState(false);
-  const [deleteId, setDeleteId] = useState<number | null>(null);
   const [initOpen, setInitOpen] = useState(false);
   const [initDevice, setInitDevice] = useState<Device | null>(null);
   const [initBaseline, setInitBaseline] = useState("");
@@ -549,13 +555,13 @@ export default function Devices() {
     }
     try {
       await api.post("/devices", payload);
-      toast.success("设备已纳管");
+      message.success("设备已纳管");
       setOpen(false);
       setPage(1);
       load(1);
     } catch (e: unknown) {
       const err = e as { response?: { data?: { detail?: string } } };
-      toast.error(err?.response?.data?.detail || toastCopy.failed);
+      message.error(err?.response?.data?.detail || toastCopy.failed);
     }
   }
 
@@ -586,19 +592,18 @@ export default function Devices() {
     if (v.snmp_v3_priv_password) payload.snmp_v3_priv_password = v.snmp_v3_priv_password;
     try {
       await api.patch(`/devices/${deviceId}`, payload);
-      toast.success(toastCopy.saved);
+      message.success(toastCopy.saved);
       setCredOpen(false);
       load();
     } catch (e: unknown) {
       const err = e as { response?: { data?: { detail?: string } } };
-      toast.error(err?.response?.data?.detail || toastCopy.failed);
+      message.error(err?.response?.data?.detail || toastCopy.failed);
     }
   }
 
   async function remove(id: number) {
     await api.delete(`/devices/${id}`);
-    toast.success(toastCopy.deleted);
-    setDeleteId(null);
+    message.success(toastCopy.deleted);
     load();
   }
 
@@ -624,64 +629,64 @@ export default function Devices() {
         data.learn_enabled && data.learn
           ? ` · 现网学习 ${data.learn.success}/${data.learn.total} 成功`
           : "";
-      toast.success(`导入完成 · 新增 ${data.created} · 跳过 ${data.skipped}${learnMsg}`);
-      if (data.errors?.length) toast.warning(`${data.errors.length} 行需修正`);
+      message.success(`导入完成 · 新增 ${data.created} · 跳过 ${data.skipped}${learnMsg}`);
+      if (data.errors?.length) message.warning(`${data.errors.length} 行需修正`);
       setPage(1);
       load(1);
     } catch (e: unknown) {
       const err = e as { response?: { data?: { detail?: string } } };
-      toast.error(err?.response?.data?.detail || toastCopy.failed);
+      message.error(err?.response?.data?.detail || toastCopy.failed);
     }
   }
 
   async function discover(deviceId: number) {
-    const tid = toast.loading("SNMP 接口扫描中…");
+    const hide = message.loading("SNMP 接口扫描中…", 0);
     try {
       const { data } = await api.post<DeviceInterface[]>(`/devices/${deviceId}/discover-interfaces`);
-      toast.dismiss(tid);
+      hide();
       const simCount = data.filter((i) => i.discovered_via === "snmp-sim").length;
       const svidCount = data.filter((i) => i.used_s_vids?.length).length;
       if (simCount === data.length) {
-        toast.warning(
+        message.warning(
           "返回的是模拟数据（设备 SNMP 不可达或 Community 错误）。请检查管理 IP、UDP 161 与 Community 后重试",
         );
       } else if (simCount > 0) {
-        toast.warning(`部分接口为模拟数据（${simCount}/${data.length}），请检查 SNMP 配置`);
+        message.warning(`部分接口为模拟数据（${simCount}/${data.length}），请检查 SNMP 配置`);
       } else {
-        toast.success(`SNMP 发现 ${data.length} 个接口 · ${svidCount} 个端口有 S-VID 占用`);
+        message.success(`SNMP 发现 ${data.length} 个接口 · ${svidCount} 个端口有 S-VID 占用`);
       }
       if (svidCount === 0 && simCount < data.length) {
-        toast.info("S-VID 需从 running-config 解析，请执行「现网学习」后重新检测");
+        message.info("S-VID 需从 running-config 解析，请执行「现网学习」后重新检测");
       }
       setIfaces(data);
     } catch (e: unknown) {
-      toast.dismiss(tid);
+      hide();
       const err = e as { response?: { data?: { detail?: string } } };
-      toast.error(err?.response?.data?.detail || toastCopy.failed);
+      message.error(err?.response?.data?.detail || toastCopy.failed);
     }
   }
 
   async function learnConfig(d: Device) {
-    const tid = toast.loading(`现网配置学习中 · ${d.name}...`);
+    const hide = message.loading(`现网配置学习中 · ${d.name}...`, 0);
     try {
       const { data } = await api.post(`/devices/${d.id}/learn`);
-      toast.dismiss(tid);
+      hide();
       if (data.success) {
         const inv = data.inventory;
-        toast.success(
+        message.success(
           `${d.name} 学习完成 · ${inv?.service_count ?? 0} 个业务 · v${data.snapshot_version}`,
         );
         if (data.svid_scan?.ports_scanned || drawerDevice?.id === d.id) {
           await loadIfaces(d.id, true);
         }
       } else {
-        toast.error(data.error || toastCopy.failed);
+        message.error(data.error || toastCopy.failed);
       }
       load();
     } catch (e: unknown) {
-      toast.dismiss(tid);
+      hide();
       const err = e as { response?: { data?: { detail?: string } } };
-      toast.error(err?.response?.data?.detail || toastCopy.failed);
+      message.error(err?.response?.data?.detail || toastCopy.failed);
     }
   }
 
@@ -693,7 +698,7 @@ export default function Devices() {
       setInitOpen(true);
     } catch (e: unknown) {
       const err = e as { response?: { data?: { detail?: string } } };
-      toast.error(err?.response?.data?.detail || toastCopy.failed);
+      message.error(err?.response?.data?.detail || toastCopy.failed);
     }
   }
 
@@ -702,33 +707,33 @@ export default function Devices() {
     setInitLoading(true);
     try {
       const { data } = await api.post(`/devices/${initDevice.id}/initialize`);
-      toast.success(`${data.device} 初始化完成 · v${data.version} · ${data.transport}`);
+      message.success(`${data.device} 初始化完成 · v${data.version} · ${data.transport}`);
       setInitOpen(false);
       setInitDevice(null);
       load();
     } catch (e: unknown) {
       const err = e as { response?: { data?: { detail?: string } } };
-      toast.error(err?.response?.data?.detail || toastCopy.failed);
+      message.error(err?.response?.data?.detail || toastCopy.failed);
     } finally {
       setInitLoading(false);
     }
   }
 
   async function check(id: number) {
-    const tid = toast.loading("可达性探测 · S-VID 扫描中…");
+    const hide = message.loading("可达性探测 · S-VID 扫描中…", 0);
     try {
       const { data } = await api.post(`/devices/${id}/check`);
-      toast.dismiss(tid);
+      hide();
       if (data.reachable) {
         const scan = data.svid_scan;
         const svidCount = scan?.total_s_vids ?? 0;
         const conflictCount = scan?.conflicts?.length ?? 0;
         if (conflictCount > 0) {
-          toast.warning(
+          message.warning(
             `${data.device} 可达 · 发现 ${svidCount} 个 S-VID · ${conflictCount} 处冲突`,
           );
         } else {
-          toast.success(
+          message.success(
             `${data.device} 可达 (${data.latency_ms}ms) · 已扫描 ${svidCount} 个 S-VID 占用`,
           );
         }
@@ -761,263 +766,17 @@ export default function Devices() {
           });
         }
       } else {
-        toast.error(`${data.device} 不可达 (${data.mgmt_ip})`);
+        message.error(`${data.device} 不可达 (${data.mgmt_ip})`);
       }
       load();
     } catch (e: unknown) {
-      toast.dismiss(tid);
+      hide();
       const err = e as { response?: { data?: { detail?: string } } };
-      toast.error(err?.response?.data?.detail || toastCopy.failed);
+      message.error(err?.response?.data?.detail || toastCopy.failed);
     }
   }
 
-  const ifaceColumns = useMemo<ColumnDef<DeviceInterface, unknown>[]>(
-    () => [
-      {
-        accessorKey: "name",
-        header: "接口",
-        cell: ({ row }) => (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span className="block max-w-[160px] truncate font-mono text-xs">{row.original.name}</span>
-            </TooltipTrigger>
-            <TooltipContent className="font-mono text-xs">{row.original.name}</TooltipContent>
-          </Tooltip>
-        ),
-      },
-      {
-        accessorKey: "description",
-        header: "描述",
-        cell: ({ row }) => {
-          const d = row.original.description;
-          if (!d) return <span className="text-muted-foreground">-</span>;
-          return (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="block max-w-[280px] truncate text-xs text-muted-foreground">{d}</span>
-              </TooltipTrigger>
-              <TooltipContent className="max-w-md break-all text-xs">{d}</TooltipContent>
-            </Tooltip>
-          );
-        },
-      },
-      {
-        accessorKey: "speed_mbps",
-        header: "速率",
-        cell: ({ row }) => {
-          const s = row.original.speed_mbps;
-          if (!s) return "-";
-          return (
-            <Badge variant="outline" className="font-mono text-xs">
-              {s >= 1000 ? `${s / 1000}G` : `${s}M`}
-            </Badge>
-          );
-        },
-      },
-      {
-        accessorKey: "oper_status",
-        header: "状态",
-        cell: ({ row }) => {
-          const s = row.original.oper_status;
-          return (
-            <Badge variant={s === "up" ? "success" : "secondary"} className="text-xs">
-              {s || "-"}
-            </Badge>
-          );
-        },
-      },
-      {
-        accessorKey: "ifindex",
-        header: "ifIndex",
-        cell: ({ row }) => <span className="font-mono text-xs">{row.original.ifindex ?? "-"}</span>,
-      },
-      {
-        accessorKey: "discovered_via",
-        header: "来源",
-        cell: ({ row }) => {
-          const d = row.original.discovered_via;
-          return d ? (
-            <Badge variant="outline" className="text-xs">
-              {d}
-            </Badge>
-          ) : (
-            "-"
-          );
-        },
-      },
-      {
-        accessorKey: "used_s_vids",
-        header: "S-VID 占用",
-        cell: ({ row }) => renderSvidUsage(row.original.used_s_vids),
-      },
-      {
-        accessorKey: "allocated",
-        header: "占用",
-        cell: ({ row }) => {
-          const a = row.original.allocated;
-          const hasSvid = row.original.used_s_vids?.length;
-          return a || hasSvid ? (
-            <Badge variant="warning" className="text-xs">
-              已占用
-            </Badge>
-          ) : (
-            <span className="text-muted-foreground">-</span>
-          );
-        },
-      },
-    ],
-    [],
-  );
-
   const ifaceHasSvid = ifaces.some((i) => (i.used_s_vids?.length ?? 0) > 0);
-
-  const columns = useMemo<ColumnDef<Device, unknown>[]>(
-    () => [
-      {
-        accessorKey: "name",
-        header: "设备",
-        cell: ({ row }) => {
-          const d = row.original;
-          return (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div className="min-w-[128px] cursor-default">
-                  <div className="font-medium text-foreground">{d.name}</div>
-                  {d.model ? (
-                    <div className="mt-0.5 truncate text-xs text-muted-foreground">{d.model}</div>
-                  ) : null}
-                </div>
-              </TooltipTrigger>
-              <TooltipContent side="right" className="max-w-xs text-xs">
-                {[d.hostname, d.loopback_ip && `Loopback ${d.loopback_ip}`, d.bgp_asn && `AS ${d.bgp_asn}`]
-                  .filter(Boolean)
-                  .join(" · ") || d.name}
-              </TooltipContent>
-            </Tooltip>
-          );
-        },
-      },
-      {
-        accessorKey: "vendor",
-        header: "厂商",
-        cell: ({ row }) => (
-          <Badge variant="outline" className="font-normal">
-            {VENDOR_SHORT[row.original.vendor] || row.original.vendor}
-          </Badge>
-        ),
-      },
-      {
-        accessorKey: "role",
-        header: "角色",
-        cell: ({ row }) => (
-          <span className="text-sm text-foreground/90">
-            {labelForOption(DEVICE_ROLE_OPTIONS, row.original.role).split(" ")[0]}
-          </span>
-        ),
-      },
-      {
-        accessorKey: "mgmt_ip",
-        header: "管理 IP",
-        cell: ({ row }) => (
-          <span className="font-mono text-sm text-foreground">{row.original.mgmt_ip}</span>
-        ),
-      },
-      {
-        id: "site",
-        header: "站点",
-        cell: ({ row }) => (
-          <span className="text-sm text-muted-foreground">{siteName(row.original.site_id)}</span>
-        ),
-      },
-      {
-        id: "cred",
-        header: "凭证",
-        cell: ({ row }) => {
-          const ok = row.original.password_set || row.original.username;
-          return ok ? (
-            <CheckCircle2 className="h-4 w-4 text-emerald-600" aria-label="已配置" />
-          ) : (
-            <Circle className="h-4 w-4 text-muted-foreground/40" aria-label="未配置" />
-          );
-        },
-      },
-      {
-        id: "snmp",
-        header: "SNMP",
-        cell: ({ row }) =>
-          row.original.snmp_enabled === false ? (
-            <span className="text-xs text-muted-foreground">—</span>
-          ) : (
-            <Badge variant="muted" className="font-mono text-[11px] font-normal">
-              v{row.original.snmp_version || "2c"}
-            </Badge>
-          ),
-      },
-      {
-        accessorKey: "status",
-        header: "状态",
-        cell: ({ row }) => <StatusDot status={row.original.status} />,
-      },
-      {
-        id: "actions",
-        header: "",
-        size: 72,
-        cell: ({ row }) => {
-          const r = row.original;
-          return (
-            <div className="flex items-center justify-end gap-0.5">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openPorts(r)}>
-                    <Cable className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>端口</TooltipContent>
-              </Tooltip>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-8 w-8">
-                    <MoreHorizontal className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-44">
-                  <DropdownMenuItem onClick={() => openCredEdit(r)}>
-                    <KeyRound className="mr-2 h-4 w-4" />
-                    凭证
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => learnConfig(r)}>
-                    <BookOpen className="mr-2 h-4 w-4" />
-                    现网学习
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => initialize(r)}>
-                    <Rocket className="mr-2 h-4 w-4" />
-                    初始化
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => check(r.id)}>
-                    <Activity className="mr-2 h-4 w-4" />
-                    检测
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => discover(r.id)}>
-                    <Network className="mr-2 h-4 w-4" />
-                    SNMP 发现
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    className="text-destructive focus:text-destructive"
-                    onClick={() => setDeleteId(r.id)}
-                  >
-                    <Trash2 className="mr-2 h-4 w-4" />
-                    {action.delete}
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          );
-        },
-      },
-    ],
-    [siteName],
-  );
 
   const stats = useMemo(() => {
     const online = rows.filter((r) => r.status === "online").length;
@@ -1032,26 +791,18 @@ export default function Devices() {
 
   return (
     <PageCard
-      className="shadow-sm"
       title={pageCopy.devices}
       description="多厂商 Fabric 纳管 · SNMP / NETCONF / SSH"
       extra={
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="ghost" size="sm" asChild className="text-muted-foreground">
-            <Link to="/settings/management">
-              <Settings className="mr-1.5 h-4 w-4" />
-              南向
-            </Link>
-          </Button>
-          <Button variant="ghost" size="sm" asChild className="text-muted-foreground">
-            <Link to="/settings/snmp">
-              <Settings className="mr-1.5 h-4 w-4" />
-              SNMP
-            </Link>
-          </Button>
-          <Button variant="outline" size="sm" onClick={exportCsv}>
-            <Download className="mr-1.5 h-4 w-4" />
-            导出
+        <Space wrap>
+          <Link to="/settings/management">
+            <Button icon={<SettingOutlined />}>南向</Button>
+          </Link>
+          <Link to="/settings/snmp">
+            <Button icon={<SettingOutlined />}>SNMP</Button>
+          </Link>
+          <Button icon={<DownloadOutlined />} onClick={exportCsv}>
+            导出 CSV
           </Button>
           <input
             ref={importRef}
@@ -1064,135 +815,328 @@ export default function Devices() {
               e.target.value = "";
             }}
           />
-          <Button variant="outline" size="sm" onClick={() => importRef.current?.click()}>
-            <Upload className="mr-1.5 h-4 w-4" />
+          <Button icon={<UploadOutlined />} onClick={() => importRef.current?.click()}>
             导入
           </Button>
-          <Button size="sm" onClick={openCreateModal}>
-            <Plus className="mr-1.5 h-4 w-4" />
+          <Button type="primary" icon={<PlusOutlined />} onClick={openCreateModal}>
             纳管设备
           </Button>
-        </div>
+        </Space>
       }
     >
-      <div className="mb-4 flex flex-col gap-3 border-b border-border/50 pb-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="relative w-full sm:max-w-sm">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            className="h-9 bg-background pl-9"
-            placeholder="搜索名称或管理 IP"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && runSearch()}
-          />
-        </div>
-        <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-          <span>
-            共 <strong className="font-medium text-foreground">{total}</strong> 台
-          </span>
-          <span className="hidden h-3 w-px bg-border sm:inline" />
-          <span>
-            <span className="text-emerald-600">{stats.online}</span> 在线
-          </span>
-          <span>
-            <span className="text-rose-600">{stats.offline}</span> 离线
-          </span>
-          <label className="ml-auto flex cursor-pointer items-center gap-2 sm:ml-0">
-            <Switch checked={learnOnImport} onCheckedChange={setLearnOnImport} id="learn-import" />
-            <span>导入即学习</span>
-          </label>
-        </div>
-      </div>
-
-      <DataTable
-        columns={columns}
-        data={rows}
-        loading={loading}
-        total={total}
-        page={page}
-        pageSize={pageSize}
-        onPageChange={setPage}
-        onPageSizeChange={setPageSize}
-        tableLayout="auto"
-        emptyText="暂无设备 · 从导入或纳管开始"
+      <ListToolbar
+        summary={`共 ${total.toLocaleString()} 台设备${total > pageSize ? " · 已分页" : ""}`}
+        left={
+          <>
+            <Input.Search
+              allowClear
+              placeholder="搜索名称或管理 IP"
+              style={{ width: 260 }}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onSearch={runSearch}
+              enterButton={<SearchOutlined />}
+            />
+            <Space size={4}>
+              <Typography.Text type="secondary">导入即学习</Typography.Text>
+              <Switch checked={learnOnImport} onChange={setLearnOnImport} size="small" />
+            </Space>
+          </>
+        }
       />
 
-      <Sheet open={!!drawerDevice} onOpenChange={(o) => !o && setDrawerDevice(null)}>
-        <SheetContent
-          side="right"
-          className="flex w-full flex-col gap-0 p-0 sm:max-w-5xl lg:max-w-[min(96vw,1280px)]"
-        >
-          <SheetHeader className="space-y-1 border-b px-6 py-4 pr-12 text-left">
-            <SheetTitle className="text-base">
-              {drawerDevice ? `端口清单 · ${drawerDevice.name}` : "端口清单"}
-            </SheetTitle>
-            <p className="text-sm text-muted-foreground">
-              IF-MIB 端口与 S-VID 占用 · SNMP 发现接口，现网学习或检测刷新 VLAN 占用
-            </p>
-          </SheetHeader>
+      <Row gutter={16} style={{ marginBottom: 16 }}>
+        <Col xs={12} md={6}>
+          <Card size="small">
+            <Statistic title="设备总数" value={total} />
+          </Card>
+        </Col>
+        <Col xs={12} md={6}>
+          <Card size="small">
+            <Statistic title="在线" value={stats.online} valueStyle={{ color: "#3f8600" }} />
+          </Card>
+        </Col>
+        <Col xs={12} md={6}>
+          <Card size="small">
+            <Statistic title="离线" value={stats.offline} valueStyle={{ color: stats.offline ? "#cf1322" : undefined }} />
+          </Card>
+        </Col>
+        <Col xs={12} md={6}>
+          <Card size="small">
+            <Statistic
+              title="当前页"
+              value={rows.length}
+              suffix={total > pageSize ? `/ ${pageSize}` : undefined}
+            />
+          </Card>
+        </Col>
+      </Row>
 
-          {drawerDevice ? (
-            <div className="flex flex-wrap items-center gap-2 border-b bg-muted/30 px-6 py-3">
-              <Button variant="outline" size="sm" onClick={() => check(drawerDevice.id)}>
-                <Activity className="mr-1.5 h-4 w-4" />
+      <Table
+        rowKey="id"
+        loading={loading}
+        dataSource={rows}
+        locale={{ emptyText: "暂无设备 · 从导入或纳管开始" }}
+        {...dataTableProps(1180, rows.length > 0)}
+        pagination={tablePagination(total, page, pageSize, (p, ps) => {
+          setPage(p);
+          setPageSize(ps);
+        })}
+        columns={[
+          {
+            title: "设备",
+            dataIndex: "name",
+            width: 180,
+            ellipsis: true,
+            render: (name: string, d: Device) => (
+              <Tooltip
+                title={
+                  [d.hostname, d.loopback_ip && `Loopback ${d.loopback_ip}`, d.bgp_asn && `AS ${d.bgp_asn}`]
+                    .filter(Boolean)
+                    .join(" · ") || name
+                }
+              >
+                <div>
+                  <div style={{ fontWeight: 500 }}>{name}</div>
+                  {d.model ? (
+                    <Typography.Text type="secondary" ellipsis style={{ fontSize: 12 }}>
+                      {d.model}
+                    </Typography.Text>
+                  ) : null}
+                </div>
+              </Tooltip>
+            ),
+          },
+          {
+            title: "厂商",
+            dataIndex: "vendor",
+            width: 96,
+            render: (v: string) => <Tag>{VENDOR_SHORT[v] || v}</Tag>,
+          },
+          {
+            title: "角色",
+            dataIndex: "role",
+            width: 72,
+            render: (r: string) => labelForOption(DEVICE_ROLE_OPTIONS, r).split(" ")[0],
+          },
+          {
+            title: "管理 IP",
+            dataIndex: "mgmt_ip",
+            width: 130,
+            render: (ip: string) => <Typography.Text code>{ip}</Typography.Text>,
+          },
+          {
+            title: "站点",
+            width: 88,
+            ellipsis: true,
+            render: (_: unknown, r: Device) => siteName(r.site_id),
+          },
+          {
+            title: "凭证",
+            width: 56,
+            align: "center",
+            render: (_: unknown, r: Device) =>
+              r.password_set || r.username ? (
+                <CheckCircleOutlined style={{ color: "#52c41a" }} />
+              ) : (
+                <CloseCircleOutlined style={{ color: "#d9d9d9" }} />
+              ),
+          },
+          {
+            title: "SNMP",
+            width: 72,
+            render: (_: unknown, r: Device) =>
+              r.snmp_enabled === false ? (
+                <Typography.Text type="secondary">—</Typography.Text>
+              ) : (
+                <Tag color="geekblue">v{r.snmp_version || "2c"}</Tag>
+              ),
+          },
+          {
+            title: "状态",
+            dataIndex: "status",
+            width: 88,
+            render: (s: string) => (
+              <Tag color={DEVICE_STATUS_COLOR[s] || "default"}>
+                {DEVICE_STATUS_LABEL[s] || s}
+              </Tag>
+            ),
+          },
+          {
+            title: "操作",
+            width: 320,
+            className: "table-actions",
+            render: (_: unknown, r: Device) => (
+              <Space wrap>
+                <Tooltip title="端口清单与 S-VID 占用">
+                  <Button size="small" type="primary" icon={<ApiOutlined />} onClick={() => openPorts(r)}>
+                    端口
+                  </Button>
+                </Tooltip>
+                <Tooltip title="编辑登录 / SNMP 凭证">
+                  <Button size="small" icon={<KeyOutlined />} onClick={() => openCredEdit(r)} />
+                </Tooltip>
+                <Tooltip title="现网配置学习">
+                  <Button size="small" icon={<BookOutlined />} onClick={() => learnConfig(r)} />
+                </Tooltip>
+                <Tooltip title="基线初始化">
+                  <Button size="small" icon={<RocketOutlined />} onClick={() => initialize(r)} />
+                </Tooltip>
+                <Tooltip title="可达性探测与 S-VID 扫描">
+                  <Button size="small" icon={<RadarChartOutlined />} onClick={() => check(r.id)} />
+                </Tooltip>
+                <Tooltip title="SNMP 接口发现">
+                  <Button size="small" icon={<NodeIndexOutlined />} onClick={() => discover(r.id)} />
+                </Tooltip>
+                <Popconfirm
+                  title="确认删除该设备?"
+                  description="此操作不可撤销，将永久删除该设备及其关联数据。"
+                  onConfirm={() => remove(r.id)}
+                >
+                  <Button size="small" danger icon={<DeleteOutlined />} />
+                </Popconfirm>
+              </Space>
+            ),
+          },
+        ]}
+      />
+
+      <Drawer
+        title={drawerDevice ? `端口清单 · ${drawerDevice.name}` : "端口清单"}
+        width="min(96vw, 1280px)"
+        open={!!drawerDevice}
+        onClose={() => setDrawerDevice(null)}
+        destroyOnClose
+        extra={
+          drawerDevice ? (
+            <Space wrap>
+              <Button size="small" icon={<RadarChartOutlined />} onClick={() => check(drawerDevice.id)}>
                 检测 S-VID
               </Button>
-              <Button variant="outline" size="sm" onClick={() => discover(drawerDevice.id)}>
-                <Network className="mr-1.5 h-4 w-4" />
+              <Button size="small" icon={<NodeIndexOutlined />} onClick={() => discover(drawerDevice.id)}>
                 SNMP 发现
               </Button>
-              <Button variant="outline" size="sm" onClick={() => learnConfig(drawerDevice)}>
-                <BookOpen className="mr-1.5 h-4 w-4" />
+              <Button size="small" icon={<BookOutlined />} onClick={() => learnConfig(drawerDevice)}>
                 现网学习
               </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="ml-auto text-muted-foreground"
-                onClick={() => loadIfaces(drawerDevice.id, true)}
-              >
+              <Button size="small" type="link" onClick={() => loadIfaces(drawerDevice.id, true)}>
                 刷新占用
               </Button>
-            </div>
-          ) : null}
+            </Space>
+          ) : null
+        }
+      >
+        <Typography.Paragraph type="secondary" style={{ marginTop: 0 }}>
+          IF-MIB 端口与 S-VID 占用 · SNMP 发现接口，现网学习或检测刷新 VLAN 占用
+        </Typography.Paragraph>
 
-          <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden px-6 py-4">
-            {ifaces.some((i) => i.discovered_via === "snmp-sim") ? (
-              <Alert variant="warning">
-                <AlertTriangle className="h-4 w-4" />
-                <AlertTitle>部分端口为模拟数据</AlertTitle>
-                <AlertDescription>
-                  snmp-sim 表示未从设备读到真实 IF-MIB。请确认 SNMP Community 与 UDP 161 可达后重新发现。
-                </AlertDescription>
-              </Alert>
-            ) : null}
+        {ifaces.some((i) => i.discovered_via === "snmp-sim") ? (
+          <Alert
+            type="warning"
+            showIcon
+            message="部分端口为模拟数据"
+            description="snmp-sim 表示未从设备读到真实 IF-MIB。请确认 SNMP Community 与 UDP 161 可达后重新发现。"
+            style={{ marginBottom: 12 }}
+          />
+        ) : null}
 
-            {!ifacesLoading && ifaces.length > 0 && !ifaceHasSvid ? (
-              <Alert>
-                <AlertTriangle className="h-4 w-4" />
-                <AlertTitle>暂无 S-VID 占用数据</AlertTitle>
-                <AlertDescription>
-                  S-VID 从 running-config（service-instance / dot1q 等）解析，SNMP 仅提供端口清单。请先执行「现网学习」拉取配置，再点「检测
-                  S-VID」或「刷新占用」。
-                </AlertDescription>
-              </Alert>
-            ) : null}
+        {!ifacesLoading && ifaces.length > 0 && !ifaceHasSvid ? (
+          <Alert
+            type="info"
+            showIcon
+            message="暂无 S-VID 占用数据"
+            description="S-VID 从 running-config（service-instance / dot1q 等）解析，SNMP 仅提供端口清单。请先执行「现网学习」拉取配置，再点「检测 S-VID」或「刷新占用」。"
+            style={{ marginBottom: 12 }}
+          />
+        ) : null}
 
-            <div className="min-h-0 flex-1 overflow-auto">
-              <DataTable
-                columns={ifaceColumns}
-                data={ifaces}
-                loading={ifacesLoading}
-                pageSize={20}
-                pageSizeOptions={[20, 50, 100]}
-                tableLayout="auto"
-                dense
-                emptyText="暂无端口数据 · 先执行 SNMP 发现"
-              />
-            </div>
-          </div>
-        </SheetContent>
-      </Sheet>
+        <Table
+          rowKey={(r) => `${r.device_id}-${r.name}`}
+          size="small"
+          loading={ifacesLoading}
+          dataSource={ifaces}
+          locale={{ emptyText: "暂无端口数据 · 先执行 SNMP 发现" }}
+          pagination={{ pageSize: 20, showSizeChanger: true, pageSizeOptions: ["20", "50", "100"] }}
+          scroll={{ x: 960 }}
+          columns={[
+            {
+              title: "接口",
+              dataIndex: "name",
+              width: 160,
+              ellipsis: true,
+              render: (name: string) => (
+                <Tooltip title={name}>
+                  <Typography.Text code ellipsis style={{ maxWidth: 140 }}>
+                    {name}
+                  </Typography.Text>
+                </Tooltip>
+              ),
+            },
+            {
+              title: "描述",
+              dataIndex: "description",
+              width: 220,
+              ellipsis: true,
+              render: (d?: string) =>
+                d ? (
+                  <Tooltip title={d}>
+                    <Typography.Text type="secondary" ellipsis style={{ maxWidth: 200 }}>
+                      {d}
+                    </Typography.Text>
+                  </Tooltip>
+                ) : (
+                  "—"
+                ),
+            },
+            {
+              title: "速率",
+              dataIndex: "speed_mbps",
+              width: 72,
+              render: (s?: number) => {
+                if (!s) return "—";
+                return <Tag>{s >= 1000 ? `${s / 1000}G` : `${s}M`}</Tag>;
+              },
+            },
+            {
+              title: "状态",
+              dataIndex: "oper_status",
+              width: 72,
+              render: (s?: string) => (
+                <Tag color={s === "up" ? "green" : "default"}>{s || "—"}</Tag>
+              ),
+            },
+            {
+              title: "ifIndex",
+              dataIndex: "ifindex",
+              width: 72,
+              render: (v?: number) => (v != null ? v : "—"),
+            },
+            {
+              title: "来源",
+              dataIndex: "discovered_via",
+              width: 88,
+              render: (d?: string) => (d ? <Tag>{d}</Tag> : "—"),
+            },
+            {
+              title: "S-VID 占用",
+              dataIndex: "used_s_vids",
+              width: 220,
+              render: (list?: SvidUsage[]) => renderSvidUsage(list),
+            },
+            {
+              title: "占用",
+              dataIndex: "allocated",
+              width: 72,
+              render: (_: unknown, row: DeviceInterface) =>
+                row.allocated || row.used_s_vids?.length ? (
+                  <Tag color="orange">已占用</Tag>
+                ) : (
+                  "—"
+                ),
+            },
+          ]}
+        />
+      </Drawer>
 
       <DeviceFormDialog
         open={open}
@@ -1212,51 +1156,21 @@ export default function Devices() {
         onSave={saveCred}
       />
 
-      <Dialog open={initOpen} onOpenChange={(o) => !o && !initLoading && setInitOpen(o)}>
-        <DialogContent className="flex max-h-[90vh] max-w-4xl flex-col gap-0 overflow-hidden p-0 sm:max-w-4xl">
-          <DialogHeader className="space-y-1 border-b px-6 py-4 text-left">
-            <DialogTitle>
-              {initDevice ? `基线初始化 · ${initDevice.name} (${initDevice.vendor})` : "基线初始化"}
-            </DialogTitle>
-            <DialogDescription>
-              标准基线预览（管理 / Loopback / Underlay / EVPN Overlay）· 确认后 dry-run 下发并归档初始化快照
-            </DialogDescription>
-          </DialogHeader>
-          <ScrollArea className="max-h-[calc(82vh-108px)] flex-1 px-6 py-4">
-            <ConfigPreviewPre>{initBaseline}</ConfigPreviewPre>
-          </ScrollArea>
-          <DialogFooter className="border-t px-6 py-4">
-            <Button type="button" variant="outline" disabled={initLoading} onClick={() => setInitOpen(false)}>
-              {action.cancel}
-            </Button>
-            <Button type="button" disabled={initLoading} onClick={confirmInitialize}>
-              {initLoading ? "下发中…" : "下发基线配置"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <AlertDialog open={deleteId != null} onOpenChange={(o) => !o && setDeleteId(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {action.confirm}
-              {action.delete}？
-            </AlertDialogTitle>
-            <AlertDialogDescription>此操作不可撤销，将永久删除该设备及其关联数据。</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{action.cancel}</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => deleteId != null && void remove(deleteId)}
-            >
-              <Trash2 className="mr-1.5 h-4 w-4" />
-              {action.delete}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <Modal
+        title={initDevice ? `基线初始化 · ${initDevice.name} (${initDevice.vendor})` : "基线初始化"}
+        open={initOpen}
+        onCancel={() => !initLoading && setInitOpen(false)}
+        onOk={confirmInitialize}
+        okText={initLoading ? "下发中…" : "下发基线配置"}
+        confirmLoading={initLoading}
+        width={960}
+        destroyOnClose
+      >
+        <Typography.Paragraph type="secondary">
+          标准基线预览（管理 / Loopback / Underlay / EVPN Overlay）· 确认后 dry-run 下发并归档初始化快照
+        </Typography.Paragraph>
+        <ConfigPreviewPre>{initBaseline}</ConfigPreviewPre>
+      </Modal>
     </PageCard>
   );
 }
