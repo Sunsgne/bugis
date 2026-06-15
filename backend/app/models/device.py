@@ -45,6 +45,12 @@ class Device(Base, TimestampMixin):
     # Also used as SNMP read community override when prefer_device_community is on.
     password: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
+    # SNMP (optional per device; empty community falls back to platform default)
+    snmp_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    snmp_port: Mapped[int] = mapped_column(Integer, default=161)
+    snmp_community: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    snmp_version: Mapped[str] = mapped_column(String(8), default="2c")
+
     @property
     def password_set(self) -> bool:
         return bool(self.password)

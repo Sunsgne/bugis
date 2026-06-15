@@ -22,6 +22,7 @@ import {
   CloudServerOutlined,
 } from "@ant-design/icons";
 import { api } from "../api/client";
+import { empty, page } from "../constants/uiCopy";
 
 const VNI_COLORS = ["#1677ff", "#52c41a", "#fa8c16", "#722ed1", "#13c2c2", "#eb2f96"];
 
@@ -41,7 +42,7 @@ function OverlayMap({ topo }: { topo: any }) {
   }, [topo]);
 
   if (!topo || !topo.nodes?.length || !layout) {
-    return <Empty description="暂无 Overlay，开通由本控制器托管的专线后出现" />;
+    return <Empty description="Overlay 尚未建立 · 开通控制器托管专线后自动呈现" />;
   }
   const vniColor = (vni: number) =>
     VNI_COLORS[(topo.vnis.indexOf(vni) + VNI_COLORS.length) % VNI_COLORS.length];
@@ -186,7 +187,7 @@ export default function ControlPlane() {
             <span style={{ fontSize: 16, fontWeight: 600 }}>
               <ShareAltOutlined /> {status?.name || "Bugis SDN 控制器"}
             </span>
-            <Tag color="geekblue" style={{ marginLeft: 8 }}>内置 · 自研</Tag>
+            <Tag color="geekblue" style={{ marginLeft: 8 }}>内置 · 自研 SDN</Tag>
             {status?.version && <Tag style={{ marginLeft: 4 }}>v{status.version}</Tag>}
           </Col>
           <Col>
@@ -201,7 +202,7 @@ export default function ControlPlane() {
           <Descriptions.Item label="集群模式">{cluster?.mode || "-"}</Descriptions.Item>
           <Descriptions.Item label="Leader">{cluster?.leader || "-"}</Descriptions.Item>
           <Descriptions.Item label="配置版本化">
-            设备配置见 <Link to="/config">配置管理</Link>
+              设备配置见 <Link to="/config">{page.config}</Link>
           </Descriptions.Item>
         </Descriptions>
       </Card>
@@ -239,13 +240,13 @@ export default function ControlPlane() {
         </Col>
       </Row>
 
-      <Card title="控制器集群 (HA)" size="small">
+      <Card title="控制器集群 · HA" size="small">
         <Table
           rowKey="node_id"
           dataSource={cluster?.nodes || []}
           pagination={false}
           size="small"
-          locale={{ emptyText: <Empty description="集群节点加载中" /> }}
+          locale={{ emptyText: <Empty description={empty.data} /> }}
           columns={[
             { title: "节点", dataIndex: "node_id" },
             { title: "主机", dataIndex: "hostname" },
@@ -275,7 +276,7 @@ export default function ControlPlane() {
           dataSource={bgp}
           pagination={false}
           size="small"
-          locale={{ emptyText: <Empty description="开通控制器托管专线后自动建立" /> }}
+          locale={{ emptyText: <Empty description="托管专线开通后自动建立 BGP 对等" /> }}
           columns={[
             { title: "设备", dataIndex: "device_name" },
             { title: "对端 IP", dataIndex: "peer_ip" },
@@ -298,7 +299,7 @@ export default function ControlPlane() {
           dataSource={bindings.slice(0, 50)}
           pagination={false}
           size="small"
-          locale={{ emptyText: <Empty description="暂无数据面绑定" /> }}
+          locale={{ emptyText: <Empty description="暂无数据面绑定记录" /> }}
           columns={[
             { title: "专线 ID", dataIndex: "circuit_id", width: 90 },
             { title: "设备 ID", dataIndex: "device_id", width: 90 },
@@ -314,7 +315,7 @@ export default function ControlPlane() {
         />
       </Card>
 
-      <Card title="VXLAN / SR-MPLS Overlay 拓扑">
+      <Card title="VXLAN / SR-MPLS Overlay">
         <OverlayMap topo={topo} />
       </Card>
 
@@ -323,7 +324,7 @@ export default function ControlPlane() {
           rowKey="id"
           dataSource={vteps}
           pagination={false}
-          locale={{ emptyText: <Empty description="暂无 VTEP" /> }}
+          locale={{ emptyText: <Empty description="暂无 VTEP 邻居" /> }}
           columns={[
             { title: "设备", dataIndex: "name" },
             { title: "VTEP IP", dataIndex: "vtep_ip" },
@@ -359,7 +360,7 @@ export default function ControlPlane() {
           rowKey="id"
           dataSource={routes}
           size="small"
-          locale={{ emptyText: <Empty description="控制器 RIB 为空" /> }}
+          locale={{ emptyText: <Empty description="RIB 为空 · 等待路由同步" /> }}
           columns={[
             {
               title: "类型",

@@ -6,6 +6,7 @@ import {
 import { EditOutlined, DeleteOutlined, StopOutlined } from "@ant-design/icons";
 import { api } from "../api/client";
 import type { WorkOrder } from "../api/types";
+import { action, empty, page, toast } from "../constants/uiCopy";
 
 const STATUS_COLOR: Record<string, string> = {
   draft: "default",
@@ -42,26 +43,26 @@ export default function WorkOrders() {
   async function doEdit() {
     const v = await editForm.validateFields();
     await api.patch(`/work-orders/${editTarget!.id}`, v);
-    message.success("工单已更新");
+    message.success(toast.saved);
     setEditTarget(null);
     load();
   }
   async function cancelWo(id: number) {
     try {
       await api.post(`/work-orders/${id}/cancel`);
-      message.success("已取消");
+      message.success("工单已撤销");
       load();
     } catch (e: any) {
-      message.error(e?.response?.data?.detail || "取消失败");
+      message.error(e?.response?.data?.detail || toast.failed);
     }
   }
   async function deleteWo(id: number) {
     try {
       await api.delete(`/work-orders/${id}`);
-      message.success("已删除");
+      message.success(toast.deleted);
       load();
     } catch (e: any) {
-      message.error(e?.response?.data?.detail || "删除失败");
+      message.error(e?.response?.data?.detail || toast.failed);
     }
   }
 
@@ -86,7 +87,7 @@ export default function WorkOrders() {
   }
 
   return (
-    <Card title="工单流转">
+    <Card title={page.workOrders}>
       <Table
         rowKey="id"
         loading={loading}
@@ -120,11 +121,11 @@ export default function WorkOrders() {
                   <EditOutlined /> 编辑
                 </a>
                 {!["running", "completed"].includes(r.status) && (
-                  <Popconfirm title="取消该工单?" onConfirm={() => cancelWo(r.id)}>
+                  <Popconfirm title="撤销该工单？" onConfirm={() => cancelWo(r.id)}>
                     <a style={{ color: "#fa8c16" }}><StopOutlined /></a>
                   </Popconfirm>
                 )}
-                <Popconfirm title="删除该工单?" onConfirm={() => deleteWo(r.id)}>
+                <Popconfirm title={`${action.confirm}${action.delete}该工单？`} onConfirm={() => deleteWo(r.id)}>
                   <a style={{ color: "#cf1322" }}><DeleteOutlined /></a>
                 </Popconfirm>
               </Space>
@@ -157,7 +158,7 @@ export default function WorkOrders() {
               <Tag>{TYPE_LABEL[current.type]}</Tag>
             </div>
 
-            <h4>处理过程</h4>
+            <h4>流转轨迹</h4>
             <Timeline
               items={current.events.map((e) => ({
                 color: LEVEL_COLOR[e.level] || "blue",
@@ -170,7 +171,7 @@ export default function WorkOrders() {
               }))}
             />
 
-            <h4>配置作业 (rendered config)</h4>
+            <h4>配置作业 · Rendered Config</h4>
             {current.config_jobs.length ? (
               <Collapse
                 items={current.config_jobs.map((j) => ({
@@ -188,7 +189,7 @@ export default function WorkOrders() {
                 }))}
               />
             ) : (
-              <Empty />
+              <Empty description={empty.default} />
             )}
           </>
         )}

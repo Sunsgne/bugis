@@ -1,4 +1,4 @@
-"""Platform runtime settings API."""
+"""Platform settings API (operational + branding)."""
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
@@ -11,9 +11,11 @@ from app.core.database import get_db
 from app.models.user import User
 from app.schemas.platform_settings import (
     AllSettingsOut,
+    PlatformAnyUpdate,
     PlatformReadonlyInfo,
     PlatformSettingsOut,
     PlatformSettingsUpdate,
+    BrandingUpdate,
 )
 from app.services import platform_settings as platform_svc
 from app.services import snmp_settings as snmp_svc
@@ -57,11 +59,18 @@ def get_platform_settings(
 
 @router.patch("/platform", response_model=PlatformSettingsOut)
 def update_platform_settings(
-    payload: PlatformSettingsUpdate,
+    payload: PlatformAnyUpdate,
     db: Session = Depends(get_db),
     _: User = Depends(require_operator),
 ):
-    row = platform_svc.update_settings(db, payload)
+    data = payload.model_dump(exclude_unset=True)
+    operational_keys = set(PlatformSettingsUpdate.model_fields.keys())
+    branding_keys = set(BrandingUpdate.model_fields.keys())
+    row = platform_svc.get_or_create(db)
+    if operational_keys.intersection(data):
+        row = platform_svc.update_settings(db, PlatformSettingsUpdate(**data))
+    if branding_keys.intersection(data):
+        row = platform_svc.update_branding(db, BrandingUpdate(**data))
     return platform_svc.to_out(row)
 
 

@@ -65,7 +65,7 @@ export default function Capacity() {
       <Row gutter={16}>
         <Col xs={24} md={6}>
           <Card>
-            <Statistic title="总容量" value={Math.round(totalCap / 1000)} suffix="Gbps" />
+            <Statistic title="Fabric 总容量" value={Math.round(totalCap / 1000)} suffix="Gbps" />
           </Card>
         </Col>
         <Col xs={24} md={6}>
@@ -80,7 +80,7 @@ export default function Capacity() {
         </Col>
         <Col xs={24} md={12}>
           <Card>
-            <div style={{ marginBottom: 8 }}>整体带宽分配率</div>
+            <div style={{ marginBottom: 8 }}>全域带宽分配率</div>
             <Progress
               percent={totalCap ? Math.round((totalUsed / totalCap) * 1000) / 10 : 0}
               strokeColor={utilColor(totalCap ? (totalUsed / totalCap) * 100 : 0)}
@@ -89,7 +89,7 @@ export default function Capacity() {
         </Col>
       </Row>
 
-      <Card title="数据中心容量">
+      <Card title="Fabric 站点容量">
         <Row gutter={16}>
           {sites.map((s) => (
             <Col xs={24} md={8} key={s.site_id}>
@@ -110,9 +110,9 @@ export default function Capacity() {
       </Card>
 
       <Card
-        title="骨干链路监控"
+        title="骨干链路 · 利用率"
         extra={
-          <Tooltip title="从端口描述 bw(100Mbps) 重新同步链路容量">
+          <Tooltip title="从端口描述 bw(100Mbps) 同步链路合同带宽">
             <Button icon={<SyncOutlined />} loading={syncing} onClick={syncBandwidth}>
               同步端口带宽
             </Button>
@@ -120,8 +120,7 @@ export default function Capacity() {
         }
       >
         <div style={{ color: "#666", fontSize: 12, marginBottom: 12 }}>
-          在端口描述中标注 <Tag>bw(100Mbps)</Tag> 或 <Tag>bw(10Gbps)</Tag>，SNMP
-          发现后自动写入链路容量；下方利用率为实际流量 / 合同带宽，超过 85% 触发告警。
+          端口描述标注 <Tag>bw(100Mbps)</Tag> 或 <Tag>bw(10Gbps)</Tag> · SNMP 发现后自动写入容量 · 利用率超 85% 触发告警
         </div>
         <ResponsiveContainer width="100%" height={240}>
           <BarChart data={linkChart}>

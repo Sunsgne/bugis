@@ -28,6 +28,8 @@ import {
 } from "recharts";
 import { api } from "../api/client";
 import type { Dashboard as DashboardData } from "../api/types";
+import { empty } from "../constants/uiCopy";
+import { useBrand } from "../context/BrandContext";
 
 const VENDOR_COLORS: Record<string, string> = {
   h3c: "#1677ff", huawei: "#cf1322", juniper: "#52c41a",
@@ -51,6 +53,7 @@ function utilColor(p: number) {
 }
 
 export default function Dashboard() {
+  const { brand } = useBrand();
   const [data, setData] = useState<DashboardData | null>(null);
   const [traffic, setTraffic] = useState<any[]>([]);
   const [alarms, setAlarms] = useState<any>(null);
@@ -109,21 +112,21 @@ export default function Dashboard() {
         }}
       >
         <div>
-          <div style={{ fontSize: 22, fontWeight: 700 }}>DCI / EVPN 专线开通与运营中心</div>
+          <div style={{ fontSize: 22, fontWeight: 700 }}>{brand.hero_title}</div>
           <div style={{ opacity: 0.85, marginTop: 4 }}>
-            多厂商 · BGP EVPN VXLAN · SR-MPLS EVPN · 自研 SDN 控制器 · DCI 互联
+            {brand.hero_subtitle}
           </div>
           <div style={{ marginTop: 10 }}>
             <Badge status={sched?.running ? "processing" : "default"} />
             <span style={{ opacity: 0.9 }}>
-              {sched?.running ? `自动巡检运行中 · 已执行 ${sched.ticks} 次 · 间隔 ${sched.interval}s` : "自动巡检未运行"}
+              {sched?.running ? `巡检引擎运行中 · ${sched.ticks} 次 · 周期 ${sched.interval}s` : "巡检引擎待机"}
             </span>
           </div>
         </div>
         <div style={{ display: "flex", gap: 28, flexWrap: "wrap" }}>
           {[
-            { l: "活跃专线", v: data.circuits_active },
-            { l: "活跃带宽", v: `${(data.total_active_bandwidth_mbps / 1000).toFixed(1)}G` },
+            { l: "在网专线", v: data.circuits_active },
+            { l: "在网带宽", v: `${(data.total_active_bandwidth_mbps / 1000).toFixed(1)}G` },
             { l: "在线设备", v: data.devices_online },
             { l: "活跃告警", v: alarms?.active || 0, warn: (alarms?.active || 0) > 0 },
           ].map((m) => (
@@ -137,18 +140,18 @@ export default function Dashboard() {
 
       {/* KPI cards */}
       <Row gutter={[16, 16]}>
-        <Col xs={12} md={4}>{kpi(<TeamOutlined />, "租户", data.tenants)}</Col>
-        <Col xs={12} md={4}>{kpi(<ClusterOutlined />, "设备(在线/总)", data.devices_online, `/ ${data.devices}`)}</Col>
-        <Col xs={12} md={4}>{kpi(<ApiOutlined />, "专线(活跃/总)", data.circuits_active, `/ ${data.circuits}`, "#52c41a")}</Col>
-        <Col xs={12} md={4}>{kpi(<ThunderboltOutlined />, "活跃带宽(Mbps)", data.total_active_bandwidth_mbps, undefined, "#1677ff")}</Col>
-        <Col xs={12} md={4}>{kpi(<NodeIndexOutlined />, "EVPN 路由", sdn?.route_count ?? 0, undefined, "#722ed1")}</Col>
+        <Col xs={12} md={4}>{kpi(<TeamOutlined />, "客户租户", data.tenants)}</Col>
+        <Col xs={12} md={4}>{kpi(<ClusterOutlined />, "设备 · 在线/总量", data.devices_online, `/ ${data.devices}`)}</Col>
+        <Col xs={12} md={4}>{kpi(<ApiOutlined />, "在网专线 · 活跃/总量", data.circuits_active, `/ ${data.circuits}`, "#52c41a")}</Col>
+        <Col xs={12} md={4}>{kpi(<ThunderboltOutlined />, "在网带宽 (Mbps)", data.total_active_bandwidth_mbps, undefined, "#1677ff")}</Col>
+        <Col xs={12} md={4}>{kpi(<NodeIndexOutlined />, "EVPN 路由条目", sdn?.route_count ?? 0, undefined, "#722ed1")}</Col>
         <Col xs={12} md={4}>{kpi(<AlertOutlined />, "活跃告警", alarms?.active || 0, undefined, (alarms?.active || 0) > 0 ? "#cf1322" : "#52c41a")}</Col>
       </Row>
 
       {/* Traffic trend + alarm donut */}
       <Row gutter={[16, 16]}>
         <Col xs={24} lg={16}>
-          <Card title="全网流量趋势 (Rx/Tx 聚合, Mbps)" style={{ height: "100%" }}>
+          <Card title="全网流量态势 · Rx/Tx 聚合 (Mbps)" style={{ height: "100%" }}>
             {traffic.length ? (
               <ResponsiveContainer width="100%" height={280}>
                 <AreaChart data={traffic}>
@@ -169,12 +172,12 @@ export default function Dashboard() {
                 </AreaChart>
               </ResponsiveContainer>
             ) : (
-              <Empty description="暂无流量数据，自动巡检将很快生成" style={{ padding: 60 }} />
+              <Empty description={empty.traffic} style={{ padding: 60 }} />
             )}
           </Card>
         </Col>
         <Col xs={24} lg={8}>
-          <Card title="告警分级" style={{ height: "100%" }}>
+          <Card title="告警态势 · 按严重级别" style={{ height: "100%" }}>
             {sevData.length ? (
               <ResponsiveContainer width="100%" height={280}>
                 <PieChart>
@@ -187,7 +190,7 @@ export default function Dashboard() {
             ) : (
               <div style={{ textAlign: "center", padding: "70px 0" }}>
                 <SafetyCertificateOutlined style={{ fontSize: 56, color: "#52c41a" }} />
-                <div style={{ marginTop: 12, color: "#52c41a", fontSize: 16 }}>系统健康 · 无活跃告警</div>
+                <div style={{ marginTop: 12, color: "#52c41a", fontSize: 16 }}>{empty.alarms}</div>
               </div>
             )}
           </Card>
@@ -197,7 +200,7 @@ export default function Dashboard() {
       {/* Vendor / status / SDN */}
       <Row gutter={[16, 16]}>
         <Col xs={24} md={8}>
-          <Card title="设备厂商分布" style={{ height: "100%" }}>
+          <Card title="设备厂商 · 异构分布" style={{ height: "100%" }}>
             <ResponsiveContainer width="100%" height={240}>
               <PieChart>
                 <Pie data={vendorData} dataKey="value" nameKey="name" outerRadius={90} label>
@@ -209,7 +212,7 @@ export default function Dashboard() {
           </Card>
         </Col>
         <Col xs={24} md={8}>
-          <Card title="专线状态分布" style={{ height: "100%" }}>
+          <Card title="专线生命周期 · 状态分布" style={{ height: "100%" }}>
             <ResponsiveContainer width="100%" height={240}>
               <BarChart data={statusData}>
                 <CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" /><YAxis allowDecimals={false} /><Tooltip />
@@ -221,7 +224,7 @@ export default function Dashboard() {
           </Card>
         </Col>
         <Col xs={24} md={8}>
-          <Card title="自研 SDN 控制器" style={{ height: "100%" }}
+          <Card title="SDN 控制面 · Bugis Controller" style={{ height: "100%" }}
             extra={<Tag color="green">{sdn?.name ? "在线" : "—"}</Tag>}>
             <Row gutter={16}>
               <Col span={8}><Statistic title="VTEP" value={sdn?.vtep_count ?? 0} prefix={<ShareAltOutlined />} /></Col>
@@ -234,7 +237,7 @@ export default function Dashboard() {
                   {k.replace("type3_imet", "Type-3 IMET").replace("type2_mac_ip", "Type-2 MAC/IP").replace("type5_ip_prefix", "Type-5 前缀")}: {v}
                 </Tag>
               ))}
-              {!sdn && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="控制器无数据" />}
+              {!sdn && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={empty.data} />}
             </div>
           </Card>
         </Col>
@@ -243,9 +246,9 @@ export default function Dashboard() {
       {/* Capacity + recent work orders */}
       <Row gutter={[16, 16]}>
         <Col xs={24} md={8}>
-          <Card title="数据中心容量" style={{ height: "100%" }}>
+          <Card title="Fabric 容量 · 站点分配" style={{ height: "100%" }}>
             <div style={{ marginBottom: 12 }}>
-              <span style={{ color: "#888" }}>整体分配率</span>
+              <span style={{ color: "#888" }}>全域分配率</span>
               <Progress percent={totalCap ? Math.round((usedCap / totalCap) * 1000) / 10 : 0}
                 strokeColor={utilColor(totalCap ? (usedCap / totalCap) * 100 : 0)} />
             </div>
@@ -258,11 +261,11 @@ export default function Dashboard() {
                 <Progress percent={s.utilization_pct} size="small" strokeColor={utilColor(s.utilization_pct)} />
               </div>
             ))}
-            {!sites.length && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} />}
+            {!sites.length && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={empty.data} />}
           </Card>
         </Col>
         <Col xs={24} md={8}>
-          <Card title="链路利用率" style={{ height: "100%" }}>
+          <Card title="链路负载 · DCI / Fabric" style={{ height: "100%" }}>
             {links.map((l) => (
               <div key={l.link_id} style={{ marginBottom: 10 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
@@ -272,11 +275,11 @@ export default function Dashboard() {
                 <Progress percent={l.utilization_pct} size="small" strokeColor={utilColor(l.utilization_pct)} />
               </div>
             ))}
-            {!links.length && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} />}
+            {!links.length && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={empty.data} />}
           </Card>
         </Col>
         <Col xs={24} md={8}>
-          <Card title="最近工单" style={{ height: "100%" }}>
+          <Card title="编排工单 · 最近动态" style={{ height: "100%" }}>
             <Table
               size="small"
               rowKey="id"

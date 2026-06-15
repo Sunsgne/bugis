@@ -20,7 +20,7 @@ import {
   SettingOutlined,
   FileTextOutlined,
 } from "@ant-design/icons";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useAuth } from "./auth";
 import { api, getToken } from "./api/client";
 import Login from "./pages/Login";
@@ -48,6 +48,9 @@ import BaselineSettings from "./pages/settings/BaselineSettings";
 import SmtpSettings from "./pages/settings/SmtpSettings";
 import SnmpSettingsTab from "./pages/settings/SnmpSettingsTab";
 import IntegrationSettings from "./pages/settings/IntegrationSettings";
+import { nav, action } from "./constants/uiCopy";
+import { useBrand } from "./context/BrandContext";
+import { BrandLogo } from "./components/BrandLogo";
 
 const { Header, Sider, Content } = Layout;
 
@@ -56,50 +59,50 @@ type MenuItem = Required<MenuProps>["items"][number];
 const MENU: MenuItem[] = [
   {
     type: "group",
-    label: "概览",
-    children: [{ key: "/", icon: <DashboardOutlined />, label: "运营总览" }],
+    label: nav.groups.overview,
+    children: [{ key: "/", icon: <DashboardOutlined />, label: nav.items.dashboard }],
   },
   {
     type: "group",
-    label: "资源与客户",
+    label: nav.groups.resources,
     children: [
-      { key: "/tenants", icon: <TeamOutlined />, label: "客户服务" },
-      { key: "/sites", icon: <EnvironmentOutlined />, label: "数据中心" },
-      { key: "/devices", icon: <ClusterOutlined />, label: "设备管理" },
+      { key: "/tenants", icon: <TeamOutlined />, label: nav.items.tenants },
+      { key: "/sites", icon: <EnvironmentOutlined />, label: nav.items.sites },
+      { key: "/devices", icon: <ClusterOutlined />, label: nav.items.devices },
     ],
   },
   {
     type: "group",
-    label: "专线业务",
+    label: nav.groups.circuits,
     children: [
-      { key: "/catalog", icon: <AppstoreOutlined />, label: "服务套餐" },
-      { key: "/circuits", icon: <ApiOutlined />, label: "专线开通" },
-      { key: "/work-orders", icon: <ProfileOutlined />, label: "工单流转" },
+      { key: "/catalog", icon: <AppstoreOutlined />, label: nav.items.catalog },
+      { key: "/circuits", icon: <ApiOutlined />, label: nav.items.circuits },
+      { key: "/work-orders", icon: <ProfileOutlined />, label: nav.items.workOrders },
     ],
   },
   {
     type: "group",
-    label: "网络与 SDN",
+    label: nav.groups.network,
     children: [
-      { key: "/controllers", icon: <CloudServerOutlined />, label: "控制器" },
-      { key: "/control-plane", icon: <ShareAltOutlined />, label: "SDN 控制平面" },
-      { key: "/config", icon: <FileTextOutlined />, label: "配置管理" },
-      { key: "/topology", icon: <PartitionOutlined />, label: "网络拓扑" },
+      { key: "/controllers", icon: <CloudServerOutlined />, label: nav.items.controllers },
+      { key: "/control-plane", icon: <ShareAltOutlined />, label: nav.items.controlPlane },
+      { key: "/config", icon: <FileTextOutlined />, label: nav.items.config },
+      { key: "/topology", icon: <PartitionOutlined />, label: nav.items.topology },
     ],
   },
   {
     type: "group",
-    label: "运维监控",
+    label: nav.groups.ops,
     children: [
-      { key: "/capacity", icon: <DeploymentUnitOutlined />, label: "容量管理" },
-      { key: "/monitoring", icon: <LineChartOutlined />, label: "监控大屏" },
-      { key: "/alarms", icon: <AlertOutlined />, label: "告警中心" },
+      { key: "/capacity", icon: <DeploymentUnitOutlined />, label: nav.items.capacity },
+      { key: "/monitoring", icon: <LineChartOutlined />, label: nav.items.monitoring },
+      { key: "/alarms", icon: <AlertOutlined />, label: nav.items.alarms },
     ],
   },
   {
     type: "group",
-    label: "系统",
-    children: [{ key: "/settings", icon: <SettingOutlined />, label: "系统设置" }],
+    label: nav.groups.system,
+    children: [{ key: "/settings", icon: <SettingOutlined />, label: nav.items.settings }],
   },
 ];
 
@@ -161,7 +164,7 @@ function AlarmBell({ onClick }: { onClick: () => void }) {
   }, []);
 
   return (
-    <Badge count={count} size="small" offset={[-2, 2]} title={live ? "实时" : "轮询"}>
+    <Badge count={count} size="small" offset={[-2, 2]} title={live ? "SSE 实时" : "轮询同步"}>
       <AlertOutlined
         style={{ fontSize: 20, cursor: "pointer", color: count ? "#cf1322" : undefined }}
         onClick={onClick}
@@ -171,24 +174,25 @@ function AlarmBell({ onClick }: { onClick: () => void }) {
 }
 
 function Shell() {
-  const nav = useNavigate();
+  const navTo = useNavigate();
   const loc = useLocation();
   const { user, logout } = useAuth();
+  const { brand } = useBrand();
   const selected = useMemo(() => selectedMenuKey(loc.pathname), [loc.pathname]);
 
   return (
     <Layout style={{ height: "100vh" }}>
       <Sider breakpoint="lg" collapsedWidth="0" theme="dark">
         <div className="app-logo">
-          <span className="dot" />
-          <span>Bugis 专线运营</span>
+          <BrandLogo brand={brand} variant="sidebar" height={24} />
+          <span>{brand.product_name}</span>
         </div>
         <Menu
           theme="dark"
           mode="inline"
           selectedKeys={[selected]}
           items={MENU}
-          onClick={(e) => nav(e.key)}
+          onClick={(e) => navTo(e.key)}
         />
       </Sider>
       <Layout>
@@ -202,15 +206,13 @@ function Shell() {
             borderBottom: "1px solid #f0f0f0",
           }}
         >
-          <div style={{ fontSize: 18, fontWeight: 600 }}>
-            DCI / EVPN 专线开通与运营平台
-          </div>
+          <div style={{ fontSize: 18, fontWeight: 600 }}>{brand.header_title}</div>
           <Space size="large">
-            <AlarmBell onClick={() => nav("/alarms")} />
+            <AlarmBell onClick={() => navTo("/alarms")} />
             <Dropdown
               menu={{
                 items: [
-                  { key: "logout", icon: <LogoutOutlined />, label: "退出登录", onClick: logout },
+                  { key: "logout", icon: <LogoutOutlined />, label: action.logout, onClick: logout },
                 ],
               }}
             >

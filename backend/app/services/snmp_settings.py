@@ -55,6 +55,8 @@ def update_settings(db: Session, payload: SnmpSettingsUpdate) -> SnmpSettings:
 def effective_community(db: Session, device: Device, override: str | None = None) -> str:
     if override:
         return override
+    if device.snmp_community:
+        return device.snmp_community
     cfg = get_or_create(db)
     if cfg.prefer_device_community and device.password:
         return device.password

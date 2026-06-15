@@ -16,6 +16,7 @@ import { PlusOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { api } from "../api/client";
 import { useAuth } from "../auth";
+import { page, toast } from "../constants/uiCopy";
 
 interface UserRow {
   id: number;
@@ -61,30 +62,30 @@ export default function Users({ embedded }: { embedded?: boolean }) {
     const values = await form.validateFields();
     try {
       await api.post("/auth/users", values);
-      message.success("用户已创建");
+      message.success(toast.created);
       setOpen(false);
       form.resetFields();
       load();
     } catch (e: any) {
-      message.error(e?.response?.data?.detail || "创建失败");
+      message.error(e?.response?.data?.detail || toast.failed);
     }
   }
 
   if (!isAdmin) {
     const denied = (
-      <Alert type="warning" message="仅管理员（admin）可管理用户。" showIcon />
+      <Alert type="warning" message="仅 Admin 角色可管理用户与权限" showIcon />
     );
     if (embedded) {
       return (
         <div>
           <Typography.Title level={5} style={{ marginTop: 0 }}>
-            用户与权限
+            {page.users}
           </Typography.Title>
           {denied}
         </div>
       );
     }
-    return <Card title="用户与权限">{denied}</Card>;
+    return <Card title={page.users}>{denied}</Card>;
   }
 
   const addBtn = (
@@ -137,9 +138,9 @@ export default function Users({ embedded }: { embedded?: boolean }) {
           <Form.Item name="role" label="角色">
             <Select
               options={[
-                { value: "admin", label: "管理员 admin" },
-                { value: "operator", label: "操作员 operator" },
-                { value: "viewer", label: "只读 viewer" },
+                { value: "admin", label: "Admin 管理员" },
+                { value: "operator", label: "Operator 操作员" },
+                { value: "viewer", label: "Viewer 只读" },
               ]}
             />
           </Form.Item>
@@ -153,7 +154,7 @@ export default function Users({ embedded }: { embedded?: boolean }) {
       <div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
           <Typography.Title level={5} style={{ margin: 0 }}>
-            用户与权限 (RBAC)
+            {page.users} · RBAC
           </Typography.Title>
           {addBtn}
         </div>
@@ -163,7 +164,7 @@ export default function Users({ embedded }: { embedded?: boolean }) {
   }
 
   return (
-    <Card title="用户与权限 (RBAC)" extra={addBtn}>
+    <Card title={`${page.users} · RBAC`} extra={addBtn}>
       {body}
     </Card>
   );

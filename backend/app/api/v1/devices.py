@@ -28,6 +28,13 @@ from app.services import platform_settings as platform_cfg
 router = APIRouter()
 
 
+def _normalize_snmp_fields(data: dict) -> dict:
+    out = dict(data)
+    if out.get("snmp_community") == "":
+        out["snmp_community"] = None
+    return out
+
+
 @router.get("", response_model=list[DeviceListOut])
 def list_devices(
     vendor: Vendor | None = None,
@@ -50,7 +57,7 @@ def create_device(
     db: Session = Depends(get_db),
     user: User = Depends(require_operator),
 ):
-    device = Device(**payload.model_dump())
+    device = Device(**_normalize_snmp_fields(payload.model_dump()))
     db.add(device)
     db.flush()
     should_learn = False
@@ -90,7 +97,7 @@ def update_device(
     device = db.get(Device, device_id)
     if not device:
         raise HTTPException(status_code=404, detail="device not found")
-    for k, v in payload.model_dump(exclude_unset=True).items():
+    for k, v in _normalize_snmp_fields(payload.model_dump(exclude_unset=True)).items():
         setattr(device, k, v)
     db.commit()
     db.refresh(device)
@@ -234,6 +241,11 @@ def discover_interfaces(
     device = db.get(Device, device_id)
     if not device:
         raise HTTPException(status_code=404, detail="device not found")
+    from app.services import snmp_device
+
+    cfg = snmp_device.effective_snmp(device)
+    if not settings.dry_run and not cfg["enabled"]:
+        raise HTTPException(status_code=400, detail="该设备未启用 SNMP，请在设备设置中开启或保持 Dry-run 模式")
     ifaces = snmp.discover_interfaces(db, device)
     port_inventory.scan_device(db, device)
     db.commit()

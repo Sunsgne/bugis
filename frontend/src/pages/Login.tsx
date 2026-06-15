@@ -3,10 +3,14 @@ import { LockOutlined, UserOutlined } from "@ant-design/icons";
 import { useState } from "react";
 import { login } from "../api/client";
 import { useAuth } from "../auth";
+import { action, toast } from "../constants/uiCopy";
+import { useBrand } from "../context/BrandContext";
+import { BrandLogo } from "../components/BrandLogo";
 
 export default function Login() {
   const { loginWithToken } = useAuth();
   const { message } = AntApp.useApp();
+  const { brand } = useBrand();
   const [loading, setLoading] = useState(false);
 
   async function onFinish(v: { username: string; password: string }) {
@@ -14,23 +18,29 @@ export default function Login() {
     try {
       const token = await login(v.username, v.password);
       await loginWithToken(token);
-      message.success("登录成功");
+      message.success(toast.loginOk);
     } catch {
-      message.error("用户名或密码错误");
+      message.error(toast.loginFail);
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="login-wrap">
+    <div
+      className="login-wrap"
+      style={{ background: brand.login_background || undefined }}
+    >
       <Card style={{ width: 380, boxShadow: "0 12px 40px rgba(0,0,0,0.25)" }}>
         <div style={{ textAlign: "center", marginBottom: 20 }}>
+          <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}>
+            <BrandLogo brand={brand} variant="login" height={40} />
+          </div>
           <Typography.Title level={3} style={{ marginBottom: 0 }}>
-            Bugis 专线运营平台
+            {brand.login_title}
           </Typography.Title>
           <Typography.Text type="secondary">
-            DCI · EVPN VXLAN · SR-MPLS EVPN
+            {brand.login_subtitle}
           </Typography.Text>
         </div>
         <Form onFinish={onFinish} initialValues={{ username: "admin", password: "admin123" }}>
@@ -41,7 +51,7 @@ export default function Login() {
             <Input.Password prefix={<LockOutlined />} placeholder="密码" size="large" />
           </Form.Item>
           <Button type="primary" htmlType="submit" block size="large" loading={loading}>
-            登录
+            {action.login}
           </Button>
         </Form>
         <Typography.Paragraph type="secondary" style={{ marginTop: 16, marginBottom: 0, fontSize: 12 }}>

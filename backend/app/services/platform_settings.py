@@ -1,11 +1,16 @@
-"""Load, persist and apply platform runtime settings."""
+"""Load, persist and apply platform settings (operational + branding)."""
 from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models.platform_settings import PlatformSettings
-from app.schemas.platform_settings import PlatformSettingsOut, PlatformSettingsUpdate
+from app.schemas.platform_settings import (
+    BrandingOut,
+    BrandingUpdate,
+    PlatformSettingsOut,
+    PlatformSettingsUpdate,
+)
 
 
 def _defaults_from_env() -> dict:
@@ -33,6 +38,20 @@ def _defaults_from_env() -> dict:
         "smtp_security": settings.smtp_security,
         "enable_metrics": settings.enable_metrics,
         "access_token_expire_minutes": settings.access_token_expire_minutes,
+    }
+
+
+def _branding_defaults() -> dict:
+    return {
+        "product_name": "Bugis Network",
+        "header_title": "DCI / EVPN 全域网络运营中枢",
+        "tagline": "DCI · EVPN 全域智能运营",
+        "login_title": "Bugis Network",
+        "login_subtitle": "Multi-Vendor · BGP EVPN · Intelligent Fabric Ops",
+        "hero_title": "DCI / EVPN 运营驾驶舱",
+        "hero_subtitle": "多厂商异构 · VXLAN / SR-MPLS EVPN · 自研 SDN · 跨域 DCI",
+        "accent_color": "#52c41a",
+        "login_background": "linear-gradient(135deg, #0b1f3a 0%, #1677ff 100%)",
     }
 
 
@@ -72,12 +91,16 @@ def get_or_create(db: Session) -> PlatformSettings:
     row = db.get(PlatformSettings, 1)
     if row:
         return row
-    row = PlatformSettings(id=1, **_defaults_from_env())
+    row = PlatformSettings(id=1, **_defaults_from_env(), **_branding_defaults())
     db.add(row)
     db.commit()
     db.refresh(row)
     sync_to_runtime(row)
     return row
+
+
+def to_branding(row: PlatformSettings) -> BrandingOut:
+    return BrandingOut.model_validate(row, from_attributes=True)
 
 
 def to_out(row: PlatformSettings) -> PlatformSettingsOut:
@@ -99,4 +122,16 @@ def update_settings(db: Session, payload: PlatformSettingsUpdate) -> PlatformSet
     db.commit()
     db.refresh(row)
     sync_to_runtime(row)
+    return row
+
+
+def update_branding(db: Session, payload: BrandingUpdate) -> PlatformSettings:
+    row = get_or_create(db)
+    data = payload.model_dump(exclude_unset=True)
+    for key, value in data.items():
+        if key in ("logo_url", "logo_mark_url") and value == "":
+            value = None
+        setattr(row, key, value)
+    db.commit()
+    db.refresh(row)
     return row

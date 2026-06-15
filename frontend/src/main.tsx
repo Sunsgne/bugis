@@ -5,6 +5,7 @@ import { ConfigProvider, App as AntApp } from "antd";
 import zhCN from "antd/locale/zh_CN";
 import App from "./App";
 import { AuthProvider } from "./auth";
+import { BrandProvider } from "./context/BrandContext";
 import "antd/dist/reset.css";
 import "./index.css";
 
@@ -21,11 +22,13 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
       }}
     >
       <AntApp>
-        <AuthProvider>
-          <BrowserRouter>
-            <App />
-          </BrowserRouter>
-        </AuthProvider>
+        <BrandProvider>
+          <AuthProvider>
+            <BrowserRouter>
+              <App />
+            </BrowserRouter>
+          </AuthProvider>
+        </BrandProvider>
       </AntApp>
     </ConfigProvider>
   </React.StrictMode>

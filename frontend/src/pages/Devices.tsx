@@ -4,6 +4,7 @@ import {
   Alert,
   Button,
   Card,
+  Collapse,
   Divider,
   Form,
   Input,
@@ -15,15 +16,25 @@ import {
   Table,
   Tag,
   Tooltip,
+  Typography,
   Upload,
   App as AntApp,
   Popconfirm,
-  Typography,
 } from "antd";
-import { PlusOutlined, DownloadOutlined, UploadOutlined, ApiOutlined, RocketOutlined, SettingOutlined, KeyOutlined, BookOutlined } from "@ant-design/icons";
+import {
+  PlusOutlined,
+  DownloadOutlined,
+  UploadOutlined,
+  ApiOutlined,
+  RocketOutlined,
+  SettingOutlined,
+  KeyOutlined,
+  BookOutlined,
+} from "@ant-design/icons";
 import { api } from "../api/client";
-import type { Device, DeviceInterface, Site, SvidUsage } from "../api/types";
+import type { Device, DeviceInterface, Site, SnmpDefaults, SvidUsage } from "../api/types";
 import { configPreviewModalProps, ConfigPreviewPre } from "../utils/configPreview";
+import { action, page, toast } from "../constants/uiCopy";
 
 const VENDOR_COLOR: Record<string, string> = {
   h3c: "blue",
@@ -52,6 +63,13 @@ const VENDOR_AUTH_HINT: Record<string, string> = {
   frr: "SSH 22，vtysh CLI；账号为 Linux 用户",
 };
 
+const FALLBACK_SNMP: SnmpDefaults = {
+  enabled: true,
+  port: 161,
+  community: "bugis-ro",
+  version: "2c",
+};
+
 export default function Devices() {
   const { message, modal } = AntApp.useApp();
   const [rows, setRows] = useState<Device[]>([]);
@@ -60,11 +78,13 @@ export default function Devices() {
   const [open, setOpen] = useState(false);
   const [credOpen, setCredOpen] = useState(false);
   const [credDevice, setCredDevice] = useState<Device | null>(null);
+  const [snmpDefaults, setSnmpDefaults] = useState<SnmpDefaults>(FALLBACK_SNMP);
   const [form] = Form.useForm();
   const [credForm] = Form.useForm();
   const [ifaces, setIfaces] = useState<Record<number, DeviceInterface[]>>({});
   const [learnOnImport, setLearnOnImport] = useState(true);
   const watchVendor = Form.useWatch("vendor", form);
+  const watchSnmpEnabled = Form.useWatch("snmp_enabled", form);
 
   async function loadIfaces(deviceId: number) {
     const { data } = await api.get<DeviceInterface[]>(`/devices/${deviceId}/interfaces`);
@@ -72,17 +92,17 @@ export default function Devices() {
   }
 
   async function discover(deviceId: number) {
-    const hide = message.loading("SNMP 接口发现中...", 0);
+    const hide = message.loading("SNMP 接口扫描中…", 0);
     try {
       const { data } = await api.post<DeviceInterface[]>(
         `/devices/${deviceId}/discover-interfaces`
       );
       hide();
-      message.success(`已发现 ${data.length} 个接口`);
+      message.success(`发现 ${data.length} 个接口`);
       setIfaces((p) => ({ ...p, [deviceId]: data }));
     } catch (e: any) {
       hide();
-      message.error(e?.response?.data?.detail || "发现失败");
+      message.error(e?.response?.data?.detail || toast.failed);
     }
   }
 
@@ -99,22 +119,53 @@ export default function Devices() {
       setLoading(false);
     }
   }
+
   useEffect(() => {
     load();
   }, []);
+
+  async function openCreateModal() {
+    let defaults = FALLBACK_SNMP;
+    try {
+      const { data } = await api.get<SnmpDefaults>("/system/snmp-defaults");
+      defaults = data;
+      setSnmpDefaults(data);
+    } catch {
+      /* use fallback */
+    }
+    form.setFieldsValue({
+      vendor: "h3c",
+      role: "leaf",
+      overlay_tech: "vxlan_evpn",
+      status: "unknown",
+      netconf_port: 830,
+      ssh_port: 22,
+      username: "admin",
+      snmp_enabled: defaults.enabled,
+      snmp_port: defaults.port,
+      snmp_community: defaults.community,
+      snmp_version: defaults.version,
+    });
+    setOpen(true);
+  }
 
   async function onCreate() {
     const values = await form.validateFields();
     const payload = { ...values };
     if (!payload.password) delete payload.password;
+    if (!payload.snmp_enabled) {
+      payload.snmp_community = null;
+    } else if (payload.snmp_community === snmpDefaults.community) {
+      payload.snmp_community = null;
+    }
     try {
       await api.post("/devices", payload);
-      message.success("设备已添加");
+      message.success("设备已纳管");
       setOpen(false);
       form.resetFields();
       load();
     } catch (e: any) {
-      message.error(e?.response?.data?.detail || "创建失败");
+      message.error(e?.response?.data?.detail || toast.failed);
     }
   }
 
@@ -140,17 +191,17 @@ export default function Devices() {
     if (v.password) payload.password = v.password;
     try {
       await api.patch(`/devices/${credDevice.id}`, payload);
-      message.success("设备凭证已保存");
+      message.success(toast.saved);
       setCredOpen(false);
       load();
     } catch (e: any) {
-      message.error(e?.response?.data?.detail || "保存失败");
+      message.error(e?.response?.data?.detail || toast.failed);
     }
   }
 
   async function remove(id: number) {
     await api.delete(`/devices/${id}`);
-    message.success("已删除");
+    message.success(toast.deleted);
     load();
   }
 
@@ -176,11 +227,11 @@ export default function Devices() {
         data.learn_enabled && data.learn
           ? ` · 现网学习 ${data.learn.success}/${data.learn.total} 成功`
           : "";
-      message.success(`导入完成: 新增 ${data.created}, 跳过 ${data.skipped}${learnMsg}`);
-      if (data.errors?.length) message.warning(`${data.errors.length} 行有误`);
+      message.success(`导入完成 · 新增 ${data.created} · 跳过 ${data.skipped}${learnMsg}`);
+      if (data.errors?.length) message.warning(`${data.errors.length} 行需修正`);
       load();
     } catch (e: any) {
-      message.error(e?.response?.data?.detail || "导入失败");
+      message.error(e?.response?.data?.detail || toast.failed);
     }
     return false;
   }
@@ -199,40 +250,40 @@ export default function Devices() {
           loadIfaces(d.id);
         }
       } else {
-        message.error(data.error || "学习失败");
+        message.error(data.error || toast.failed);
       }
       load();
     } catch (e: any) {
       hide();
-      message.error(e?.response?.data?.detail || "学习失败");
+      message.error(e?.response?.data?.detail || toast.failed);
     }
   }
 
   async function initialize(d: Device) {
     const { data: bl } = await api.get(`/devices/${d.id}/baseline`);
     modal.confirm({
-      title: `设备初始化 · ${d.name} (${d.vendor})`,
+      title: `基线初始化 · ${d.name} (${d.vendor})`,
       ...configPreviewModalProps,
       icon: null,
       content: (
         <div>
           <div style={{ marginBottom: 8, color: "#888" }}>
-            标准基线配置(管理/Loopback/Underlay/EVPN Overlay)预览,确认后下发(dry-run)并保存为初始化快照:
+            标准基线预览（管理 / Loopback / Underlay / EVPN Overlay）· 确认后 dry-run 下发并归档初始化快照
           </div>
           <ConfigPreviewPre>{bl.content}</ConfigPreviewPre>
         </div>
       ),
-      okText: "下发初始化配置",
+      okText: "下发基线配置",
       onOk: async () => {
         const { data } = await api.post(`/devices/${d.id}/initialize`);
-        message.success(`${data.device} 初始化完成 (v${data.version}, ${data.transport})`);
+        message.success(`${data.device} 初始化完成 · v${data.version} · ${data.transport}`);
         load();
       },
     });
   }
 
   async function check(id: number) {
-    const hide = message.loading("设备检测中 (可达性 + S-VID 占用)...", 0);
+    const hide = message.loading("可达性探测 · S-VID 扫描中…", 0);
     try {
       const { data } = await api.post(`/devices/${id}/check`);
       hide();
@@ -279,7 +330,7 @@ export default function Devices() {
       load();
     } catch (e: any) {
       hide();
-      message.error(e?.response?.data?.detail || "检测失败");
+      message.error(e?.response?.data?.detail || toast.failed);
     }
   }
 
@@ -317,17 +368,17 @@ export default function Devices() {
 
   return (
     <Card
-      title="设备管理"
+      title={page.devices}
       extra={
         <Space>
           <Link to="/settings/snmp">
             <Button icon={<SettingOutlined />}>SNMP 全局设置</Button>
           </Link>
           <Button icon={<DownloadOutlined />} onClick={exportCsv}>
-            导出 CSV
+            {action.export} CSV
           </Button>
           <Upload accept=".csv" showUploadList={false} beforeUpload={importCsv}>
-            <Button icon={<UploadOutlined />}>导入 CSV</Button>
+            <Button icon={<UploadOutlined />}>{action.import} CSV</Button>
           </Upload>
           <Tooltip title="导入后自动拉取现网 running-config 并解析业务/VLAN 占用">
             <Switch
@@ -337,8 +388,8 @@ export default function Devices() {
               onChange={setLearnOnImport}
             />
           </Tooltip>
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>
-            添加设备
+          <Button type="primary" icon={<PlusOutlined />} onClick={openCreateModal}>
+            纳管设备
           </Button>
         </Space>
       }
@@ -408,7 +459,7 @@ export default function Devices() {
                 ]}
               />
             ) : (
-              <span style={{ color: "#888" }}>暂无接口，点击「SNMP 发现」</span>
+              <span style={{ color: "#888" }}>接口未同步 · 触发 SNMP 发现</span>
             );
           },
         }}
@@ -433,12 +484,22 @@ export default function Devices() {
           { title: "管理IP", dataIndex: "mgmt_ip" },
           {
             title: "凭证",
-            width: 100,
+            width: 88,
             render: (_, r) =>
               r.password_set || r.username ? (
                 <Tag color="green">已配置</Tag>
               ) : (
                 <Tag>未配置</Tag>
+              ),
+          },
+          {
+            title: "SNMP",
+            width: 88,
+            render: (_, r) =>
+              r.snmp_enabled === false ? (
+                <Tag>关闭</Tag>
+              ) : (
+                <Tag color="blue">{r.snmp_version || "2c"}</Tag>
               ),
           },
           { title: "Loopback", dataIndex: "loopback_ip" },
@@ -464,10 +525,10 @@ export default function Devices() {
                 </a>
                 <a onClick={() => check(r.id)}>检测</a>
                 <a onClick={() => discover(r.id)}>
-                  <ApiOutlined /> SNMP发现
+                  <ApiOutlined /> SNMP 发现
                 </a>
-                <Popconfirm title="确认删除?" onConfirm={() => remove(r.id)}>
-                  <a style={{ color: "#cf1322" }}>删除</a>
+                <Popconfirm title={`${action.confirm}${action.delete}？`} onConfirm={() => remove(r.id)}>
+                  <a style={{ color: "#cf1322" }}>{action.delete}</a>
                 </Popconfirm>
               </Space>
             ),
@@ -475,26 +536,14 @@ export default function Devices() {
         ]}
       />
       <Modal
-        title="添加设备"
+        title="纳管设备"
         open={open}
         onOk={onCreate}
         onCancel={() => setOpen(false)}
         width={720}
-        okText="添加"
+        okText={action.create}
       >
-        <Form
-          form={form}
-          layout="vertical"
-          initialValues={{
-            vendor: "h3c",
-            role: "leaf",
-            overlay_tech: "vxlan_evpn",
-            status: "unknown",
-            netconf_port: 830,
-            ssh_port: 22,
-            username: "admin",
-          }}
-        >
+        <Form form={form} layout="vertical">
           <Alert
             type="info"
             showIcon
@@ -582,6 +631,43 @@ export default function Devices() {
               <InputNumber min={1} max={65535} style={{ width: "100%" }} />
             </Form.Item>
           </Space>
+
+          <Divider orientation="left" style={{ margin: "8px 0 12px" }}>
+            SNMP 采集（可选）
+          </Divider>
+          <Typography.Paragraph type="secondary" style={{ marginTop: 0, marginBottom: 12 }}>
+            默认继承平台配置（Community <Typography.Text code>{snmpDefaults.community}</Typography.Text> · UDP {snmpDefaults.port}）。
+            关闭后跳过 SNMP 接口发现（Dry-run 下仍可模拟）。
+          </Typography.Paragraph>
+          <Form.Item name="snmp_enabled" label="启用 SNMP" valuePropName="checked">
+            <Switch checkedChildren="开" unCheckedChildren="关" />
+          </Form.Item>
+          <Collapse
+            ghost
+            activeKey={watchSnmpEnabled ? ["snmp"] : []}
+            items={[
+              {
+                key: "snmp",
+                label: "高级参数（留空则使用平台默认）",
+                children: (
+                  <Space size="middle" style={{ display: "flex", flexWrap: "wrap", width: "100%" }}>
+                    <Form.Item name="snmp_community" label="Community" style={{ flex: "1 1 200px" }}>
+                      <Input placeholder={snmpDefaults.community} disabled={!watchSnmpEnabled} allowClear />
+                    </Form.Item>
+                    <Form.Item name="snmp_port" label="UDP 端口" style={{ width: 120 }}>
+                      <InputNumber min={1} max={65535} style={{ width: "100%" }} disabled={!watchSnmpEnabled} />
+                    </Form.Item>
+                    <Form.Item name="snmp_version" label="版本" style={{ width: 100 }}>
+                      <Select
+                        disabled={!watchSnmpEnabled}
+                        options={[{ value: "2c", label: "v2c" }]}
+                      />
+                    </Form.Item>
+                  </Space>
+                ),
+              },
+            ]}
+          />
         </Form>
       </Modal>
 
@@ -591,7 +677,7 @@ export default function Devices() {
         onOk={saveCred}
         onCancel={() => setCredOpen(false)}
         width={520}
-        okText="保存"
+        okText={action.save}
       >
         <Alert
           type="warning"

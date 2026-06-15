@@ -15,6 +15,7 @@ import {
 } from "recharts";
 import { api } from "../api/client";
 import type { Circuit, CircuitHealth, TelemetrySample } from "../api/types";
+import { action, empty } from "../constants/uiCopy";
 
 export default function Monitoring() {
   const { message } = AntApp.useApp();
@@ -64,7 +65,7 @@ export default function Monitoring() {
 
   async function simulate() {
     const { data } = await api.post("/telemetry/simulate");
-    message.success(`已为 ${data.generated} 条活跃专线生成采样`);
+    message.success(`已生成 ${data.generated} 条采样`);
     if (selected) loadData(selected);
   }
 
@@ -88,7 +89,7 @@ export default function Monitoring() {
               style={{ width: 360 }}
               value={selected ?? undefined}
               onChange={setSelected}
-              placeholder="选择专线"
+              placeholder="选择 Circuit"
               options={circuits.map((c) => ({
                 value: c.id,
                 label: `${c.code} · ${c.name}`,
@@ -97,13 +98,13 @@ export default function Monitoring() {
           </Col>
           <Col>
             <Button icon={<ExperimentOutlined />} onClick={simulate} type="primary" ghost>
-              生成模拟采样
+              注入模拟流量
             </Button>{" "}
             <Button
               icon={<ReloadOutlined />}
               onClick={() => selected && loadData(selected)}
             >
-              刷新
+              {action.refresh}
             </Button>
           </Col>
         </Row>
@@ -132,7 +133,7 @@ export default function Monitoring() {
                   strokeColor={scoreColor(health.health_score)}
                   format={(p) => `${p}`}
                 />
-                <div style={{ marginTop: 8, color: "#888" }}>健康评分</div>
+                <div style={{ marginTop: 8, color: "#888" }}>健康指数</div>
               </Card>
             </Col>
             {[
@@ -170,7 +171,7 @@ export default function Monitoring() {
           </Row>
 
           <Card
-            title="月 95 计费 (95th percentile)"
+            title="95th 计费带宽"
             extra={
               <Select
                 size="small"
@@ -213,11 +214,11 @@ export default function Monitoring() {
                 </Col>
               </Row>
             ) : (
-              <Empty description="本月暂无采样数据" />
+              <Empty description={empty.traffic} />
             )}
           </Card>
 
-          <Card title="流量 (Rx/Tx Mbps)">
+          <Card title="流量曲线 · Rx / Tx">
             {chartData.length ? (
               <ResponsiveContainer width="100%" height={260}>
                 <AreaChart data={chartData}>
@@ -231,11 +232,11 @@ export default function Monitoring() {
                 </AreaChart>
               </ResponsiveContainer>
             ) : (
-              <Empty description="暂无采样数据，点击“生成模拟采样”" />
+              <Empty description={empty.traffic} />
             )}
           </Card>
 
-          <Card title="时延 / 丢包">
+          <Card title="时延 · 丢包">
             {chartData.length ? (
               <ResponsiveContainer width="100%" height={220}>
                 <LineChart data={chartData}>
@@ -250,12 +251,12 @@ export default function Monitoring() {
                 </LineChart>
               </ResponsiveContainer>
             ) : (
-              <Empty />
+              <Empty description={empty.traffic} />
             )}
           </Card>
         </>
       ) : (
-        <Empty />
+        <Empty description={empty.data} />
       )}
     </div>
   );

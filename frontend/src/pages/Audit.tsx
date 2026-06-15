@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { Button, Card, Input, Table, Tag, Typography } from "antd";
+import { Card, Input, Table, Tag, Typography } from "antd";
 import { ReloadOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { api } from "../api/client";
 import type { AuditEntry } from "../api/types";
+import { empty, page } from "../constants/uiCopy";
 
 const METHOD_COLOR: Record<string, string> = {
   POST: "green",
@@ -35,7 +36,7 @@ export default function Audit({ embedded }: { embedded?: boolean }) {
 
   const search = (
     <Input.Search
-      placeholder="按操作人过滤"
+      placeholder="按操作人筛选"
       allowClear
       style={{ width: 220 }}
       onSearch={setActor}
@@ -45,35 +46,36 @@ export default function Audit({ embedded }: { embedded?: boolean }) {
 
   const table = (
     <Table
-        rowKey="id"
-        loading={loading}
-        dataSource={rows}
-        columns={[
-          {
-            title: "时间",
-            dataIndex: "created_at",
-            width: 180,
-            render: (t) => (t ? dayjs(t).format("MM-DD HH:mm:ss") : "-"),
-          },
-          { title: "操作人", dataIndex: "actor", render: (a) => <Tag>{a}</Tag> },
-          {
-            title: "方法",
-            dataIndex: "method",
-            width: 90,
-            render: (m) => <Tag color={METHOD_COLOR[m]}>{m}</Tag>,
-          },
-          { title: "路径", dataIndex: "path" },
-          {
-            title: "状态码",
-            dataIndex: "status_code",
-            width: 90,
-            render: (c) => (
-              <Tag color={c < 300 ? "green" : c < 500 ? "orange" : "red"}>{c}</Tag>
-            ),
-          },
-          { title: "来源 IP", dataIndex: "source_ip" },
-        ]}
-      />
+      rowKey="id"
+      loading={loading}
+      dataSource={rows}
+      locale={{ emptyText: empty.default }}
+      columns={[
+        {
+          title: "时间",
+          dataIndex: "created_at",
+          width: 180,
+          render: (t) => (t ? dayjs(t).format("MM-DD HH:mm:ss") : "-"),
+        },
+        { title: "操作人", dataIndex: "actor", render: (a) => <Tag>{a}</Tag> },
+        {
+          title: "方法",
+          dataIndex: "method",
+          width: 90,
+          render: (m) => <Tag color={METHOD_COLOR[m]}>{m}</Tag>,
+        },
+        { title: "路径", dataIndex: "path" },
+        {
+          title: "状态码",
+          dataIndex: "status_code",
+          width: 90,
+          render: (c) => (
+            <Tag color={c < 300 ? "green" : c < 500 ? "orange" : "red"}>{c}</Tag>
+          ),
+        },
+        { title: "来源 IP", dataIndex: "source_ip" },
+      ]}
+    />
   );
 
   if (embedded) {
@@ -81,7 +83,7 @@ export default function Audit({ embedded }: { embedded?: boolean }) {
       <div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
           <Typography.Title level={5} style={{ margin: 0 }}>
-            操作审计
+            {page.audit}
           </Typography.Title>
           {search}
         </div>
@@ -91,7 +93,7 @@ export default function Audit({ embedded }: { embedded?: boolean }) {
   }
 
   return (
-    <Card title="操作审计" extra={search}>
+    <Card title={page.audit} extra={search}>
       {table}
     </Card>
   );

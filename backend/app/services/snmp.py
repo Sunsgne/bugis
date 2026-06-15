@@ -12,7 +12,6 @@ these are stored on ``DeviceInterface.description`` and synced to backbone
 from __future__ import annotations
 
 import random
-import time
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -21,6 +20,7 @@ from app.core.config import settings
 from app.models.device import Device, DeviceInterface
 from app.models.enums import Vendor
 from app.models.snmp_settings import SnmpSettings
+from app.services import snmp_device
 from app.services import snmp_settings as snmp_cfg
 
 # Vendor interface naming conventions: (access_pattern, count, uplink_pattern, uplink_count, speed)
@@ -112,6 +112,8 @@ def _walk_oid(
     oid: str,
     cfg: SnmpSettings,
     community: str,
+    *,
+    port: int | None = None,
 ) -> dict[int, str]:
     from pysnmp.hlapi import (  # pragma: no cover
         ContextData,
@@ -129,7 +131,7 @@ def _walk_oid(
         SnmpEngine(),
         creds,
         UdpTransportTarget(
-            (device.mgmt_ip, cfg.port),
+            (device.mgmt_ip, port or cfg.port),
             timeout=cfg.timeout_sec,
             retries=cfg.retries,
         ),
@@ -154,13 +156,22 @@ def probe_interfaces(
 ) -> list[dict]:
     """Walk IF-MIB once and return raw interface dicts (no DB write)."""
     cfg = snmp_cfg.get_or_create(db)
+    device_snmp = snmp_device.effective_snmp(device)
     if not cfg.enabled:
         raise RuntimeError("SNMP 采集已在平台设置中关闭")
+    if not device_snmp["enabled"]:
+        raise RuntimeError("该设备已关闭 SNMP 采集")
     community = snmp_cfg.effective_community(db, device, community_override)
-    return _walk_real(device, cfg, community)
+    return _walk_real(device, cfg, community, port=device_snmp["port"])
 
 
-def _walk_real(device: Device, cfg: SnmpSettings, community: str) -> list[dict]:  # pragma: no cover
+def _walk_real(
+    device: Device,
+    cfg: SnmpSettings,
+    community: str,
+    *,
+    port: int | None = None,
+) -> list[dict]:  # pragma: no cover
     try:
         import pysnmp  # noqa: F401
     except ImportError as exc:
@@ -168,22 +179,27 @@ def _walk_real(device: Device, cfg: SnmpSettings, community: str) -> list[dict]:
             "pysnmp not installed; install it or run in dry-run mode"
         ) from exc
 
-    names = _walk_oid(device, "1.3.6.1.2.1.2.2.1.2", cfg, community) if cfg.walk_if_descr else {}
+    walk_port = port or cfg.port
+    names = (
+        _walk_oid(device, "1.3.6.1.2.1.2.2.1.2", cfg, community, port=walk_port)
+        if cfg.walk_if_descr
+        else {}
+    )
     if not names:
         raise RuntimeError("未采集到 ifDescr，请检查 community / 网络可达性 / SNMP 版本")
 
     aliases = (
-        _walk_oid(device, "1.3.6.1.2.1.31.1.1.1.18", cfg, community)
+        _walk_oid(device, "1.3.6.1.2.1.31.1.1.1.18", cfg, community, port=walk_port)
         if cfg.walk_if_alias
         else {}
     )
     speeds = (
-        _walk_oid(device, "1.3.6.1.2.1.31.1.1.1.15", cfg, community)
+        _walk_oid(device, "1.3.6.1.2.1.31.1.1.1.15", cfg, community, port=walk_port)
         if cfg.walk_if_high_speed
         else {}
     )
     opers = (
-        _walk_oid(device, "1.3.6.1.2.1.2.2.1.8", cfg, community)
+        _walk_oid(device, "1.3.6.1.2.1.2.2.1.8", cfg, community, port=walk_port)
         if cfg.walk_if_oper_status
         else {}
     )
@@ -214,11 +230,12 @@ def discover_interfaces(db: Session, device: Device) -> list[DeviceInterface]:
     from app.services import link_monitor
 
     cfg = snmp_cfg.get_or_create(db)
-    if settings.dry_run or not cfg.enabled:
-        discovered = _synthesize(device)
+    device_snmp = snmp_device.effective_snmp(device)
+    if settings.dry_run or not cfg.enabled or not device_snmp["enabled"]:
+        discovered = _synthesize(device) if settings.dry_run else []
     else:
         community = snmp_cfg.effective_community(db, device)
-        discovered = _walk_real(device, cfg, community)
+        discovered = _walk_real(device, cfg, community, port=device_snmp["port"])
 
     existing = {
         i.name: i

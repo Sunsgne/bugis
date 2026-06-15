@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Card, Tag, Empty, Space } from "antd";
 import { api } from "../api/client";
 import type { Topology as Topo } from "../api/types";
+import { empty, page } from "../constants/uiCopy";
 
 const VENDOR_COLOR: Record<string, string> = {
   h3c: "#1677ff",
@@ -69,16 +70,16 @@ export default function Topology() {
     return { pos, width, height, colW, marginX, marginY };
   }, [topo]);
 
-  if (!topo || !layout) return <Empty />;
-  if (!topo.nodes.length) return <Empty description="暂无设备" />;
+  if (!topo || !layout) return <Empty description={empty.data} />;
+  if (!topo.nodes.length) return <Empty description={empty.devices} />;
 
   return (
     <Card
-      title="网络拓扑"
+      title={page.topology}
       extra={
         <Space>
           <Tag color="#cf1322">DCI 互联</Tag>
-          <Tag color="#1677ff">DC 内链路</Tag>
+          <Tag color="#1677ff">Fabric 内链路</Tag>
         </Space>
       }
     >
