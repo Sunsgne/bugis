@@ -1,25 +1,24 @@
-import { Navigate, Route, Routes, useNavigate, useLocation } from "react-router-dom";
-import { Layout, Menu, Spin, Dropdown, Avatar, Tag, Badge, Space } from "antd";
-import type { MenuProps } from "antd";
+import { Navigate, Route, Routes, useNavigate, useLocation, Link } from "react-router-dom";
 import {
-  DashboardOutlined,
-  TeamOutlined,
-  ClusterOutlined,
-  ApiOutlined,
-  ProfileOutlined,
-  LineChartOutlined,
-  EnvironmentOutlined,
-  UserOutlined,
-  LogoutOutlined,
-  AlertOutlined,
-  DeploymentUnitOutlined,
-  PartitionOutlined,
-  AppstoreOutlined,
-  CloudServerOutlined,
-  ShareAltOutlined,
-  SettingOutlined,
-  FileTextOutlined,
-} from "@ant-design/icons";
+  LayoutDashboard,
+  Users,
+  MapPin,
+  Server,
+  Package,
+  Cable,
+  ClipboardList,
+  Cloud,
+  Share2,
+  FileText,
+  Network,
+  Gauge,
+  LineChart,
+  Bell,
+  Settings,
+  LogOut,
+  Menu,
+  ChevronRight,
+} from "lucide-react";
 import { useMemo, useState, useEffect } from "react";
 import { useAuth } from "./auth";
 import { api, getToken } from "./api/client";
@@ -39,7 +38,7 @@ import Controllers from "./pages/Controllers";
 import ControlPlane from "./pages/ControlPlane";
 import ConfigManagement from "./pages/ConfigManagement";
 import Notifications from "./pages/Notifications";
-import Users from "./pages/Users";
+import UsersPage from "./pages/Users";
 import Audit from "./pages/Audit";
 import SettingsLayout from "./pages/settings/SettingsLayout";
 import GeneralSettings from "./pages/settings/GeneralSettings";
@@ -53,64 +52,64 @@ import IntegrationSettings from "./pages/settings/IntegrationSettings";
 import { nav, action } from "./constants/uiCopy";
 import { useBrand } from "./context/BrandContext";
 import { BrandLogo } from "./components/BrandLogo";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { cn } from "@/lib/utils";
 
-const { Header, Sider, Content } = Layout;
+type NavItem = { key: string; label: string; icon: React.ReactNode };
+type NavGroup = { label: string; items: NavItem[] };
 
-type MenuItem = Required<MenuProps>["items"][number];
-
-const MENU: MenuItem[] = [
+const MENU: NavGroup[] = [
   {
-    type: "group",
     label: nav.groups.overview,
-    children: [{ key: "/", icon: <DashboardOutlined />, label: nav.items.dashboard }],
+    items: [{ key: "/", label: nav.items.dashboard, icon: <LayoutDashboard className="h-4 w-4" /> }],
   },
   {
-    type: "group",
     label: nav.groups.resources,
-    children: [
-      { key: "/tenants", icon: <TeamOutlined />, label: nav.items.tenants },
-      { key: "/sites", icon: <EnvironmentOutlined />, label: nav.items.sites },
-      { key: "/devices", icon: <ClusterOutlined />, label: nav.items.devices },
+    items: [
+      { key: "/tenants", label: nav.items.tenants, icon: <Users className="h-4 w-4" /> },
+      { key: "/sites", label: nav.items.sites, icon: <MapPin className="h-4 w-4" /> },
+      { key: "/devices", label: nav.items.devices, icon: <Server className="h-4 w-4" /> },
     ],
   },
   {
-    type: "group",
     label: nav.groups.circuits,
-    children: [
-      { key: "/catalog", icon: <AppstoreOutlined />, label: nav.items.catalog },
-      { key: "/circuits", icon: <ApiOutlined />, label: nav.items.circuits },
-      { key: "/work-orders", icon: <ProfileOutlined />, label: nav.items.workOrders },
+    items: [
+      { key: "/catalog", label: nav.items.catalog, icon: <Package className="h-4 w-4" /> },
+      { key: "/circuits", label: nav.items.circuits, icon: <Cable className="h-4 w-4" /> },
+      { key: "/work-orders", label: nav.items.workOrders, icon: <ClipboardList className="h-4 w-4" /> },
     ],
   },
   {
-    type: "group",
     label: nav.groups.network,
-    children: [
-      { key: "/controllers", icon: <CloudServerOutlined />, label: nav.items.controllers },
-      { key: "/control-plane", icon: <ShareAltOutlined />, label: nav.items.controlPlane },
-      { key: "/config", icon: <FileTextOutlined />, label: nav.items.config },
-      { key: "/topology", icon: <PartitionOutlined />, label: nav.items.topology },
+    items: [
+      { key: "/controllers", label: nav.items.controllers, icon: <Cloud className="h-4 w-4" /> },
+      { key: "/control-plane", label: nav.items.controlPlane, icon: <Share2 className="h-4 w-4" /> },
+      { key: "/config", label: nav.items.config, icon: <FileText className="h-4 w-4" /> },
+      { key: "/topology", label: nav.items.topology, icon: <Network className="h-4 w-4" /> },
     ],
   },
   {
-    type: "group",
     label: nav.groups.ops,
-    children: [
-      { key: "/capacity", icon: <DeploymentUnitOutlined />, label: nav.items.capacity },
-      { key: "/monitoring", icon: <LineChartOutlined />, label: nav.items.monitoring },
-      { key: "/alarms", icon: <AlertOutlined />, label: nav.items.alarms },
+    items: [
+      { key: "/capacity", label: nav.items.capacity, icon: <Gauge className="h-4 w-4" /> },
+      { key: "/monitoring", label: nav.items.monitoring, icon: <LineChart className="h-4 w-4" /> },
+      { key: "/alarms", label: nav.items.alarms, icon: <Bell className="h-4 w-4" /> },
     ],
   },
   {
-    type: "group",
     label: nav.groups.system,
-    children: [{ key: "/settings", icon: <SettingOutlined />, label: nav.items.settings }],
+    items: [{ key: "/settings", label: nav.items.settings, icon: <Settings className="h-4 w-4" /> }],
   },
 ];
 
-const ROUTE_KEYS = MENU.flatMap((g) =>
-  g && "children" in g && g.children ? g.children.map((c) => (c as { key: string }).key) : []
-);
+const ROUTE_KEYS = MENU.flatMap((g) => g.items.map((i) => i.key));
 
 function selectedMenuKey(pathname: string): string {
   if (pathname.startsWith("/settings")) return "/settings";
@@ -123,7 +122,6 @@ function selectedMenuKey(pathname: string): string {
 
 function AlarmBell({ onClick }: { onClick: () => void }) {
   const [count, setCount] = useState(0);
-  const [live, setLive] = useState(false);
 
   useEffect(() => {
     const token = getToken();
@@ -145,13 +143,11 @@ function AlarmBell({ onClick }: { onClick: () => void }) {
         try {
           const d = JSON.parse(e.data);
           setCount(d.active_alarms || 0);
-          setLive(true);
         } catch {
           /* ignore */
         }
       });
       es.onerror = () => {
-        setLive(false);
         if (!poll) poll = setInterval(loadOnce, 8000);
       };
     } else {
@@ -166,12 +162,14 @@ function AlarmBell({ onClick }: { onClick: () => void }) {
   }, []);
 
   return (
-    <Badge count={count} size="small" offset={[-2, 2]} title={live ? "SSE 实时" : "轮询同步"}>
-      <AlertOutlined
-        style={{ fontSize: 20, cursor: "pointer", color: count ? "#cf1322" : undefined }}
-        onClick={onClick}
-      />
-    </Badge>
+    <Button variant="ghost" size="icon" className="relative" onClick={onClick}>
+      <Bell className={cn("h-5 w-5", count > 0 && "text-destructive")} />
+      {count > 0 ? (
+        <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-medium text-white">
+          {count > 99 ? "99+" : count}
+        </span>
+      ) : null}
+    </Button>
   );
 }
 
@@ -181,55 +179,91 @@ function Shell() {
   const { user, logout } = useAuth();
   const { brand } = useBrand();
   const selected = useMemo(() => selectedMenuKey(loc.pathname), [loc.pathname]);
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  const sidebar = (
+    <aside className="flex h-full w-60 shrink-0 flex-col border-r border-white/10 bg-slate-950 text-slate-100">
+      <div className="flex h-14 items-center gap-2 border-b border-white/10 px-4">
+        <BrandLogo brand={brand} variant="sidebar" height={24} />
+        <span className="truncate text-sm font-semibold tracking-wide">{brand.product_name}</span>
+      </div>
+      <nav className="flex-1 overflow-y-auto px-2 py-3">
+        {MENU.map((group) => (
+          <div key={group.label} className="mb-4">
+            <div className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-widest text-slate-500">
+              {group.label}
+            </div>
+            <div className="space-y-0.5">
+              {group.items.map((item) => {
+                const active = selected === item.key;
+                return (
+                  <button
+                    key={item.key}
+                    type="button"
+                    onClick={() => {
+                      navTo(item.key);
+                      setMobileOpen(false);
+                    }}
+                    className={cn(
+                      "flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors",
+                      active
+                        ? "bg-primary text-primary-foreground shadow-sm"
+                        : "text-slate-300 hover:bg-white/10 hover:text-white",
+                    )}
+                  >
+                    {item.icon}
+                    <span className="truncate">{item.label}</span>
+                    {active ? <ChevronRight className="ml-auto h-3.5 w-3.5 opacity-70" /> : null}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </nav>
+    </aside>
+  );
 
   return (
-    <Layout className="app-shell" style={{ height: "100vh", width: "100%", overflow: "hidden" }}>
-      <Sider breakpoint="lg" collapsedWidth="0" theme="dark">
-        <div className="app-logo">
-          <BrandLogo brand={brand} variant="sidebar" height={24} />
-          <span>{brand.product_name}</span>
+    <div className="flex h-screen w-full overflow-hidden bg-background">
+      <div className="hidden lg:block">{sidebar}</div>
+      {mobileOpen ? (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setMobileOpen(false)} />
+          <div className="relative h-full w-60">{sidebar}</div>
         </div>
-        <Menu
-          theme="dark"
-          mode="inline"
-          selectedKeys={[selected]}
-          items={MENU}
-          onClick={(e) => navTo(e.key)}
-        />
-      </Sider>
-      <Layout style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column" }}>
-        <Header
-          style={{
-            background: "#fff",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            paddingInline: 24,
-            borderBottom: "1px solid #f0f0f0",
-          }}
-        >
-          <div style={{ fontSize: 18, fontWeight: 600 }}>{brand.header_title}</div>
-          <Space size="large">
+      ) : null}
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="flex h-14 shrink-0 items-center justify-between border-b bg-card px-4 lg:px-6">
+          <div className="flex items-center gap-3">
+            <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setMobileOpen(true)}>
+              <Menu className="h-5 w-5" />
+            </Button>
+            <h1 className="text-base font-semibold text-foreground">{brand.header_title}</h1>
+          </div>
+          <div className="flex items-center gap-2">
             <AlarmBell onClick={() => navTo("/alarms")} />
-            <Dropdown
-              menu={{
-                items: [
-                  { key: "logout", icon: <LogoutOutlined />, label: action.logout, onClick: logout },
-                ],
-              }}
-            >
-              <span style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 8 }}>
-                <Avatar size="small" icon={<UserOutlined />} />
-                {user?.full_name || user?.username}
-                <Tag color="blue">{user?.role}</Tag>
-              </span>
-            </Dropdown>
-          </Space>
-        </Header>
-        <Content
-          className="page-content"
-          style={{ padding: 16, overflow: "auto", flex: 1, minWidth: 0, minHeight: 0 }}
-        >
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="gap-2 px-2">
+                  <span className="hidden max-w-[120px] truncate sm:inline">{user?.full_name || user?.username}</span>
+                  <Badge variant="secondary" className="font-normal">
+                    {user?.role}
+                  </Badge>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={logout}>
+                  <LogOut className="mr-2 h-4 w-4" />
+                  {action.logout}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </header>
+
+        <main className="flex min-h-0 flex-1 flex-col overflow-auto p-4 lg:p-5">
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/tenants" element={<Tenants />} />
@@ -256,7 +290,7 @@ function Shell() {
               <Route path="snmp" element={<SnmpSettingsTab />} />
               <Route path="integration" element={<IntegrationSettings />} />
               <Route path="notifications" element={<Notifications embedded />} />
-              <Route path="users" element={<Users embedded />} />
+              <Route path="users" element={<UsersPage embedded />} />
               <Route path="audit" element={<Audit embedded />} />
             </Route>
             <Route path="/notifications" element={<Navigate to="/settings/notifications" replace />} />
@@ -265,9 +299,9 @@ function Shell() {
             <Route path="/audit" element={<Navigate to="/settings/audit" replace />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
-        </Content>
-      </Layout>
-    </Layout>
+        </main>
+      </div>
+    </div>
   );
 }
 
@@ -276,8 +310,8 @@ export default function App() {
 
   if (!ready) {
     return (
-      <div style={{ height: "100vh", display: "grid", placeItems: "center" }}>
-        <Spin size="large" />
+      <div className="flex h-screen items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
       </div>
     );
   }
