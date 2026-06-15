@@ -91,7 +91,14 @@ run_scp "$STACK_ENV" "$USER@$HOST:$REMOTE_DIR/.env"
 rm -f "$STACK_ENV"
 
 echo "==> Building and restarting demo containers (PostgreSQL + observability)"
-run_ssh "cd '$REMOTE_DIR' && tar -xzf bugis-demo-src.tar.gz && rm -f bugis-demo-src.tar.gz && docker compose -f docker-compose.demo.yml --env-file .env build && docker compose -f docker-compose.demo.yml --env-file .env up -d"
+run_ssh "cd '$REMOTE_DIR' && \
+  cp .env /tmp/bugis-demo.env 2>/dev/null || true && \
+  find . -mindepth 1 -maxdepth 1 ! -name 'bugis-demo-src.tar.gz' -exec rm -rf {} + && \
+  tar -xzf bugis-demo-src.tar.gz && \
+  cp /tmp/bugis-demo.env .env && \
+  rm -f bugis-demo-src.tar.gz && \
+  docker compose -f docker-compose.demo.yml --env-file .env build && \
+  docker compose -f docker-compose.demo.yml --env-file .env up -d"
 
 echo "==> Health check (allow time for migrations + seed on first boot)"
 for i in $(seq 1 20); do
