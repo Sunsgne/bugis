@@ -64,9 +64,18 @@ run_ssh "cd '$REMOTE_DIR' && tar -xzf bugis-demo-src.tar.gz && rm -f bugis-demo-
 
 echo "==> Health check"
 for i in 1 2 3 4 5 6 7 8 9 10; do
-  if run_ssh "curl -fsS http://127.0.0.1:3300/ >/dev/null 2>&1 || curl -fsS http://localhost:3300/ >/dev/null 2>&1"; then
-    echo "Demo is up: http://${HOST}:3300/"
-    exit 0
+  if curl -fsS "http://${HOST}:3300/health" >/dev/null 2>&1; then
+    TOKEN=$(curl -sS -X POST "http://${HOST}:3300/api/v1/auth/login" \
+      -d 'username=admin&password=admin123' | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null || true)
+    if [[ -n "$TOKEN" ]]; then
+      CODE=$(curl -sS -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $TOKEN" \
+        "http://${HOST}:3300/api/v1/circuits")
+      if [[ "$CODE" == "200" ]]; then
+        echo "Demo is up: http://${HOST}:3300/ (circuits API OK)"
+        exit 0
+      fi
+      echo "WARN: health OK but /circuits returned $CODE (attempt $i)"
+    fi
   fi
   sleep 3
 done

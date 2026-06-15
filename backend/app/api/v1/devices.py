@@ -42,7 +42,7 @@ def list_devices(
     return db.execute(stmt).scalars().all()
 
 
-@router.post("", response_model=DeviceOut, status_code=201)
+@router.post("", response_model=DeviceListOut, status_code=201)
 def create_device(
     payload: DeviceCreate,
     db: Session = Depends(get_db),
@@ -67,7 +67,7 @@ def get_device(
     return device
 
 
-@router.patch("/{device_id}", response_model=DeviceOut)
+@router.patch("/{device_id}", response_model=DeviceListOut)
 def update_device(
     device_id: int,
     payload: DeviceUpdate,

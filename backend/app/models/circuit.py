@@ -8,8 +8,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
 from app.models.enums import AccessMode, CircuitStatus, PathMode, ServiceType
-from app.models.mixins import TimestampMixin
-from sqlalchemy import Enum as SAEnum
+from app.models.mixins import TimestampMixin, str_enum_column
 
 if TYPE_CHECKING:
     from app.models.device import Device
@@ -63,7 +62,7 @@ class Circuit(Base, TimestampMixin):
 
     # Underlay path: auto (OSPF/BGP best effort) or SR-MPLS explicit segment list.
     path_mode: Mapped[PathMode] = mapped_column(
-        SAEnum(PathMode), default=PathMode.AUTO
+        str_enum_column(PathMode), default=PathMode.AUTO
     )
 
     tenant: Mapped["Tenant"] = relationship(back_populates="circuits")
@@ -96,7 +95,7 @@ class CircuitEndpoint(Base, TimestampMixin):
     interface_name: Mapped[str] = mapped_column(String(64))
     # Customer access (attachment circuit) encapsulation.
     access_mode: Mapped[AccessMode] = mapped_column(
-        SAEnum(AccessMode), default=AccessMode.DOT1Q
+        str_enum_column(AccessMode), default=AccessMode.DOT1Q
     )
     vlan_id: Mapped[int | None] = mapped_column(Integer, nullable=True)  # S-VID / access VLAN
     inner_vlan_id: Mapped[int | None] = mapped_column(Integer, nullable=True)  # C-VID (QinQ)
