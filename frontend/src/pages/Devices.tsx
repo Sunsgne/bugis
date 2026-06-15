@@ -38,12 +38,11 @@ import {
   MANAGEMENT_TRANSPORT_OPTIONS,
   SNMP_V3_SECURITY_OPTIONS,
   SNMP_VERSION_OPTIONS,
-  VENDOR_OPTIONS,
 } from "../constants/formOptions";
 import { action, page as pageCopy, toast as toastCopy } from "../constants/uiCopy";
 import { buildListQuery } from "../utils/table";
-import { PageCard, ListToolbar } from "@/components";
 import DataTable from "@/components/DataTable";
+import StatusDot from "@/components/StatusDot";
 import DeviceFormDialog, { type DeviceFormValues } from "@/components/DeviceFormDialog";
 import FormSelect from "@/components/FormSelect";
 import {
@@ -88,20 +87,13 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
-const VENDOR_VARIANT: Record<string, "info" | "destructive" | "success" | "warning" | "secondary"> = {
-  h3c: "info",
-  huawei: "destructive",
-  juniper: "success",
-  arista: "warning",
-  cisco: "secondary",
-  frr: "info",
-};
-
-const STATUS_VARIANT: Record<string, "success" | "destructive" | "warning" | "secondary"> = {
-  online: "success",
-  offline: "destructive",
-  maintenance: "warning",
-  unknown: "secondary",
+const VENDOR_SHORT: Record<string, string> = {
+  h3c: "H3C",
+  huawei: "Huawei",
+  juniper: "Juniper",
+  arista: "Arista",
+  cisco: "Cisco",
+  frr: "FRR",
 };
 
 const SVID_SOURCE_VARIANT: Record<string, "destructive" | "warning" | "info"> = {
@@ -880,132 +872,114 @@ export default function Devices() {
     () => [
       {
         accessorKey: "name",
-        header: "名称",
-        size: 140,
-        cell: ({ row }) => <span className="block max-w-[140px] truncate">{row.original.name}</span>,
+        header: "设备",
+        cell: ({ row }) => {
+          const d = row.original;
+          return (
+            <div className="min-w-[120px]">
+              <div className="font-medium text-foreground">{d.name}</div>
+              {d.model ? (
+                <div className="mt-0.5 truncate text-xs text-muted-foreground">{d.model}</div>
+              ) : null}
+            </div>
+          );
+        },
       },
       {
         accessorKey: "vendor",
         header: "厂商",
-        size: 120,
-        cell: ({ row }) => {
-          const v = row.original.vendor;
-          return (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Badge variant={VENDOR_VARIANT[v] || "secondary"}>
-                  {labelForOption(VENDOR_OPTIONS, v)}
-                </Badge>
-              </TooltipTrigger>
-              <TooltipContent>{labelForOption(VENDOR_OPTIONS, v)}</TooltipContent>
-            </Tooltip>
-          );
-        },
-      },
-      {
-        accessorKey: "model",
-        header: "型号",
-        size: 120,
         cell: ({ row }) => (
-          <span className="block max-w-[120px] truncate">{row.original.model || "-"}</span>
+          <span className="text-sm text-foreground/90">
+            {VENDOR_SHORT[row.original.vendor] || row.original.vendor}
+          </span>
         ),
       },
       {
-        accessorKey: "role",
-        header: "角色",
-        size: 120,
+        id: "fabric",
+        header: "架构",
         cell: ({ row }) => {
-          const r = row.original.role;
+          const role = labelForOption(DEVICE_ROLE_OPTIONS, row.original.role);
+          const overlay =
+            row.original.overlay_tech === "vxlan_evpn" ? "VXLAN-EVPN" : "SR-MPLS-EVPN";
           return (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Badge variant="outline">{labelForOption(DEVICE_ROLE_OPTIONS, r)}</Badge>
-              </TooltipTrigger>
-              <TooltipContent>{labelForOption(DEVICE_ROLE_OPTIONS, r)}</TooltipContent>
-            </Tooltip>
+            <div className="min-w-[100px] text-xs leading-relaxed text-muted-foreground">
+              <div>{role.split(" ")[0]}</div>
+              <div className="text-[11px] opacity-80">{overlay}</div>
+            </div>
           );
         },
       },
       {
-        accessorKey: "overlay_tech",
-        header: "Overlay",
-        size: 130,
+        id: "network",
+        header: "网络",
         cell: ({ row }) => {
-          const o = row.original.overlay_tech;
+          const d = row.original;
           return (
-            <Badge variant={o === "vxlan_evpn" ? "info" : "secondary"}>
-              {o === "vxlan_evpn" ? "VXLAN-EVPN" : "SR-MPLS-EVPN"}
-            </Badge>
+            <div className="font-mono text-xs leading-relaxed">
+              <div className="text-foreground">{d.mgmt_ip}</div>
+              {d.loopback_ip ? (
+                <div className="text-muted-foreground">Lo {d.loopback_ip}</div>
+              ) : null}
+              {d.bgp_asn ? <div className="text-muted-foreground">AS {d.bgp_asn}</div> : null}
+            </div>
           );
         },
       },
-      { accessorKey: "mgmt_ip", header: "管理IP", size: 120 },
       {
-        id: "transport",
-        header: "南向",
-        size: 96,
-        cell: ({ row }) => (
-          <Badge variant="outline">
-            {labelForOption(MANAGEMENT_TRANSPORT_OPTIONS, row.original.management_transport || "auto")}
-          </Badge>
-        ),
+        id: "access",
+        header: "接入",
+        cell: ({ row }) => {
+          const d = row.original;
+          const transport = labelForOption(
+            MANAGEMENT_TRANSPORT_OPTIONS,
+            d.management_transport || "auto",
+          );
+          const cred = d.password_set || d.username;
+          const snmp =
+            d.snmp_enabled === false ? "SNMP 关" : `SNMP ${d.snmp_version || "2c"}`;
+          return (
+            <div className="space-y-0.5 text-xs text-muted-foreground">
+              <div>{transport.replace(/（.*?）/, "").trim()}</div>
+              <div className={cred ? "text-emerald-600" : "text-amber-600"}>
+                {cred ? "凭证已配" : "凭证未配"}
+              </div>
+              <div>{snmp}</div>
+            </div>
+          );
+        },
       },
-      {
-        id: "credentials",
-        header: "凭证",
-        size: 88,
-        cell: ({ row }) =>
-          row.original.password_set || row.original.username ? (
-            <Badge variant="success">已配置</Badge>
-          ) : (
-            <Badge variant="secondary">未配置</Badge>
-          ),
-      },
-      {
-        id: "snmp",
-        header: "SNMP",
-        size: 88,
-        cell: ({ row }) =>
-          row.original.snmp_enabled === false ? (
-            <Badge variant="secondary">关闭</Badge>
-          ) : (
-            <Badge variant="info">{row.original.snmp_version || "2c"}</Badge>
-          ),
-      },
-      { accessorKey: "loopback_ip", header: "Loopback", size: 120 },
-      { accessorKey: "bgp_asn", header: "ASN", size: 80 },
       {
         id: "site",
         header: "站点",
-        size: 80,
-        cell: ({ row }) => siteName(row.original.site_id),
+        cell: ({ row }) => (
+          <span className="text-sm text-muted-foreground">{siteName(row.original.site_id)}</span>
+        ),
       },
       {
         accessorKey: "status",
         header: "状态",
-        size: 90,
-        cell: ({ row }) => {
-          const s = row.original.status;
-          return <Badge variant={STATUS_VARIANT[s] || "secondary"}>{s}</Badge>;
-        },
+        cell: ({ row }) => <StatusDot status={row.original.status} />,
       },
       {
         id: "actions",
-        header: "操作",
-        size: 120,
+        header: "",
+        size: 88,
         cell: ({ row }) => {
           const r = row.original;
           return (
-            <div className="flex items-center gap-1">
-              <Button variant="outline" size="sm" className="h-8" onClick={() => openPorts(r)}>
-                <Cable className="mr-1 h-3.5 w-3.5" />
-                端口
-              </Button>
+            <div className="flex items-center justify-end gap-0.5">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openPorts(r)}>
+                    <Cable className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>端口清单</TooltipContent>
+              </Tooltip>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="icon" className="h-8 w-8">
                     <MoreHorizontal className="h-4 w-4" />
-                    <span className="sr-only">更多操作</span>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-44">
@@ -1047,31 +1021,61 @@ export default function Devices() {
     [siteName],
   );
 
+  const stats = useMemo(() => {
+    const online = rows.filter((r) => r.status === "online").length;
+    const offline = rows.filter((r) => r.status === "offline").length;
+    return { online, offline };
+  }, [rows]);
+
   function runSearch() {
     setPage(1);
     load(1, pageSize, search);
   }
 
   return (
-    <PageCard
-      title={pageCopy.devices}
-      extra={
+    <div className="space-y-6">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="space-y-1">
+          <h2 className="text-lg font-semibold tracking-tight">{pageCopy.devices}</h2>
+          <p className="text-sm text-muted-foreground">
+            多厂商 Fabric 设备纳管 · SNMP 采集 · NETCONF / SSH 现网学习
+          </p>
+        </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" size="sm" asChild>
-            <Link to="/settings/management">
-              <Settings className="mr-1.5 h-4 w-4" />
-              南向接口设置
-            </Link>
-          </Button>
-          <Button variant="outline" size="sm" asChild>
-            <Link to="/settings/snmp">
-              <Settings className="mr-1.5 h-4 w-4" />
-              SNMP 全局设置
-            </Link>
-          </Button>
-          <Button variant="outline" size="sm" onClick={exportCsv}>
-            <Download className="mr-1.5 h-4 w-4" />
-            {action.export} CSV
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm">
+                <Settings className="mr-1.5 h-4 w-4" />
+                设置与导入
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-52">
+              <DropdownMenuItem asChild>
+                <Link to="/settings/management">南向接口设置</Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link to="/settings/snmp">SNMP 全局设置</Link>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={exportCsv}>
+                <Download className="mr-2 h-4 w-4" />
+                {action.export} CSV
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => importRef.current?.click()}>
+                <Upload className="mr-2 h-4 w-4" />
+                {action.import} CSV
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <div className="flex items-center gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-1.5">
+            <Switch checked={learnOnImport} onCheckedChange={setLearnOnImport} id="learn-import" />
+            <label htmlFor="learn-import" className="cursor-pointer text-xs text-muted-foreground">
+              {learnOnImport ? "导入即学习" : "仅导入"}
+            </label>
+          </div>
+          <Button size="sm" onClick={openCreateModal}>
+            <Plus className="mr-1.5 h-4 w-4" />
+            纳管设备
           </Button>
           <input
             ref={importRef}
@@ -1084,56 +1088,53 @@ export default function Devices() {
               e.target.value = "";
             }}
           />
-          <Button variant="outline" size="sm" onClick={() => importRef.current?.click()}>
-            <Upload className="mr-1.5 h-4 w-4" />
-            {action.import} CSV
-          </Button>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div className="flex items-center gap-2 rounded-md border px-3 py-1.5">
-                <Switch checked={learnOnImport} onCheckedChange={setLearnOnImport} id="learn-import" />
-                <label htmlFor="learn-import" className="cursor-pointer text-sm">
-                  {learnOnImport ? "导入即学习" : "仅导入"}
-                </label>
-              </div>
-            </TooltipTrigger>
-            <TooltipContent>导入后自动拉取现网 running-config 并解析业务/VLAN 占用</TooltipContent>
-          </Tooltip>
-          <Button size="sm" onClick={openCreateModal}>
-            <Plus className="mr-1.5 h-4 w-4" />
-            纳管设备
-          </Button>
         </div>
-      }
-    >
-      <ListToolbar
-        summary={`共 ${total.toLocaleString()} 台设备`}
-        left={
-          <div className="flex w-full max-w-sm items-center gap-2">
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-3 lg:max-w-xl">
+        <div className="rounded-xl bg-card px-4 py-3 ring-1 ring-border/60">
+          <div className="text-2xl font-semibold tabular-nums">{total.toLocaleString()}</div>
+          <div className="text-xs text-muted-foreground">设备总数</div>
+        </div>
+        <div className="rounded-xl bg-card px-4 py-3 ring-1 ring-border/60">
+          <div className="text-2xl font-semibold tabular-nums text-emerald-600">{stats.online}</div>
+          <div className="text-xs text-muted-foreground">在线</div>
+        </div>
+        <div className="rounded-xl bg-card px-4 py-3 ring-1 ring-border/60">
+          <div className="text-2xl font-semibold tabular-nums text-red-600">{stats.offline}</div>
+          <div className="text-xs text-muted-foreground">离线</div>
+        </div>
+      </div>
+
+      <div className="rounded-xl bg-card p-4 ring-1 ring-border/60 sm:p-5">
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="relative flex-1 sm:max-w-md">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
-              placeholder="搜索设备名称、主机名或管理 IP"
+              className="h-9 pl-9"
+              placeholder="搜索名称、主机名或管理 IP"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && runSearch()}
             />
-            <Button variant="outline" size="icon" onClick={runSearch}>
-              <Search className="h-4 w-4" />
-            </Button>
           </div>
-        }
-      />
+          <span className="text-xs text-muted-foreground">本页 {rows.length} 台 · 共 {total} 台</span>
+        </div>
 
-      <DataTable
-        columns={columns}
-        data={rows}
-        loading={loading}
-        total={total}
-        page={page}
-        pageSize={pageSize}
-        onPageChange={setPage}
-        onPageSizeChange={setPageSize}
-        emptyText="暂无设备 · 从导入或纳管开始"
-      />
+        <DataTable
+          columns={columns}
+          data={rows}
+          loading={loading}
+          total={total}
+          page={page}
+          pageSize={pageSize}
+          onPageChange={setPage}
+          onPageSizeChange={setPageSize}
+          tableLayout="auto"
+          variant="plain"
+          emptyText="暂无设备 · 从导入或纳管开始"
+        />
+      </div>
 
       <Sheet open={!!drawerDevice} onOpenChange={(o) => !o && setDrawerDevice(null)}>
         <SheetContent
@@ -1275,6 +1276,6 @@ export default function Devices() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </PageCard>
+    </div>
   );
 }

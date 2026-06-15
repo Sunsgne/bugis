@@ -39,6 +39,7 @@ type Props<TData> = {
   tableLayout?: "fixed" | "auto";
   dense?: boolean;
   showPagination?: boolean;
+  variant?: "default" | "plain";
 };
 
 export default function DataTable<TData>({
@@ -56,6 +57,7 @@ export default function DataTable<TData>({
   tableLayout = "fixed",
   dense = false,
   showPagination = true,
+  variant = "default",
 }: Props<TData>) {
   const serverMode = total != null && onPageChange != null;
   const pageCount = serverMode ? Math.max(1, Math.ceil(total / pageSize)) : undefined;
@@ -83,15 +85,25 @@ export default function DataTable<TData>({
 
   return (
     <div className={cn("w-full min-w-0 space-y-3", className)}>
-      <div className="w-full overflow-x-auto rounded-lg border bg-card">
+      <div
+        className={cn(
+          "w-full overflow-x-auto",
+          variant === "plain"
+            ? "rounded-xl ring-1 ring-border/60"
+            : "rounded-lg border bg-card",
+        )}
+      >
         <Table className={cn("w-full", tableLayout === "fixed" ? "table-fixed" : "table-auto")}>
-          <TableHeader>
+          <TableHeader className={variant === "plain" ? "bg-muted/40" : undefined}>
             {table.getHeaderGroups().map((hg) => (
-              <TableRow key={hg.id}>
+              <TableRow key={hg.id} className={variant === "plain" ? "hover:bg-transparent" : undefined}>
                 {hg.headers.map((header) => (
                   <TableHead
                     key={header.id}
-                    className={cn(dense && "h-9 px-2 text-xs")}
+                    className={cn(
+                      dense && "h-9 px-2 text-xs",
+                      variant === "plain" && "h-10 text-[11px] font-medium uppercase tracking-wider text-muted-foreground/80",
+                    )}
                     style={
                       tableLayout === "fixed" && header.getSize() !== 150
                         ? { width: header.getSize() }
@@ -113,9 +125,15 @@ export default function DataTable<TData>({
               </TableRow>
             ) : rows.length ? (
               rows.map((row) => (
-                <TableRow key={row.id}>
+                <TableRow
+                  key={row.id}
+                  className={variant === "plain" ? "border-border/40 hover:bg-muted/30" : undefined}
+                >
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id} className={cn(dense && "px-2 py-2 text-xs")}>
+                    <TableCell
+                      key={cell.id}
+                      className={cn(dense ? "px-2 py-2 text-xs" : variant === "plain" && "py-3.5")}
+                    >
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </TableCell>
                   ))}
