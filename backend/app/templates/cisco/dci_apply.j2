@@ -1,17 +1,24 @@
-! Cisco IOS-XR - DCI EVPN gateway (anycast / GW)  circuit {{ circuit.code }}
-! role={{ device.role }} lo0={{ device.loopback_ip }} asn={{ device.bgp_asn }}
+! Cisco IOS-XR - DCI EVPN-MPLS gateway  circuit={{ circuit.code }} evi={{ circuit.vni }}
+! role={{ device.role.value }} lo0={{ device.loopback_ip }} asn={{ device.bgp_asn }}
+
 evpn
  evi {{ circuit.vni }}
   bgp
    rd {{ circuit.route_distinguisher }}
    route-target import {{ circuit.route_target }}
    route-target export {{ circuit.route_target }}
-  # Re-originate routes between DCI domains
-  control-word-disable
+  !
+  advertise-mac
+ !
 !
 router bgp {{ device.bgp_asn }}
  neighbor-group DCI-EVPN
+  remote-as external
+  update-source Loopback0
   address-family l2vpn evpn
    route-reflector-client
    next-hop-self
+   re-originate evpn
+  !
+ !
 !

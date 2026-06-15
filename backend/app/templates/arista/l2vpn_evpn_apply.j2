@@ -1,52 +1,22 @@
+{% import 'arista/_macros.j2' as eos %}
 {% set mode = endpoint.access_mode.value if endpoint.access_mode else 'dot1q' %}
 {% set svid = endpoint.vlan_id or circuit.vlan_id %}
 {% set cvid = endpoint.inner_vlan_id %}
-! Arista EOS - EVPN-MPLS L2 over Segment Routing  circuit {{ circuit.code }}
-! device {{ device.name }} lo0={{ device.loopback_ip }} node-sid={{ device.sr_node_sid }}
-! access-mode={{ mode }} s-vid={{ svid }}{% if cvid %} c-vid={{ cvid }}{% endif %}
+! Arista EOS - EVPN-MPLS L2 (vlan-based MAC-VRF)  circuit={{ circuit.code }} vlan={{ svid }}
+! device={{ device.name }} lo0={{ device.loopback_ip }} ac={{ mode }} s-vid={{ svid }}{% if cvid %} c-vid={{ cvid }}{% endif %}
+! Ref: EOS EVPN vlan service + MPLS encapsulation (RFC 7432)
 
-mpls ip
-!
-router general
-   segment-routing mpls
-!
 vlan {{ svid }}
-   name CUST_{{ circuit.code }}
+   name CUST_{{ circuit.tenant_id }}_{{ circuit.code }}
 !
-{% if circuit.bandwidth_mbps %}
-class-map type qos match-all CUST_{{ circuit.code }}
- match vlan {{ svid }}
-!
-policy-map type qos CUST_{{ circuit.code }}_IN
- class CUST_{{ circuit.code }}
-  police rate {{ circuit.bandwidth_mbps }} mbps burst-size 1 mbytes
-!
-policy-map type qos CUST_{{ circuit.code }}_OUT
- class CUST_{{ circuit.code }}
-  shape average {{ circuit.bandwidth_mbps }} mbps
-!
-{% endif %}
+{{ eos.qos_policies(circuit, svid) }}
 interface {{ endpoint.interface_name }}
    description CUST_{{ circuit.tenant_id }}_{{ circuit.code }}
    mtu {{ circuit.mtu }}
-{% if mode == 'access' %}
-   switchport access vlan {{ svid }}
-{% elif mode == 'qinq' %}
-   switchport dot1q-tunnel allowed vlan {{ svid }}
-   switchport mode dot1q-tunnel
-   switchport access vlan {{ svid }}
-{% else %}
-   switchport trunk allowed vlan {{ svid }}
-   switchport mode trunk
-{% endif %}
+{{ eos.l2_switchport(mode, svid, cvid) }}
 {% if circuit.bandwidth_mbps %}
    service-policy type qos input CUST_{{ circuit.code }}_IN
    service-policy type qos output CUST_{{ circuit.code }}_OUT
 {% endif %}
 !
-router bgp {{ device.bgp_asn }}
-   vlan {{ svid }}
-      rd {{ circuit.route_distinguisher }}
-      route-target both {{ circuit.route_target }}
-      redistribute learned
-!
+{{ eos.evpn_vlan_bgp(circuit, svid, device) }}

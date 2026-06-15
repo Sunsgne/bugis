@@ -1,2 +1,4 @@
-## Juniper Junos - remove DCI EVPN gateway  circuit {{ circuit.code }}
-delete routing-instances EVI_{{ circuit.code }} protocols evpn interconnect
+{% import 'juniper/_macros.j2' as jun %}
+## Juniper Junos - remove DCI EVPN  circuit={{ circuit.code }}
+delete routing-instances {{ jun.evi_name(circuit) }} protocols evpn interconnect
+delete protocols bgp group DCI-EVPN

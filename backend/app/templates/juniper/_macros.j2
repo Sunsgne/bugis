@@ -1,0 +1,49 @@
+{# Juniper Junos EVPN-MPLS shared fragments (RFC 7432 / RFC 8365) #}
+{% macro l2_unit(mode, svid) -%}
+{%- if mode == 'access' -%}0{%- else -%}{{ svid or 1 }}{%- endif -%}
+{%- endmacro %}
+
+{% macro l2_ifl(endpoint, mode, svid) -%}
+{{ endpoint.interface_name }}.{{ l2_unit(mode, svid) }}
+{%- endmacro %}
+
+{% macro evi_name(circuit) -%}EVPN_{{ circuit.vni }}{%- endmacro %}
+
+{% macro l2_ac(endpoint, circuit, mode, svid, cvid) -%}
+set interfaces {{ endpoint.interface_name }} flexible-vlan-tagging
+set interfaces {{ endpoint.interface_name }} encapsulation flexible-ethernet-services
+set interfaces {{ endpoint.interface_name }} description CUST_{{ circuit.tenant_id }}_{{ circuit.code }}
+set interfaces {{ endpoint.interface_name }} mtu {{ circuit.mtu }}
+{% if mode == 'access' %}
+set interfaces {{ endpoint.interface_name }} unit 0 encapsulation ethernet-bridge
+set interfaces {{ endpoint.interface_name }} unit 0 family bridge interface-mode access
+{% elif mode == 'qinq' %}
+set interfaces {{ endpoint.interface_name }} unit {{ svid }} encapsulation vlan-bridge
+set interfaces {{ endpoint.interface_name }} unit {{ svid }} vlan-tags outer {{ svid }} inner {{ cvid }}
+{% else %}
+set interfaces {{ endpoint.interface_name }} unit {{ svid }} encapsulation vlan-bridge
+set interfaces {{ endpoint.interface_name }} unit {{ svid }} vlan-id {{ svid }}
+{% endif %}
+{% if circuit.esi %}
+set interfaces {{ endpoint.interface_name }} esi {{ circuit.esi }}
+set interfaces {{ endpoint.interface_name }} esi all-active
+{% endif %}
+{% if circuit.bandwidth_mbps %}
+set class-of-service interfaces {{ endpoint.interface_name }} unit {{ l2_unit(mode, svid) }} shaping-rate {{ circuit.bandwidth_mbps }}m
+{% endif %}
+{%- endmacro %}
+
+{% macro evpn_l2_instance(circuit, ifl, mode, svid) -%}
+{% set evi = evi_name(circuit) %}
+set routing-instances {{ evi }} instance-type evpn
+{% if mode == 'access' %}
+set routing-instances {{ evi }} vlan-id none
+{% else %}
+set routing-instances {{ evi }} vlan-id {{ svid }}
+{% endif %}
+set routing-instances {{ evi }} interface {{ ifl }}
+set routing-instances {{ evi }} route-distinguisher {{ circuit.route_distinguisher }}
+set routing-instances {{ evi }} vrf-target target:{{ circuit.route_target }}
+set routing-instances {{ evi }} protocols evpn interface {{ ifl }}
+set routing-instances {{ evi }} protocols evpn label-allocation per-instance
+{%- endmacro %}

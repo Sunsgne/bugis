@@ -1,2 +1,4 @@
-! Cisco IOS-XR - remove DCI EVPN gateway  circuit {{ circuit.code }}
+! Cisco IOS-XR - remove DCI EVPN  circuit={{ circuit.code }}
 no evpn evi {{ circuit.vni }}
+router bgp {{ device.bgp_asn }}
+ no neighbor-group DCI-EVPN

@@ -829,6 +829,103 @@ def test_h3c_huawei_template_quality(client, auth_headers):
     assert "head-end peer-list protocol bgp" in hw_cfg
 
 
+def test_srmpls_vendor_template_quality(client, auth_headers):
+    """Production-style checks for Juniper / Arista / Cisco SR-MPLS EVPN templates."""
+    site, tenant, _, dev_cisco = _bootstrap_topology(client, auth_headers)
+    n = next(_seq)
+    dev_juniper = client.post(
+        "/api/v1/devices", headers=auth_headers,
+        json={"name": f"JUN-TPL-{n}", "vendor": "juniper", "role": "pe",
+              "overlay_tech": "srmpls_evpn", "status": "online",
+              "mgmt_ip": f"10.88.{n}.1", "loopback_ip": f"10.88.{n}.255",
+              "bgp_asn": 65010, "sr_node_sid": 100 + n, "site_id": site["id"]},
+    ).json()
+    dev_arista = client.post(
+        "/api/v1/devices", headers=auth_headers,
+        json={"name": f"ARI-TPL-{n}", "vendor": "arista", "role": "pe",
+              "overlay_tech": "srmpls_evpn", "status": "online",
+              "mgmt_ip": f"10.89.{n}.1", "loopback_ip": f"10.89.{n}.255",
+              "bgp_asn": 65010, "sr_node_sid": 200 + n, "site_id": site["id"]},
+    ).json()
+
+    l2 = client.post(
+        "/api/v1/circuits", headers=auth_headers,
+        json={"name": "SR-MPLS L2", "tenant_id": tenant["id"],
+              "service_type": "l2vpn_evpn", "bandwidth_mbps": 200,
+              "endpoints": [
+                  {"label": "A", "device_id": dev_juniper["id"], "interface_name": "ge-0/0/1",
+                   "vlan_id": 120},
+                  {"label": "Z", "device_id": dev_cisco["id"], "interface_name": "GigabitEthernet0/0/0/1",
+                   "vlan_id": 120},
+              ]},
+    ).json()
+    wo = client.post(
+        f"/api/v1/work-orders/provision/{l2['id']}", headers=auth_headers
+    ).json()
+    jun_cfg = next(j["rendered_config"] for j in wo["config_jobs"] if j["device_id"] == dev_juniper["id"])
+    cisco_cfg = next(j["rendered_config"] for j in wo["config_jobs"] if j["device_id"] == dev_cisco["id"])
+    assert "instance-type evpn" in jun_cfg
+    assert "encapsulation vlan-bridge" in jun_cfg
+    assert "label-allocation per-instance" in jun_cfg
+    assert "l2vpn" in cisco_cfg and "bridge-domain BD_" in cisco_cfg
+    assert "evpn" in cisco_cfg and "advertise-mac" in cisco_cfg
+    assert "rewrite ingress tag pop 1 symmetric" in cisco_cfg
+
+    l3 = client.post(
+        "/api/v1/circuits", headers=auth_headers,
+        json={"name": "SR-MPLS L3", "tenant_id": tenant["id"],
+              "service_type": "l3vpn_evpn", "bandwidth_mbps": 300,
+              "endpoints": [
+                  {"label": "A", "device_id": dev_arista["id"], "interface_name": "Ethernet1",
+                   "vlan_id": 130, "gateway_ip": "10.130.0.1"},
+              ]},
+    ).json()
+    wo3 = client.post(
+        f"/api/v1/work-orders/provision/{l3['id']}", headers=auth_headers
+    ).json()
+    ari_cfg = next(j["rendered_config"] for j in wo3["config_jobs"] if j["device_id"] == dev_arista["id"])
+    assert "interface Vlan130" in ari_cfg
+    assert "route-target import evpn" in ari_cfg
+    assert "encapsulation mpls" in ari_cfg
+
+
+def test_frr_template_quality(client, auth_headers):
+    """FRR EVPN-VXLAN should render real bridge/vxlan dataplane, not comment-only stubs."""
+    site = client.post(
+        "/api/v1/sites", headers=auth_headers,
+        json={"name": "FRR TPL DC", "code": f"FRR-TPL-{next(_seq)}", "bgp_asn": 65099},
+    ).json()
+    tenant = client.post(
+        "/api/v1/tenants", headers=auth_headers,
+        json={"name": "FRR TPL Tenant", "code": "FRR-TPL-T", "type": "internal"},
+    ).json()
+    dev = client.post(
+        "/api/v1/devices", headers=auth_headers,
+        json={"name": "FRR-TPL-1", "vendor": "frr", "role": "leaf",
+              "overlay_tech": "vxlan_evpn", "status": "online",
+              "mgmt_ip": "10.9.9.1", "loopback_ip": "10.9.9.255",
+              "bgp_asn": 65099, "site_id": site["id"]},
+    ).json()
+    circuit = client.post(
+        "/api/v1/circuits", headers=auth_headers,
+        json={"name": "FRR dot1q", "tenant_id": tenant["id"],
+              "service_type": "l2vpn_evpn", "bandwidth_mbps": 100,
+              "endpoints": [
+                  {"label": "A", "device_id": dev["id"], "interface_name": "swp1", "vlan_id": 50},
+              ]},
+    ).json()
+    wo = client.post(
+        f"/api/v1/work-orders/provision/{circuit['id']}", headers=auth_headers
+    ).json()
+    cfg = wo["config_jobs"][0]["rendered_config"]
+    assert "bridge br" in cfg
+    assert "interface vxlan" in cfg
+    assert "encapsulation dot1q 50" in cfg
+    assert "advertise-all-vni" in cfg
+    assert "l2vpn evpn" in cfg
+    assert "config vlan member" not in cfg  # no SONiC comment-only stub
+
+
 def test_dot1q_default_encapsulation(client, auth_headers):
     site, tenant, dev_h3c, _ = _bootstrap_topology(client, auth_headers)
     circuit = client.post(

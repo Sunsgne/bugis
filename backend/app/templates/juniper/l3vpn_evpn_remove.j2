@@ -1,3 +1,9 @@
-## Juniper Junos - remove EVPN Type-5 L3VPN  circuit {{ circuit.code }}
+{% import 'juniper/_macros.j2' as jun %}
+{% set mode = endpoint.access_mode.value if endpoint.access_mode else 'dot1q' %}
+{% set svid = endpoint.vlan_id or circuit.vlan_id %}
+{% set unit = jun.l2_unit(mode, svid) %}
+## Juniper Junos - remove EVPN-MPLS L3  circuit={{ circuit.code }}
 delete routing-instances {{ circuit.vrf_name }}
+delete routing-instances {{ jun.evi_name(circuit) }}
 delete interfaces irb unit {{ circuit.vni }}
+delete interfaces {{ endpoint.interface_name }} unit {{ unit }}

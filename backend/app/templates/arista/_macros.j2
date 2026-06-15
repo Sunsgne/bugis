@@ -1,0 +1,40 @@
+{# Arista EOS EVPN-MPLS shared fragments #}
+{% macro l2_switchport(mode, svid, cvid) -%}
+{% if mode == 'access' %}
+   switchport access vlan {{ svid }}
+{% elif mode == 'qinq' %}
+   switchport mode dot1q-tunnel
+   switchport dot1q-tunnel allowed vlan add {{ svid }}
+   ! inner C-VID {{ cvid }} — map on platform via vlan translation / service instance if required
+{% else %}
+   switchport mode trunk
+   switchport trunk allowed vlan {{ svid }}
+{% endif %}
+{%- endmacro %}
+
+{% macro evpn_vlan_bgp(circuit, svid, device) -%}
+router bgp {{ device.bgp_asn }}
+   vlan {{ svid }}
+      rd {{ circuit.route_distinguisher }}
+      route-target both {{ circuit.route_target }}
+      redistribute learned
+   !
+   address-family evpn
+      neighbor EVPN-OVERLAY encapsulation mpls next-hop-self source-interface Loopback0
+{%- endmacro %}
+
+{% macro qos_policies(circuit, svid) -%}
+{% if circuit.bandwidth_mbps %}
+class-map type qos match-all CUST_{{ circuit.code }}
+ match vlan {{ svid }}
+!
+policy-map type qos CUST_{{ circuit.code }}_IN
+ class CUST_{{ circuit.code }}
+  police rate {{ circuit.bandwidth_mbps }} mbps burst-size 1 mbytes
+!
+policy-map type qos CUST_{{ circuit.code }}_OUT
+ class CUST_{{ circuit.code }}
+  shape average {{ circuit.bandwidth_mbps }} mbps
+!
+{% endif %}
+{%- endmacro %}

@@ -1,30 +1,14 @@
+{% import 'frr/_macros.j2' as frr %}
 {% set mode = endpoint.access_mode.value if endpoint.access_mode else 'dot1q' %}
 {% set svid = endpoint.vlan_id or circuit.vlan_id %}
-! FRRouting (vtysh) + SONiC - BGP EVPN VXLAN L2 (E-LAN)  circuit {{ circuit.code }}
-! device {{ device.name }} lo={{ device.loopback_ip }} asn={{ device.bgp_asn }}
-! access-mode={{ mode }} s-vid={{ svid }}
-! --- SONiC dataplane: map access port to the VXLAN-backed VLAN/bridge ---
-{% if mode == 'access' %}
-! config vlan member add {{ svid }} {{ endpoint.interface_name }} -u   # untagged
-{% else %}
-! config vlan member add {{ svid }} {{ endpoint.interface_name }}      # tagged
-{% endif %}
-! config vxlan evpn_nvo add nvo vtep
-! config vxlan map add vtep {{ circuit.vni }} {{ svid }}
-! --- FRR control plane ---
+! FRRouting - EVPN-VXLAN L2 (E-LAN)  circuit={{ circuit.code }} vni={{ circuit.vni }}
+! device={{ device.name }} lo={{ device.loopback_ip }} asn={{ device.bgp_asn }}
+! ac={{ mode }} s-vid={{ svid }}
+! Ref: FRR EVPN + Linux bridge/vxlan (RFC 8365)
+
 configure terminal
-vrf default
- vni {{ circuit.vni }}
-exit-vrf
 !
-router bgp {{ device.bgp_asn }}
- address-family l2vpn evpn
-  advertise-all-vni
-  vni {{ circuit.vni }}
-   rd {{ circuit.route_distinguisher }}
-   route-target import {{ circuit.route_target }}
-   route-target export {{ circuit.route_target }}
-  exit-vni
- exit-address-family
-exit
+{{ frr.bridge_vlan_member(endpoint, mode, svid, circuit) }}
+{{ frr.vxlan_if(circuit, device) }}
+{{ frr.bgp_evpn_vni(circuit, device) }}
 end

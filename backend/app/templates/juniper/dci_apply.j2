@@ -1,8 +1,22 @@
-## Juniper Junos - DCI EVPN-MPLS gateway (Inter-AS / stitching)  circuit {{ circuit.code }}
-## role={{ device.role }} lo0={{ device.loopback_ip }} asn={{ device.bgp_asn }}
+{% import 'juniper/_macros.j2' as jun %}
+## Juniper Junos - DCI EVPN-MPLS gateway  circuit={{ circuit.code }} vni={{ circuit.vni }}
+## role={{ device.role.value }} lo0={{ device.loopback_ip }} asn={{ device.bgp_asn }}
+
+set routing-instances {{ jun.evi_name(circuit) }} instance-type evpn
+set routing-instances {{ jun.evi_name(circuit) }} route-distinguisher {{ circuit.route_distinguisher }}
+set routing-instances {{ jun.evi_name(circuit) }} vrf-target target:{{ circuit.route_target }}
+set routing-instances {{ jun.evi_name(circuit) }} protocols evpn label-allocation per-instance
+set routing-instances {{ jun.evi_name(circuit) }} protocols evpn interconnect route-distinguisher {{ circuit.route_distinguisher }}
+set routing-instances {{ jun.evi_name(circuit) }} protocols evpn interconnect vrf-target target:{{ circuit.route_target }}
+{% if circuit.esi %}
+set routing-instances {{ jun.evi_name(circuit) }} protocols evpn interconnect esi {{ circuit.esi }}
+{% endif %}
 set protocols bgp group DCI-EVPN type external
 set protocols bgp group DCI-EVPN family evpn signaling
 set protocols bgp group DCI-EVPN local-as {{ device.bgp_asn }}
-set routing-instances EVI_{{ circuit.code }} protocols evpn interconnect vrf-target target:{{ circuit.route_target }}
-set routing-instances EVI_{{ circuit.code }} protocols evpn interconnect route-distinguisher {{ circuit.route_distinguisher }}
-set routing-instances EVI_{{ circuit.code }} protocols evpn interconnect esi {{ circuit.esi or '00:11:22:33:44:55:66:77:88:99' }}
+set protocols bgp group DCI-EVPN import DCI-EVPN-IMPORT
+set protocols bgp group DCI-EVPN export DCI-EVPN-EXPORT
+set policy-options policy-statement DCI-EVPN-IMPORT term evpn from family evpn
+set policy-options policy-statement DCI-EVPN-IMPORT term evpn then accept
+set policy-options policy-statement DCI-EVPN-EXPORT term evpn from family evpn
+set policy-options policy-statement DCI-EVPN-EXPORT term evpn then accept

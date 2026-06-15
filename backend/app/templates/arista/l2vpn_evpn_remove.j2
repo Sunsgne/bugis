@@ -1,6 +1,14 @@
-! Arista EOS - remove EVPN-MPLS L2  circuit {{ circuit.code }}
-router bgp {{ device.bgp_asn }}
-   no vlan {{ endpoint.vlan_id or circuit.vlan_id }}
+{% set svid = endpoint.vlan_id or circuit.vlan_id %}
+! Arista EOS - remove EVPN-MPLS L2  circuit={{ circuit.code }}
+interface {{ endpoint.interface_name }}
+   no switchport access vlan
+   no switchport mode
+   default mtu
 !
-no interface {{ endpoint.interface_name }}
-no vlan {{ endpoint.vlan_id or circuit.vlan_id }}
+router bgp {{ device.bgp_asn }}
+   no vlan {{ svid }}
+!
+no vlan {{ svid }}
+no policy-map type qos CUST_{{ circuit.code }}_IN
+no policy-map type qos CUST_{{ circuit.code }}_OUT
+no class-map type qos match-all CUST_{{ circuit.code }}

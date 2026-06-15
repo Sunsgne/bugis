@@ -1,9 +1,17 @@
-! FRRouting (vtysh) - BGP EVPN VXLAN L3 (symmetric IRB)  circuit {{ circuit.code }}
-! device {{ device.name }} vrf={{ circuit.vrf_name }}
+{% import 'frr/_macros.j2' as frr %}
+{% set mode = endpoint.access_mode.value if endpoint.access_mode else 'dot1q' %}
+{% set svid = endpoint.vlan_id or circuit.vlan_id }}
+! FRRouting - EVPN-VXLAN L3 (symmetric IRB)  circuit={{ circuit.code }} vrf={{ circuit.vrf_name }}
+! device={{ device.name }} ac={{ mode }} s-vid={{ svid }}
+
 configure terminal
+!
 vrf {{ circuit.vrf_name }}
  vni {{ circuit.vni }}
 exit-vrf
+!
+{{ frr.bridge_vlan_member(endpoint, mode, svid, circuit) }}
+{{ frr.vxlan_if(circuit, device) }}
 !
 interface irb{{ circuit.vni }}
  ip address {{ endpoint.gateway_ip }}/24
@@ -18,6 +26,18 @@ router bgp {{ device.bgp_asn }} vrf {{ circuit.vrf_name }}
   route-target import {{ circuit.route_target }}
   route-target export {{ circuit.route_target }}
   advertise ipv4 unicast
+  advertise-svi-ip
+ exit-address-family
+exit
+!
+router bgp {{ device.bgp_asn }}
+ address-family l2vpn evpn
+  vni {{ circuit.vni }}
+   rd {{ circuit.route_distinguisher }}
+   route-target import {{ circuit.route_target }}
+   route-target export {{ circuit.route_target }}
+  exit-vni
+  advertise-all-vni
  exit-address-family
 exit
 end

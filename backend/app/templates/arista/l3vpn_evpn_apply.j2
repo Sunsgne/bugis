@@ -1,20 +1,39 @@
-! Arista EOS - EVPN L3 (IRB / Type-5) over SR-MPLS  circuit {{ circuit.code }}
-! device {{ device.name }} vrf={{ circuit.vrf_name }}
+{% import 'arista/_macros.j2' as eos %}
+{% set mode = endpoint.access_mode.value if endpoint.access_mode else 'dot1q' %}
+{% set svid = endpoint.vlan_id or circuit.vlan_id %}
+{% set cvid = endpoint.inner_vlan_id %}
+! Arista EOS - EVPN-MPLS L3 (IRB / Type-5)  circuit={{ circuit.code }} vrf={{ circuit.vrf_name }}
+! device={{ device.name }} ac={{ mode }} s-vid={{ svid }}
+
 vrf instance {{ circuit.vrf_name }}
 !
 ip routing vrf {{ circuit.vrf_name }}
 !
-interface Vlan{{ endpoint.vlan_id or circuit.vlan_id }}
+vlan {{ svid }}
+   name CUST_{{ circuit.tenant_id }}_{{ circuit.code }}
+!
+interface Vlan{{ svid }}
    vrf {{ circuit.vrf_name }}
    ip address {{ endpoint.gateway_ip }}/24
    mtu {{ circuit.mtu }}
 !
+interface {{ endpoint.interface_name }}
+   description CUST_{{ circuit.tenant_id }}_{{ circuit.code }}
+   mtu {{ circuit.mtu }}
+{{ eos.l2_switchport(mode, svid, cvid) }}
+!
 router bgp {{ device.bgp_asn }}
+   vlan {{ svid }}
+      rd {{ circuit.route_distinguisher }}
+      route-target both {{ circuit.route_target }}
+      redistribute learned
+   !
    vrf {{ circuit.vrf_name }}
       rd {{ circuit.route_distinguisher }}
       route-target import evpn {{ circuit.route_target }}
       route-target export evpn {{ circuit.route_target }}
       redistribute connected
+   !
+   address-family evpn
+      neighbor EVPN-OVERLAY encapsulation mpls next-hop-self source-interface Loopback0
 !
-interface {{ endpoint.interface_name }}
-   switchport access vlan {{ endpoint.vlan_id or circuit.vlan_id }}

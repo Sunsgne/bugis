@@ -1,9 +1,9 @@
+{% import 'cisco/_macros.j2' as xr %}
 {% set mode = endpoint.access_mode.value if endpoint.access_mode else 'dot1q' %}
 {% set svid = endpoint.vlan_id or circuit.vlan_id %}
 {% set cvid = endpoint.inner_vlan_id %}
-! Cisco IOS-XR - EVPN IRB L3 (Type-5) over SR-MPLS  circuit {{ circuit.code }}
-! device {{ device.name }} vrf={{ circuit.vrf_name }}
-! access-mode={{ mode }} s-vid={{ svid }}{% if cvid %} c-vid={{ cvid }}{% endif %}
+! Cisco IOS-XR - EVPN-MPLS L3 (IRB / Type-5)  circuit={{ circuit.code }} vrf={{ circuit.vrf_name }}
+! device={{ device.name }} ac={{ mode }} s-vid={{ svid }}
 
 vrf {{ circuit.vrf_name }}
  address-family ipv4 unicast
@@ -16,20 +16,14 @@ interface BVI{{ circuit.vni }}
  mtu {{ circuit.mtu }}
 !
 interface {{ endpoint.interface_name }}
+ description CUST_{{ circuit.tenant_id }}_{{ circuit.code }}
+ mtu {{ circuit.mtu }}
  l2transport
-{% if mode == 'access' %}
-  encapsulation untagged
-{% elif mode == 'qinq' %}
-  encapsulation dot1q {{ svid }} second-dot1q {{ cvid }}
-  rewrite ingress tag pop 2 symmetric
-{% else %}
-  encapsulation dot1q {{ svid }}
-  rewrite ingress tag pop 1 symmetric
-{% endif %}
+{{ xr.l2_encap(mode, svid, cvid) }}
 !
 l2vpn
- bridge group BG_{{ circuit.code }}
-  bridge-domain BD_{{ circuit.code }}
+ bridge group BG_{{ circuit.vni }}
+  bridge-domain BD_{{ circuit.vni }}
    interface {{ endpoint.interface_name }}
    routed interface BVI{{ circuit.vni }}
    evi {{ circuit.vni }}
@@ -39,11 +33,12 @@ router bgp {{ device.bgp_asn }}
   rd {{ circuit.route_distinguisher }}
   address-family ipv4 unicast
    redistribute connected
+  !
+  address-family l2vpn evpn
+   advertise ipv4 unicast
+  !
+ !
 !
-evpn
- evi {{ circuit.vni }}
-  bgp
-   rd {{ circuit.route_distinguisher }}
-   route-target import {{ circuit.route_target }}
-   route-target export {{ circuit.route_target }}
+{{ xr.evpn_evi(circuit) }}
+  advertise-ipv4
 !

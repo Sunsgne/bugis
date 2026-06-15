@@ -1,6 +1,14 @@
-! Arista EOS - remove EVPN L3VPN  circuit {{ circuit.code }}
+{% set svid = endpoint.vlan_id or circuit.vlan_id %}
+! Arista EOS - remove EVPN-MPLS L3  circuit={{ circuit.code }}
+interface {{ endpoint.interface_name }}
+   no switchport access vlan
+   no switchport mode
+!
+no interface Vlan{{ svid }}
+!
 router bgp {{ device.bgp_asn }}
+   no vlan {{ svid }}
    no vrf {{ circuit.vrf_name }}
 !
-no interface Vlan{{ endpoint.vlan_id or circuit.vlan_id }}
 no vrf instance {{ circuit.vrf_name }}
+no vlan {{ svid }}

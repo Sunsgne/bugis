@@ -1,29 +1,12 @@
+{% import 'cisco/_macros.j2' as xr %}
 {% set mode = endpoint.access_mode.value if endpoint.access_mode else 'dot1q' %}
 {% set svid = endpoint.vlan_id or circuit.vlan_id %}
 {% set cvid = endpoint.inner_vlan_id %}
-! Cisco IOS-XR - EVPN-MPLS L2 (E-LAN) over Segment Routing  circuit {{ circuit.code }}
-! device {{ device.name }} lo0={{ device.loopback_ip }} node-sid={{ device.sr_node_sid }}
-! access-mode={{ mode }} s-vid={{ svid }}{% if cvid %} c-vid={{ cvid }}{% endif %}
+! Cisco IOS-XR - EVPN-MPLS L2 (E-LAN)  circuit={{ circuit.code }} evi={{ circuit.vni }}
+! device={{ device.name }} lo0={{ device.loopback_ip }} ac={{ mode }} s-vid={{ svid }}{% if cvid %} c-vid={{ cvid }}{% endif %}
+! Ref: IOS-XR l2vpn bridge-domain + evpn evi (RFC 7432)
 
-router isis CORE
- address-family ipv4 unicast
-  segment-routing mpls
- interface Loopback0
-  address-family ipv4 unicast
-   prefix-sid index {{ device.sr_node_sid or 0 }}
-!
-{% if circuit.bandwidth_mbps %}
-policy-map CUST_{{ circuit.code }}_IN
- class class-default
-  police rate {{ circuit.bandwidth_mbps }} mbps
- !
-!
-policy-map CUST_{{ circuit.code }}_OUT
- class class-default
-  shape average {{ circuit.bandwidth_mbps }} mbps
- !
-!
-{% endif %}
+{{ xr.qos_maps(circuit) }}
 interface {{ endpoint.interface_name }}
  description CUST_{{ circuit.tenant_id }}_{{ circuit.code }}
  mtu {{ circuit.mtu }}
@@ -32,32 +15,18 @@ interface {{ endpoint.interface_name }}
  service-policy output CUST_{{ circuit.code }}_OUT
 {% endif %}
  l2transport
-{% if mode == 'access' %}
-  encapsulation untagged
-{% elif mode == 'qinq' %}
-  encapsulation dot1q {{ svid }} second-dot1q {{ cvid }}
-  rewrite ingress tag pop 2 symmetric
-{% else %}
-  encapsulation dot1q {{ svid }}
-  rewrite ingress tag pop 1 symmetric
-{% endif %}
+{{ xr.l2_encap(mode, svid, cvid) }}
 !
 l2vpn
- bridge group BG_{{ circuit.code }}
-  bridge-domain BD_{{ circuit.code }}
+ bridge group BG_{{ circuit.vni }}
+  bridge-domain BD_{{ circuit.vni }}
    interface {{ endpoint.interface_name }}
    evi {{ circuit.vni }}
 !
-evpn
- evi {{ circuit.vni }}
-  bgp
-   rd {{ circuit.route_distinguisher }}
-   route-target import {{ circuit.route_target }}
-   route-target export {{ circuit.route_target }}
-  advertise-mac
+{{ xr.evpn_evi(circuit) }}
 {% if circuit.esi %}
  interface {{ endpoint.interface_name }}
   ethernet-segment
    identifier type 0 {{ circuit.esi }}
-{% endif %}
 !
+{% endif %}

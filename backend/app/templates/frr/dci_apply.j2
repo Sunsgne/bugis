@@ -1,8 +1,11 @@
-! FRRouting (vtysh) - DCI EVPN gateway / route-reflector  circuit {{ circuit.code }}
-! role={{ device.role }} lo={{ device.loopback_ip }} asn={{ device.bgp_asn }}
+! FRRouting - DCI EVPN-VXLAN gateway  circuit={{ circuit.code }} vni={{ circuit.vni }}
+! role={{ device.role.value }} lo={{ device.loopback_ip }} asn={{ device.bgp_asn }}
+
 configure terminal
 router bgp {{ device.bgp_asn }}
  neighbor DCI peer-group
+ neighbor DCI remote-as external
+ neighbor DCI update-source lo
  address-family l2vpn evpn
   neighbor DCI activate
   neighbor DCI route-reflector-client

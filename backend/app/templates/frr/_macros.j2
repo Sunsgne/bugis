@@ -1,0 +1,56 @@
+{# FRRouting EVPN-VXLAN (Linux bridge + vxlan) shared fragments #}
+{% macro bridge_vlan_member(endpoint, mode, svid, circuit) -%}
+bridge br{{ circuit.vni }}
+ bridge-vlan-aware yes
+!
+{% if mode == 'access' %}
+interface {{ endpoint.interface_name }}
+ description CUST_{{ circuit.tenant_id }}_{{ circuit.code }}
+ bridge-group br{{ circuit.vni }}
+ bridge-group br{{ circuit.vni }} untagged
+!
+{% elif mode == 'qinq' %}
+interface {{ endpoint.interface_name }}.{{ svid }}
+ description CUST_{{ circuit.tenant_id }}_{{ circuit.code }} qinq {{ svid }}
+ encapsulation dot1q {{ svid }} second-dot1q {{ endpoint.inner_vlan_id }}
+!
+bridge br{{ circuit.vni }}
+ bridge-vlan-aware yes
+ vlan {{ svid }}
+  member {{ endpoint.interface_name }}.{{ svid }}
+ exit-vlan
+!
+{% else %}
+interface {{ endpoint.interface_name }}.{{ svid }}
+ description CUST_{{ circuit.tenant_id }}_{{ circuit.code }} dot1q {{ svid }}
+ encapsulation dot1q {{ svid }}
+!
+bridge br{{ circuit.vni }}
+ bridge-vlan-aware yes
+ vlan {{ svid }}
+  member {{ endpoint.interface_name }}.{{ svid }}
+ exit-vlan
+!
+{% endif %}
+{%- endmacro %}
+
+{% macro vxlan_if(circuit, device) -%}
+interface vxlan{{ circuit.vni }}
+ vxlan id {{ circuit.vni }}
+ vxlan local-tunnelip {{ device.loopback_ip }}
+ vxlan dstport 4789
+ bridge-group br{{ circuit.vni }}
+!
+{%- endmacro %}
+
+{% macro bgp_evpn_vni(circuit, device) -%}
+router bgp {{ device.bgp_asn }}
+ address-family l2vpn evpn
+  vni {{ circuit.vni }}
+   rd {{ circuit.route_distinguisher }}
+   route-target import {{ circuit.route_target }}
+   route-target export {{ circuit.route_target }}
+  exit-vni
+  advertise-all-vni
+ exit-address-family
+{%- endmacro %}

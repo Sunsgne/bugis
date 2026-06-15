@@ -1,4 +1,6 @@
-! FRRouting (vtysh) - remove BGP EVPN VXLAN L2  circuit {{ circuit.code }}
+{% set mode = endpoint.access_mode.value if endpoint.access_mode else 'dot1q' %}
+{% set svid = endpoint.vlan_id or circuit.vlan_id %}
+! FRRouting - remove EVPN-VXLAN L2  circuit={{ circuit.code }}
 configure terminal
 router bgp {{ device.bgp_asn }}
  address-family l2vpn evpn
@@ -6,7 +8,8 @@ router bgp {{ device.bgp_asn }}
  exit-address-family
 exit
 no interface vxlan{{ circuit.vni }}
-vrf default
- no vni {{ circuit.vni }}
-exit-vrf
+no bridge br{{ circuit.vni }}
+{% if mode != 'access' %}
+no interface {{ endpoint.interface_name }}.{{ svid }}
+{% endif %}
 end

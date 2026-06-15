@@ -1,0 +1,38 @@
+{# Cisco IOS-XR EVPN-MPLS shared fragments #}
+{% macro l2_encap(mode, svid, cvid) -%}
+{% if mode == 'access' %}
+  encapsulation untagged
+{% elif mode == 'qinq' %}
+  encapsulation dot1q {{ svid }} second-dot1q {{ cvid }}
+  rewrite ingress tag pop 2 symmetric
+{% else %}
+  encapsulation dot1q {{ svid }}
+  rewrite ingress tag pop 1 symmetric
+{% endif %}
+{%- endmacro %}
+
+{% macro evpn_evi(circuit) -%}
+evpn
+ evi {{ circuit.vni }}
+  bgp
+   rd {{ circuit.route_distinguisher }}
+   route-target import {{ circuit.route_target }}
+   route-target export {{ circuit.route_target }}
+  !
+  advertise-mac
+{%- endmacro %}
+
+{% macro qos_maps(circuit) -%}
+{% if circuit.bandwidth_mbps %}
+policy-map CUST_{{ circuit.code }}_IN
+ class class-default
+  police rate {{ circuit.bandwidth_mbps }} mbps
+ !
+!
+policy-map CUST_{{ circuit.code }}_OUT
+ class class-default
+  shape average {{ circuit.bandwidth_mbps }} mbps
+ !
+!
+{% endif %}
+{%- endmacro %}
