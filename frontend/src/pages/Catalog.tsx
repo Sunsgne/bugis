@@ -22,7 +22,7 @@ import { EyeOutlined, PlusOutlined, SearchOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { api } from "../api/client";
 import type { Offering, Paginated } from "../api/types";
-import { buildListQuery, tablePagination } from "../utils/table";
+import { buildListQuery, PAGE_SIZE_OPTIONS, pageRangeLabel, tablePagination } from "../utils/table";
 
 const { Text, Paragraph } = Typography;
 
@@ -199,21 +199,49 @@ export default function Catalog() {
           筛选
         </Button>
         <Button onClick={resetFilters}>重置</Button>
-        <Text type="secondary">共 {total.toLocaleString()} 个套餐</Text>
       </Space>
+
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+          marginBottom: 12,
+        }}
+      >
+        <Text type="secondary">{pageRangeLabel(total, page, pageSize)}</Text>
+        <Space size={8}>
+          <Text type="secondary">每页</Text>
+          <Select
+            value={pageSize}
+            style={{ width: 96 }}
+            options={PAGE_SIZE_OPTIONS.map((n) => ({ value: n, label: `${n} 条` }))}
+            onChange={(ps) => {
+              setPage(1);
+              setPageSize(ps);
+            }}
+          />
+        </Space>
+      </div>
 
       <Table
         rowKey="id"
         loading={loading}
         dataSource={rows}
         size="middle"
-        scroll={{ x: 1100 }}
         pagination={tablePagination(total, page, pageSize, (p, ps) => {
           setPage(p);
           setPageSize(ps);
         })}
         columns={[
-          { title: "套餐名称", dataIndex: "name", width: 180, ellipsis: true },
+          {
+            title: "序号",
+            width: 64,
+            render: (_, __, index) => (page - 1) * pageSize + index + 1,
+          },
+          { title: "套餐名称", dataIndex: "name", ellipsis: true },
           {
             title: "编码",
             dataIndex: "code",
@@ -233,17 +261,9 @@ export default function Catalog() {
             render: (b) => `${Number(b).toLocaleString()} Mbps`,
           },
           {
-            title: "SLA",
-            dataIndex: "sla_target",
-            width: 90,
-            render: (s) => (s ? `${s}%` : "-"),
-          },
-          { title: "CoS", dataIndex: "cos", width: 80, render: (c) => c || "-" },
-          { title: "MTU", dataIndex: "mtu", width: 80 },
-          {
             title: "等级",
             dataIndex: "tier",
-            width: 100,
+            width: 110,
             render: (t) =>
               t ? (
                 <Tag color={TIER_COLOR[t]}>
@@ -267,15 +287,8 @@ export default function Catalog() {
             ),
           },
           {
-            title: "说明",
-            dataIndex: "description",
-            ellipsis: true,
-            render: (d) => d || <Text type="secondary">-</Text>,
-          },
-          {
             title: "操作",
             width: 120,
-            fixed: "right",
             render: (_, r) => (
               <Space>
                 <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => setDetail(r)}>
@@ -299,37 +312,55 @@ export default function Catalog() {
         onClose={() => setDetail(null)}
       >
         {detail && (
-          <Descriptions bordered column={1} size="small">
-            <Descriptions.Item label="套餐名称">{detail.name}</Descriptions.Item>
-            <Descriptions.Item label="编码">
-              <Tag>{detail.code}</Tag>
-            </Descriptions.Item>
-            <Descriptions.Item label="业务类型">
-              <Tag color="geekblue">{SERVICE_LABEL[detail.service_type] || detail.service_type}</Tag>
-            </Descriptions.Item>
-            <Descriptions.Item label="带宽">{detail.bandwidth_mbps.toLocaleString()} Mbps</Descriptions.Item>
-            <Descriptions.Item label="SLA">{detail.sla_target ? `${detail.sla_target}%` : "-"}</Descriptions.Item>
-            <Descriptions.Item label="CoS">{detail.cos || "-"}</Descriptions.Item>
-            <Descriptions.Item label="MTU">{detail.mtu}</Descriptions.Item>
-            <Descriptions.Item label="等级">
-              {detail.tier ? (
-                <Tag color={TIER_COLOR[detail.tier]}>
-                  {TIER_LABEL[detail.tier] || detail.tier} ({detail.tier})
-                </Tag>
-              ) : (
-                "-"
-              )}
-            </Descriptions.Item>
-            <Descriptions.Item label="上架状态">
-              <Tag color={detail.active ? "green" : "default"}>{detail.active ? "已上架" : "已下架"}</Tag>
-            </Descriptions.Item>
-            <Descriptions.Item label="说明">{detail.description || "-"}</Descriptions.Item>
-            {"created_at" in detail && (detail as Offering & { created_at?: string }).created_at && (
-              <Descriptions.Item label="创建时间">
-                {dayjs((detail as Offering & { created_at?: string }).created_at).format("YYYY-MM-DD HH:mm")}
+          <>
+            <Descriptions bordered column={1} size="small" title="基本信息">
+              <Descriptions.Item label="套餐名称">{detail.name}</Descriptions.Item>
+              <Descriptions.Item label="编码">
+                <Tag>{detail.code}</Tag>
               </Descriptions.Item>
-            )}
-          </Descriptions>
+              <Descriptions.Item label="上架状态">
+                <Tag color={detail.active ? "green" : "default"}>{detail.active ? "已上架" : "已下架"}</Tag>
+              </Descriptions.Item>
+              <Descriptions.Item label="说明">{detail.description || "-"}</Descriptions.Item>
+              {detail.created_at && (
+                <Descriptions.Item label="创建时间">
+                  {dayjs(detail.created_at).format("YYYY-MM-DD HH:mm")}
+                </Descriptions.Item>
+              )}
+              {detail.updated_at && (
+                <Descriptions.Item label="更新时间">
+                  {dayjs(detail.updated_at).format("YYYY-MM-DD HH:mm")}
+                </Descriptions.Item>
+              )}
+            </Descriptions>
+
+            <Descriptions bordered column={1} size="small" title="服务参数" style={{ marginTop: 16 }}>
+              <Descriptions.Item label="业务类型">
+                <Tag color="geekblue">{SERVICE_LABEL[detail.service_type] || detail.service_type}</Tag>
+              </Descriptions.Item>
+              <Descriptions.Item label="带宽">{detail.bandwidth_mbps.toLocaleString()} Mbps</Descriptions.Item>
+              <Descriptions.Item label="SLA">{detail.sla_target ? `${detail.sla_target}%` : "未设置"}</Descriptions.Item>
+              <Descriptions.Item label="CoS / DSCP">{detail.cos || "未设置"}</Descriptions.Item>
+              <Descriptions.Item label="MTU">{detail.mtu}</Descriptions.Item>
+              <Descriptions.Item label="等级">
+                {detail.tier ? (
+                  <Tag color={TIER_COLOR[detail.tier]}>
+                    {TIER_LABEL[detail.tier] || detail.tier} ({detail.tier})
+                  </Tag>
+                ) : (
+                  "未设置"
+                )}
+              </Descriptions.Item>
+            </Descriptions>
+
+            <Alert
+              type="info"
+              showIcon
+              style={{ marginTop: 16 }}
+              message="开通专线时自动预填"
+              description="新建专线选择本套餐后，将预填：业务类型、带宽、SLA、CoS、MTU。等级用于套餐分类与筛选；VNI/VLAN/VRF 等实例参数仍按站点与租户单独分配。"
+            />
+          </>
         )}
       </Drawer>
 

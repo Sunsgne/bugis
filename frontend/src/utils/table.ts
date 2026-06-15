@@ -9,6 +9,15 @@ export function buildListQuery(params: Record<string, string | number | boolean 
   return qs ? `?${qs}` : "";
 }
 
+export const PAGE_SIZE_OPTIONS = [20, 50, 100, 200] as const;
+
+export function pageRangeLabel(total: number, page: number, pageSize: number): string {
+  if (total === 0) return "暂无数据";
+  const start = (page - 1) * pageSize + 1;
+  const end = Math.min(page * pageSize, total);
+  return `第 ${start.toLocaleString()}–${end.toLocaleString()} 条，共 ${total.toLocaleString()} 条`;
+}
+
 export function tablePagination(
   total: number,
   page: number,
@@ -21,8 +30,9 @@ export function tablePagination(
     total,
     showSizeChanger: true,
     showQuickJumper: total > pageSize * 2,
-    pageSizeOptions: ["20", "50", "100", "200"],
-    showTotal: (t) => `共 ${t.toLocaleString()} 条`,
+    pageSizeOptions: PAGE_SIZE_OPTIONS.map(String),
+    showTotal: (t, range) =>
+      range ? `第 ${range[0].toLocaleString()}–${range[1].toLocaleString()} 条，共 ${t.toLocaleString()} 条` : `共 ${t.toLocaleString()} 条`,
     onChange,
   };
 }
