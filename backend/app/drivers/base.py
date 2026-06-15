@@ -115,6 +115,76 @@ class BaseDriver:
         )
         return header + config
 
+    def fetch_config(self, device: Any, dry_run: bool = True) -> DriverResult:
+        """Pull running-config from device (NETCONF get-config or CLI show run)."""
+        result = DriverResult(success=True, dry_run=dry_run)
+        if dry_run:
+            from app.services.config_fetch import simulated_config
+
+            result.config = simulated_config(device)
+            result.output = (
+                f"[DRY-RUN] fetched {len(result.config.splitlines())} line(s) "
+                f"from {getattr(device, 'name', 'unknown')}"
+            )
+            result.finished_at = datetime.now(timezone.utc)
+            return result
+        try:
+            result.config = self._real_fetch(device)
+            result.output = f"fetched {len(result.config.splitlines())} line(s)"
+            result.success = True
+        except Exception as exc:  # pragma: no cover
+            result.success = False
+            result.output = f"FETCH FAILED: {exc}"
+        result.finished_at = datetime.now(timezone.utc)
+        return result
+
+    def _real_fetch(self, device: Any) -> str:  # pragma: no cover
+        if self.transport == "netconf":
+            return self._fetch_netconf(device)
+        return self._fetch_cli(device)
+
+    def _fetch_netconf(self, device: Any) -> str:  # pragma: no cover
+        try:
+            from ncclient import manager  # type: ignore
+        except ImportError as exc:
+            raise RuntimeError(
+                "ncclient not installed; install it or run in dry-run mode"
+            ) from exc
+        with manager.connect(
+            host=device.mgmt_ip,
+            port=device.netconf_port,
+            username=device.username,
+            password=device.password,
+            hostkey_verify=False,
+            timeout=30,
+        ) as m:
+            reply = m.get_config(source="running")
+            return str(reply)
+
+    def _fetch_cli(self, device: Any) -> str:  # pragma: no cover
+        try:
+            from netmiko import ConnectHandler  # type: ignore
+        except ImportError as exc:
+            raise RuntimeError(
+                "netmiko not installed; install it or run in dry-run mode"
+            ) from exc
+        device_type = NETMIKO_DEVICE_TYPES.get(self.vendor, "autodetect")
+        conn = ConnectHandler(
+            device_type=device_type,
+            host=device.mgmt_ip,
+            port=device.ssh_port,
+            username=device.username,
+            password=device.password,
+        )
+        try:
+            if self.vendor == Vendor.JUNIPER:
+                return conn.send_command("show configuration | display set")
+            if self.vendor in (Vendor.H3C, Vendor.HUAWEI):
+                return conn.send_command("display current-configuration")
+            return conn.send_command("show running-config")
+        finally:
+            conn.disconnect()
+
     def _real_push(self, device: Any, config: str) -> str:  # pragma: no cover
         """Real push hook. Subclasses may override per transport.
 

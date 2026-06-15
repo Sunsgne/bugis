@@ -33,6 +33,19 @@ def latest_baseline(db: Session, device_id: int) -> DeviceConfigSnapshot | None:
     ).scalar_one_or_none()
 
 
+def latest_learned(db: Session, device_id: int) -> DeviceConfigSnapshot | None:
+    """Most recent snapshot from live-network auto-learn."""
+    return db.execute(
+        select(DeviceConfigSnapshot)
+        .where(
+            DeviceConfigSnapshot.device_id == device_id,
+            DeviceConfigSnapshot.source == "learn",
+        )
+        .order_by(DeviceConfigSnapshot.version.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+
+
 def add_snapshot(
     db: Session, device: Device, content: str, source: str = "backup",
     note: str | None = None, created_by: str | None = None,
@@ -127,5 +140,23 @@ def diff_snapshots(a: DeviceConfigSnapshot | None, b: DeviceConfigSnapshot) -> s
             left, right,
             fromfile=f"v{a.version}" if a else "empty",
             tofile=f"v{b.version}", lineterm="",
+        )
+    )
+
+
+def diff_platform_vs_learned(db: Session, device: Device) -> str:
+    """Diff platform-assembled running config vs latest learned live config."""
+    learned = latest_learned(db, device.id)
+    if not learned:
+        return ""
+    platform = build_running_config(db, device)
+    left = platform.splitlines()
+    right = learned.content.splitlines()
+    return "\n".join(
+        difflib.unified_diff(
+            left, right,
+            fromfile="platform-assembled",
+            tofile=f"learned-v{learned.version}",
+            lineterm="",
         )
     )

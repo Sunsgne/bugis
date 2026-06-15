@@ -4,7 +4,7 @@ from __future__ import annotations
 import csv
 import io
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from starlette.responses import Response
@@ -22,6 +22,8 @@ from app.models.enums import (
 from app.models.site import Site
 from app.models.tenant import Tenant
 from app.models.user import User
+from app.services import config_learn
+from app.services import platform_settings as platform_cfg
 
 router = APIRouter()
 
@@ -70,13 +72,17 @@ def export_devices(db: Session = Depends(get_db), _: User = Depends(get_current_
 @router.post("/devices/import")
 def import_devices(
     file: UploadFile = File(...),
+    learn: bool | None = Query(default=None, description="导入后对新增设备执行现网配置学习；省略则跟随平台设置"),
     db: Session = Depends(get_db),
-    _: User = Depends(require_operator),
+    user: User = Depends(require_operator),
 ):
     try:
         text = file.file.read().decode("utf-8-sig")
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"cannot read file: {exc}")
+
+    plat = platform_cfg.get_or_create(db)
+    do_learn = plat.auto_learn_on_import if learn is None else learn
 
     reader = csv.DictReader(io.StringIO(text))
     sites = {s.code: s.id for s in db.execute(select(Site)).scalars().all()}
@@ -84,6 +90,7 @@ def import_devices(
         d.name for d in db.execute(select(Device.name)).all()  # type: ignore
     }
     created, skipped, errors = 0, 0, []
+    new_device_ids: list[int] = []
     for i, row in enumerate(reader, start=2):
         name = (row.get("name") or "").strip()
         if not name:
@@ -110,12 +117,27 @@ def import_devices(
                 site_id=sites.get((row.get("site_code") or "").strip()),
             )
             db.add(device)
+            db.flush()
+            new_device_ids.append(device.id)
             existing.add(name)
             created += 1
         except (ValueError, KeyError) as exc:
             errors.append(f"row {i}: {exc}")
+
+    learn_summary = None
+    if do_learn and new_device_ids:
+        learn_summary = config_learn.learn_devices_batch(
+            db, new_device_ids, created_by=user.username
+        )
+
     db.commit()
-    return {"created": created, "skipped": skipped, "errors": errors}
+    return {
+        "created": created,
+        "skipped": skipped,
+        "errors": errors,
+        "learn_enabled": do_learn,
+        "learn": learn_summary,
+    }
 
 
 @router.get("/circuits/export")

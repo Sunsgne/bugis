@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { Button, Card, Col, Row, Table, Tag, Tabs, App as AntApp, Empty, Modal } from "antd";
-import { CloudUploadOutlined, DiffOutlined, ReloadOutlined } from "@ant-design/icons";
+import { Button, Card, Col, Row, Table, Tag, Tabs, App as AntApp, Empty, Modal, Descriptions } from "antd";
+import { CloudUploadOutlined, DiffOutlined, ReloadOutlined, BookOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { api } from "../api/client";
 import { configPreviewModalProps, ConfigPreviewPre } from "../utils/configPreview";
@@ -29,6 +29,8 @@ export default function ConfigManagement() {
   const [running, setRunning] = useState<string>("");
   const [snaps, setSnaps] = useState<any[]>([]);
   const [diff, setDiff] = useState<string>("");
+  const [drift, setDrift] = useState<string>("");
+  const [learned, setLearned] = useState<any>(null);
 
   async function loadDevices() {
     const { data } = await api.get("/config/devices");
@@ -39,13 +41,16 @@ export default function ConfigManagement() {
 
   async function select(id: number) {
     setSel(id);
-    const [r, s] = await Promise.all([
+    const [r, s, ls] = await Promise.all([
       api.get(`/config/devices/${id}/running`),
       api.get(`/config/devices/${id}/snapshots`),
+      api.get(`/devices/${id}/learned-state`).catch(() => ({ data: null })),
     ]);
     setRunning(r.data.content);
     setSnaps(s.data);
     setDiff("");
+    setDrift("");
+    setLearned(ls.data);
   }
 
   async function backup() {
@@ -53,6 +58,32 @@ export default function ConfigManagement() {
     await api.post(`/config/devices/${sel}/backup`);
     message.success("已生成配置备份快照");
     select(sel);
+  }
+
+  async function loadDrift() {
+    if (!sel) return;
+    try {
+      const { data } = await api.get(`/config/devices/${sel}/drift`);
+      setDrift(data.diff);
+      setLearned((p: any) => ({ ...p, inventory: data.inventory }));
+    } catch (e: any) {
+      message.error(e?.response?.data?.detail || "暂无现网学习快照");
+    }
+  }
+
+  async function runLearn() {
+    if (!sel) return;
+    const hide = message.loading("现网配置学习中...", 0);
+    try {
+      await api.post(`/devices/${sel}/learn`);
+      hide();
+      message.success("现网配置学习完成");
+      select(sel);
+      loadDevices();
+    } catch (e: any) {
+      hide();
+      message.error(e?.response?.data?.detail || "学习失败");
+    }
   }
 
   async function loadDiff() {
@@ -85,6 +116,16 @@ export default function ConfigManagement() {
               { title: "设备", dataIndex: "name" },
               { title: "厂商", dataIndex: "vendor", render: (v) => <Tag color={VENDOR_COLOR[v]}>{v}</Tag> },
               { title: "版本", dataIndex: "latest_version", render: (v) => (v ? `v${v}` : "-") },
+              {
+                title: "现网学习",
+                dataIndex: "learned_version",
+                render: (v, r) =>
+                  v ? (
+                    <Tag color="orange">v{v} · {r.service_count ?? 0} 业务</Tag>
+                  ) : (
+                    <Tag>未学习</Tag>
+                  ),
+              },
             ]}
           />
         </Card>
@@ -93,9 +134,14 @@ export default function ConfigManagement() {
         <Card
           title="配置管理"
           extra={
-            <Button type="primary" icon={<CloudUploadOutlined />} onClick={backup} disabled={!sel}>
-              备份当前配置
-            </Button>
+            <Button.Group>
+              <Button icon={<BookOutlined />} onClick={runLearn} disabled={!sel}>
+                现网学习
+              </Button>
+              <Button type="primary" icon={<CloudUploadOutlined />} onClick={backup} disabled={!sel}>
+                备份当前配置
+              </Button>
+            </Button.Group>
           }
         >
           {!sel ? (
@@ -107,6 +153,57 @@ export default function ConfigManagement() {
                   key: "running",
                   label: "运行配置 (Running)",
                   children: <pre className="config-pre">{running}</pre>,
+                },
+                {
+                  key: "learned",
+                  label: "现网学习",
+                  children: learned?.has_learned_config ? (
+                    <>
+                      <Descriptions size="small" bordered column={2} style={{ marginBottom: 12 }}>
+                        <Descriptions.Item label="学习版本">v{learned.latest_snapshot_version}</Descriptions.Item>
+                        <Descriptions.Item label="学习时间">
+                          {learned.latest_snapshot_at ? dayjs(learned.latest_snapshot_at).format("YYYY-MM-DD HH:mm:ss") : "-"}
+                        </Descriptions.Item>
+                        <Descriptions.Item label="业务数">
+                          {learned.inventory?.service_count ?? 0}
+                        </Descriptions.Item>
+                        <Descriptions.Item label="VLAN 数">
+                          {learned.inventory?.vlan_ids?.length ?? 0}
+                        </Descriptions.Item>
+                        <Descriptions.Item label="漂移行数">{learned.drift_line_count ?? 0}</Descriptions.Item>
+                      </Descriptions>
+                      {learned.inventory?.l2_services?.length > 0 && (
+                        <Table
+                          size="small"
+                          rowKey="name"
+                          pagination={false}
+                          style={{ marginBottom: 12 }}
+                          dataSource={learned.inventory.l2_services}
+                          columns={[
+                            { title: "业务", dataIndex: "name" },
+                            { title: "VNI", dataIndex: "vni" },
+                            { title: "RD", dataIndex: "rd" },
+                            { title: "RT", dataIndex: "rt" },
+                            {
+                              title: "接口",
+                              dataIndex: "interfaces",
+                              render: (v: string[]) => v?.join(", ") || "-",
+                            },
+                          ]}
+                        />
+                      )}
+                      <Button size="small" icon={<DiffOutlined />} onClick={loadDrift}>
+                        平台 vs 现网 配置漂移
+                      </Button>
+                      {drift && <ColoredDiff text={drift} />}
+                    </>
+                  ) : (
+                    <Empty description="尚未执行现网学习">
+                      <Button type="primary" icon={<BookOutlined />} onClick={runLearn}>
+                        立即学习
+                      </Button>
+                    </Empty>
+                  ),
                 },
                 {
                   key: "history",
@@ -127,7 +224,21 @@ export default function ConfigManagement() {
                           { title: "版本", dataIndex: "version", render: (v) => `v${v}` },
                           {
                             title: "来源", dataIndex: "source",
-                            render: (s) => <Tag color={s === "push" ? "green" : "blue"}>{s === "push" ? "开通下发" : s === "backup" ? "手动备份" : s}</Tag>,
+                            render: (s) => (
+                              <Tag
+                                color={
+                                  s === "push" ? "green" : s === "learn" ? "orange" : "blue"
+                                }
+                              >
+                                {s === "push"
+                                  ? "开通下发"
+                                  : s === "backup"
+                                    ? "手动备份"
+                                    : s === "learn"
+                                      ? "现网学习"
+                                      : s}
+                              </Tag>
+                            ),
                           },
                           { title: "行数", dataIndex: "lines" },
                           { title: "操作人", dataIndex: "created_by" },

@@ -35,6 +35,16 @@ def _setup_db():
     os.unlink(_db_path)
 
 
+@pytest.fixture(autouse=True)
+def _reset_dry_run():
+    """Keep tests isolated when a case toggles platform dry-run off."""
+    from app.core.config import settings
+
+    settings.dry_run = True
+    yield
+    settings.dry_run = True
+
+
 @pytest.fixture()
 def client():
     return TestClient(app)

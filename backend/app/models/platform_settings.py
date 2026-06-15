@@ -45,6 +45,8 @@ class PlatformSettings(Base, TimestampMixin):
 
     enable_metrics: Mapped[bool] = mapped_column(Boolean, default=True)
 
+    auto_learn_on_import: Mapped[bool] = mapped_column(Boolean, default=True)
+
     access_token_expire_minutes: Mapped[int] = mapped_column(Integer, default=60 * 24)
 
     notes: Mapped[str | None] = mapped_column(String(512), nullable=True)

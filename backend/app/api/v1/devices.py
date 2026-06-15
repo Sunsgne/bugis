@@ -1,7 +1,7 @@
 """Device & interface management endpoints."""
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session, noload
 
@@ -22,7 +22,8 @@ from app.schemas.device import (
     DeviceOut,
     DeviceUpdate,
 )
-from app.services import baseline, config_mgmt, port_inventory, snmp, snmp_settings as snmp_cfg
+from app.services import baseline, config_learn, config_mgmt, port_inventory, snmp, snmp_settings as snmp_cfg
+from app.services import platform_settings as platform_cfg
 
 router = APIRouter()
 
@@ -45,11 +46,23 @@ def list_devices(
 @router.post("", response_model=DeviceListOut, status_code=201)
 def create_device(
     payload: DeviceCreate,
+    learn: bool | None = Query(default=None, description="导入后立即现网配置学习；省略则跟随平台设置"),
     db: Session = Depends(get_db),
-    _: User = Depends(require_operator),
+    user: User = Depends(require_operator),
 ):
     device = Device(**payload.model_dump())
     db.add(device)
+    db.flush()
+    should_learn = False
+    if learn is True:
+        should_learn = True
+    elif learn is False:
+        should_learn = False
+    else:
+        plat = platform_cfg.get_or_create(db)
+        should_learn = plat.auto_learn_on_import
+    if should_learn:
+        config_learn.learn_device(db, device, created_by=user.username)
     db.commit()
     db.refresh(device)
     return device
@@ -225,3 +238,30 @@ def discover_interfaces(
     port_inventory.scan_device(db, device)
     db.commit()
     return sorted(ifaces, key=lambda i: (i.ifindex or 0))
+
+
+@router.post("/{device_id}/learn")
+def learn_device_config(
+    device_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_operator),
+):
+    """Pull live running-config, parse inventory, snapshot and refresh port S-VID."""
+    device = db.get(Device, device_id)
+    if not device:
+        raise HTTPException(status_code=404, detail="device not found")
+    result = config_learn.learn_device(db, device, created_by=user.username)
+    db.commit()
+    return result
+
+
+@router.get("/{device_id}/learned-state")
+def get_learned_state(
+    device_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    device = db.get(Device, device_id)
+    if not device:
+        raise HTTPException(status_code=404, detail="device not found")
+    return config_learn.learned_state(db, device)

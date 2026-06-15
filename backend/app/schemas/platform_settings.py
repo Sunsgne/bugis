@@ -36,6 +36,7 @@ class PlatformSettingsBase(BaseModel):
     smtp_security: str = "starttls"
 
     enable_metrics: bool = True
+    auto_learn_on_import: bool = True
     access_token_expire_minutes: int = Field(default=1440, ge=5, le=60 * 24 * 30)
 
     notes: str | None = None
@@ -71,6 +72,7 @@ class PlatformSettingsUpdate(BaseModel):
     smtp_security: str | None = None
 
     enable_metrics: bool | None = None
+    auto_learn_on_import: bool | None = None
     access_token_expire_minutes: int | None = Field(default=None, ge=5, le=60 * 24 * 30)
 
     notes: str | None = None

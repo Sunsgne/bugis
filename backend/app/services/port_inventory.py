@@ -265,8 +265,9 @@ def _parse_interface_blocks(config: str, vendor: Vendor) -> dict[str, list[SvidE
 
 
 def device_config_usage(db: Session, device: Device) -> dict[str, PortUsage]:
-    """Parse assembled running-config for S-VID usage on the device."""
-    config = config_mgmt.build_running_config(db, device)
+    """Parse device running-config for S-VID usage (learned snapshot preferred)."""
+    learned = config_mgmt.latest_learned(db, device.id)
+    config = learned.content if learned else config_mgmt.build_running_config(db, device)
     parsed = _parse_interface_blocks(config, device.vendor)
     by_iface: dict[str, PortUsage] = {}
     for iface, entries in parsed.items():
@@ -327,7 +328,7 @@ def scan_device(db: Session, device: Device, *, include_legacy: bool = True) -> 
         serialized = [e.as_dict() for e in usage.entries]
         di = ifaces.get(iface_name)
         if di is None:
-            di = DeviceInterface(device_id=device.id, name=iface_name)
+            di = DeviceInterface(device_id=device.id, name=iface_name, discovered_via="running-config")
             db.add(di)
             ifaces[iface_name] = di
         di.used_s_vids = serialized

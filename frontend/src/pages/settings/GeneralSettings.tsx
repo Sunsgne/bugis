@@ -87,6 +87,16 @@ export default function GeneralSettings() {
               <Switch checkedChildren="开" unCheckedChildren="关" />
             </Form.Item>
           </Col>
+          <Col xs={24} md={8}>
+            <Form.Item
+              name="auto_learn_on_import"
+              label="导入设备后自动现网学习"
+              valuePropName="checked"
+              tooltip="CSV 导入或新增设备时自动拉取 running-config 并解析业务/VLAN"
+            >
+              <Switch checkedChildren="开" unCheckedChildren="关" />
+            </Form.Item>
+          </Col>
         </Row>
         <Row gutter={16}>
           <Col xs={12} md={6}>

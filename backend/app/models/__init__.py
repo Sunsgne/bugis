@@ -23,6 +23,7 @@ from app.models.controlplane import (  # noqa: F401
 from app.models.platform_settings import PlatformSettings  # noqa: F401
 from app.models.snmp_settings import SnmpSettings  # noqa: F401
 from app.models.config_snapshot import DeviceConfigSnapshot  # noqa: F401
+from app.models.device_learn_run import DeviceLearnRun  # noqa: F401
 
 __all__ = [
     "User",
@@ -51,4 +52,5 @@ __all__ = [
     "DeviceConfigSnapshot",
     "SnmpSettings",
     "PlatformSettings",
+    "DeviceLearnRun",
 ]

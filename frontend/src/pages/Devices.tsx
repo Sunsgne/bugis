@@ -20,7 +20,7 @@ import {
   Popconfirm,
   Typography,
 } from "antd";
-import { PlusOutlined, DownloadOutlined, UploadOutlined, ApiOutlined, RocketOutlined, SettingOutlined, KeyOutlined } from "@ant-design/icons";
+import { PlusOutlined, DownloadOutlined, UploadOutlined, ApiOutlined, RocketOutlined, SettingOutlined, KeyOutlined, BookOutlined } from "@ant-design/icons";
 import { api } from "../api/client";
 import type { Device, DeviceInterface, Site, SvidUsage } from "../api/types";
 import { configPreviewModalProps, ConfigPreviewPre } from "../utils/configPreview";
@@ -63,6 +63,7 @@ export default function Devices() {
   const [form] = Form.useForm();
   const [credForm] = Form.useForm();
   const [ifaces, setIfaces] = useState<Record<number, DeviceInterface[]>>({});
+  const [learnOnImport, setLearnOnImport] = useState(true);
   const watchVendor = Form.useWatch("vendor", form);
 
   async function loadIfaces(deviceId: number) {
@@ -168,14 +169,43 @@ export default function Devices() {
     const fd = new FormData();
     fd.append("file", file);
     try {
-      const { data } = await api.post("/bulk/devices/import", fd);
-      message.success(`导入完成: 新增 ${data.created}, 跳过 ${data.skipped}`);
+      const { data } = await api.post("/bulk/devices/import", fd, {
+        params: { learn: learnOnImport },
+      });
+      const learnMsg =
+        data.learn_enabled && data.learn
+          ? ` · 现网学习 ${data.learn.success}/${data.learn.total} 成功`
+          : "";
+      message.success(`导入完成: 新增 ${data.created}, 跳过 ${data.skipped}${learnMsg}`);
       if (data.errors?.length) message.warning(`${data.errors.length} 行有误`);
       load();
     } catch (e: any) {
       message.error(e?.response?.data?.detail || "导入失败");
     }
     return false;
+  }
+
+  async function learnConfig(d: Device) {
+    const hide = message.loading(`现网配置学习中 · ${d.name}...`, 0);
+    try {
+      const { data } = await api.post(`/devices/${d.id}/learn`);
+      hide();
+      if (data.success) {
+        const inv = data.inventory;
+        message.success(
+          `${d.name} 学习完成 · ${inv?.service_count ?? 0} 个业务 · v${data.snapshot_version}`
+        );
+        if (data.svid_scan?.ports_scanned) {
+          loadIfaces(d.id);
+        }
+      } else {
+        message.error(data.error || "学习失败");
+      }
+      load();
+    } catch (e: any) {
+      hide();
+      message.error(e?.response?.data?.detail || "学习失败");
+    }
   }
 
   async function initialize(d: Device) {
@@ -299,6 +329,14 @@ export default function Devices() {
           <Upload accept=".csv" showUploadList={false} beforeUpload={importCsv}>
             <Button icon={<UploadOutlined />}>导入 CSV</Button>
           </Upload>
+          <Tooltip title="导入后自动拉取现网 running-config 并解析业务/VLAN 占用">
+            <Switch
+              checkedChildren="导入即学习"
+              unCheckedChildren="仅导入"
+              checked={learnOnImport}
+              onChange={setLearnOnImport}
+            />
+          </Tooltip>
           <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>
             添加设备
           </Button>
@@ -417,6 +455,9 @@ export default function Devices() {
               <Space wrap>
                 <a onClick={() => openCredEdit(r)}>
                   <KeyOutlined /> 凭证
+                </a>
+                <a onClick={() => learnConfig(r)}>
+                  <BookOutlined /> 现网学习
                 </a>
                 <a onClick={() => initialize(r)}>
                   <RocketOutlined /> 初始化

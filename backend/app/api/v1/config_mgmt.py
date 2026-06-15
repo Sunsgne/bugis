@@ -10,7 +10,7 @@ from app.core.database import get_db
 from app.models.config_snapshot import DeviceConfigSnapshot
 from app.models.device import Device
 from app.models.user import User
-from app.services import config_mgmt
+from app.services import config_learn, config_mgmt
 
 router = APIRouter()
 
@@ -27,6 +27,8 @@ def list_device_configs(db: Session = Depends(get_db), _: User = Depends(get_cur
             .order_by(DeviceConfigSnapshot.version.desc())
             .limit(1)
         ).scalar_one_or_none()
+        learned = config_mgmt.latest_learned(db, d.id)
+        state = config_learn.learned_state(db, d)
         out.append({
             "device_id": d.id,
             "name": d.name,
@@ -36,6 +38,10 @@ def list_device_configs(db: Session = Depends(get_db), _: User = Depends(get_cur
             "latest_version": latest.version if latest else 0,
             "latest_at": latest.created_at.isoformat() if latest and latest.created_at else None,
             "latest_source": latest.source if latest else None,
+            "learned_version": learned.version if learned else 0,
+            "learned_at": learned.created_at.isoformat() if learned and learned.created_at else None,
+            "service_count": (state.get("inventory") or {}).get("service_count", 0),
+            "drift_line_count": state.get("drift_line_count", 0),
         })
     return out
 
@@ -125,4 +131,27 @@ def diff_config(
         "from": snap_a.version if snap_a else None,
         "to": snap_b.version,
         "diff": config_mgmt.diff_snapshots(snap_a, snap_b) or "(无差异)",
+    }
+
+
+@router.get("/devices/{device_id}/drift")
+def config_drift(
+    device_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    """Diff platform-assembled running config vs latest learned live config."""
+    device = db.get(Device, device_id)
+    if not device:
+        raise HTTPException(status_code=404, detail="device not found")
+    learned = config_mgmt.latest_learned(db, device_id)
+    if not learned:
+        raise HTTPException(status_code=404, detail="尚未执行现网配置学习")
+    diff = config_mgmt.diff_platform_vs_learned(db, device)
+    state = config_learn.learned_state(db, device)
+    return {
+        "device": device.name,
+        "learned_version": learned.version,
+        "inventory": state.get("inventory"),
+        "diff": diff or "(无差异)",
     }
