@@ -667,3 +667,33 @@ body.login-route {
 .ant-form-item .ant-input-affix-wrapper {
   width: 100%;
 }
+
+/* Select dropdown — softer empty state, consistent with page cards */
+.app-select-dropdown.ant-select-dropdown {
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+  padding: 4px 0;
+}
+
+.app-select-dropdown .ant-select-item-empty,
+.app-select-dropdown .ant-empty {
+  padding: 10px 16px;
+  margin: 0;
+  color: #64748b;
+}
+
+.app-select-dropdown .ant-empty-image {
+  height: 32px;
+  margin-bottom: 4px;
+}
+
+.monitoring-page .monitoring-empty-card > .ant-card-body {
+  padding: 48px 24px;
+  background: #fafbfc;
+}
+
+.monitoring-page .monitoring-empty-card.ant-card {
+  border: 1px dashed rgba(148, 163, 184, 0.35);
+  background: #fafbfc;
+}
