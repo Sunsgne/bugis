@@ -11,7 +11,7 @@ type Props = {
 
 export default function PageCard({ title, description, extra, children, className }: Props) {
   return (
-    <Card className={cn("w-full min-w-0 border-border/60 shadow-sm", className)}>
+    <Card className={cn("w-full min-w-0 border-border/60 bg-card shadow-sm", className)}>
       {(title || extra) && (
         <CardHeader className="flex flex-col gap-4 space-y-0 pb-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0 space-y-1">

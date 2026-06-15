@@ -263,7 +263,7 @@ function Shell() {
           </div>
         </header>
 
-        <main className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-auto p-4 lg:p-5">
+        <main className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-auto bg-slate-100/80 p-4 lg:p-6">
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/tenants" element={<Tenants />} />

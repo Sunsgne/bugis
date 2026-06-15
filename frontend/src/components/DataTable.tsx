@@ -87,14 +87,12 @@ export default function DataTable<TData>({
     <div className={cn("w-full min-w-0 space-y-3", className)}>
       <div
         className={cn(
-          "w-full overflow-x-auto",
-          variant === "plain"
-            ? "rounded-xl ring-1 ring-border/60"
-            : "rounded-lg border bg-card",
+          "w-full overflow-x-auto rounded-md border border-border/80 bg-background",
+          variant === "plain" && "rounded-md border-border/80 ring-0",
         )}
       >
         <Table className={cn("w-full", tableLayout === "fixed" ? "table-fixed" : "table-auto")}>
-          <TableHeader className={variant === "plain" ? "bg-muted/40" : undefined}>
+          <TableHeader className={variant === "plain" ? "bg-muted/30" : "bg-muted/20"}>
             {table.getHeaderGroups().map((hg) => (
               <TableRow key={hg.id} className={variant === "plain" ? "hover:bg-transparent" : undefined}>
                 {hg.headers.map((header) => (
@@ -102,7 +100,7 @@ export default function DataTable<TData>({
                     key={header.id}
                     className={cn(
                       dense && "h-9 px-2 text-xs",
-                      variant === "plain" && "h-10 text-[11px] font-medium uppercase tracking-wider text-muted-foreground/80",
+                      "h-9 text-xs font-medium text-muted-foreground",
                     )}
                     style={
                       tableLayout === "fixed" && header.getSize() !== 150
