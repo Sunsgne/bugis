@@ -96,6 +96,10 @@ export interface Circuit {
   sla_target?: string;
   cos?: string;
   description?: string;
+  egress_country?: string;
+  egress_site_id?: number;
+  ipt_public_ip?: string;
+  ipt_nat_enabled?: number;
   endpoints: CircuitEndpoint[];
 }
 

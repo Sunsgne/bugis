@@ -1,0 +1,24 @@
+{% import 'huawei/_macros.j2' as hw %}
+{% set mode = endpoint.access_mode.value if endpoint.access_mode else 'dot1q' %}
+{% set svid = endpoint.vlan_id or circuit.vlan_id %}
+#
+# Huawei Remote IPT remove - circuit={{ circuit.code }}
+#
+{% if is_egress %}
+undo ip route-static vpn-instance {{ circuit.vrf_name }} 0.0.0.0.0.0.0
+undo interface LoopBack{{ circuit.vni }}
+undo nat instance nat-{{ circuit.code }}
+undo traffic classifier classifier-{{ circuit.code }}
+undo traffic behavior behavior-{{ circuit.code }}
+undo acl number {{ circuit.vni }}
+undo ip vpn-instance {{ circuit.vrf_name }}
+{% else %}
+interface {{ endpoint.interface_name }}
+ undo dot1q termination vid {{ svid }}
+#
+undo interface Vbdif{{ circuit.vni }}
+undo bridge-domain {{ circuit.vni }}
+undo ip vpn-instance {{ circuit.vrf_name }}
+{% endif %}
+#
+return

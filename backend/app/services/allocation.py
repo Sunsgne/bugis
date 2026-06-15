@@ -72,6 +72,26 @@ def build_vrf_name(code: str) -> str:
     return f"vrf_{code.replace('-', '_').lower()}"
 
 
+def allocate_public_ip(db: Session, vni: int) -> str:
+    """Deterministic demo public IP for Remote IPT breakout."""
+    used = {
+        r[0]
+        for r in db.execute(
+            select(Circuit.ipt_public_ip).where(Circuit.ipt_public_ip.is_not(None))
+        ).all()
+        if r[0]
+    }
+    # 203.x.y.z pool for lab/demo
+    base = 203
+    second = 100 + (vni % 100)
+    third = (vni // 100) % 200
+    for host in range(1, 254):
+        candidate = f"{base}.{second}.{third}.{host}"
+        if candidate not in used:
+            return candidate
+    return f"{base}.{second}.{third}.254"
+
+
 def auto_allocate_circuit_fields(db: Session, circuit: Circuit, asn: int | None) -> None:
     """Fill in any unset EVPN identifiers on a circuit in-place."""
     if circuit.vni is None:
@@ -84,3 +104,7 @@ def auto_allocate_circuit_fields(db: Session, circuit: Circuit, asn: int | None)
         circuit.route_target = build_rt(asn, circuit.vni)
     if not circuit.vrf_name:
         circuit.vrf_name = build_vrf_name(circuit.code)
+    from app.models.enums import ServiceType
+
+    if circuit.service_type == ServiceType.REMOTE_IPT and not circuit.ipt_public_ip:
+        circuit.ipt_public_ip = allocate_public_ip(db, circuit.vni)

@@ -12,6 +12,7 @@ import difflib
 from app.models.circuit import Circuit, CircuitEndpoint
 from app.models.config_job import ConfigJob
 from app.models.device import Device
+from app.models.enums import CircuitStatus
 from app.models.offering import ServiceOffering
 from app.models.tenant import Tenant
 from app.models.user import User
@@ -26,6 +27,12 @@ from app.schemas.circuit import (
 from app.services import allocation, probe, validation
 
 router = APIRouter()
+
+DELETABLE_STATUSES = frozenset({
+    CircuitStatus.DECOMMISSIONED,
+    CircuitStatus.DRAFT,
+    CircuitStatus.FAILED,
+})
 
 
 def _site_asn_for_endpoints(db: Session, endpoints: list[CircuitEndpoint]) -> int | None:
@@ -253,6 +260,14 @@ def delete_circuit(
     circuit = db.get(Circuit, circuit_id)
     if not circuit:
         raise HTTPException(status_code=404, detail="circuit not found")
+    if circuit.status not in DELETABLE_STATUSES:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "仅已拆除、草稿或失败状态的专线可删除；"
+                "请先执行拆除工单后再删除"
+            ),
+        )
     db.delete(circuit)
     db.commit()
 

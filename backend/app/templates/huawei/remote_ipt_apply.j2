@@ -1,0 +1,56 @@
+{% import 'huawei/_macros.j2' as hw %}
+{% set mode = endpoint.access_mode.value if endpoint.access_mode else 'dot1q' %}
+{% set svid = endpoint.vlan_id or circuit.vlan_id %}
+#
+# Huawei Remote IPT - circuit={{ circuit.code }} vni={{ circuit.vni }}
+# device={{ device.name }} egress={{ circuit.egress_country }} public={{ circuit.ipt_public_ip }}
+#
+{% if is_egress %}
+! --- Egress border: breakout to {{ circuit.egress_country }} IPT ---
+ip vpn-instance {{ circuit.vrf_name }}
+ ipv4-family
+  route-distinguisher {{ circuit.route_distinguisher }}
+  vpn-target {{ circuit.route_target }} export-extcommunity
+  vpn-target {{ circuit.route_target }} import-extcommunity
+#
+interface LoopBack{{ circuit.vni }}
+ ip binding vpn-instance {{ circuit.vrf_name }}
+ ip address {{ circuit.ipt_public_ip }} 255.255.255.255
+#
+ip route-static vpn-instance {{ circuit.vrf_name }} 0.0.0.0.0.0.0 <ipt-upstream-gw> description REMOTE-IPT-{{ circuit.code }}
+{% if circuit.ipt_nat_enabled %}
+nat instance nat-{{ circuit.code }} id {{ circuit.vni }}
+ service-classifier classifier-{{ circuit.code }} behavior behavior-{{ circuit.code }}
+#
+traffic classifier classifier-{{ circuit.code }} operator or
+ if-match acl {{ circuit.vni }}
+#
+traffic behavior behavior-{{ circuit.code }}
+ nat bind instance nat-{{ circuit.code }}
+#
+acl number {{ circuit.vni }}
+ rule permit ip source any destination any
+{% endif %}
+{% else %}
+! --- Customer access side ---
+ip vpn-instance {{ circuit.vrf_name }}
+ ipv4-family
+  route-distinguisher {{ circuit.route_distinguisher }}
+  vpn-target {{ circuit.route_target }} export-extcommunity evpn
+  vpn-target {{ circuit.route_target }} import-extcommunity evpn
+ vxlan vni {{ circuit.vni }}
+#
+{{ hw.bridge_domain_evpn(circuit) }}
+#
+interface Vbdif{{ circuit.vni }}
+ ip binding vpn-instance {{ circuit.vrf_name }}
+ ip address {{ endpoint.gateway_ip }} 255.255.255.0
+ arp distribute-gateway enable
+ arp collect host enable
+#
+{{ hw.l2_subif(endpoint, circuit, mode, svid, endpoint.inner_vlan_id) }}
+#
+{{ hw.nve_vni(circuit) }}
+{% endif %}
+#
+return

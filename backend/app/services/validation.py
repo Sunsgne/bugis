@@ -12,7 +12,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.circuit import Circuit
-from app.models.enums import ServiceType
+from app.models.device import Device
+from app.models.enums import AccessMode, DeviceRole, ServiceType
+from app.models.site import Site
 
 
 @dataclass
@@ -27,6 +29,9 @@ class Issue:
 
 VNI_MIN, VNI_MAX = 1, 16_777_215
 VLAN_MIN, VLAN_MAX = 1, 4094
+EGRESS_COUNTRIES = frozenset({
+    "CN", "HK", "SG", "JP", "US", "GB", "DE", "AU", "TW", "KR",
+})
 
 
 def validate_circuit(db: Session, circuit: Circuit) -> list[Issue]:
@@ -51,12 +56,69 @@ def validate_circuit(db: Session, circuit: Circuit) -> list[Issue]:
         issues.append(Issue("error", "missing_rt", "缺少 Route Target"))
 
     # L3 services need a gateway IP on at least one endpoint
-    if circuit.service_type == ServiceType.L3VPN_EVPN:
+    if circuit.service_type in (ServiceType.L3VPN_EVPN, ServiceType.REMOTE_IPT):
         if not circuit.vrf_name:
             issues.append(Issue("error", "missing_vrf", "L3VPN 缺少 VRF 名称"))
         if not any(ep.gateway_ip for ep in circuit.endpoints):
             issues.append(
                 Issue("warning", "no_gateway", "L3VPN 未配置任意 IRB 网关地址")
+            )
+
+    # Remote IPT: cross-border breakout via dedicated line to foreign public internet
+    if circuit.service_type == ServiceType.REMOTE_IPT:
+        if len(circuit.endpoints) < 1:
+            issues.append(
+                Issue("error", "remote_ipt_no_access", "Remote IPT 至少需要一个客户接入端点")
+            )
+        if not circuit.egress_country:
+            issues.append(
+                Issue("error", "remote_ipt_country", "Remote IPT 必须指定公网出口国家/地区")
+            )
+        elif circuit.egress_country.upper() not in EGRESS_COUNTRIES:
+            issues.append(
+                Issue(
+                    "warning", "remote_ipt_country_unknown",
+                    f"出口地区 {circuit.egress_country} 不在常用列表，请确认",
+                )
+            )
+        if not circuit.egress_site_id:
+            issues.append(
+                Issue("error", "remote_ipt_site", "Remote IPT 必须指定出口站点 (PoP)")
+            )
+        else:
+            egress_site = db.get(Site, circuit.egress_site_id)
+            if not egress_site:
+                issues.append(
+                    Issue("error", "remote_ipt_site_missing", "出口站点不存在")
+                )
+            else:
+                borders = db.execute(
+                    select(Device).where(
+                        Device.site_id == circuit.egress_site_id,
+                        Device.role.in_([DeviceRole.DCI_GW, DeviceRole.BORDER_LEAF]),
+                    )
+                ).scalars().all()
+                if not borders:
+                    issues.append(
+                        Issue(
+                            "error", "remote_ipt_no_border",
+                            f"出口站点 {egress_site.name} 无边界网关设备",
+                        )
+                    )
+        if not circuit.ipt_public_ip:
+            issues.append(
+                Issue("warning", "remote_ipt_ip", "未分配公网出口 IP，将自动分配")
+            )
+        access_sites = {
+            ep.device.site_id for ep in circuit.endpoints
+            if ep.device and ep.device.site_id
+        }
+        if circuit.egress_site_id and access_sites == {circuit.egress_site_id}:
+            issues.append(
+                Issue(
+                    "warning", "remote_ipt_same_site",
+                    "接入与出口在同一站点，Remote IPT 通常用于跨境公网出口",
+                )
             )
 
     # Bandwidth & MTU sanity

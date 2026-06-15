@@ -1,0 +1,14 @@
+! ===== REMOTE IPT intent (cross-border public internet breakout) =====
+! circuit={{ circuit.code }} device={{ device.name }} vrf={{ circuit.vrf_name }}
+! egress_country={{ circuit.egress_country }} public_ip={{ circuit.ipt_public_ip }}
+! nat={{ circuit.ipt_nat_enabled }} is_egress={{ is_egress|default(false) }}
+{% if is_egress %}
+! [EGRESS BORDER] default-route + NAT to local IPT in {{ circuit.egress_country }}
+! ip route-static vpn-instance {{ circuit.vrf_name }} 0.0.0.0 0.0.0.0 <upstream-ipt-gw>
+! nat outbound {{ circuit.ipt_nat_enabled and 'enable' or 'disable' }} interface <wan-if> vpn-instance {{ circuit.vrf_name }}
+{% else %}
+! [ACCESS] EVPN L3 attach + route leak toward egress PoP
+! vni={{ circuit.vni }} rd={{ circuit.route_distinguisher }} rt={{ circuit.route_target }}
+! irb gateway={{ endpoint.gateway_ip }} attach={{ endpoint.interface_name }}
+{% endif %}
+! NOTE: generic placeholder - vendor template not found for {{ vendor }}

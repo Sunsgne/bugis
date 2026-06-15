@@ -73,6 +73,7 @@ class ServiceType(str, enum.Enum):
     L3VPN_EVPN = "l3vpn_evpn"  # EVPN IRB / L3VPN
     EVPN_VPWS = "evpn_vpws"  # point-to-point
     DCI = "dci"  # data center interconnect
+    REMOTE_IPT = "remote_ipt"  # 远端公网出口：通过专线使用对端国家/地区 IPT
 
 
 class CircuitStatus(str, enum.Enum):

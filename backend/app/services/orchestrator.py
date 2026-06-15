@@ -116,13 +116,22 @@ def _operation_for(wo_type: WorkOrderType) -> str:
     return "apply"
 
 
-def _build_context(circuit: Circuit, endpoint: CircuitEndpoint,
-                   device: Device, site: Site | None) -> dict:
+def _build_context(
+    circuit: Circuit,
+    endpoint: CircuitEndpoint,
+    device: Device,
+    site: Site | None,
+    *,
+    is_egress: bool = False,
+    is_gateway: bool = False,
+) -> dict:
     return {
         "circuit": circuit,
         "endpoint": endpoint,
         "device": device,
         "site": site,
+        "is_egress": is_egress,
+        "is_gateway": is_gateway,
     }
 
 
@@ -184,11 +193,23 @@ def execute(db: Session, wo: WorkOrder, actor: str | None = None) -> WorkOrder:
 
     # For DCI services, also program the DCI gateways (direct-mode only).
     gateway_devices: list[Device] = []
-    if service_type == ServiceType.DCI or wo.type == WorkOrderType.PROVISION:
+    if service_type in (ServiceType.DCI, ServiceType.REMOTE_IPT) or wo.type == WorkOrderType.PROVISION:
         for gw in _dci_gateways(db, circuit):
             if gw.site and gw.site.delivery_mode == DeliveryMode.CONTROLLER:
                 continue
             gateway_devices.append(gw)
+
+    # Remote IPT: program egress-site border for NAT / default route breakout.
+    egress_borders: list[Device] = []
+    if service_type == ServiceType.REMOTE_IPT and circuit.egress_site_id:
+        egress_borders = list(
+            db.execute(
+                select(Device).where(
+                    Device.site_id == circuit.egress_site_id,
+                    Device.role.in_([DeviceRole.DCI_GW, DeviceRole.BORDER_LEAF]),
+                )
+            ).scalars().all()
+        )
 
     failed = False
 
@@ -211,9 +232,21 @@ def execute(db: Session, wo: WorkOrder, actor: str | None = None) -> WorkOrder:
         failed = failed or not ok
 
     for gw in gateway_devices:
-        # gateways use the DCI template regardless of access service type
-        ok = _render_and_push(db, wo, circuit, None, gw, ServiceType.DCI,
-                              operation, actor, is_gateway=True)
+        ok = _render_and_push(
+            db, wo, circuit, None, gw, ServiceType.DCI,
+            operation, actor, is_gateway=True,
+        )
+        failed = failed or not ok
+
+    for gw in egress_borders:
+        if gw in gateway_devices:
+            continue
+        if gw.site and gw.site.delivery_mode == DeliveryMode.CONTROLLER:
+            continue
+        ok = _render_and_push(
+            db, wo, circuit, None, gw, ServiceType.REMOTE_IPT,
+            operation, actor, is_gateway=True, is_egress=True,
+        )
         failed = failed or not ok
 
     if failed:
@@ -373,6 +406,7 @@ def _render_and_push(
     operation: str,
     actor: str | None,
     is_gateway: bool = False,
+    is_egress: bool = False,
 ) -> bool:
     driver = get_driver(device.vendor)
     site = device.site
@@ -386,7 +420,9 @@ def _render_and_push(
         vlan_id=circuit.vlan_id,
         gateway_ip=None,
     )
-    context = _build_context(circuit, ep, device, site)
+    context = _build_context(
+        circuit, ep, device, site, is_egress=is_egress, is_gateway=is_gateway,
+    )
 
     job = ConfigJob(
         work_order_id=wo.id,

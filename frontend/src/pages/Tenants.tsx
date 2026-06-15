@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   Button,
   Card,
@@ -28,9 +29,18 @@ const STATUS_COLOR: Record<string, string> = {
   terminated: "red",
 };
 
+interface TenantSummary {
+  tenant_id: number;
+  circuits_total: number;
+  circuits_active: number;
+  circuits_decommissioned: number;
+  active_bandwidth_mbps: number;
+}
+
 export default function Tenants() {
   const { message } = AntApp.useApp();
   const [rows, setRows] = useState<Tenant[]>([]);
+  const [summaries, setSummaries] = useState<TenantSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [form] = Form.useForm();
@@ -38,8 +48,12 @@ export default function Tenants() {
   async function load() {
     setLoading(true);
     try {
-      const { data } = await api.get<Tenant[]>("/tenants");
-      setRows(data);
+      const [t, s] = await Promise.all([
+        api.get<Tenant[]>("/tenants"),
+        api.get<TenantSummary[]>("/tenants/summaries"),
+      ]);
+      setRows(t.data);
+      setSummaries(s.data);
     } finally {
       setLoading(false);
     }
@@ -47,6 +61,10 @@ export default function Tenants() {
   useEffect(() => {
     load();
   }, []);
+
+  function summaryOf(id: number) {
+    return summaries.find((s) => s.tenant_id === id);
+  }
 
   async function onCreate() {
     const values = await form.validateFields();
@@ -69,7 +87,7 @@ export default function Tenants() {
 
   return (
     <Card
-      title="租户管理"
+      title="客户服务 · 租户"
       extra={
         <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>
           新建租户
@@ -93,12 +111,31 @@ export default function Tenants() {
             dataIndex: "status",
             render: (s) => <Tag color={STATUS_COLOR[s]}>{s}</Tag>,
           },
+          {
+            title: "专线",
+            render: (_, r) => {
+              const s = summaryOf(r.id);
+              if (!s) return "-";
+              return (
+                <Space size={4}>
+                  <Tag color="green">{s.circuits_active} 活跃</Tag>
+                  {s.circuits_decommissioned > 0 && (
+                    <Tag>{s.circuits_decommissioned} 已拆</Tag>
+                  )}
+                  <span style={{ color: "#888", fontSize: 12 }}>
+                    {s.active_bandwidth_mbps} Mbps
+                  </span>
+                </Space>
+              );
+            },
+          },
           { title: "联系人", dataIndex: "contact_name" },
           { title: "云账号", dataIndex: "cloud_account" },
           {
             title: "操作",
             render: (_, r) => (
               <Space>
+                <Link to={`/circuits?tenant=${r.id}`}>管理专线</Link>
                 <Popconfirm title="确认删除该租户?" onConfirm={() => remove(r.id)}>
                   <a style={{ color: "#cf1322" }}>删除</a>
                 </Popconfirm>

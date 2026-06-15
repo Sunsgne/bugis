@@ -49,13 +49,13 @@ const { Header, Sider, Content } = Layout;
 
 const MENU = [
   { key: "/", icon: <DashboardOutlined />, label: "运营总览" },
-  { key: "/tenants", icon: <TeamOutlined />, label: "租户管理" },
+  { key: "/tenants", icon: <TeamOutlined />, label: "客户服务" },
   { key: "/sites", icon: <EnvironmentOutlined />, label: "数据中心" },
   { key: "/devices", icon: <ClusterOutlined />, label: "设备管理" },
   { key: "/controllers", icon: <CloudServerOutlined />, label: "控制器" },
   { key: "/control-plane", icon: <ShareAltOutlined />, label: "SDN 控制平面" },
   { key: "/catalog", icon: <AppstoreOutlined />, label: "服务套餐" },
-  { key: "/circuits", icon: <ApiOutlined />, label: "专线管理" },
+  { key: "/circuits", icon: <ApiOutlined />, label: "专线开通" },
   { key: "/work-orders", icon: <ProfileOutlined />, label: "工单流转" },
   { key: "/config", icon: <FileTextOutlined />, label: "配置管理" },
   { key: "/topology", icon: <PartitionOutlined />, label: "网络拓扑" },

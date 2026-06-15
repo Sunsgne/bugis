@@ -119,8 +119,15 @@ def import_devices(
 
 
 @router.get("/circuits/export")
-def export_circuits(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
-    circuits = db.execute(select(Circuit).order_by(Circuit.id)).scalars().all()
+def export_circuits(
+    tenant_id: int | None = None,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    stmt = select(Circuit).order_by(Circuit.id)
+    if tenant_id:
+        stmt = stmt.where(Circuit.tenant_id == tenant_id)
+    circuits = db.execute(stmt).scalars().all()
     tenants = {t.id: t.code for t in db.execute(select(Tenant)).scalars().all()}
     devices = {d.id: d.name for d in db.execute(select(Device)).scalars().all()}
     columns = [

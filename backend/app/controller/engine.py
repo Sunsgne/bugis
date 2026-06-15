@@ -138,7 +138,9 @@ class BugisController:
     ) -> dict:
         vni = circuit.vni or 0
         rt = circuit.route_target or f"65000:{vni}"
-        is_l3 = circuit.service_type in (ServiceType.L3VPN_EVPN, ServiceType.DCI)
+        is_l3 = circuit.service_type in (
+            ServiceType.L3VPN_EVPN, ServiceType.DCI, ServiceType.REMOTE_IPT,
+        )
 
         db.execute(delete(EvpnRoute).where(EvpnRoute.circuit_id == circuit.id))
 

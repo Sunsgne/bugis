@@ -127,6 +127,10 @@ def run() -> None:
                             service_type=ServiceType.DCI, bandwidth_mbps=10000,
                             sla_target="99.99", cos="ef", tier="gold",
                             description="10Gbps 数据中心互联"),
+            ServiceOffering(name="Remote IPT 跨境公网", code="RIPT-STD",
+                            service_type=ServiceType.REMOTE_IPT, bandwidth_mbps=500,
+                            sla_target="99.9", cos="af21", tier="silver",
+                            description="通过专线接入对端国家/地区公网出口 (IPT)"),
         ])
         db.flush()
 
@@ -177,6 +181,25 @@ def run() -> None:
         make_circuit("政务DCI数据中心互联", t_gov, ServiceType.DCI,
                      [("A", "BJ-BORDER-01", "GE1/0/3"),
                       ("Z", "SH-BORDER-01", "GE1/0/3")], 5000, sla="99.99")
+
+        # Remote IPT demo: bank in CN accesses US public internet via SH egress
+        c_ript = Circuit(
+            name="openai-azure", code=allocation.next_circuit_code(db),
+            tenant_id=t_bank.id, service_type=ServiceType.REMOTE_IPT,
+            bandwidth_mbps=200, sla_target="99.9", mtu=1500,
+            status=CircuitStatus.DECOMMISSIONED,
+            egress_country="US", egress_site_id=sh.id,
+            description="通过专线使用美国公网访问 Azure/OpenAI",
+        )
+        db.add(c_ript)
+        db.flush()
+        db.add(CircuitEndpoint(
+            circuit_id=c_ript.id, device_id=by_name["BJ-LEAF-01"].id,
+            label="A", interface_name="GE1/0/10",
+            gateway_ip="10.200.1.1", vlan_id=200,
+        ))
+        db.flush()
+        allocation.auto_allocate_circuit_fields(db, c_ript, 65001)
 
         # --- DCI / intra-DC links (capacity & topology) ---
         db.add_all([

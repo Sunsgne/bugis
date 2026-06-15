@@ -1,0 +1,58 @@
+{% import 'h3c/_macros.j2' as h3c %}
+{% set mode = endpoint.access_mode.value if endpoint.access_mode else 'dot1q' %}
+{% set svid = endpoint.vlan_id or circuit.vlan_id %}
+{% set cvid = endpoint.inner_vlan_id %}
+#
+# H3C Remote IPT - circuit={{ circuit.code }} vni={{ circuit.vni }}
+# device={{ device.name }} egress={{ circuit.egress_country }} public={{ circuit.ipt_public_ip }}
+#
+{% if is_egress %}
+! --- Egress border: NAT breakout to {{ circuit.egress_country }} public internet ---
+ip vpn-instance {{ circuit.vrf_name }}
+ route-distinguisher {{ circuit.route_distinguisher }}
+ address-family ipv4
+  vpn-target {{ circuit.route_target }} import-extcommunity
+  vpn-target {{ circuit.route_target }} export-extcommunity
+  import-route direct
+  import-route static
+#
+interface LoopBack{{ circuit.vni }}
+ ip binding vpn-instance {{ circuit.vrf_name }}
+ ip address {{ circuit.ipt_public_ip }} 255.255.255.255
+#
+ip route-static vpn-instance {{ circuit.vrf_name }} 0.0.0.0 0.0.0.0 <ipt-upstream-gw> description REMOTE-IPT-{{ circuit.code }}
+{% if circuit.ipt_nat_enabled %}
+nat outbound 2000 address-group 2000 vpn-instance {{ circuit.vrf_name }}
+nat address-group 2000
+ address {{ circuit.ipt_public_ip }} {{ circuit.ipt_public_ip }}
+#
+acl advanced 2000
+ rule permit ip source {{ circuit.vrf_name }} destination any
+{% endif %}
+{% else %}
+! --- Customer access: EVPN L3 IRB toward remote egress ---
+ip vpn-instance {{ circuit.vrf_name }}
+ route-distinguisher {{ circuit.route_distinguisher }}
+ address-family ipv4
+  vpn-target {{ circuit.route_target }} import-extcommunity
+  vpn-target {{ circuit.route_target }} export-extcommunity
+ address-family evpn
+  vpn-target {{ circuit.route_target }} import-extcommunity
+  vpn-target {{ circuit.route_target }} export-extcommunity
+#
+l2vpn enable
+{{ h3c.vsi_evpn_header(circuit, l3=true) }}
+#
+interface Vsi-interface{{ circuit.vni }}
+ ip binding vpn-instance {{ circuit.vrf_name }}
+ ip address {{ endpoint.gateway_ip }} 255.255.255.0
+ distributed-gateway local
+ mac-address evpn-anycast
+#
+interface {{ endpoint.interface_name }}
+ port link-mode bridge
+ mtu {{ circuit.mtu }}
+{{ h3c.service_instance_ac(endpoint, circuit, mode, svid, cvid) }}
+{% endif %}
+#
+return

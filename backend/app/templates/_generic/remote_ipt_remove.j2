@@ -1,0 +1,7 @@
+! ===== REMOTE IPT teardown =====
+! circuit={{ circuit.code }} device={{ device.name }} is_egress={{ is_egress|default(false) }}
+{% if is_egress %}
+! undo nat / static routes for vrf {{ circuit.vrf_name }}
+{% else %}
+! undo vsi / vrf / service-instance for {{ circuit.code }}
+{% endif %}

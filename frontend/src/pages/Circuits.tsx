@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   Button,
   Card,
@@ -17,6 +18,11 @@ import {
   Drawer,
   Collapse,
   Timeline,
+  Row,
+  Col,
+  Statistic,
+  Switch,
+  Segmented,
 } from "antd";
 import {
   PlusOutlined,
@@ -27,16 +33,30 @@ import {
   DownloadOutlined,
   HistoryOutlined,
   RadarChartOutlined,
+  DeleteOutlined,
 } from "@ant-design/icons";
 import { api } from "../api/client";
-import type { Circuit, Device, DeviceInterface, Offering, Tenant } from "../api/types";
+import type { Circuit, Device, DeviceInterface, Offering, Site, Tenant } from "../api/types";
 
 const SERVICE_LABEL: Record<string, string> = {
   l2vpn_evpn: "EVPN L2VPN",
   l3vpn_evpn: "EVPN L3VPN",
   evpn_vpws: "EVPN-VPWS",
   dci: "DCI 互联",
+  remote_ipt: "Remote IPT",
 };
+const EGRESS_COUNTRIES = [
+  { value: "CN", label: "中国 CN" },
+  { value: "HK", label: "香港 HK" },
+  { value: "SG", label: "新加坡 SG" },
+  { value: "JP", label: "日本 JP" },
+  { value: "US", label: "美国 US" },
+  { value: "GB", label: "英国 GB" },
+  { value: "DE", label: "德国 DE" },
+  { value: "AU", label: "澳大利亚 AU" },
+  { value: "TW", label: "台湾 TW" },
+  { value: "KR", label: "韩国 KR" },
+];
 const STATUS_COLOR: Record<string, string> = {
   draft: "default",
   pending: "gold",
@@ -48,10 +68,29 @@ const STATUS_COLOR: Record<string, string> = {
   failed: "red",
 };
 
+interface TenantSummary {
+  tenant_id: number;
+  circuits_total: number;
+  circuits_active: number;
+  circuits_decommissioned: number;
+  circuits_draft: number;
+  total_bandwidth_mbps: number;
+  active_bandwidth_mbps: number;
+  by_service_type: Record<string, number>;
+}
+
+const DELETABLE = new Set(["decommissioned", "draft", "failed"]);
+
 export default function Circuits() {
   const { message, modal } = AntApp.useApp();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tenantFilter = searchParams.get("tenant");
+  const selectedTenantId = tenantFilter ? Number(tenantFilter) : null;
+
   const [rows, setRows] = useState<Circuit[]>([]);
   const [tenants, setTenants] = useState<Tenant[]>([]);
+  const [summaries, setSummaries] = useState<TenantSummary[]>([]);
+  const [sites, setSites] = useState<Site[]>([]);
   const [devices, setDevices] = useState<Device[]>([]);
   const [offerings, setOfferings] = useState<Offering[]>([]);
   const [loading, setLoading] = useState(false);
@@ -66,31 +105,71 @@ export default function Circuits() {
   async function load() {
     setLoading(true);
     try {
-      const [c, t, d, o] = await Promise.all([
-        api.get<Circuit[]>("/circuits"),
+      const circuitUrl = selectedTenantId
+        ? `/circuits?tenant_id=${selectedTenantId}`
+        : "/circuits";
+      const [c, t, s, d, o, sum] = await Promise.all([
+        api.get<Circuit[]>(circuitUrl),
         api.get<Tenant[]>("/tenants"),
+        api.get<Site[]>("/sites"),
         api.get<Device[]>("/devices"),
         api.get<Offering[]>("/offerings?active=true"),
+        api.get<TenantSummary[]>("/tenants/summaries"),
       ]);
       setRows(c.data);
       setTenants(t.data);
+      setSites(s.data);
       setDevices(d.data);
       setOfferings(o.data);
+      setSummaries(sum.data);
     } finally {
       setLoading(false);
     }
   }
   useEffect(() => {
     load();
-  }, []);
+  }, [selectedTenantId]);
 
   const tenantName = (id: number) => tenants.find((t) => t.id === id)?.name || id;
   const deviceName = (id: number) => devices.find((d) => d.id === id)?.name || id;
+  const siteName = (id?: number) => sites.find((s) => s.id === id)?.name || id;
+
+  const activeSummary = useMemo(
+    () => summaries.find((s) => s.tenant_id === selectedTenantId),
+    [summaries, selectedTenantId],
+  );
+
+  function setTenantFilter(id: number | null) {
+    if (id) {
+      setSearchParams({ tenant: String(id) });
+    } else {
+      setSearchParams({});
+    }
+  }
+
+  async function removeCircuit(c: Circuit) {
+    try {
+      await api.delete(`/circuits/${c.id}`);
+      message.success(`专线 ${c.code} 已删除`);
+      load();
+    } catch (e: any) {
+      message.error(e?.response?.data?.detail || "删除失败");
+    }
+  }
 
   async function onCreate() {
     const values = await form.validateFields();
+    const payload = { ...values };
+    if (typeof payload.ipt_nat_enabled === "boolean") {
+      payload.ipt_nat_enabled = payload.ipt_nat_enabled ? 1 : 0;
+    }
+    if (payload.service_type !== "remote_ipt") {
+      delete payload.egress_country;
+      delete payload.egress_site_id;
+      delete payload.ipt_nat_enabled;
+    }
     try {
-      await api.post("/circuits", values);
+      await api.post("/circuits", payload);
       message.success("专线已创建（草稿），可点击开通下发配置");
       setOpen(false);
       form.resetFields();
@@ -261,22 +340,23 @@ export default function Circuits() {
 
   return (
     <Card
-      title="专线管理"
+      title="客户服务 · 专线"
       extra={
         <Space>
           <Button
             icon={<DownloadOutlined />}
             onClick={async () => {
-              const { data } = await api.get("/bulk/circuits/export", {
-                responseType: "text",
-              });
+              const url = selectedTenantId
+                ? `/bulk/circuits/export?tenant_id=${selectedTenantId}`
+                : "/bulk/circuits/export";
+              const { data } = await api.get(url, { responseType: "text" });
               const blob = new Blob([data], { type: "text/csv" });
-              const url = URL.createObjectURL(blob);
+              const dl = URL.createObjectURL(blob);
               const a = document.createElement("a");
-              a.href = url;
-              a.download = "circuits.csv";
+              a.href = dl;
+              a.download = selectedTenantId ? `circuits-tenant-${selectedTenantId}.csv` : "circuits.csv";
               a.click();
-              URL.revokeObjectURL(url);
+              URL.revokeObjectURL(dl);
             }}
           >
             导出 CSV
@@ -287,6 +367,52 @@ export default function Circuits() {
         </Space>
       }
     >
+      <div style={{ marginBottom: 16 }}>
+        <Segmented
+          value={selectedTenantId ?? "all"}
+          onChange={(v) => setTenantFilter(v === "all" ? null : Number(v))}
+          options={[
+            { label: `全部客户 (${summaries.reduce((n, s) => n + s.circuits_total, 0)})`, value: "all" },
+            ...tenants.map((t) => {
+              const sum = summaries.find((s) => s.tenant_id === t.id);
+              return {
+                value: t.id,
+                label: `${t.name} (${sum?.circuits_total ?? 0})`,
+              };
+            }),
+          ]}
+        />
+      </div>
+
+      {selectedTenantId && activeSummary && (
+        <Row gutter={16} style={{ marginBottom: 16 }}>
+          <Col xs={12} md={6}>
+            <Card size="small">
+              <Statistic title="活跃专线" value={activeSummary.circuits_active} suffix={`/ ${activeSummary.circuits_total}`} />
+            </Card>
+          </Col>
+          <Col xs={12} md={6}>
+            <Card size="small">
+              <Statistic title="活跃带宽" value={activeSummary.active_bandwidth_mbps} suffix="Mbps" />
+            </Card>
+          </Col>
+          <Col xs={12} md={6}>
+            <Card size="small">
+              <Statistic title="已拆除" value={activeSummary.circuits_decommissioned} valueStyle={{ color: "#8c8c8c" }} />
+            </Card>
+          </Col>
+          <Col xs={12} md={6}>
+            <Card size="small">
+              <Statistic
+                title="业务类型"
+                value={Object.keys(activeSummary.by_service_type).length}
+                suffix="种"
+              />
+            </Card>
+          </Col>
+        </Row>
+      )}
+
       <Table
         rowKey="id"
         loading={loading}
@@ -300,6 +426,16 @@ export default function Circuits() {
               <Descriptions.Item label="RD">{r.route_distinguisher}</Descriptions.Item>
               <Descriptions.Item label="RT">{r.route_target}</Descriptions.Item>
               <Descriptions.Item label="MTU">{r.mtu}</Descriptions.Item>
+              {r.service_type === "remote_ipt" && (
+                <>
+                  <Descriptions.Item label="出口国家">{r.egress_country}</Descriptions.Item>
+                  <Descriptions.Item label="出口站点">{siteName(r.egress_site_id)}</Descriptions.Item>
+                  <Descriptions.Item label="公网 IP">{r.ipt_public_ip}</Descriptions.Item>
+                  <Descriptions.Item label="NAT">
+                    {r.ipt_nat_enabled ? "启用" : "关闭"}
+                  </Descriptions.Item>
+                </>
+              )}
               <Descriptions.Item label="端点" span={3}>
                 {r.endpoints.map((e) => (
                   <Tag key={e.id}>
@@ -316,11 +452,17 @@ export default function Circuits() {
         columns={[
           { title: "编码", dataIndex: "code" },
           { title: "名称", dataIndex: "name" },
-          { title: "租户", render: (_, r) => tenantName(r.tenant_id) },
+          ...(!selectedTenantId
+            ? [{ title: "租户", render: (_: unknown, r: Circuit) => tenantName(r.tenant_id) }]
+            : []),
           {
             title: "业务类型",
             dataIndex: "service_type",
-            render: (s) => <Tag color="geekblue">{SERVICE_LABEL[s] || s}</Tag>,
+            render: (s: string) => (
+              <Tag color={s === "remote_ipt" ? "purple" : "geekblue"}>
+                {SERVICE_LABEL[s] || s}
+              </Tag>
+            ),
           },
           { title: "VNI", dataIndex: "vni" },
           {
@@ -336,9 +478,9 @@ export default function Circuits() {
           },
           {
             title: "操作",
-            width: 240,
+            width: 280,
             render: (_, r) => (
-              <Space>
+              <Space wrap>
                 <Tooltip
                   title={
                     r.status === "active"
@@ -355,33 +497,47 @@ export default function Circuits() {
                     {r.status === "active" ? "重新下发" : "开通"}
                   </Button>
                 </Tooltip>
-                <Tooltip title="变更带宽">
-                  <Button
-                    size="small"
-                    icon={<EditOutlined />}
-                    onClick={() => {
-                      setModifyTarget(r);
-                      modifyForm.setFieldsValue({ bandwidth_mbps: r.bandwidth_mbps });
-                    }}
-                  />
-                </Tooltip>
+                {r.status === "active" && (
+                  <Tooltip title="变更带宽">
+                    <Button
+                      size="small"
+                      icon={<EditOutlined />}
+                      onClick={() => {
+                        setModifyTarget(r);
+                        modifyForm.setFieldsValue({ bandwidth_mbps: r.bandwidth_mbps });
+                      }}
+                    />
+                  </Tooltip>
+                )}
                 <Tooltip title="预览各厂商配置">
                   <Button size="small" icon={<EyeOutlined />} onClick={() => preview(r)} />
                 </Tooltip>
-                <Tooltip title="端到端拨测">
-                  <Button
-                    size="small"
-                    icon={<RadarChartOutlined />}
-                    onClick={() => probe(r)}
-                    disabled={r.status !== "active"}
-                  />
-                </Tooltip>
+                {r.status === "active" && (
+                  <Tooltip title="端到端拨测">
+                    <Button
+                      size="small"
+                      icon={<RadarChartOutlined />}
+                      onClick={() => probe(r)}
+                    />
+                  </Tooltip>
+                )}
                 <Tooltip title="配置历史与版本对比">
                   <Button size="small" icon={<HistoryOutlined />} onClick={() => openHistory(r)} />
                 </Tooltip>
-                <Popconfirm title="确认拆除该专线?" onConfirm={() => decommission(r)}>
-                  <Button size="small" danger icon={<MinusCircleOutlined />} />
-                </Popconfirm>
+                {r.status !== "decommissioned" && r.status !== "draft" && (
+                  <Popconfirm title="确认拆除该专线?" onConfirm={() => decommission(r)}>
+                    <Button size="small" danger icon={<MinusCircleOutlined />} />
+                  </Popconfirm>
+                )}
+                {DELETABLE.has(r.status) && (
+                  <Popconfirm
+                    title="确认永久删除该专线记录?"
+                    description="仅删除系统记录，设备配置应已通过拆除工单清除"
+                    onConfirm={() => removeCircuit(r)}
+                  >
+                    <Button size="small" danger icon={<DeleteOutlined />} />
+                  </Popconfirm>
+                )}
               </Space>
             ),
           },
@@ -392,7 +548,9 @@ export default function Circuits() {
         form={form}
         tenants={tenants}
         devices={devices}
+        sites={sites}
         offerings={offerings}
+        defaultTenantId={selectedTenantId}
         onOk={onCreate}
         onCancel={() => setOpen(false)}
         message={message}
@@ -497,8 +655,25 @@ export default function Circuits() {
   );
 }
 
-function CreateModal({ open, form, tenants, devices, offerings, onOk, onCancel, message }: any) {
+function CreateModal({
+  open,
+  form,
+  tenants,
+  devices,
+  sites,
+  offerings,
+  defaultTenantId,
+  onOk,
+  onCancel,
+  message,
+}: any) {
   const [ifaceByDevice, setIfaceByDevice] = useState<Record<number, DeviceInterface[]>>({});
+
+  useEffect(() => {
+    if (open && defaultTenantId) {
+      form.setFieldValue("tenant_id", defaultTenantId);
+    }
+  }, [open, defaultTenantId, form]);
 
   async function loadIfaces(deviceId: number, autoDiscover = true) {
     if (!deviceId) return;
@@ -538,11 +713,17 @@ function CreateModal({ open, form, tenants, devices, offerings, onOk, onCancel, 
     });
   }
   return (
-    <Modal title="新建专线" open={open} onOk={onOk} onCancel={onCancel} width={680}>
+    <Modal title="新建专线" open={open} onOk={onOk} onCancel={onCancel} width={720}>
       <Form
         form={form}
         layout="vertical"
-        initialValues={{ service_type: "l2vpn_evpn", bandwidth_mbps: 100, mtu: 9000, endpoints: [{ label: "A" }, { label: "Z" }] }}
+        initialValues={{
+          service_type: "l2vpn_evpn",
+          bandwidth_mbps: 100,
+          mtu: 9000,
+          ipt_nat_enabled: true,
+          endpoints: [{ label: "A" }, { label: "Z" }],
+        }}
       >
         <Form.Item name="offering_id" label="选择套餐 (可选, 自动预填参数)">
           <Select
@@ -568,6 +749,14 @@ function CreateModal({ open, form, tenants, devices, offerings, onOk, onCancel, 
         <Space size="middle" style={{ display: "flex" }}>
           <Form.Item name="service_type" label="业务类型" style={{ flex: 1 }}>
             <Select
+              onChange={(v) => {
+                if (v === "remote_ipt") {
+                  const eps = form.getFieldValue("endpoints") || [];
+                  if (eps.length > 1) {
+                    form.setFieldValue("endpoints", [eps[0]]);
+                  }
+                }
+              }}
               options={Object.entries(SERVICE_LABEL).map(([value, label]) => ({ value, label }))}
             />
           </Form.Item>
@@ -578,6 +767,58 @@ function CreateModal({ open, form, tenants, devices, offerings, onOk, onCancel, 
             <Input placeholder="99.95" />
           </Form.Item>
         </Space>
+
+        <Form.Item noStyle shouldUpdate={(p, c) => p.service_type !== c.service_type}>
+          {({ getFieldValue }) =>
+            getFieldValue("service_type") === "remote_ipt" ? (
+              <div
+                style={{
+                  background: "#f9f0ff",
+                  border: "1px solid #d3adf7",
+                  borderRadius: 8,
+                  padding: "12px 12px 0",
+                  marginBottom: 12,
+                }}
+              >
+                <div style={{ fontWeight: 600, marginBottom: 8, color: "#531dab" }}>
+                  Remote IPT · 跨境公网出口
+                </div>
+                <div style={{ color: "#666", fontSize: 12, marginBottom: 8 }}>
+                  客户通过专线接入本地端口，流量经 EVPN 隧道送至对端国家 PoP，
+                  在边界网关 NAT 后使用当地公网 (IPT)。
+                </div>
+                <Space size="middle" style={{ display: "flex", flexWrap: "wrap" }}>
+                  <Form.Item
+                    name="egress_country"
+                    label="公网出口国家/地区"
+                    rules={[{ required: true, message: "请选择出口国家" }]}
+                    style={{ minWidth: 200 }}
+                  >
+                    <Select options={EGRESS_COUNTRIES} placeholder="例如 US" />
+                  </Form.Item>
+                  <Form.Item
+                    name="egress_site_id"
+                    label="出口 PoP 站点"
+                    rules={[{ required: true, message: "请选择出口站点" }]}
+                    style={{ minWidth: 220 }}
+                  >
+                    <Select
+                      showSearch
+                      optionFilterProp="label"
+                      options={sites.map((s: Site) => ({
+                        value: s.id,
+                        label: `${s.name} (${s.region || s.code})`,
+                      }))}
+                    />
+                  </Form.Item>
+                  <Form.Item name="ipt_nat_enabled" label="出口 NAT" valuePropName="checked">
+                    <Switch checkedChildren="开" unCheckedChildren="关" />
+                  </Form.Item>
+                </Space>
+              </div>
+            ) : null
+          }
+        </Form.Item>
 
         <div style={{ fontWeight: 600, marginBottom: 8 }}>接入端点</div>
         <Form.List name="endpoints">

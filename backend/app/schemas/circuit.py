@@ -43,6 +43,10 @@ class CircuitBase(BaseModel):
     sla_target: str | None = None
     cos: str | None = None
     description: str | None = None
+    egress_country: str | None = None
+    egress_site_id: int | None = None
+    ipt_public_ip: str | None = None
+    ipt_nat_enabled: int = 1
 
 
 class CircuitCreate(CircuitBase):
@@ -60,6 +64,10 @@ class CircuitUpdate(BaseModel):
     sla_target: str | None = None
     cos: str | None = None
     description: str | None = None
+    egress_country: str | None = None
+    egress_site_id: int | None = None
+    ipt_public_ip: str | None = None
+    ipt_nat_enabled: int | None = None
     status: CircuitStatus | None = None
 
 

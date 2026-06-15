@@ -1,0 +1,23 @@
+{% import 'h3c/_macros.j2' as h3c %}
+{% set mode = endpoint.access_mode.value if endpoint.access_mode else 'dot1q' %}
+{% set svid = endpoint.vlan_id or circuit.vlan_id %}
+#
+# H3C Remote IPT remove - circuit={{ circuit.code }} device={{ device.name }}
+#
+{% if is_egress %}
+undo ip route-static vpn-instance {{ circuit.vrf_name }} 0.0.0.0 0.0.0.0
+undo interface LoopBack{{ circuit.vni }}
+undo nat outbound 2000
+undo nat address-group 2000
+undo acl advanced 2000
+undo ip vpn-instance {{ circuit.vrf_name }}
+{% else %}
+interface {{ endpoint.interface_name }}
+ undo service-instance {{ svid }}
+#
+undo interface Vsi-interface{{ circuit.vni }}
+undo vsi vsi_{{ circuit.code }}
+undo ip vpn-instance {{ circuit.vrf_name }}
+{% endif %}
+#
+return

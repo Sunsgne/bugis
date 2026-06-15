@@ -23,6 +23,7 @@ const SERVICE_LABEL: Record<string, string> = {
   l3vpn_evpn: "EVPN L3VPN",
   evpn_vpws: "EVPN-VPWS",
   dci: "DCI 互联",
+  remote_ipt: "Remote IPT",
 };
 const TIER_COLOR: Record<string, string> = {
   gold: "gold",

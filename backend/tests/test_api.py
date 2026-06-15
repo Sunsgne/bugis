@@ -844,3 +844,101 @@ def test_telemetry_and_health(client, auth_headers):
     ).json()
     assert health["samples"] >= 1
     assert 0 <= health["health_score"] <= 100
+
+
+def test_delete_decommissioned_circuit(client, auth_headers):
+    _, tenant, dev_a, _ = _bootstrap_topology(client, auth_headers)
+    circuit = client.post(
+        "/api/v1/circuits", headers=auth_headers,
+        json={"name": "to-delete", "tenant_id": tenant["id"], "service_type": "l2vpn_evpn",
+              "endpoints": [{"label": "A", "device_id": dev_a["id"], "interface_name": "GE1/0/1"}]},
+    ).json()
+    client.post(
+        f"/api/v1/work-orders/provision/{circuit['id']}?wo_type=decommission",
+        headers=auth_headers,
+    )
+    refreshed = client.get(f"/api/v1/circuits/{circuit['id']}", headers=auth_headers).json()
+    assert refreshed["status"] == "decommissioned"
+    assert client.delete(
+        f"/api/v1/circuits/{circuit['id']}", headers=auth_headers
+    ).status_code == 204
+    assert client.get(f"/api/v1/circuits/{circuit['id']}", headers=auth_headers).status_code == 404
+
+
+def test_delete_active_circuit_forbidden(client, auth_headers):
+    _, tenant, dev_a, _ = _bootstrap_topology(client, auth_headers)
+    circuit = client.post(
+        "/api/v1/circuits", headers=auth_headers,
+        json={"name": "active-no-del", "tenant_id": tenant["id"], "service_type": "l2vpn_evpn",
+              "endpoints": [{"label": "A", "device_id": dev_a["id"], "interface_name": "GE1/0/1"}]},
+    ).json()
+    client.post(f"/api/v1/work-orders/provision/{circuit['id']}", headers=auth_headers)
+    r = client.delete(f"/api/v1/circuits/{circuit['id']}", headers=auth_headers)
+    assert r.status_code == 409
+
+
+def test_tenant_summaries(client, auth_headers):
+    _, tenant, dev_a, _ = _bootstrap_topology(client, auth_headers)
+    client.post(
+        "/api/v1/circuits", headers=auth_headers,
+        json={"name": "sum-c", "tenant_id": tenant["id"], "service_type": "l2vpn_evpn",
+              "bandwidth_mbps": 500,
+              "endpoints": [{"label": "A", "device_id": dev_a["id"], "interface_name": "GE1/0/1"}]},
+    )
+    summaries = client.get("/api/v1/tenants/summaries", headers=auth_headers).json()
+    row = next(s for s in summaries if s["tenant_id"] == tenant["id"])
+    assert row["circuits_total"] >= 1
+    assert row["total_bandwidth_mbps"] >= 500
+    one = client.get(f"/api/v1/tenants/{tenant['id']}/summary", headers=auth_headers).json()
+    assert one["tenant_id"] == tenant["id"]
+
+
+def test_remote_ipt_provision(client, auth_headers):
+    n = next(_seq)
+    egress = client.post(
+        "/api/v1/sites", headers=auth_headers,
+        json={"name": f"US PoP {n}", "code": f"US-POP{n}", "region": "US", "bgp_asn": 65100},
+    ).json()
+    access = client.post(
+        "/api/v1/sites", headers=auth_headers,
+        json={"name": f"CN DC {n}", "code": f"CN-DC{n}", "region": "CN", "bgp_asn": 65101},
+    ).json()
+    tenant = client.post(
+        "/api/v1/tenants", headers=auth_headers,
+        json={"name": f"RIPT Tenant {n}", "code": f"RIPT{n}", "type": "enterprise"},
+    ).json()
+    border = client.post(
+        "/api/v1/devices", headers=auth_headers,
+        json={"name": f"US-BORDER-{n}", "vendor": "huawei", "role": "dci_gw",
+              "overlay_tech": "vxlan_evpn", "status": "online",
+              "mgmt_ip": f"10.20.{n}.1", "bgp_asn": 65100, "site_id": egress["id"]},
+    ).json()
+    leaf = client.post(
+        "/api/v1/devices", headers=auth_headers,
+        json={"name": f"CN-LEAF-{n}", "vendor": "h3c", "role": "leaf",
+              "overlay_tech": "vxlan_evpn", "status": "online",
+              "mgmt_ip": f"10.21.{n}.1", "bgp_asn": 65101, "site_id": access["id"]},
+    ).json()
+    circuit = client.post(
+        "/api/v1/circuits", headers=auth_headers,
+        json={
+            "name": "CN-US Remote IPT", "tenant_id": tenant["id"],
+            "service_type": "remote_ipt", "bandwidth_mbps": 200,
+            "egress_country": "US", "egress_site_id": egress["id"],
+            "ipt_nat_enabled": 1,
+            "endpoints": [{
+                "label": "A", "device_id": leaf["id"], "interface_name": "GE1/0/5",
+                "gateway_ip": "10.200.1.1", "vlan_id": 200,
+            }],
+        },
+    ).json()
+    assert circuit["ipt_public_ip"]
+    v = client.get(f"/api/v1/circuits/{circuit['id']}/validate", headers=auth_headers).json()
+    assert v["ok"]
+    wo = client.post(
+        f"/api/v1/work-orders/provision/{circuit['id']}", headers=auth_headers
+    ).json()
+    assert wo["status"] == "completed"
+    configs = " ".join(j.get("rendered_config", "") for j in wo["config_jobs"])
+    assert "REMOTE IPT" in configs or "Remote IPT" in configs or "remote_ipt" in configs.lower()
+    assert circuit["code"] in configs or "vrf_" in configs

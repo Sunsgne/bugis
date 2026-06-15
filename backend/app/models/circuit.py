@@ -53,6 +53,14 @@ class Circuit(Base, TimestampMixin):
 
     description: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
+    # Remote IPT: breakout in another country/region via overlay to border.
+    egress_country: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    egress_site_id: Mapped[int | None] = mapped_column(
+        ForeignKey("sites.id", ondelete="SET NULL"), nullable=True
+    )
+    ipt_public_ip: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    ipt_nat_enabled: Mapped[int] = mapped_column(Integer, default=1)
+
     tenant: Mapped["Tenant"] = relationship(back_populates="circuits")
     endpoints: Mapped[list["CircuitEndpoint"]] = relationship(
         back_populates="circuit", cascade="all, delete-orphan"

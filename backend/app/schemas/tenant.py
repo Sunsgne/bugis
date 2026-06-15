@@ -36,3 +36,14 @@ class TenantUpdate(BaseModel):
 
 class TenantOut(TenantBase, TimestampedSchema):
     id: int
+
+
+class TenantSummary(BaseModel):
+    tenant_id: int
+    circuits_total: int = 0
+    circuits_active: int = 0
+    circuits_decommissioned: int = 0
+    circuits_draft: int = 0
+    total_bandwidth_mbps: int = 0
+    active_bandwidth_mbps: int = 0
+    by_service_type: dict[str, int] = {}
