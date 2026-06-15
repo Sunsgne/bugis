@@ -48,6 +48,13 @@ def validate_circuit(db: Session, circuit: Circuit) -> list[Issue]:
     elif not (VNI_MIN <= circuit.vni <= VNI_MAX):
         issues.append(Issue("error", "vni_range", f"VNI {circuit.vni} 超出范围"))
 
+    if not circuit.vsi_name:
+        issues.append(Issue("error", "missing_vsi", "缺少 VSI 名称"))
+    elif len(circuit.vsi_name) > 63:
+        issues.append(Issue("error", "vsi_invalid", "VSI 名称过长"))
+    elif not all(c.isalnum() or c in "-_" for c in circuit.vsi_name):
+        issues.append(Issue("warning", "vsi_format", f"VSI {circuit.vsi_name} 含特殊字符，请确认设备支持"))
+
     if circuit.vlan_id is not None and not (VLAN_MIN <= circuit.vlan_id <= VLAN_MAX):
         issues.append(Issue("error", "vlan_range", f"VLAN {circuit.vlan_id} 超出范围"))
 
@@ -155,6 +162,19 @@ def validate_circuit(db: Session, circuit: Circuit) -> list[Issue]:
             issues.append(
                 Issue("error", "vni_collision",
                       f"VNI {circuit.vni} 与专线 {other.code} 冲突")
+            )
+
+    # VSI collision
+    if circuit.vsi_name:
+        other = db.execute(
+            select(Circuit).where(
+                Circuit.vsi_name == circuit.vsi_name, Circuit.id != circuit.id
+            )
+        ).scalars().first()
+        if other:
+            issues.append(
+                Issue("error", "vsi_collision",
+                      f"VSI {circuit.vsi_name} 与专线 {other.code} 冲突")
             )
 
     # Endpoint interface naming present

@@ -390,6 +390,14 @@ export default function Circuits() {
   async function onCreate() {
     const values = await form.validateFields();
     const payload = { ...values };
+    if (payload.vni === undefined || payload.vni === null || payload.vni === "") {
+      delete payload.vni;
+    }
+    if (!payload.vsi_name || !String(payload.vsi_name).trim()) {
+      delete payload.vsi_name;
+    } else {
+      payload.vsi_name = String(payload.vsi_name).trim();
+    }
     if (typeof payload.ipt_nat_enabled === "boolean") {
       payload.ipt_nat_enabled = payload.ipt_nat_enabled ? 1 : 0;
     }
@@ -697,6 +705,7 @@ export default function Circuits() {
                     children: (
                       <Descriptions size="small" column={3} bordered>
                         <Descriptions.Item label="VNI">{detail.vni}</Descriptions.Item>
+                        <Descriptions.Item label="VSI">{detail.vsi_name || "-"}</Descriptions.Item>
                         <Descriptions.Item label="VLAN">{detail.vlan_id}</Descriptions.Item>
                         <Descriptions.Item label="VRF">{detail.vrf_name}</Descriptions.Item>
                         <Descriptions.Item label="RD">{detail.route_distinguisher}</Descriptions.Item>
@@ -769,7 +778,14 @@ export default function Circuits() {
               </Tag>
             ),
           },
-          { title: "VNI", dataIndex: "vni" },
+          { title: "VNI", dataIndex: "vni", width: 90 },
+          {
+            title: "VSI",
+            dataIndex: "vsi_name",
+            width: 140,
+            ellipsis: true,
+            render: (v) => v || "-",
+          },
           {
             title: "带宽",
             dataIndex: "bandwidth_mbps",
@@ -1184,6 +1200,53 @@ function CreateModal({
             </Form.Item>
           </Col>
         </Row>
+
+        <Collapse
+          ghost
+          items={[
+            {
+              key: "evpn",
+              label: "EVPN 标识（VNI / VSI · 留空自动编排）",
+              children: (
+                <Row gutter={16}>
+                  <Col span={12}>
+                    <Form.Item
+                      name="vni"
+                      label="VNI"
+                      extra="留空则平台自动分配，不可与已有专线重复"
+                      rules={[
+                        {
+                          type: "number",
+                          min: 1,
+                          max: 16777215,
+                          message: "VNI 范围 1–16777215",
+                        },
+                      ]}
+                    >
+                      <InputNumber min={1} max={16777215} style={{ width: "100%" }} placeholder="自动分配" />
+                    </Form.Item>
+                  </Col>
+                  <Col span={12}>
+                    <Form.Item
+                      name="vsi_name"
+                      label="VSI 名称"
+                      extra="H3C 等设备 VSI 实例名，留空则按编码自动生成"
+                      rules={[
+                        { max: 63, message: "最长 63 字符" },
+                        {
+                          pattern: /^[A-Za-z0-9_-]*$/,
+                          message: "仅允许字母、数字、下划线、连字符",
+                        },
+                      ]}
+                    >
+                      <Input placeholder="例如 vsi_cir_ab12cd" />
+                    </Form.Item>
+                  </Col>
+                </Row>
+              ),
+            },
+          ]}
+        />
 
         <Form.Item noStyle shouldUpdate={(p, c) => p.service_type !== c.service_type}>
           {({ getFieldValue }) =>

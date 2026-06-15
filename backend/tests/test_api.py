@@ -205,8 +205,11 @@ def test_validation_blocks_collision(client, auth_headers):
             ],
         },
     ).json()
-    # Second circuit forced onto the same VNI -> collision.
-    dup = client.post(
+    assert base.get("vni") is not None
+    assert base.get("vsi_name") is not None
+
+    # Duplicate VNI rejected at create time.
+    dup_resp = client.post(
         "/api/v1/circuits",
         headers=auth_headers,
         json={
@@ -217,16 +220,25 @@ def test_validation_blocks_collision(client, auth_headers):
                 {"label": "A", "device_id": dev_z["id"], "interface_name": "GE1/0/3"},
             ],
         },
-    ).json()
-    v = client.get(f"/api/v1/circuits/{dup['id']}/validate", headers=auth_headers).json()
-    assert v["ok"] is False
-    assert any(i["code"] == "vni_collision" for i in v["issues"])
+    )
+    assert dup_resp.status_code == 409
+    assert "VNI" in dup_resp.json()["detail"]
 
-    # Provisioning must be blocked by the pre-check.
-    wo = client.post(
-        f"/api/v1/work-orders/provision/{dup['id']}", headers=auth_headers
-    ).json()
-    assert wo["status"] == "failed"
+    # Duplicate VSI rejected at create time.
+    vsi_resp = client.post(
+        "/api/v1/circuits",
+        headers=auth_headers,
+        json={
+            "name": "VSI dup", "tenant_id": tenant["id"],
+            "service_type": "l2vpn_evpn", "bandwidth_mbps": 100,
+            "vsi_name": base["vsi_name"],
+            "endpoints": [
+                {"label": "A", "device_id": dev_z["id"], "interface_name": "GE1/0/4"},
+            ],
+        },
+    )
+    assert vsi_resp.status_code == 409
+    assert "VSI" in vsi_resp.json()["detail"]
 
 
 def test_offering_prefill(client, auth_headers):

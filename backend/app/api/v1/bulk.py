@@ -153,7 +153,7 @@ def export_circuits(
     tenants = {t.id: t.code for t in db.execute(select(Tenant)).scalars().all()}
     devices = {d.id: d.name for d in db.execute(select(Device)).scalars().all()}
     columns = [
-        "code", "name", "tenant_code", "service_type", "status", "vni", "vlan_id",
+        "code", "name", "tenant_code", "service_type", "status", "vni", "vsi_name", "vlan_id",
         "vrf_name", "rd", "rt", "bandwidth_mbps", "sla_target", "endpoints",
     ]
     rows = []
@@ -169,6 +169,7 @@ def export_circuits(
             "service_type": c.service_type.value,
             "status": c.status.value,
             "vni": c.vni or "",
+            "vsi_name": c.vsi_name or "",
             "vlan_id": c.vlan_id or "",
             "vrf_name": c.vrf_name or "",
             "rd": c.route_distinguisher or "",

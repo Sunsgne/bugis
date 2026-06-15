@@ -162,6 +162,26 @@ def create_circuit(
 
     circuit = Circuit(**data)
     circuit.code = payload.code or allocation.next_circuit_code(db)
+
+    if circuit.vni is not None:
+        if not (validation.VNI_MIN <= circuit.vni <= validation.VNI_MAX):
+            raise HTTPException(status_code=400, detail=f"VNI {circuit.vni} 超出有效范围")
+        other = allocation.vni_in_use(db, circuit.vni)
+        if other:
+            raise HTTPException(
+                status_code=409,
+                detail=f"VNI {circuit.vni} 已被专线 {other.code} 占用",
+            )
+
+    if circuit.vsi_name:
+        circuit.vsi_name = allocation.normalize_vsi_name(circuit.vsi_name)
+        other = allocation.vsi_in_use(db, circuit.vsi_name)
+        if other:
+            raise HTTPException(
+                status_code=409,
+                detail=f"VSI {circuit.vsi_name} 已被专线 {other.code} 占用",
+            )
+
     db.add(circuit)
     db.flush()
 

@@ -35,7 +35,8 @@ class Circuit(Base, TimestampMixin):
     )
 
     # EVPN identifiers
-    vni: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    vni: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    vsi_name: Mapped[str | None] = mapped_column(String(64), nullable=True, unique=True, index=True)
     vlan_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     vrf_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
     route_distinguisher: Mapped[str | None] = mapped_column(String(64), nullable=True)

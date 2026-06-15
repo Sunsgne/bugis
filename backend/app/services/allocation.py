@@ -14,14 +14,59 @@ from sqlalchemy.orm import Session
 from app.models.circuit import Circuit
 
 VNI_BASE = 10000
-VNI_MAX = 16_000_000
+VNI_MAX = 16_777_215
 VLAN_BASE = 100
 VLAN_MAX = 4000
+VSI_MAX_LEN = 63
 
 
 def _used_vnis(db: Session) -> set[int]:
     rows = db.execute(select(Circuit.vni).where(Circuit.vni.is_not(None))).all()
     return {r[0] for r in rows}
+
+
+def _used_vsis(db: Session) -> set[str]:
+    rows = db.execute(
+        select(Circuit.vsi_name).where(Circuit.vsi_name.is_not(None))
+    ).all()
+    return {r[0] for r in rows}
+
+
+def build_vsi_name(code: str) -> str:
+    """Default VSI name derived from circuit code (H3C-safe)."""
+    return f"vsi_{code.replace('-', '_').lower()}"[:VSI_MAX_LEN]
+
+
+def normalize_vsi_name(name: str) -> str:
+    return name.strip()[:VSI_MAX_LEN]
+
+
+def allocate_vsi(db: Session, code: str) -> str:
+    used = _used_vsis(db)
+    base = build_vsi_name(code)
+    if base not in used:
+        return base
+    candidate = base
+    n = 2
+    while candidate in used:
+        suffix = f"_{n}"
+        candidate = f"{base[: VSI_MAX_LEN - len(suffix)]}{suffix}"
+        n += 1
+    return candidate
+
+
+def vni_in_use(db: Session, vni: int, *, exclude_circuit_id: int | None = None) -> Circuit | None:
+    stmt = select(Circuit).where(Circuit.vni == vni)
+    if exclude_circuit_id is not None:
+        stmt = stmt.where(Circuit.id != exclude_circuit_id)
+    return db.execute(stmt).scalars().first()
+
+
+def vsi_in_use(db: Session, vsi_name: str, *, exclude_circuit_id: int | None = None) -> Circuit | None:
+    stmt = select(Circuit).where(Circuit.vsi_name == vsi_name)
+    if exclude_circuit_id is not None:
+        stmt = stmt.where(Circuit.id != exclude_circuit_id)
+    return db.execute(stmt).scalars().first()
 
 
 def _used_vlans(db: Session) -> set[int]:
@@ -96,6 +141,8 @@ def auto_allocate_circuit_fields(db: Session, circuit: Circuit, asn: int | None)
     """Fill in any unset EVPN identifiers on a circuit in-place."""
     if circuit.vni is None:
         circuit.vni = allocate_vni(db)
+    if not circuit.vsi_name:
+        circuit.vsi_name = allocate_vsi(db, circuit.code)
     if circuit.vlan_id is None:
         circuit.vlan_id = allocate_vlan(db)
     if not circuit.route_distinguisher:

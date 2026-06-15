@@ -120,6 +120,7 @@ export interface Circuit {
   service_type: string;
   status: string;
   vni?: number;
+  vsi_name?: string;
   vlan_id?: number;
   vrf_name?: string;
   route_distinguisher?: string;

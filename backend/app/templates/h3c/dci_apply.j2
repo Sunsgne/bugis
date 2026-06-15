@@ -3,7 +3,7 @@
 # role={{ device.role.value }} loopback={{ device.loopback_ip }} asn={{ device.bgp_asn }}
 #
 l2vpn enable
-vsi vsi_{{ circuit.code }}
+vsi {{ circuit.vsi_name }}
  vxlan {{ circuit.vni }}
  evpn encapsulation vxlan
   route-distinguisher {{ circuit.route_distinguisher }}

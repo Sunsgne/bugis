@@ -5,6 +5,6 @@
 interface {{ endpoint.interface_name }}
  undo service-instance {{ svid or 1 }}
 #
-undo vsi vsi_{{ circuit.code }}
+undo vsi {{ circuit.vsi_name }}
 #
 return

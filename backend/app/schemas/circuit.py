@@ -33,6 +33,7 @@ class CircuitBase(BaseModel):
     service_type: ServiceType = ServiceType.L2VPN_EVPN
     # EVPN identifiers - auto-allocated when omitted.
     vni: int | None = None
+    vsi_name: str | None = None
     vlan_id: int | None = None
     vrf_name: str | None = None
     route_distinguisher: str | None = None

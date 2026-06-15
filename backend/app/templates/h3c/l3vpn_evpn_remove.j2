@@ -5,7 +5,7 @@ undo interface Vsi-interface{{ circuit.vni }}
 interface {{ endpoint.interface_name }}
  undo service-instance {{ circuit.vlan_id or endpoint.vlan_id }}
 #
-undo vsi vsi_{{ circuit.code }}
+undo vsi {{ circuit.vsi_name }}
 undo ip vpn-instance {{ circuit.vrf_name }}
 #
 return

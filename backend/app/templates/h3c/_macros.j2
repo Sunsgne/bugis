@@ -1,6 +1,6 @@
 {# H3C Comware7 EVPN VXLAN shared fragments #}
 {% macro vsi_evpn_header(circuit, l3=false) -%}
-vsi vsi_{{ circuit.code }}
+vsi {{ circuit.vsi_name }}
  description {{ circuit.name }} (tenant={{ circuit.tenant_id }})
 {% if l3 %}
  gateway vsi-interface Vsi-interface{{ circuit.vni }}
@@ -27,5 +27,5 @@ vsi vsi_{{ circuit.code }}
   qos car outbound any cir {{ circuit.bandwidth_mbps * 1000 }} cbs {{ circuit.bandwidth_mbps * 1000 * 25 }}
 {% endif %}
   statistics enable
-  xconnect vsi vsi_{{ circuit.code }}
+  xconnect vsi {{ circuit.vsi_name }}
 {%- endmacro %}
