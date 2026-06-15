@@ -19,6 +19,7 @@ frontend/.vite/
 # Local-only deployment/SSH helpers (may contain credentials) - never commit
 deploy/_remote*.py
 deploy/remote.py
+deploy/demo.env
 
 # Editor / OS
 .DS_Store

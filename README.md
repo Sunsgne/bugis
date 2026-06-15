@@ -152,6 +152,30 @@ cd backend && python -m pytest -q
 
 本平台的南向驱动层即为对接上述控制器 / 设备的抽象点。
 
+## 🚀 Demo 环境自动部署
+
+公开 Demo：`http://203.117.117.196:3300/`（账号 `admin` / `admin123`）
+
+每次合并到 `main` 后，可通过 GitHub Actions 自动同步 Demo（需在仓库 Secrets 配置）：
+
+| Secret | 说明 |
+|--------|------|
+| `DEMO_SSH_PASSWORD` | **必填**，远程 SSH 密码 |
+| `DEMO_SSH_HOST` | 默认 `203.117.117.196` |
+| `DEMO_SSH_PORT` | 默认 `2333` |
+| `DEMO_SSH_USER` | 默认 `root` |
+| `DEMO_REMOTE_DIR` | 默认 `/root/bugis` |
+
+本地手动部署：
+
+```bash
+cp deploy/demo.env.example deploy/demo.env   # 填入密码，勿提交
+source deploy/demo.env
+./scripts/deploy-demo.sh
+```
+
+Workflow 文件：`.github/workflows/demo-deploy.yml`（push `main` 或手动触发）。
+
 ## ⚠️ 说明
 
 - 默认 **dry-run** 模式，渲染的厂商配置仅用于审阅，不会下发到真实设备。
