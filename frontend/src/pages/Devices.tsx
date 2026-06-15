@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import {
   Button,
   Card,
+  Collapse,
+  Divider,
   Form,
   Input,
   InputNumber,
@@ -12,13 +14,14 @@ import {
   Table,
   Tag,
   Tooltip,
+  Typography,
   Upload,
   App as AntApp,
   Popconfirm,
 } from "antd";
 import { PlusOutlined, DownloadOutlined, UploadOutlined, ApiOutlined, RocketOutlined } from "@ant-design/icons";
 import { api } from "../api/client";
-import type { Device, DeviceInterface, Site, SvidUsage } from "../api/types";
+import type { Device, DeviceInterface, Site, SnmpDefaults, SvidUsage } from "../api/types";
 import { action, empty, page, toast } from "../constants/uiCopy";
 
 const VENDOR_COLOR: Record<string, string> = {
@@ -39,14 +42,23 @@ const ROLES = ["spine", "leaf", "border_leaf", "vtep", "pe", "p", "rr", "dci_gw"
 const OVERLAYS = ["vxlan_evpn", "srmpls_evpn"];
 const VENDORS = ["h3c", "huawei", "juniper", "arista", "cisco", "frr"];
 
+const FALLBACK_SNMP: SnmpDefaults = {
+  enabled: true,
+  port: 161,
+  community: "bugis-ro",
+  version: "2c",
+};
+
 export default function Devices() {
   const { message, modal } = AntApp.useApp();
   const [rows, setRows] = useState<Device[]>([]);
   const [sites, setSites] = useState<Site[]>([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
+  const [snmpDefaults, setSnmpDefaults] = useState<SnmpDefaults>(FALLBACK_SNMP);
   const [form] = Form.useForm();
   const [ifaces, setIfaces] = useState<Record<number, DeviceInterface[]>>({});
+  const watchSnmpEnabled = Form.useWatch("snmp_enabled", form);
 
   async function loadIfaces(deviceId: number) {
     const { data } = await api.get<DeviceInterface[]>(`/devices/${deviceId}/interfaces`);
@@ -85,10 +97,41 @@ export default function Devices() {
     load();
   }, []);
 
+  async function openCreateModal() {
+    let defaults = FALLBACK_SNMP;
+    try {
+      const { data } = await api.get<SnmpDefaults>("/system/snmp-defaults");
+      defaults = data;
+      setSnmpDefaults(data);
+    } catch {
+      /* use fallback */
+    }
+    form.setFieldsValue({
+      vendor: "h3c",
+      role: "leaf",
+      overlay_tech: "vxlan_evpn",
+      status: "online",
+      netconf_port: 830,
+      ssh_port: 22,
+      snmp_enabled: defaults.enabled,
+      snmp_port: defaults.port,
+      snmp_community: defaults.community,
+      snmp_version: defaults.version,
+    });
+    setOpen(true);
+  }
+
   async function onCreate() {
     const values = await form.validateFields();
+    const payload = { ...values };
+    if (!payload.snmp_enabled) {
+      payload.snmp_community = null;
+    } else if (payload.snmp_community === snmpDefaults.community) {
+      // 与平台默认相同时可不落库，运行时自动继承
+      payload.snmp_community = null;
+    }
     try {
-      await api.post("/devices", values);
+      await api.post("/devices", payload);
       message.success("设备已纳管");
       setOpen(false);
       form.resetFields();
@@ -247,7 +290,7 @@ export default function Devices() {
           <Upload accept=".csv" showUploadList={false} beforeUpload={importCsv}>
             <Button icon={<UploadOutlined />}>{action.import} CSV</Button>
           </Upload>
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>
+          <Button type="primary" icon={<PlusOutlined />} onClick={openCreateModal}>
             纳管设备
           </Button>
         </Space>
@@ -341,6 +384,16 @@ export default function Devices() {
             ),
           },
           { title: "管理IP", dataIndex: "mgmt_ip" },
+          {
+            title: "SNMP",
+            width: 88,
+            render: (_, r) =>
+              r.snmp_enabled === false ? (
+                <Tag>关闭</Tag>
+              ) : (
+                <Tag color="blue">{r.snmp_version || "2c"}</Tag>
+              ),
+          },
           { title: "Loopback", dataIndex: "loopback_ip" },
           { title: "ASN", dataIndex: "bgp_asn" },
           { title: "站点", render: (_, r) => siteName(r.site_id) },
@@ -373,21 +426,10 @@ export default function Devices() {
         open={open}
         onOk={onCreate}
         onCancel={() => setOpen(false)}
-        width={620}
+        width={720}
       >
-        <Form
-          form={form}
-          layout="vertical"
-          initialValues={{
-            vendor: "h3c",
-            role: "leaf",
-            overlay_tech: "vxlan_evpn",
-            status: "online",
-            netconf_port: 830,
-            ssh_port: 22,
-          }}
-        >
-          <Space size="middle" style={{ display: "flex" }}>
+        <Form form={form} layout="vertical">
+          <Space size="middle" style={{ display: "flex", flexWrap: "wrap" }}>
             <Form.Item name="name" label="名称" rules={[{ required: true }]} style={{ flex: 1 }}>
               <Input placeholder="BJ-LEAF-01" />
             </Form.Item>
@@ -431,6 +473,43 @@ export default function Devices() {
               <Switch />
             </Form.Item>
           </Space>
+
+          <Divider orientation="left" style={{ margin: "8px 0 12px" }}>
+            SNMP 采集（可选）
+          </Divider>
+          <Typography.Paragraph type="secondary" style={{ marginTop: 0, marginBottom: 12 }}>
+            默认继承平台配置（Community <Typography.Text code>{snmpDefaults.community}</Typography.Text> · UDP {snmpDefaults.port}）。
+            关闭后跳过 SNMP 接口发现（Dry-run 下仍可模拟）。
+          </Typography.Paragraph>
+          <Form.Item name="snmp_enabled" label="启用 SNMP" valuePropName="checked">
+            <Switch checkedChildren="开" unCheckedChildren="关" />
+          </Form.Item>
+          <Collapse
+            ghost
+            activeKey={watchSnmpEnabled ? ["snmp"] : []}
+            items={[
+              {
+                key: "snmp",
+                label: "高级参数（留空则使用平台默认）",
+                children: (
+                  <Space size="middle" style={{ display: "flex", flexWrap: "wrap", width: "100%" }}>
+                    <Form.Item name="snmp_community" label="Community" style={{ flex: "1 1 200px" }}>
+                      <Input placeholder={snmpDefaults.community} disabled={!watchSnmpEnabled} allowClear />
+                    </Form.Item>
+                    <Form.Item name="snmp_port" label="UDP 端口" style={{ width: 120 }}>
+                      <InputNumber min={1} max={65535} style={{ width: "100%" }} disabled={!watchSnmpEnabled} />
+                    </Form.Item>
+                    <Form.Item name="snmp_version" label="版本" style={{ width: 100 }}>
+                      <Select
+                        disabled={!watchSnmpEnabled}
+                        options={[{ value: "2c", label: "v2c" }]}
+                      />
+                    </Form.Item>
+                  </Space>
+                ),
+              },
+            ]}
+          />
         </Form>
       </Modal>
     </Card>

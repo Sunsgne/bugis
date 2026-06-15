@@ -57,6 +57,13 @@ export interface DeviceInterface {
   discovered_via?: string;
 }
 
+export interface SnmpDefaults {
+  enabled: boolean;
+  port: number;
+  community: string;
+  version: string;
+}
+
 export interface Device {
   id: number;
   name: string;
@@ -73,6 +80,10 @@ export interface Device {
   sr_node_sid?: number;
   is_route_reflector: boolean;
   site_id?: number;
+  snmp_enabled?: boolean;
+  snmp_port?: number;
+  snmp_version?: string;
+  snmp_community_set?: boolean;
   interfaces?: DeviceInterface[];
 }
 

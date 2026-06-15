@@ -44,6 +44,12 @@ class Device(Base, TimestampMixin):
     # NOTE: store credentials encrypted / in a vault in production.
     password: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
+    # SNMP (optional per device; empty community falls back to platform default)
+    snmp_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    snmp_port: Mapped[int] = mapped_column(Integer, default=161)
+    snmp_community: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    snmp_version: Mapped[str] = mapped_column(String(8), default="2c")
+
     # Routing identity
     loopback_ip: Mapped[str | None] = mapped_column(String(64), nullable=True)
     bgp_asn: Mapped[int | None] = mapped_column(Integer, nullable=True)

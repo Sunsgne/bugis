@@ -1,7 +1,7 @@
 """Device & interface schemas."""
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.models.enums import DeviceRole, DeviceStatus, OverlayTech, Vendor
 from app.schemas.common import TimestampedSchema
@@ -51,6 +51,10 @@ class DeviceBase(BaseModel):
     ssh_port: int = 22
     username: str | None = None
     password: str | None = None
+    snmp_enabled: bool = True
+    snmp_port: int = Field(default=161, ge=1, le=65535)
+    snmp_community: str | None = None
+    snmp_version: str = "2c"
     loopback_ip: str | None = None
     bgp_asn: int | None = None
     sr_node_sid: int | None = None
@@ -75,6 +79,10 @@ class DeviceUpdate(BaseModel):
     ssh_port: int | None = None
     username: str | None = None
     password: str | None = None
+    snmp_enabled: bool | None = None
+    snmp_port: int | None = Field(default=None, ge=1, le=65535)
+    snmp_community: str | None = None
+    snmp_version: str | None = None
     loopback_ip: str | None = None
     bgp_asn: int | None = None
     sr_node_sid: int | None = None
@@ -87,6 +95,23 @@ class DeviceListOut(DeviceBase, TimestampedSchema):
 
     id: int
     password: str | None = Field(default=None, exclude=True)
+    snmp_community: str | None = Field(default=None, exclude=True)
+    snmp_community_set: bool = False
+
+    @model_validator(mode="before")
+    @classmethod
+    def _flag_community(cls, data):
+        from app.models.device import Device
+
+        if isinstance(data, Device):
+            payload = {c.key: getattr(data, c.key) for c in Device.__table__.columns}
+            payload["snmp_community_set"] = bool(data.snmp_community)
+            return payload
+        if isinstance(data, dict):
+            comm = data.get("snmp_community")
+            data = dict(data)
+            data["snmp_community_set"] = bool(comm)
+        return data
 
 
 class DeviceOut(DeviceBase, TimestampedSchema):

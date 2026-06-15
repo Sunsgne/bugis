@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.models.device import Device, DeviceInterface
 from app.models.enums import Vendor
+from app.services import snmp_device
 
 # Vendor interface naming conventions: (access_pattern, count, uplink_pattern, uplink_count, speed)
 VENDOR_INTERFACES: dict[Vendor, list[tuple[str, int, int]]] = {
@@ -62,6 +63,7 @@ def _synthesize(device: Device) -> list[dict]:
 
 
 def _walk_oid(device: Device, oid: str) -> dict[int, str]:
+    cfg = snmp_device.effective_snmp(device)
     from pysnmp.hlapi import (  # pragma: no cover
         CommunityData,
         ContextData,
@@ -72,12 +74,11 @@ def _walk_oid(device: Device, oid: str) -> dict[int, str]:
         nextCmd,
     )
 
-    community = device.password or "public"
     out: dict[int, str] = {}
     for (errInd, errStat, _idx, varBinds) in nextCmd(
         SnmpEngine(),
-        CommunityData(community),
-        UdpTransportTarget((device.mgmt_ip, 161), timeout=2, retries=1),
+        CommunityData(cfg["community"]),
+        UdpTransportTarget((device.mgmt_ip, cfg["port"]), timeout=2, retries=1),
         ContextData(),
         ObjectType(ObjectIdentity(oid)),
         lexicographicMode=False,
@@ -126,7 +127,11 @@ def discover_interfaces(db: Session, device: Device) -> list[DeviceInterface]:
     """Discover and upsert a device's interfaces. Returns the current set."""
     from app.services import link_monitor
 
-    discovered = _synthesize(device) if settings.dry_run else _walk_real(device)
+    cfg = snmp_device.effective_snmp(device)
+    if settings.dry_run or cfg["enabled"]:
+        discovered = _synthesize(device) if settings.dry_run else _walk_real(device)
+    else:
+        discovered = []
 
     existing = {
         i.name: i
