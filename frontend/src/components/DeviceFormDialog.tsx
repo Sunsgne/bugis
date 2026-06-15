@@ -22,7 +22,7 @@ import {
   SNMP_VERSION_OPTIONS,
   VENDOR_OPTIONS,
 } from "@/constants/formOptions";
-import type { ManagementDefaults, Site, SnmpDefaults } from "@/api/types";
+import type { Device, ManagementDefaults, Site, SnmpDefaults } from "@/api/types";
 import { formModalProps } from "@/utils/formModal";
 
 export type DeviceFormValues = {
@@ -81,9 +81,46 @@ function defaultValues(mgmt: ManagementDefaults, snmp: SnmpDefaults): Partial<De
   };
 }
 
+export function deviceToFormValues(
+  device: Device,
+  mgmt: ManagementDefaults,
+  snmp: SnmpDefaults,
+): DeviceFormValues {
+  return {
+    name: device.name,
+    vendor: device.vendor,
+    model: device.model || "",
+    role: device.role,
+    overlay_tech: device.overlay_tech,
+    mgmt_ip: device.mgmt_ip,
+    loopback_ip: device.loopback_ip || "",
+    bgp_asn: device.bgp_asn ?? null,
+    site_id: device.site_id ?? null,
+    sr_node_sid: device.sr_node_sid ?? null,
+    is_route_reflector: device.is_route_reflector,
+    management_transport: device.management_transport || mgmt.management_transport,
+    username: device.username || "",
+    password: "",
+    enable_password: "",
+    netconf_port: device.netconf_port ?? mgmt.netconf_port,
+    ssh_port: device.ssh_port ?? mgmt.ssh_port,
+    netmiko_device_type: device.netmiko_device_type || "",
+    snmp_enabled: device.snmp_enabled !== false,
+    snmp_port: device.snmp_port ?? snmp.port,
+    snmp_community: "",
+    snmp_version: device.snmp_version || snmp.version,
+    snmp_v3_username: device.snmp_v3_username || "",
+    snmp_v3_security_level: device.snmp_v3_security_level || "authPriv",
+    snmp_v3_auth_password: "",
+    snmp_v3_priv_password: "",
+  };
+}
+
 type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  mode?: "create" | "edit";
+  device?: Device | null;
   sites: Site[];
   mgmtDefaults: ManagementDefaults;
   snmpDefaults: SnmpDefaults;
@@ -93,11 +130,14 @@ type Props = {
 export default function DeviceFormDialog({
   open,
   onOpenChange,
+  mode = "create",
+  device = null,
   sites,
   mgmtDefaults,
   snmpDefaults,
   onSubmit,
 }: Props) {
+  const isEdit = mode === "edit";
   const [form] = Form.useForm<DeviceFormValues>();
   const [submitting, setSubmitting] = useState(false);
   const snmpEnabled = Form.useWatch("snmp_enabled", form);
@@ -105,11 +145,14 @@ export default function DeviceFormDialog({
   const vendor = Form.useWatch("vendor", form);
 
   useEffect(() => {
-    if (open) {
-      form.resetFields();
+    if (!open) return;
+    form.resetFields();
+    if (isEdit && device) {
+      form.setFieldsValue(deviceToFormValues(device, mgmtDefaults, snmpDefaults));
+    } else {
       form.setFieldsValue(defaultValues(mgmtDefaults, snmpDefaults));
     }
-  }, [open, mgmtDefaults, snmpDefaults, form]);
+  }, [open, isEdit, device, mgmtDefaults, snmpDefaults, form]);
 
   async function handleOk() {
     try {
@@ -125,34 +168,46 @@ export default function DeviceFormDialog({
 
   return (
     <Modal
-      title="纳管设备"
+      title={isEdit && device ? `编辑设备 · ${device.name}` : "纳管设备"}
       open={open}
       onOk={handleOk}
       onCancel={() => onOpenChange(false)}
       confirmLoading={submitting}
-      okText="创建"
+      okText={isEdit ? "保存" : "创建"}
       cancelText="取消"
       {...formModalProps}
       width={760}
     >
       <Typography.Paragraph type="secondary" style={{ marginTop: 0, marginBottom: 12 }}>
-        填写设备基础信息与南向凭证，SNMP 与登录密码相互独立。
+        {isEdit
+          ? "修改设备基础信息、南向凭证与 SNMP 配置。密码类字段留空则保持原值。"
+          : "填写设备基础信息与南向凭证，SNMP 与登录密码相互独立。"}
       </Typography.Paragraph>
 
       <Form form={form} layout="vertical" className="app-form" requiredMark="optional">
-        <Alert
-          type="info"
-          showIcon
-          message="远程登录凭证说明"
-          description={
-            <>
-              <strong>配置下发 / 初始化</strong> 使用 NETCONF 或 SSH CLI。
-              <strong> SNMP 发现</strong> 独立配置 Community / v3。全局默认见{" "}
-              <Link to="/settings/management">南向接口</Link> 与 <Link to="/settings/snmp">SNMP 采集</Link>。
-            </>
-          }
-          style={{ marginBottom: 16 }}
-        />
+        {isEdit ? (
+          <Alert
+            type="warning"
+            showIcon
+            message="敏感字段不会回显"
+            description="登录密码、Enable 密码与 SNMP 密钥留空则不修改。厂商纳管后不可变更。"
+            style={{ marginBottom: 16 }}
+          />
+        ) : (
+          <Alert
+            type="info"
+            showIcon
+            message="远程登录凭证说明"
+            description={
+              <>
+                <strong>配置下发 / 初始化</strong> 使用 NETCONF 或 SSH CLI。
+                <strong> SNMP 发现</strong> 独立配置 Community / v3。全局默认见{" "}
+                <Link to="/settings/management">南向接口</Link> 与 <Link to="/settings/snmp">SNMP 采集</Link>。
+              </>
+            }
+            style={{ marginBottom: 16 }}
+          />
+        )}
 
         <Typography.Text strong>基础信息</Typography.Text>
         <Row gutter={16} style={{ marginTop: 12 }}>
@@ -162,8 +217,8 @@ export default function DeviceFormDialog({
             </Form.Item>
           </Col>
           <Col xs={24} sm={12}>
-            <Form.Item name="vendor" label="厂商">
-              <Select options={VENDOR_OPTIONS} />
+            <Form.Item name="vendor" label="厂商" extra={isEdit ? "纳管后不可修改" : undefined}>
+              <Select options={VENDOR_OPTIONS} disabled={isEdit} />
             </Form.Item>
           </Col>
           <Col xs={24} sm={12}>
@@ -238,12 +293,18 @@ export default function DeviceFormDialog({
           </Col>
           <Col xs={24} sm={12}>
             <Form.Item name="password" label="登录密码">
-              <Input.Password autoComplete="new-password" placeholder="NETCONF / SSH" />
+              <Input.Password
+                autoComplete="new-password"
+                placeholder={isEdit ? (device?.password_set ? "已配置 · 留空不修改" : "NETCONF / SSH") : "NETCONF / SSH"}
+              />
             </Form.Item>
           </Col>
           <Col xs={24} sm={12}>
             <Form.Item name="enable_password" label="Enable 密码">
-              <Input.Password autoComplete="new-password" placeholder="可选" />
+              <Input.Password
+                autoComplete="new-password"
+                placeholder={isEdit ? (device?.enable_password_set ? "已配置 · 留空不修改" : "可选") : "可选"}
+              />
             </Form.Item>
           </Col>
           <Col xs={24} sm={12}>
@@ -297,7 +358,13 @@ export default function DeviceFormDialog({
                   <Row gutter={16}>
                     <Col xs={24} sm={12}>
                       <Form.Item name="snmp_community" label="Community">
-                        <Input placeholder={snmpDefaults.community} />
+                        <Input
+                          placeholder={
+                            isEdit && device?.snmp_community_set
+                              ? "已配置 · 留空不修改"
+                              : snmpDefaults.community
+                          }
+                        />
                       </Form.Item>
                     </Col>
                     <Col xs={24} sm={12}>
@@ -328,12 +395,22 @@ export default function DeviceFormDialog({
                         </Col>
                         <Col xs={24} sm={12}>
                           <Form.Item name="snmp_v3_auth_password" label="认证密码">
-                            <Input.Password autoComplete="new-password" />
+                            <Input.Password
+                              autoComplete="new-password"
+                              placeholder={
+                                isEdit && device?.snmp_v3_auth_password_set ? "已配置 · 留空不修改" : undefined
+                              }
+                            />
                           </Form.Item>
                         </Col>
                         <Col xs={24} sm={12}>
                           <Form.Item name="snmp_v3_priv_password" label="加密密码">
-                            <Input.Password autoComplete="new-password" />
+                            <Input.Password
+                              autoComplete="new-password"
+                              placeholder={
+                                isEdit && device?.snmp_v3_priv_password_set ? "已配置 · 留空不修改" : undefined
+                              }
+                            />
                           </Form.Item>
                         </Col>
                       </>

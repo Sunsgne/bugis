@@ -1,4 +1,3 @@
-import { zodResolver } from "@hookform/resolvers/zod";
 import {
   ApiOutlined,
   BookOutlined,
@@ -6,7 +5,7 @@ import {
   CloseCircleOutlined,
   DeleteOutlined,
   DownloadOutlined,
-  KeyOutlined,
+  EditOutlined,
   MoreOutlined,
   NodeIndexOutlined,
   PlusOutlined,
@@ -35,11 +34,8 @@ import {
   Tooltip,
   Typography,
 } from "antd";
-import { AlertTriangle } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useForm, type Resolver } from "react-hook-form";
 import { Link } from "react-router-dom";
-import { z } from "zod";
 import { api } from "../api/client";
 import type {
   Device,
@@ -54,36 +50,12 @@ import { ConfigPreviewPre } from "../utils/configPreview";
 import {
   DEVICE_ROLE_OPTIONS,
   labelForOption,
-  MANAGEMENT_TRANSPORT_OPTIONS,
-  SNMP_V3_SECURITY_OPTIONS,
-  SNMP_VERSION_OPTIONS,
 } from "../constants/formOptions";
-import { action, page as pageCopy, toast as toastCopy } from "../constants/uiCopy";
+import { page as pageCopy, toast as toastCopy } from "../constants/uiCopy";
 import { buildListQuery, dataTableProps, tablePagination } from "../utils/table";
 import { PageCard } from "@/components";
 import ListToolbar from "../components/ListToolbar";
 import DeviceFormDialog, { type DeviceFormValues } from "@/components/DeviceFormDialog";
-import FormSelect from "@/components/FormSelect";
-import { Alert as UiAlert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-} from "@/components/ui/form";
-import { Input as UiInput } from "@/components/ui/input";
-import { Separator } from "@/components/ui/separator";
-import { Switch as UiSwitch } from "@/components/ui/switch";
-import { Button as UiButton } from "@/components/ui/button";
 
 const VENDOR_SHORT: Record<string, string> = {
   h3c: "H3C",
@@ -130,25 +102,31 @@ const FALLBACK_MGMT: ManagementDefaults = {
   snmp: FALLBACK_SNMP,
 };
 
-const credSchema = z.object({
-  management_transport: z.string(),
-  username: z.string().optional(),
-  password: z.string().optional(),
-  enable_password: z.string().optional(),
-  netconf_port: z.coerce.number(),
-  ssh_port: z.coerce.number(),
-  netmiko_device_type: z.string().optional(),
-  snmp_enabled: z.boolean(),
-  snmp_community: z.string().optional(),
-  snmp_port: z.coerce.number(),
-  snmp_version: z.string(),
-  snmp_v3_username: z.string().optional(),
-  snmp_v3_security_level: z.string().optional(),
-  snmp_v3_auth_password: z.string().optional(),
-  snmp_v3_priv_password: z.string().optional(),
-});
-
-type CredFormValues = z.infer<typeof credSchema>;
+function buildDevicePayload(
+  values: DeviceFormValues,
+  snmpDefaults: SnmpDefaults,
+  editing?: Device | null,
+): Record<string, unknown> {
+  const payload: Record<string, unknown> = { ...values };
+  if (editing) delete payload.vendor;
+  if (!payload.password) delete payload.password;
+  if (!payload.enable_password) delete payload.enable_password;
+  if (!payload.snmp_enabled) {
+    payload.snmp_community = null;
+  } else if (!payload.snmp_community) {
+    delete payload.snmp_community;
+  } else if (payload.snmp_community === snmpDefaults.community && !editing?.snmp_community_set) {
+    delete payload.snmp_community;
+  }
+  if (!payload.snmp_v3_auth_password) delete payload.snmp_v3_auth_password;
+  if (!payload.snmp_v3_priv_password) delete payload.snmp_v3_priv_password;
+  if (payload.netmiko_device_type === "") payload.netmiko_device_type = null;
+  if (payload.model === "") payload.model = null;
+  if (payload.loopback_ip === "") payload.loopback_ip = null;
+  if (payload.username === "") payload.username = null;
+  if (payload.snmp_v3_username === "") payload.snmp_v3_username = null;
+  return payload;
+}
 
 function renderSvidUsage(list?: SvidUsage[] | null) {
   if (!list?.length) return <Typography.Text type="secondary">—</Typography.Text>;
@@ -174,299 +152,6 @@ function renderSvidUsage(list?: SvidUsage[] | null) {
   );
 }
 
-type CredentialEditDialogProps = {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  device: Device | null;
-  mgmtDefaults: ManagementDefaults;
-  snmpDefaults: SnmpDefaults;
-  onSave: (deviceId: number, values: CredFormValues) => Promise<void>;
-};
-
-function CredentialEditDialog({
-  open,
-  onOpenChange,
-  device,
-  mgmtDefaults,
-  snmpDefaults,
-  onSave,
-}: CredentialEditDialogProps) {
-  const form = useForm<CredFormValues>({
-    resolver: zodResolver(credSchema) as Resolver<CredFormValues>,
-    defaultValues: {
-      management_transport: "auto",
-      snmp_enabled: true,
-      snmp_port: snmpDefaults.port,
-      snmp_version: snmpDefaults.version,
-      snmp_v3_security_level: "authPriv",
-      netconf_port: mgmtDefaults.netconf_port,
-      ssh_port: mgmtDefaults.ssh_port,
-    },
-  });
-
-  const watchSnmpVersion = form.watch("snmp_version");
-
-  useEffect(() => {
-    if (open && device) {
-      form.reset({
-        management_transport: device.management_transport || "auto",
-        username: device.username || "",
-        netconf_port: device.netconf_port ?? mgmtDefaults.netconf_port,
-        ssh_port: device.ssh_port ?? mgmtDefaults.ssh_port,
-        netmiko_device_type: device.netmiko_device_type || "",
-        password: "",
-        enable_password: "",
-        snmp_enabled: device.snmp_enabled !== false,
-        snmp_community: "",
-        snmp_port: device.snmp_port ?? snmpDefaults.port,
-        snmp_version: device.snmp_version || snmpDefaults.version,
-        snmp_v3_username: device.snmp_v3_username || "",
-        snmp_v3_security_level: device.snmp_v3_security_level || "authPriv",
-        snmp_v3_auth_password: "",
-        snmp_v3_priv_password: "",
-      });
-    }
-  }, [open, device, mgmtDefaults, snmpDefaults, form]);
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[min(90vh,900px)] max-w-xl flex-col gap-0 overflow-hidden p-0 sm:max-w-xl">
-        <DialogHeader className="shrink-0 space-y-1 border-b px-6 py-4 text-left">
-          <DialogTitle>{device ? `设备凭证 · ${device.name}` : "设备凭证"}</DialogTitle>
-          <DialogDescription>留空密码则保持原值，SNMP Community 与登录密码相互独立。</DialogDescription>
-        </DialogHeader>
-
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-          <Form {...form}>
-            <form
-              id="device-cred-form"
-              className="space-y-4 px-6 py-5"
-              onSubmit={form.handleSubmit(async (v) => {
-                if (device) await onSave(device.id, v);
-              })}
-            >
-              <UiAlert variant="warning">
-                <AlertTriangle className="h-4 w-4" />
-                <AlertTitle>敏感字段不会回显</AlertTitle>
-                <AlertDescription>留空密码则保持原值。SNMP Community 与登录密码已分离，可分别配置。</AlertDescription>
-              </UiAlert>
-
-              <FormField
-                control={form.control}
-                name="management_transport"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>配置下发传输</FormLabel>
-                    <FormControl>
-                      <FormSelect value={field.value} onValueChange={field.onChange} options={MANAGEMENT_TRANSPORT_OPTIONS} />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="username"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>用户名</FormLabel>
-                    <FormControl>
-                      <UiInput placeholder="admin / netconf" {...field} />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="password"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>登录密码 (NETCONF / SSH)</FormLabel>
-                    <FormControl>
-                      <UiInput type="password" autoComplete="new-password" placeholder="留空不修改" {...field} />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="enable_password"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Enable 密码</FormLabel>
-                    <FormControl>
-                      <UiInput type="password" autoComplete="new-password" placeholder="留空不修改" {...field} />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-              <div className="grid gap-4 sm:grid-cols-2">
-                <FormField
-                  control={form.control}
-                  name="netconf_port"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>NETCONF 端口</FormLabel>
-                      <FormControl>
-                        <UiInput type="number" min={1} max={65535} {...field} />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="ssh_port"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>SSH 端口</FormLabel>
-                      <FormControl>
-                        <UiInput type="number" min={1} max={65535} {...field} />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-              </div>
-              <FormField
-                control={form.control}
-                name="netmiko_device_type"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Netmiko 设备类型 (可选)</FormLabel>
-                    <FormControl>
-                      <UiInput placeholder="留空则按厂商自动选择" {...field} />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-
-              <Separator />
-
-              <FormField
-                control={form.control}
-                name="snmp_enabled"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
-                    <FormLabel className="mt-0">启用 SNMP</FormLabel>
-                    <FormControl>
-                      <UiSwitch checked={field.value} onCheckedChange={field.onChange} />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-              <div className="grid gap-4 sm:grid-cols-2">
-                <FormField
-                  control={form.control}
-                  name="snmp_community"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Community (v2c)</FormLabel>
-                      <FormControl>
-                        <UiInput
-                          placeholder={
-                            device?.snmp_community_set ? "已配置 · 留空不修改" : snmpDefaults.community
-                          }
-                          {...field}
-                        />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="snmp_port"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>UDP 端口</FormLabel>
-                      <FormControl>
-                        <UiInput type="number" min={1} max={65535} {...field} />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="snmp_version"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>版本</FormLabel>
-                      <FormControl>
-                        <FormSelect value={field.value} onValueChange={field.onChange} options={SNMP_VERSION_OPTIONS} />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-              </div>
-              {watchSnmpVersion === "3" ? (
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <FormField
-                    control={form.control}
-                    name="snmp_v3_username"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>SNMPv3 用户名</FormLabel>
-                        <FormControl>
-                          <UiInput {...field} />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="snmp_v3_security_level"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>安全级别</FormLabel>
-                        <FormControl>
-                          <FormSelect
-                            value={field.value || "authPriv"}
-                            onValueChange={field.onChange}
-                            options={SNMP_V3_SECURITY_OPTIONS}
-                          />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="snmp_v3_auth_password"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>认证密码</FormLabel>
-                        <FormControl>
-                          <UiInput type="password" autoComplete="new-password" placeholder="留空不修改" {...field} />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="snmp_v3_priv_password"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>加密密码</FormLabel>
-                        <FormControl>
-                          <UiInput type="password" autoComplete="new-password" placeholder="留空不修改" {...field} />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                </div>
-              ) : null}
-            </form>
-          </Form>
-        </div>
-
-        <DialogFooter className="shrink-0 border-t px-6 py-4">
-          <UiButton type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            {action.cancel}
-          </UiButton>
-          <UiButton type="submit" form="device-cred-form">
-            {action.save}
-          </UiButton>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
 
 export default function Devices() {
   const { message, modal } = AntApp.useApp();
@@ -477,9 +162,9 @@ export default function Devices() {
   const [search, setSearch] = useState("");
   const [sites, setSites] = useState<Site[]>([]);
   const [loading, setLoading] = useState(false);
-  const [open, setOpen] = useState(false);
-  const [credOpen, setCredOpen] = useState(false);
-  const [credDevice, setCredDevice] = useState<Device | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
+  const [formMode, setFormMode] = useState<"create" | "edit">("create");
+  const [formDevice, setFormDevice] = useState<Device | null>(null);
   const [snmpDefaults, setSnmpDefaults] = useState<SnmpDefaults>(FALLBACK_SNMP);
   const [mgmtDefaults, setMgmtDefaults] = useState<ManagementDefaults>(FALLBACK_MGMT);
   const [learnOnImport, setLearnOnImport] = useState(true);
@@ -531,70 +216,57 @@ export default function Devices() {
     load();
   }, [page, pageSize]);
 
-  async function openCreateModal() {
-    let mgmt = FALLBACK_MGMT;
+  async function ensureMgmtDefaults() {
     try {
       const { data } = await api.get<ManagementDefaults>("/system/management-defaults");
-      mgmt = data;
       setMgmtDefaults(data);
       setSnmpDefaults(data.snmp);
+      return data;
     } catch {
       setMgmtDefaults(FALLBACK_MGMT);
       setSnmpDefaults(FALLBACK_SNMP);
+      return FALLBACK_MGMT;
     }
-    setOpen(true);
   }
 
-  async function onCreate(values: DeviceFormValues) {
-    const payload: Record<string, unknown> = { ...values };
-    if (!payload.password) delete payload.password;
-    if (!payload.snmp_enabled) {
-      payload.snmp_community = null;
-    } else if (payload.snmp_community === snmpDefaults.community) {
-      payload.snmp_community = null;
+  async function openCreateModal() {
+    await ensureMgmtDefaults();
+    setFormMode("create");
+    setFormDevice(null);
+    setFormOpen(true);
+  }
+
+  async function openEditModal(device: Device) {
+    await ensureMgmtDefaults();
+    setFormMode("edit");
+    setFormDevice(device);
+    setFormOpen(true);
+  }
+
+  async function onFormSubmit(values: DeviceFormValues) {
+    if (formMode === "edit" && formDevice) {
+      try {
+        const payload = buildDevicePayload(values, snmpDefaults, formDevice);
+        payload.snmp_v3_auth_protocol = formDevice.snmp_v3_auth_protocol || "SHA";
+        payload.snmp_v3_priv_protocol = formDevice.snmp_v3_priv_protocol || "AES";
+        await api.patch(`/devices/${formDevice.id}`, payload);
+        message.success(toastCopy.saved);
+        setFormOpen(false);
+        setFormDevice(null);
+        load();
+      } catch (e: unknown) {
+        const err = e as { response?: { data?: { detail?: string } } };
+        message.error(err?.response?.data?.detail || toastCopy.failed);
+      }
+      return;
     }
+
     try {
-      await api.post("/devices", payload);
+      await api.post("/devices", buildDevicePayload(values, snmpDefaults));
       message.success("设备已纳管");
-      setOpen(false);
+      setFormOpen(false);
       setPage(1);
       load(1);
-    } catch (e: unknown) {
-      const err = e as { response?: { data?: { detail?: string } } };
-      message.error(err?.response?.data?.detail || toastCopy.failed);
-    }
-  }
-
-  function openCredEdit(d: Device) {
-    setCredDevice(d);
-    setCredOpen(true);
-  }
-
-  async function saveCred(deviceId: number, v: CredFormValues) {
-    const payload: Record<string, unknown> = {
-      management_transport: v.management_transport,
-      username: v.username || null,
-      netconf_port: v.netconf_port,
-      ssh_port: v.ssh_port,
-      netmiko_device_type: v.netmiko_device_type || null,
-      snmp_enabled: v.snmp_enabled,
-      snmp_port: v.snmp_port,
-      snmp_version: v.snmp_version,
-      snmp_v3_username: v.snmp_v3_username || null,
-      snmp_v3_security_level: v.snmp_v3_security_level || null,
-      snmp_v3_auth_protocol: credDevice?.snmp_v3_auth_protocol || "SHA",
-      snmp_v3_priv_protocol: credDevice?.snmp_v3_priv_protocol || "AES",
-    };
-    if (v.password) payload.password = v.password;
-    if (v.enable_password) payload.enable_password = v.enable_password;
-    if (v.snmp_community) payload.snmp_community = v.snmp_community;
-    if (v.snmp_v3_auth_password) payload.snmp_v3_auth_password = v.snmp_v3_auth_password;
-    if (v.snmp_v3_priv_password) payload.snmp_v3_priv_password = v.snmp_v3_priv_password;
-    try {
-      await api.patch(`/devices/${deviceId}`, payload);
-      message.success(toastCopy.saved);
-      setCredOpen(false);
-      load();
     } catch (e: unknown) {
       const err = e as { response?: { data?: { detail?: string } } };
       message.error(err?.response?.data?.detail || toastCopy.failed);
@@ -897,7 +569,9 @@ export default function Devices() {
                 }
               >
                 <div style={{ minWidth: 0 }}>
-                  <div style={{ fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis" }}>{name}</div>
+                  <Button type="link" size="small" style={{ padding: 0, height: "auto" }} onClick={() => openEditModal(d)}>
+                    <span style={{ fontWeight: 500 }}>{name}</span>
+                  </Button>
                   {d.model ? (
                     <Typography.Text type="secondary" ellipsis style={{ fontSize: 12, display: "block" }}>
                       {d.model}
@@ -964,7 +638,7 @@ export default function Devices() {
           {
             title: "操作",
             key: "actions",
-            width: 168,
+            width: 196,
             fixed: "right" as const,
             className: "table-actions",
             render: (_: unknown, r: Device) => (
@@ -972,13 +646,20 @@ export default function Devices() {
                 <Button size="small" type="primary" icon={<ApiOutlined />} onClick={() => openPorts(r)}>
                   端口
                 </Button>
-                <Tooltip title="凭证">
-                  <Button size="small" icon={<KeyOutlined />} onClick={() => openCredEdit(r)} />
+                <Tooltip title="编辑设备信息">
+                  <Button size="small" icon={<EditOutlined />} onClick={() => openEditModal(r)} />
                 </Tooltip>
                 <Dropdown
                   trigger={["click"]}
                   menu={{
                     items: [
+                      {
+                        key: "edit",
+                        icon: <EditOutlined />,
+                        label: "编辑设备",
+                        onClick: () => openEditModal(r),
+                      },
+                      { type: "divider" },
                       {
                         key: "learn",
                         icon: <BookOutlined />,
@@ -1167,21 +848,17 @@ export default function Devices() {
       </Drawer>
 
       <DeviceFormDialog
-        open={open}
-        onOpenChange={setOpen}
+        open={formOpen}
+        onOpenChange={(o) => {
+          setFormOpen(o);
+          if (!o) setFormDevice(null);
+        }}
+        mode={formMode}
+        device={formDevice}
         sites={sites}
         mgmtDefaults={mgmtDefaults}
         snmpDefaults={snmpDefaults}
-        onSubmit={onCreate}
-      />
-
-      <CredentialEditDialog
-        open={credOpen}
-        onOpenChange={setCredOpen}
-        device={credDevice}
-        mgmtDefaults={mgmtDefaults}
-        snmpDefaults={snmpDefaults}
-        onSave={saveCred}
+        onSubmit={onFormSubmit}
       />
 
       <Modal
