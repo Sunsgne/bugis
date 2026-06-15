@@ -1,5 +1,5 @@
 ! Arista EOS - 设备初始化基线 (baseline)  {{ device.name }}
-! role={{ device.role }} loopback={{ device.loopback_ip }} asn={{ asn }} node-sid={{ device.sr_node_sid }}
+! role={{ device.role.value }} loopback={{ device.loopback_ip }} asn={{ asn }} node-sid={{ device.sr_node_sid }}
 hostname {{ device.name }}
 clock timezone Asia/Shanghai
 ntp server {{ ntp_server }}

@@ -1,5 +1,5 @@
 ! ===== GENERIC device baseline (init) - {{ device.name }} =====
-! vendor={{ vendor }} role={{ device.role }} loopback={{ device.loopback_ip }} asn={{ asn }}
+! vendor={{ vendor }} role={{ device.role.value }} loopback={{ device.loopback_ip }} asn={{ asn }}
 ! underlay={{ site.underlay_prefix if site else '-' }}
 ! BGP EVPN overlay RR peers: {{ rr_peers | join(', ') if rr_peers else '(none)' }}
 ! NOTE: generic baseline placeholder - vendor template not found for {{ vendor }}
