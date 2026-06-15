@@ -16,7 +16,9 @@ from app.schemas.workorder import (
     ApprovalRequest,
     WorkOrderCreate,
     WorkOrderOut,
+    WorkOrderUpdate,
 )
+from app.models.enums import WorkOrderStatus
 from app.services import ansible_export, orchestrator
 
 router = APIRouter()
@@ -65,6 +67,59 @@ def get_work_order(
     if not wo:
         raise HTTPException(status_code=404, detail="work order not found")
     return wo
+
+
+@router.patch("/{wo_id}", response_model=WorkOrderOut)
+def update_work_order(
+    wo_id: int,
+    payload: WorkOrderUpdate,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_operator),
+):
+    wo = db.get(WorkOrder, wo_id)
+    if not wo:
+        raise HTTPException(status_code=404, detail="work order not found")
+    data = payload.model_dump(exclude_unset=True)
+    for k, v in data.items():
+        setattr(wo, k, v)
+    if data:
+        orchestrator._log(db, wo, f"工单已编辑 ({', '.join(data)})", actor=user.username)
+    db.commit()
+    db.refresh(wo)
+    return wo
+
+
+@router.post("/{wo_id}/cancel", response_model=WorkOrderOut)
+def cancel_work_order(
+    wo_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_operator),
+):
+    wo = db.get(WorkOrder, wo_id)
+    if not wo:
+        raise HTTPException(status_code=404, detail="work order not found")
+    if wo.status in (WorkOrderStatus.RUNNING, WorkOrderStatus.COMPLETED):
+        raise HTTPException(status_code=400, detail="cannot cancel a running/completed work order")
+    wo.status = WorkOrderStatus.CANCELLED
+    orchestrator._log(db, wo, "工单已取消", level="warning", actor=user.username)
+    db.commit()
+    db.refresh(wo)
+    return wo
+
+
+@router.delete("/{wo_id}", status_code=204)
+def delete_work_order(
+    wo_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_operator),
+):
+    wo = db.get(WorkOrder, wo_id)
+    if not wo:
+        raise HTTPException(status_code=404, detail="work order not found")
+    if wo.status == WorkOrderStatus.RUNNING:
+        raise HTTPException(status_code=400, detail="cannot delete a running work order")
+    db.delete(wo)
+    db.commit()
 
 
 @router.post("/{wo_id}/submit", response_model=WorkOrderOut)

@@ -226,7 +226,25 @@ def execute(db: Session, wo: WorkOrder, actor: str | None = None) -> WorkOrder:
         else:
             circuit.status = CircuitStatus.ACTIVE
         _log(db, wo, "Execution completed successfully", actor=actor)
+        # Auto-snapshot affected devices into configuration management.
+        _snapshot_devices(db, circuit, actor)
     return wo
+
+
+def _snapshot_devices(db: Session, circuit: Circuit, actor: str | None) -> None:
+    from app.services import config_mgmt
+
+    seen: set[int] = set()
+    for ep in circuit.endpoints:
+        if ep.device and ep.device_id not in seen:
+            seen.add(ep.device_id)
+            try:
+                config_mgmt.snapshot_device(
+                    db, ep.device, source="push",
+                    note=f"auto after {circuit.code}", created_by=actor,
+                )
+            except Exception:  # noqa: BLE001
+                pass
 
 
 def _deliver_via_bugis(

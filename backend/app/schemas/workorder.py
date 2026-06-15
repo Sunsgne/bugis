@@ -59,3 +59,8 @@ class ApprovalRequest(BaseModel):
     approved_by: str
     approve: bool = True
     notes: str | None = None
+
+
+class WorkOrderUpdate(BaseModel):
+    title: str | None = None
+    notes: str | None = None

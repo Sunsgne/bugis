@@ -85,6 +85,56 @@ def overview_traffic(db: Session, sample_limit: int = 800) -> list[dict]:
     return out[-40:]
 
 
+def _percentile(values: list[float], pct: float) -> float:
+    if not values:
+        return 0.0
+    s = sorted(values)
+    import math
+    idx = max(0, math.ceil(pct / 100 * len(s)) - 1)
+    return round(s[idx], 2)
+
+
+def billing_95th(db: Session, circuit: Circuit, period: str | None = None) -> dict:
+    """95th-percentile (月95) bandwidth billing for a circuit.
+
+    Buckets samples by month; for the selected month computes the 95th
+    percentile of inbound and outbound, billing the higher (ISP convention).
+    """
+    samples = db.execute(
+        select(TelemetrySample).where(TelemetrySample.circuit_id == circuit.id)
+    ).scalars().all()
+
+    by_month: dict[str, list[TelemetrySample]] = {}
+    for s in samples:
+        if not s.created_at:
+            continue
+        by_month.setdefault(s.created_at.strftime("%Y-%m"), []).append(s)
+
+    months = sorted(by_month.keys(), reverse=True)
+    sel = period if period in by_month else (months[0] if months else None)
+    rows = by_month.get(sel, [])
+
+    rx = [s.rx_mbps for s in rows]
+    tx = [s.tx_mbps for s in rows]
+    rx95 = _percentile(rx, 95)
+    tx95 = _percentile(tx, 95)
+    return {
+        "circuit_id": circuit.id,
+        "circuit_code": circuit.code,
+        "period": sel,
+        "available_months": months,
+        "samples": len(rows),
+        "bandwidth_mbps": circuit.bandwidth_mbps,
+        "in_95_mbps": rx95,
+        "out_95_mbps": tx95,
+        "billable_95_mbps": max(rx95, tx95),
+        "peak_mbps": round(max([*rx, *tx], default=0.0), 2),
+        "avg_mbps": round((sum(rx) + sum(tx)) / (2 * len(rows)), 2) if rows else 0.0,
+        "utilization_pct": round(max(rx95, tx95) / circuit.bandwidth_mbps * 100, 1)
+        if circuit.bandwidth_mbps else 0.0,
+    }
+
+
 def compute_health(db: Session, circuit: Circuit, limit: int = 100) -> CircuitHealth:
     samples = db.execute(
         select(TelemetrySample)

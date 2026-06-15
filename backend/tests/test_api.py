@@ -614,6 +614,69 @@ def test_dot1q_default_encapsulation(client, auth_headers):
     assert "c-vid" not in cfg  # single-tag dot1q has no inner tag
 
 
+def test_workorder_edit_cancel_delete(client, auth_headers):
+    _, tenant, dev_a, _ = _bootstrap_topology(client, auth_headers)
+    circuit = client.post(
+        "/api/v1/circuits", headers=auth_headers,
+        json={"name": "WO mgmt", "tenant_id": tenant["id"], "service_type": "l2vpn_evpn",
+              "endpoints": [{"label": "A", "device_id": dev_a["id"], "interface_name": "GE1/0/1"}]},
+    ).json()
+    wo = client.post("/api/v1/work-orders", headers=auth_headers,
+                     json={"circuit_id": circuit["id"], "type": "provision"}).json()
+    # edit
+    r = client.patch(f"/api/v1/work-orders/{wo['id']}", headers=auth_headers,
+                     json={"title": "改标题", "notes": "备注"})
+    assert r.status_code == 200 and r.json()["title"] == "改标题"
+    # cancel
+    assert client.post(f"/api/v1/work-orders/{wo['id']}/cancel", headers=auth_headers).json()["status"] == "cancelled"
+    # delete
+    assert client.delete(f"/api/v1/work-orders/{wo['id']}", headers=auth_headers).status_code == 204
+
+
+def test_billing_95th(client, auth_headers):
+    _, tenant, dev_a, _ = _bootstrap_topology(client, auth_headers)
+    circuit = client.post(
+        "/api/v1/circuits", headers=auth_headers,
+        json={"name": "bill", "tenant_id": tenant["id"], "service_type": "l2vpn_evpn",
+              "bandwidth_mbps": 1000,
+              "endpoints": [{"label": "A", "device_id": dev_a["id"], "interface_name": "GE1/0/1"}]},
+    ).json()
+    client.post(f"/api/v1/work-orders/provision/{circuit['id']}", headers=auth_headers)
+    for _ in range(20):
+        client.post("/api/v1/telemetry/samples", headers=auth_headers,
+                    json={"circuit_id": circuit["id"], "rx_mbps": 400, "tx_mbps": 600})
+    b = client.get(f"/api/v1/telemetry/circuits/{circuit['id']}/billing", headers=auth_headers).json()
+    assert b["billable_95_mbps"] > 0
+    assert b["period"] and len(b["available_months"]) >= 1
+
+
+def test_config_management(client, auth_headers):
+    _, tenant, dev_a, _ = _bootstrap_topology(client, auth_headers)
+    circuit = client.post(
+        "/api/v1/circuits", headers=auth_headers,
+        json={"name": "cfg", "tenant_id": tenant["id"], "service_type": "l2vpn_evpn",
+              "endpoints": [{"label": "A", "device_id": dev_a["id"], "interface_name": "GE1/0/1"}]},
+    ).json()
+    # Provisioning auto-snapshots the device config.
+    client.post(f"/api/v1/work-orders/provision/{circuit['id']}", headers=auth_headers)
+    snaps = client.get(f"/api/v1/config/devices/{dev_a['id']}/snapshots", headers=auth_headers).json()
+    assert len(snaps) >= 1 and snaps[0]["source"] == "push"
+    running = client.get(f"/api/v1/config/devices/{dev_a['id']}/running", headers=auth_headers).json()
+    assert "running-config" in running["content"]
+    # manual backup creates a new version
+    bk = client.post(f"/api/v1/config/devices/{dev_a['id']}/backup", headers=auth_headers).json()
+    assert bk["version"] >= 2
+
+
+def test_feishu_notification(client, auth_headers):
+    ch = client.post("/api/v1/notifications", headers=auth_headers,
+                     json={"name": "飞书群", "type": "feishu",
+                           "url": "https://open.feishu.cn/open-apis/bot/v2/hook/x",
+                           "min_severity": "warning"}).json()
+    res = client.post(f"/api/v1/notifications/{ch['id']}/test", headers=auth_headers).json()
+    assert res["success"] and res["payload"]["msg_type"] == "text"
+
+
 def test_telemetry_and_health(client, auth_headers):
     _, tenant, dev_a, dev_z = _bootstrap_topology(client, auth_headers)
     circuit = client.post(

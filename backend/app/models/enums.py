@@ -178,12 +178,15 @@ class DeliveryMode(str, enum.Enum):
 
 
 class NotificationType(str, enum.Enum):
-    """Outbound alarm notification channel type."""
+    """Outbound alarm notification channel type (mainstream platforms)."""
 
     WEBHOOK = "webhook"  # 通用 JSON webhook
     SLACK = "slack"
     DINGTALK = "dingtalk"  # 钉钉
     WECOM = "wecom"  # 企业微信
+    FEISHU = "feishu"  # 飞书 / Lark
+    TEAMS = "teams"  # Microsoft Teams
+    EMAIL = "email"  # 邮件 (SMTP / 收件人)
 
 
 # Severity ordering for notification thresholds (higher = more severe).

@@ -30,9 +30,21 @@ interface Channel {
 
 const TYPE_LABEL: Record<string, string> = {
   webhook: "通用 Webhook",
-  slack: "Slack",
   dingtalk: "钉钉",
   wecom: "企业微信",
+  feishu: "飞书 / Lark",
+  slack: "Slack",
+  teams: "Microsoft Teams",
+  email: "邮件 (SMTP)",
+};
+const URL_HINT: Record<string, string> = {
+  webhook: "https://your-endpoint/webhook",
+  dingtalk: "https://oapi.dingtalk.com/robot/send?access_token=...",
+  wecom: "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=...",
+  feishu: "https://open.feishu.cn/open-apis/bot/v2/hook/...",
+  slack: "https://hooks.slack.com/services/...",
+  teams: "https://outlook.office.com/webhook/...",
+  email: "收件人邮箱 noc@example.com",
 };
 const SEV_COLOR: Record<string, string> = {
   critical: "red",
@@ -48,6 +60,7 @@ export default function Notifications() {
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [form] = Form.useForm();
+  const watchType = Form.useWatch("type", form);
 
   async function load() {
     setLoading(true);
@@ -150,8 +163,12 @@ export default function Notifications() {
           <Form.Item name="type" label="类型">
             <Select options={Object.entries(TYPE_LABEL).map(([value, label]) => ({ value, label }))} />
           </Form.Item>
-          <Form.Item name="url" label="Webhook 地址" rules={[{ required: true }]}>
-            <Input placeholder="https://..." />
+          <Form.Item
+            name="url"
+            label={watchType === "email" ? "收件人邮箱" : "Webhook 地址"}
+            rules={[{ required: true }]}
+          >
+            <Input placeholder={URL_HINT[watchType] || "https://..."} />
           </Form.Item>
           <Form.Item name="min_severity" label="触发阈值 (达到该级别及以上发送)">
             <Select

@@ -64,6 +64,13 @@ class Settings(BaseSettings):
     # Shared token for StackStorm-style webhook intake (X-Webhook-Token header).
     webhook_token: str = "bugis-webhook-token"
 
+    # --- Email (SMTP) for email notification channels ---
+    smtp_host: str = ""
+    smtp_port: int = 25
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from: str = "bugis@localhost"
+
 
 @lru_cache
 def get_settings() -> Settings:

@@ -8,6 +8,7 @@ from app.api.v1 import (
     bulk,
     capacity,
     circuits,
+    config_mgmt,
     controllers,
     controlplane,
     devices,
@@ -51,6 +52,9 @@ api_router.include_router(
     integrations.router, prefix="/integrations", tags=["integrations"]
 )
 api_router.include_router(audit.router, prefix="/audit", tags=["audit"])
+api_router.include_router(
+    config_mgmt.router, prefix="/config", tags=["config-management"]
+)
 api_router.include_router(bulk.router, prefix="/bulk", tags=["bulk"])
 api_router.include_router(stream.router, prefix="/stream", tags=["stream"])
 api_router.include_router(system.router, prefix="/system", tags=["system"])

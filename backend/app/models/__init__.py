@@ -14,6 +14,7 @@ from app.models.offering import ServiceOffering  # noqa: F401
 from app.models.controller import Controller  # noqa: F401
 from app.models.notification import NotificationChannel  # noqa: F401
 from app.models.controlplane import EvpnRoute, VtepPeer  # noqa: F401
+from app.models.config_snapshot import DeviceConfigSnapshot  # noqa: F401
 
 __all__ = [
     "User",
@@ -35,4 +36,5 @@ __all__ = [
     "NotificationChannel",
     "VtepPeer",
     "EvpnRoute",
+    "DeviceConfigSnapshot",
 ]

@@ -51,6 +51,20 @@ def circuit_samples(
     ).scalars().all()
 
 
+@router.get("/circuits/{circuit_id}/billing")
+def circuit_billing(
+    circuit_id: int,
+    period: str | None = None,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    """95th-percentile (月95) bandwidth billing for a circuit."""
+    circuit = db.get(Circuit, circuit_id)
+    if not circuit:
+        raise HTTPException(status_code=404, detail="circuit not found")
+    return telemetry_service.billing_95th(db, circuit, period)
+
+
 @router.get("/circuits/{circuit_id}/health", response_model=CircuitHealth)
 def circuit_health(
     circuit_id: int,

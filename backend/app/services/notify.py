@@ -33,6 +33,23 @@ def build_payload(channel: NotificationChannel, alarm: Alarm) -> dict:
         return {"text": text}
     if channel.type in (NotificationType.DINGTALK, NotificationType.WECOM):
         return {"msgtype": "text", "text": {"content": text}}
+    if channel.type == NotificationType.FEISHU:
+        return {"msg_type": "text", "content": {"text": text}}
+    if channel.type == NotificationType.TEAMS:
+        return {
+            "@type": "MessageCard",
+            "@context": "https://schema.org/extensions",
+            "themeColor": "CF1322" if alarm.severity.value in ("critical", "major")
+            else "1677FF",
+            "title": f"[Bugis] {alarm.severity.value.upper()} · {alarm.kind}",
+            "text": text,
+        }
+    if channel.type == NotificationType.EMAIL:
+        return {
+            "to": channel.url,
+            "subject": f"[Bugis][{alarm.severity.value.upper()}] {alarm.title}",
+            "body": text,
+        }
     # generic webhook
     return {
         "source": "bugis",
@@ -48,6 +65,8 @@ def build_payload(channel: NotificationChannel, alarm: Alarm) -> dict:
 def _send(channel: NotificationChannel, payload: dict) -> tuple[bool, str]:
     if settings.dry_run:
         return True, f"[DRY-RUN] -> {channel.type.value} {channel.url}"
+    if channel.type == NotificationType.EMAIL:  # pragma: no cover
+        return _send_email(channel, payload)
     try:  # pragma: no cover - requires network
         import httpx
 
@@ -56,6 +75,30 @@ def _send(channel: NotificationChannel, payload: dict) -> tuple[bool, str]:
             return resp.is_success, f"{resp.status_code}"
     except Exception as exc:  # pragma: no cover
         return False, f"error: {exc}"
+
+
+def _send_email(channel: NotificationChannel, payload: dict) -> tuple[bool, str]:  # pragma: no cover
+    """Send via SMTP if BUGIS_SMTP_HOST is configured, else report skip."""
+    host = getattr(settings, "smtp_host", "") or ""
+    if not host:
+        return False, "SMTP not configured (set BUGIS_SMTP_HOST)"
+    import smtplib
+    from email.mime.text import MIMEText
+
+    msg = MIMEText(payload["body"], "plain", "utf-8")
+    msg["Subject"] = payload["subject"]
+    msg["From"] = getattr(settings, "smtp_from", "bugis@localhost")
+    msg["To"] = payload["to"]
+    try:
+        with smtplib.SMTP(host, getattr(settings, "smtp_port", 25), timeout=10) as s:
+            user = getattr(settings, "smtp_user", "")
+            if user:
+                s.starttls()
+                s.login(user, getattr(settings, "smtp_password", ""))
+            s.send_message(msg)
+        return True, "sent"
+    except Exception as exc:
+        return False, f"smtp error: {exc}"
 
 
 def dispatch_for_alarm(db: Session, alarm: Alarm) -> int:
