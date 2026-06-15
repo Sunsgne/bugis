@@ -3,11 +3,14 @@ import { LockOutlined, UserOutlined } from "@ant-design/icons";
 import { useState } from "react";
 import { login } from "../api/client";
 import { useAuth } from "../auth";
-import { action, brand, toast } from "../constants/uiCopy";
+import { action, toast } from "../constants/uiCopy";
+import { useBrand } from "../context/BrandContext";
+import { BrandLogo } from "../components/BrandLogo";
 
 export default function Login() {
   const { loginWithToken } = useAuth();
   const { message } = AntApp.useApp();
+  const { brand } = useBrand();
   const [loading, setLoading] = useState(false);
 
   async function onFinish(v: { username: string; password: string }) {
@@ -24,14 +27,20 @@ export default function Login() {
   }
 
   return (
-    <div className="login-wrap">
+    <div
+      className="login-wrap"
+      style={{ background: brand.login_background || undefined }}
+    >
       <Card style={{ width: 380, boxShadow: "0 12px 40px rgba(0,0,0,0.25)" }}>
         <div style={{ textAlign: "center", marginBottom: 20 }}>
+          <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}>
+            <BrandLogo brand={brand} variant="login" height={40} />
+          </div>
           <Typography.Title level={3} style={{ marginBottom: 0 }}>
-            {brand.loginTitle}
+            {brand.login_title}
           </Typography.Title>
           <Typography.Text type="secondary">
-            {brand.loginSubtitle}
+            {brand.login_subtitle}
           </Typography.Text>
         </div>
         <Form onFinish={onFinish} initialValues={{ username: "admin", password: "admin123" }}>

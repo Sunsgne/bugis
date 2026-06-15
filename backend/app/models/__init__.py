@@ -21,6 +21,7 @@ from app.models.controlplane import (  # noqa: F401
     VtepPeer,
 )
 from app.models.config_snapshot import DeviceConfigSnapshot  # noqa: F401
+from app.models.platform_settings import PlatformSettings  # noqa: F401
 
 __all__ = [
     "User",
@@ -47,4 +48,5 @@ __all__ = [
     "ControllerClusterNode",
     "DataPlaneBinding",
     "DeviceConfigSnapshot",
+    "PlatformSettings",
 ]

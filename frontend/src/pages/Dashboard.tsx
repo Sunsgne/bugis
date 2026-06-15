@@ -28,7 +28,8 @@ import {
 } from "recharts";
 import { api } from "../api/client";
 import type { Dashboard as DashboardData } from "../api/types";
-import { brand, empty } from "../constants/uiCopy";
+import { empty } from "../constants/uiCopy";
+import { useBrand } from "../context/BrandContext";
 
 const VENDOR_COLORS: Record<string, string> = {
   h3c: "#1677ff", huawei: "#cf1322", juniper: "#52c41a",
@@ -52,6 +53,7 @@ function utilColor(p: number) {
 }
 
 export default function Dashboard() {
+  const { brand } = useBrand();
   const [data, setData] = useState<DashboardData | null>(null);
   const [traffic, setTraffic] = useState<any[]>([]);
   const [alarms, setAlarms] = useState<any>(null);
@@ -110,9 +112,9 @@ export default function Dashboard() {
         }}
       >
         <div>
-          <div style={{ fontSize: 22, fontWeight: 700 }}>{brand.heroTitle}</div>
+          <div style={{ fontSize: 22, fontWeight: 700 }}>{brand.hero_title}</div>
           <div style={{ opacity: 0.85, marginTop: 4 }}>
-            {brand.heroSubtitle}
+            {brand.hero_subtitle}
           </div>
           <div style={{ marginTop: 10 }}>
             <Badge status={sched?.running ? "processing" : "default"} />

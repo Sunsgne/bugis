@@ -21,6 +21,7 @@ import {
   BellOutlined,
   ShareAltOutlined,
   FileTextOutlined,
+  SettingOutlined,
 } from "@ant-design/icons";
 import { useEffect, useState } from "react";
 import { useAuth } from "./auth";
@@ -44,7 +45,10 @@ import Controllers from "./pages/Controllers";
 import ControlPlane from "./pages/ControlPlane";
 import ConfigManagement from "./pages/ConfigManagement";
 import Notifications from "./pages/Notifications";
-import { brand, nav } from "./constants/uiCopy";
+import Settings from "./pages/Settings";
+import { nav } from "./constants/uiCopy";
+import { useBrand } from "./context/BrandContext";
+import { BrandLogo } from "./components/BrandLogo";
 import type { MenuProps } from "antd";
 
 const { Header, Sider, Content } = Layout;
@@ -96,12 +100,13 @@ const MENU: MenuItem[] = [
   },
   {
     type: "group",
-    label: "集成与治理",
+    label: nav.groups.system,
     children: [
+      { key: "/settings", icon: <SettingOutlined />, label: nav.items.settings },
       { key: "/notifications", icon: <BellOutlined />, label: nav.items.notifications },
       { key: "/integrations", icon: <IntegrationIcon />, label: nav.items.integrations },
       { key: "/users", icon: <SafetyOutlined />, label: nav.items.users },
-      { key: "/audit", icon: <AuditOutlined />, label: "操作审计" },
+      { key: "/audit", icon: <AuditOutlined />, label: nav.items.audit },
     ],
   },
 ];
@@ -174,24 +179,25 @@ function AlarmBell({ onClick }: { onClick: () => void }) {
 }
 
 function Shell() {
-  const nav = useNavigate();
+  const navTo = useNavigate();
   const loc = useLocation();
   const { user, logout } = useAuth();
+  const { brand } = useBrand();
   const selected = selectedMenuKey(loc.pathname);
 
   return (
     <Layout style={{ height: "100vh" }}>
       <Sider breakpoint="lg" collapsedWidth="0" theme="dark">
         <div className="app-logo">
-          <span className="dot" />
-          <span>{brand.product}</span>
+          <BrandLogo brand={brand} variant="sidebar" height={24} />
+          <span>{brand.product_name}</span>
         </div>
         <Menu
           theme="dark"
           mode="inline"
           selectedKeys={[selected]}
           items={MENU}
-          onClick={(e) => nav(e.key)}
+          onClick={(e) => navTo(e.key)}
         />
       </Sider>
       <Layout>
@@ -206,10 +212,10 @@ function Shell() {
           }}
         >
           <div style={{ fontSize: 18, fontWeight: 600 }}>
-            {brand.header}
+            {brand.header_title}
           </div>
           <Space size="large">
-          <AlarmBell onClick={() => nav("/alarms")} />
+          <AlarmBell onClick={() => navTo("/alarms")} />
           <Dropdown
             menu={{
               items: [
@@ -241,6 +247,7 @@ function Shell() {
             <Route path="/capacity" element={<Capacity />} />
             <Route path="/monitoring" element={<Monitoring />} />
             <Route path="/alarms" element={<Alarms />} />
+            <Route path="/settings" element={<Settings />} />
             <Route path="/notifications" element={<Notifications />} />
             <Route path="/integrations" element={<Integrations />} />
             <Route path="/audit" element={<Audit />} />
