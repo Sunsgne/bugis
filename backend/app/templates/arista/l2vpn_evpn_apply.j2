@@ -35,5 +35,6 @@ router bgp {{ device.bgp_asn }}
 !
 {% if circuit.bandwidth_mbps %}
 interface {{ endpoint.interface_name }}
-   shape rate {{ circuit.bandwidth_mbps }} mbps
+   ! egress shaping, rate unit = kbps
+   shape rate {{ circuit.bandwidth_mbps * 1000 }}
 {% endif %}

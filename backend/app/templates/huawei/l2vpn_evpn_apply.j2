@@ -25,14 +25,13 @@ interface {{ endpoint.interface_name }}.{{ subif }} mode l2
  rewrite pop single
 {% endif %}
  bridge-domain {{ circuit.vni }}
+{% if circuit.bandwidth_mbps %}
+ # rate-limit (line rate), cir unit = kbps
+ qos lr cir {{ circuit.bandwidth_mbps * 1000 }} inbound
+ qos lr cir {{ circuit.bandwidth_mbps * 1000 }} outbound
+{% endif %}
 #
 interface Nve1
  vni {{ circuit.vni }} head-end peer-list protocol bgp
-#
-{% if circuit.bandwidth_mbps %}
- qos
-  traffic policy CUST_{{ circuit.code }} inbound cir {{ circuit.bandwidth_mbps }} mbps
-  traffic policy CUST_{{ circuit.code }} outbound cir {{ circuit.bandwidth_mbps }} mbps
-{% endif %}
 #
 return

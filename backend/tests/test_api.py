@@ -595,6 +595,39 @@ def test_access_encapsulation_modes(client, auth_headers):
     assert "encapsulation untag" in hw_cfg
 
 
+def test_rate_limit_rendering(client, auth_headers):
+    site, tenant, dev_h3c, _ = _bootstrap_topology(client, auth_headers)
+    huawei = client.post(
+        "/api/v1/devices", headers=auth_headers,
+        json={"name": f"HW-RL-{next(_seq)}", "vendor": "huawei", "role": "leaf",
+              "overlay_tech": "vxlan_evpn", "status": "online",
+              "mgmt_ip": "10.88.0.1", "bgp_asn": 65010, "site_id": site["id"]},
+    ).json()
+    circuit = client.post(
+        "/api/v1/circuits", headers=auth_headers,
+        json={"name": "RL", "tenant_id": tenant["id"], "service_type": "l2vpn_evpn",
+              "bandwidth_mbps": 200,
+              "endpoints": [
+                  {"label": "A", "device_id": dev_h3c["id"], "interface_name": "GE1/0/1"},
+                  {"label": "Z", "device_id": huawei["id"], "interface_name": "GE1/0/1"},
+              ]},
+    ).json()
+    wo = client.post(
+        f"/api/v1/work-orders/provision/{circuit['id']}", headers=auth_headers
+    ).json()
+    cfgs = {j["device_id"]: j["rendered_config"] for j in wo["config_jobs"]}
+    h3c = cfgs[dev_h3c["id"]]
+    hw = cfgs[huawei["id"]]
+    # H3C CAR in kbps (200 Mbps -> 200000 kbps), inside interface (before service-instance)
+    assert "qos car inbound any cir 200000" in h3c
+    assert h3c.index("qos car") < h3c.index("service-instance")
+    # Huawei line-rate qos lr in kbps with direction keyword
+    assert "qos lr cir 200000 inbound" in hw
+    assert "qos lr cir 200000 outbound" in hw
+    # old bogus syntax gone
+    assert "traffic policy" not in hw
+
+
 def test_dot1q_default_encapsulation(client, auth_headers):
     site, tenant, dev_h3c, _ = _bootstrap_topology(client, auth_headers)
     circuit = client.post(

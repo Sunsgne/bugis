@@ -12,9 +12,25 @@ router isis CORE
   address-family ipv4 unicast
    prefix-sid index {{ device.sr_node_sid or 0 }}
 !
+{% if circuit.bandwidth_mbps %}
+policy-map CUST_{{ circuit.code }}_IN
+ class class-default
+  police rate {{ circuit.bandwidth_mbps }} mbps
+ !
+!
+policy-map CUST_{{ circuit.code }}_OUT
+ class class-default
+  shape average {{ circuit.bandwidth_mbps }} mbps
+ !
+!
+{% endif %}
 interface {{ endpoint.interface_name }}
  description CUST_{{ circuit.tenant_id }}_{{ circuit.code }}
  mtu {{ circuit.mtu }}
+{% if circuit.bandwidth_mbps %}
+ service-policy input CUST_{{ circuit.code }}_IN
+ service-policy output CUST_{{ circuit.code }}_OUT
+{% endif %}
  l2transport
 {% if mode == 'access' %}
   encapsulation untagged

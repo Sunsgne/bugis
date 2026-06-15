@@ -36,5 +36,9 @@ interface {{ endpoint.interface_name }}.{{ subif }} mode l2
  rewrite pop single
 {% endif %}
  bridge-domain {{ circuit.vni }}
+{% if circuit.bandwidth_mbps %}
+ qos lr cir {{ circuit.bandwidth_mbps * 1000 }} inbound
+ qos lr cir {{ circuit.bandwidth_mbps * 1000 }} outbound
+{% endif %}
 #
 return

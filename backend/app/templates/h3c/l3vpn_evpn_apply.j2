@@ -30,6 +30,10 @@ interface Vsi-interface{{ circuit.vni }}
 #
 interface {{ endpoint.interface_name }}
  port link-mode bridge
+{% if circuit.bandwidth_mbps %}
+ qos car inbound any cir {{ circuit.bandwidth_mbps * 1000 }} cbs {{ circuit.bandwidth_mbps * 1000 * 25 }}
+ qos car outbound any cir {{ circuit.bandwidth_mbps * 1000 }} cbs {{ circuit.bandwidth_mbps * 1000 * 25 }}
+{% endif %}
  service-instance {{ svid or 1 }}
 {% if mode == 'access' %}
   encapsulation untagged
