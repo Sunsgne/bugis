@@ -1,11 +1,10 @@
+{% import 'huawei/_macros.j2' as hw %}
 {% set mode = endpoint.access_mode.value if endpoint.access_mode else 'dot1q' %}
 {% set svid = endpoint.vlan_id or circuit.vlan_id %}
 {% set cvid = endpoint.inner_vlan_id %}
-{% set subif = svid or 1 %}
 #
-# Huawei VRP - EVPN VXLAN L3VPN (distributed gateway)  circuit {{ circuit.code }}
-# access-mode={{ mode }} s-vid={{ svid }}{% if cvid %} ce-vid={{ cvid }}{% endif %}
-
+# Huawei VRP - EVPN VXLAN L3VPN (distributed gateway)  circuit={{ circuit.code }} vni={{ circuit.vni }}
+# device={{ device.name }} vrf={{ circuit.vrf_name }} ac={{ mode }} s-vid={{ svid }}
 #
 ip vpn-instance {{ circuit.vrf_name }}
  ipv4-family
@@ -14,11 +13,7 @@ ip vpn-instance {{ circuit.vrf_name }}
   vpn-target {{ circuit.route_target }} import-extcommunity evpn
  vxlan vni {{ circuit.vni }}
 #
-bridge-domain {{ circuit.vni }}
- vxlan vni {{ circuit.vni }}
- evpn
-  route-distinguisher {{ circuit.route_distinguisher }}
-  vpn-target {{ circuit.route_target }} both
+{{ hw.bridge_domain_evpn(circuit) }}
 #
 interface Vbdif{{ circuit.vni }}
  ip binding vpn-instance {{ circuit.vrf_name }}
@@ -26,19 +21,8 @@ interface Vbdif{{ circuit.vni }}
  arp distribute-gateway enable
  arp collect host enable
 #
-interface {{ endpoint.interface_name }}.{{ subif }} mode l2
-{% if mode == 'access' %}
- encapsulation untag
-{% elif mode == 'qinq' %}
- encapsulation qinq vid {{ svid }} ce-vid {{ cvid }}
-{% else %}
- encapsulation dot1q vid {{ svid }}
- rewrite pop single
-{% endif %}
- bridge-domain {{ circuit.vni }}
-{% if circuit.bandwidth_mbps %}
- qos lr cir {{ circuit.bandwidth_mbps * 1000 }} inbound
- qos lr cir {{ circuit.bandwidth_mbps * 1000 }} outbound
-{% endif %}
+{{ hw.l2_subif(endpoint, circuit, mode, svid, cvid) }}
+#
+{{ hw.nve_vni(circuit) }}
 #
 return

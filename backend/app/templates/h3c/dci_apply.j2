@@ -1,13 +1,14 @@
 #
 # H3C Comware7 - DCI EVPN VXLAN gateway stitching  circuit {{ circuit.code }}
-# role={{ device.role }} loopback={{ device.loopback_ip }} asn={{ device.bgp_asn }}
+# role={{ device.role.value }} loopback={{ device.loopback_ip }} asn={{ device.bgp_asn }}
 #
 l2vpn enable
 vsi vsi_{{ circuit.code }}
  vxlan {{ circuit.vni }}
  evpn encapsulation vxlan
   route-distinguisher {{ circuit.route_distinguisher }}
-  vpn-target {{ circuit.route_target }} both
+  vpn-target {{ circuit.route_target }} import-extcommunity
+  vpn-target {{ circuit.route_target }} export-extcommunity
 #
 bgp {{ device.bgp_asn }}
  address-family l2vpn evpn

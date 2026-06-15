@@ -1,10 +1,10 @@
+{% import 'h3c/_macros.j2' as h3c %}
 {% set mode = endpoint.access_mode.value if endpoint.access_mode else 'dot1q' %}
 {% set svid = endpoint.vlan_id or circuit.vlan_id %}
 {% set cvid = endpoint.inner_vlan_id %}
 #
-# H3C Comware7 - EVPN VXLAN L3VPN (distributed IRB)  circuit {{ circuit.code }}
-# access-mode={{ mode }} s-vid={{ svid }}{% if cvid %} c-vid={{ cvid }}{% endif %}
-
+# H3C Comware7 - EVPN VXLAN L3VPN (distributed IRB)  circuit={{ circuit.code }} vni={{ circuit.vni }}
+# device={{ device.name }} vrf={{ circuit.vrf_name }} ac={{ mode }} s-vid={{ svid }}
 #
 ip vpn-instance {{ circuit.vrf_name }}
  route-distinguisher {{ circuit.route_distinguisher }}
@@ -16,11 +16,7 @@ ip vpn-instance {{ circuit.vrf_name }}
   vpn-target {{ circuit.route_target }} export-extcommunity
 #
 l2vpn enable
-vsi vsi_{{ circuit.code }}
- vxlan {{ circuit.vni }}
- evpn encapsulation vxlan
-  route-distinguisher {{ circuit.route_distinguisher }}
-  vpn-target {{ circuit.route_target }} both
+{{ h3c.vsi_evpn_header(circuit, l3=true) }}
 #
 interface Vsi-interface{{ circuit.vni }}
  ip binding vpn-instance {{ circuit.vrf_name }}
@@ -30,19 +26,7 @@ interface Vsi-interface{{ circuit.vni }}
 #
 interface {{ endpoint.interface_name }}
  port link-mode bridge
- service-instance {{ svid or 1 }}
-{% if mode == 'access' %}
-  encapsulation untagged
-{% elif mode == 'qinq' %}
-  encapsulation s-vid {{ svid }} c-vid {{ cvid }}
-{% else %}
-  encapsulation s-vid {{ svid }}
-{% endif %}
-{% if circuit.bandwidth_mbps %}
-  # rate-limit per service-instance (CAR), cir unit = kbps
-  qos car inbound any cir {{ circuit.bandwidth_mbps * 1000 }} cbs {{ circuit.bandwidth_mbps * 1000 * 25 }}
-  qos car outbound any cir {{ circuit.bandwidth_mbps * 1000 }} cbs {{ circuit.bandwidth_mbps * 1000 * 25 }}
-{% endif %}
-  xconnect vsi vsi_{{ circuit.code }}
+ mtu {{ circuit.mtu }}
+{{ h3c.service_instance_ac(endpoint, circuit, mode, svid, cvid) }}
 #
 return

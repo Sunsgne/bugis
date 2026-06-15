@@ -1,0 +1,41 @@
+{# Huawei VRP / CE EVPN VXLAN shared fragments #}
+{% macro l2_ifname(endpoint, mode, svid) -%}
+{%- if mode == 'access' -%}
+{{ endpoint.interface_name }}
+{%- else -%}
+{{ endpoint.interface_name }}.{{ svid or 1 }}
+{%- endif -%}
+{%- endmacro %}
+
+{% macro bridge_domain_evpn(circuit) -%}
+bridge-domain {{ circuit.vni }}
+ vxlan vni {{ circuit.vni }}
+ evpn
+  route-distinguisher {{ circuit.route_distinguisher }}
+  vpn-target {{ circuit.route_target }} export-extcommunity
+  vpn-target {{ circuit.route_target }} import-extcommunity
+{%- endmacro %}
+
+{% macro l2_subif(endpoint, circuit, mode, svid, cvid) -%}
+interface {{ l2_ifname(endpoint, mode, svid) }} mode l2
+ description CUST_{{ circuit.tenant_id }}_{{ circuit.code }}
+{% if mode == 'access' %}
+ encapsulation untag
+{% elif mode == 'qinq' %}
+ encapsulation qinq vid {{ svid }} ce-vid {{ cvid }}
+{% else %}
+ encapsulation dot1q vid {{ svid }}
+ rewrite pop single
+{% endif %}
+ bridge-domain {{ circuit.vni }}
+{% if circuit.bandwidth_mbps %}
+ # rate-limit on AC sub-interface (line rate), cir unit = kbps
+ qos lr cir {{ circuit.bandwidth_mbps * 1000 }} inbound
+ qos lr cir {{ circuit.bandwidth_mbps * 1000 }} outbound
+{% endif %}
+{%- endmacro %}
+
+{% macro nve_vni(circuit) -%}
+interface Nve1
+ vni {{ circuit.vni }} head-end peer-list protocol bgp
+{%- endmacro %}

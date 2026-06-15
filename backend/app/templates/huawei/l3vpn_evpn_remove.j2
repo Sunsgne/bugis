@@ -1,8 +1,14 @@
+{% import 'huawei/_macros.j2' as hw %}
+{% set mode = endpoint.access_mode.value if endpoint.access_mode else 'dot1q' %}
+{% set svid = endpoint.vlan_id or circuit.vlan_id %}
 #
 # Huawei VRP - remove EVPN VXLAN L3VPN  circuit {{ circuit.code }}
 #
 undo interface Vbdif{{ circuit.vni }}
-undo interface {{ endpoint.interface_name }}.{{ endpoint.vlan_id or circuit.vlan_id }}
+undo interface {{ hw.l2_ifname(endpoint, mode, svid) }}
+interface Nve1
+ undo vni {{ circuit.vni }} head-end peer-list protocol bgp
+#
 undo bridge-domain {{ circuit.vni }}
 undo ip vpn-instance {{ circuit.vrf_name }}
 #

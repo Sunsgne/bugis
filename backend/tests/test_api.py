@@ -677,6 +677,52 @@ def test_rate_limit_rendering(client, auth_headers):
     assert "traffic policy" not in hw
 
 
+def test_h3c_huawei_template_quality(client, auth_headers):
+    """Production-style checks for H3C/Huawei EVPN VXLAN templates."""
+    site, tenant, dev_h3c, _ = _bootstrap_topology(client, auth_headers)
+    huawei = client.post(
+        "/api/v1/devices", headers=auth_headers,
+        json={"name": f"HW-TPL-{next(_seq)}", "vendor": "huawei", "role": "leaf",
+              "overlay_tech": "vxlan_evpn", "status": "online",
+              "mgmt_ip": "10.99.0.1", "bgp_asn": 65010, "site_id": site["id"]},
+    ).json()
+    l3 = client.post(
+        "/api/v1/circuits", headers=auth_headers,
+        json={"name": "L3 tpl", "tenant_id": tenant["id"],
+              "service_type": "l3vpn_evpn", "bandwidth_mbps": 500,
+              "endpoints": [
+                  {"label": "A", "device_id": dev_h3c["id"], "interface_name": "GE1/0/3",
+                   "vlan_id": 11, "gateway_ip": "10.11.0.1"},
+              ]},
+    ).json()
+    wo = client.post(
+        f"/api/v1/work-orders/provision/{l3['id']}", headers=auth_headers
+    ).json()
+    h3c = next(j["rendered_config"] for j in wo["config_jobs"] if j["device_id"] == dev_h3c["id"])
+    assert "gateway vsi-interface Vsi-interface" in h3c
+    assert "distributed-gateway local" in h3c
+    assert "statistics enable" in h3c
+    assert h3c.index("service-instance") < h3c.index("qos car") < h3c.index("xconnect")
+
+    l2 = client.post(
+        "/api/v1/circuits", headers=auth_headers,
+        json={"name": "L2 access", "tenant_id": tenant["id"],
+              "service_type": "l2vpn_evpn", "bandwidth_mbps": 100,
+              "endpoints": [
+                  {"label": "Z", "device_id": huawei["id"], "interface_name": "GE1/0/8",
+                   "access_mode": "access"},
+              ]},
+    ).json()
+    wo2 = client.post(
+        f"/api/v1/work-orders/provision/{l2['id']}", headers=auth_headers
+    ).json()
+    hw_cfg = next(j["rendered_config"] for j in wo2["config_jobs"] if j["device_id"] == huawei["id"])
+    assert "interface GE1/0/8 mode l2" in hw_cfg
+    assert "GE1/0/8." not in hw_cfg
+    assert "encapsulation untag" in hw_cfg
+    assert "head-end peer-list protocol bgp" in hw_cfg
+
+
 def test_dot1q_default_encapsulation(client, auth_headers):
     site, tenant, dev_h3c, _ = _bootstrap_topology(client, auth_headers)
     circuit = client.post(

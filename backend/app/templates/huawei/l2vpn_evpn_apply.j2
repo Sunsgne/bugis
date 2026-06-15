@@ -1,37 +1,15 @@
+{% import 'huawei/_macros.j2' as hw %}
 {% set mode = endpoint.access_mode.value if endpoint.access_mode else 'dot1q' %}
 {% set svid = endpoint.vlan_id or circuit.vlan_id %}
 {% set cvid = endpoint.inner_vlan_id %}
-{% set subif = svid or 1 %}
 #
-# Huawei VRP (Datacom) - EVPN VXLAN L2VPN  circuit {{ circuit.code }}
-# access-mode={{ mode }} s-vid={{ svid }}{% if cvid %} ce-vid={{ cvid }}{% endif %}
-
+# Huawei VRP (Datacom) - EVPN VXLAN L2VPN  circuit={{ circuit.code }} vni={{ circuit.vni }}
+# device={{ device.name }} ac={{ mode }} s-vid={{ svid }}{% if cvid %} ce-vid={{ cvid }}{% endif %}
 #
-bridge-domain {{ circuit.vni }}
- vxlan vni {{ circuit.vni }}
- evpn
-  route-distinguisher {{ circuit.route_distinguisher }}
-  vpn-target {{ circuit.route_target }} export-extcommunity
-  vpn-target {{ circuit.route_target }} import-extcommunity
+{{ hw.bridge_domain_evpn(circuit) }}
 #
-interface {{ endpoint.interface_name }}.{{ subif }} mode l2
- description CUST_{{ circuit.tenant_id }}_{{ circuit.code }}
-{% if mode == 'access' %}
- encapsulation untag
-{% elif mode == 'qinq' %}
- encapsulation qinq vid {{ svid }} ce-vid {{ cvid }}
-{% else %}
- encapsulation dot1q vid {{ svid }}
- rewrite pop single
-{% endif %}
- bridge-domain {{ circuit.vni }}
-{% if circuit.bandwidth_mbps %}
- # rate-limit (line rate), cir unit = kbps
- qos lr cir {{ circuit.bandwidth_mbps * 1000 }} inbound
- qos lr cir {{ circuit.bandwidth_mbps * 1000 }} outbound
-{% endif %}
+{{ hw.l2_subif(endpoint, circuit, mode, svid, cvid) }}
 #
-interface Nve1
- vni {{ circuit.vni }} head-end peer-list protocol bgp
+{{ hw.nve_vni(circuit) }}
 #
 return
