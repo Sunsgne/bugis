@@ -32,6 +32,8 @@ class PlatformSettingsBase(BaseModel):
     smtp_user: str = ""
     smtp_password: str | None = None
     smtp_from: str = "bugis@localhost"
+    smtp_provider: str = ""
+    smtp_security: str = "starttls"
 
     enable_metrics: bool = True
     access_token_expire_minutes: int = Field(default=1440, ge=5, le=60 * 24 * 30)
@@ -65,6 +67,8 @@ class PlatformSettingsUpdate(BaseModel):
     smtp_user: str | None = None
     smtp_password: str | None = None
     smtp_from: str | None = None
+    smtp_provider: str | None = None
+    smtp_security: str | None = None
 
     enable_metrics: bool | None = None
     access_token_expire_minutes: int | None = Field(default=None, ge=5, le=60 * 24 * 30)

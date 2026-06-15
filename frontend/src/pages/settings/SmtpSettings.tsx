@@ -1,21 +1,67 @@
-import { Button, Col, Form, Input, InputNumber, Row, Space, App as AntApp, Typography } from "antd";
+import {
+  Alert,
+  Button,
+  Col,
+  Form,
+  Input,
+  InputNumber,
+  Row,
+  Select,
+  Space,
+  App as AntApp,
+  Typography,
+} from "antd";
 import { SaveOutlined } from "@ant-design/icons";
-import { useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { usePlatformSettings } from "../../hooks/usePlatformSettings";
+import {
+  SMTP_CATEGORIES,
+  SMTP_PRESETS,
+  SMTP_SECURITY_OPTIONS,
+  getSmtpPreset,
+  guessSmtpProvider,
+} from "../../data/smtpPresets";
 
 export default function SmtpSettings() {
   const { message } = AntApp.useApp();
   const [form] = Form.useForm();
   const { platform, loading, saving, save } = usePlatformSettings();
+  const [providerId, setProviderId] = useState("custom");
+
+  const preset = useMemo(() => getSmtpPreset(providerId), [providerId]);
 
   useEffect(() => {
-    if (platform) form.setFieldsValue(platform);
+    if (!platform) return;
+    const guessed = platform.smtp_provider || guessSmtpProvider(platform.smtp_host, platform.smtp_port);
+    setProviderId(guessed);
+    form.setFieldsValue({
+      ...platform,
+      smtp_provider: guessed,
+      smtp_security: platform.smtp_security || "starttls",
+    });
   }, [platform, form]);
+
+  function applyPreset(id: string) {
+    setProviderId(id);
+    const p = getSmtpPreset(id);
+    if (!p || id === "custom") {
+      form.setFieldValue("smtp_provider", "custom");
+      return;
+    }
+    form.setFieldsValue({
+      smtp_provider: id,
+      smtp_host: p.host,
+      smtp_port: p.port,
+      smtp_security: p.security,
+    });
+  }
 
   async function onSave() {
     const v = await form.validateFields();
     try {
       await save({
+        smtp_provider: v.smtp_provider || providerId,
+        smtp_security: v.smtp_security,
         smtp_host: v.smtp_host,
         smtp_port: v.smtp_port,
         smtp_user: v.smtp_user,
@@ -28,6 +74,14 @@ export default function SmtpSettings() {
     }
   }
 
+  const groupedOptions = SMTP_CATEGORIES.map((cat) => ({
+    label: cat,
+    options: SMTP_PRESETS.filter((p) => p.category === cat).map((p) => ({
+      value: p.id,
+      label: p.name,
+    })),
+  }));
+
   return (
     <div>
       <Space style={{ marginBottom: 16, width: "100%", justifyContent: "space-between" }}>
@@ -35,41 +89,79 @@ export default function SmtpSettings() {
           <Typography.Title level={5} style={{ margin: 0 }}>
             邮件 SMTP
           </Typography.Title>
-          <Typography.Text type="secondary">告警邮件通知渠道使用</Typography.Text>
+          <Typography.Text type="secondary">
+            告警「邮件」通知渠道使用；选择主流平台自动填充服务器参数
+          </Typography.Text>
         </div>
         <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={onSave}>
           保存
         </Button>
       </Space>
+
+      <Alert
+        type="info"
+        showIcon
+        style={{ marginBottom: 16 }}
+        message="支持主流邮件平台"
+        description="涵盖 QQ / 163 / 企业邮、Gmail / Outlook、SendGrid / Mailgun / AWS SES 等，选择后自动填入 SMTP 主机、端口与加密方式，仅需填写账号与授权码。"
+      />
+
       <Form form={form} layout="vertical" disabled={loading}>
+        <Form.Item name="smtp_provider" label="邮件平台">
+          <Select
+            showSearch
+            optionFilterProp="label"
+            options={groupedOptions}
+            value={providerId}
+            onChange={applyPreset}
+            placeholder="选择邮件服务商"
+          />
+        </Form.Item>
+
+        {preset?.doc && (
+          <Alert type="warning" showIcon style={{ marginBottom: 16 }} message={preset.doc} />
+        )}
+
         <Row gutter={16}>
-          <Col xs={24} md={12}>
-            <Form.Item name="smtp_host" label="SMTP 主机">
+          <Col xs={24} md={10}>
+            <Form.Item name="smtp_host" label="SMTP 主机" rules={[{ required: true, message: "请输入 SMTP 主机" }]}>
               <Input placeholder="smtp.example.com" />
             </Form.Item>
           </Col>
-          <Col xs={24} md={6}>
-            <Form.Item name="smtp_port" label="端口">
+          <Col xs={12} md={4}>
+            <Form.Item name="smtp_port" label="端口" rules={[{ required: true }]}>
               <InputNumber min={1} max={65535} style={{ width: "100%" }} />
             </Form.Item>
           </Col>
-          <Col xs={24} md={6}>
-            <Form.Item name="smtp_from" label="发件人">
-              <Input placeholder="noc@example.com" />
+          <Col xs={12} md={10}>
+            <Form.Item name="smtp_security" label="加密方式">
+              <Select
+                options={SMTP_SECURITY_OPTIONS}
+                onChange={() => setProviderId("custom")}
+              />
             </Form.Item>
           </Col>
           <Col xs={24} md={12}>
-            <Form.Item name="smtp_user" label="用户名">
-              <Input />
+            <Form.Item
+              name="smtp_user"
+              label="用户名 / 账号"
+              extra={preset?.userHint}
+            >
+              <Input placeholder={preset?.userHint || "SMTP 登录账号"} />
             </Form.Item>
           </Col>
           <Col xs={24} md={12}>
             <Form.Item
               name="smtp_password"
-              label="密码"
-              extra={platform?.smtp_password_set ? "已设置，留空则不修改" : undefined}
+              label="密码 / 授权码"
+              extra={platform?.smtp_password_set ? "已设置，留空则不修改" : "多数平台需使用授权码而非登录密码"}
             >
               <Input.Password placeholder="留空保持原值" autoComplete="new-password" />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={12}>
+            <Form.Item name="smtp_from" label="发件人地址" extra={preset?.fromHint}>
+              <Input placeholder={preset?.fromHint || "noc@example.com"} />
             </Form.Item>
           </Col>
         </Row>

@@ -79,6 +79,8 @@ class Settings(BaseSettings):
     smtp_user: str = ""
     smtp_password: str = ""
     smtp_from: str = "bugis@localhost"
+    smtp_provider: str = ""
+    smtp_security: str = "starttls"
 
 
 @lru_cache

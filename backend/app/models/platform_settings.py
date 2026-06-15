@@ -40,6 +40,8 @@ class PlatformSettings(Base, TimestampMixin):
     smtp_user: Mapped[str] = mapped_column(String(128), default="")
     smtp_password: Mapped[str | None] = mapped_column(String(255), nullable=True)
     smtp_from: Mapped[str] = mapped_column(String(255), default="bugis@localhost")
+    smtp_provider: Mapped[str] = mapped_column(String(64), default="")
+    smtp_security: Mapped[str] = mapped_column(String(16), default="starttls")
 
     enable_metrics: Mapped[bool] = mapped_column(Boolean, default=True)
 

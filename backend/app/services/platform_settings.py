@@ -29,6 +29,8 @@ def _defaults_from_env() -> dict:
         "smtp_user": settings.smtp_user,
         "smtp_password": settings.smtp_password or None,
         "smtp_from": settings.smtp_from,
+        "smtp_provider": settings.smtp_provider,
+        "smtp_security": settings.smtp_security,
         "enable_metrics": settings.enable_metrics,
         "access_token_expire_minutes": settings.access_token_expire_minutes,
     }
@@ -56,6 +58,8 @@ def sync_to_runtime(row: PlatformSettings) -> None:
     if row.smtp_password:
         settings.smtp_password = row.smtp_password
     settings.smtp_from = row.smtp_from
+    settings.smtp_provider = row.smtp_provider
+    settings.smtp_security = row.smtp_security or "starttls"
     settings.enable_metrics = row.enable_metrics
     settings.access_token_expire_minutes = row.access_token_expire_minutes
 

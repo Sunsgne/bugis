@@ -89,12 +89,20 @@ def _send_email(channel: NotificationChannel, payload: dict) -> tuple[bool, str]
     msg["Subject"] = payload["subject"]
     msg["From"] = getattr(settings, "smtp_from", "bugis@localhost")
     msg["To"] = payload["to"]
+    port = int(getattr(settings, "smtp_port", 25) or 25)
+    security = (getattr(settings, "smtp_security", "starttls") or "starttls").lower()
+    user = getattr(settings, "smtp_user", "") or ""
+    password = getattr(settings, "smtp_password", "") or ""
     try:
-        with smtplib.SMTP(host, getattr(settings, "smtp_port", 25), timeout=10) as s:
-            user = getattr(settings, "smtp_user", "")
-            if user:
+        if security == "ssl":
+            server = smtplib.SMTP_SSL(host, port, timeout=10)
+        else:
+            server = smtplib.SMTP(host, port, timeout=10)
+        with server as s:
+            if security == "starttls":
                 s.starttls()
-                s.login(user, getattr(settings, "smtp_password", ""))
+            if user:
+                s.login(user, password)
             s.send_message(msg)
         return True, "sent"
     except Exception as exc:

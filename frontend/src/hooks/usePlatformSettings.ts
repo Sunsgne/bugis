@@ -21,6 +21,8 @@ export interface PlatformSettings {
   smtp_port: number;
   smtp_user: string;
   smtp_from: string;
+  smtp_provider?: string;
+  smtp_security?: string;
   smtp_password_set?: boolean;
   enable_metrics: boolean;
   access_token_expire_minutes: number;
