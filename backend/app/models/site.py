@@ -8,8 +8,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
 from app.models.enums import DeliveryMode
-from app.models.mixins import TimestampMixin
-from sqlalchemy import Enum as SAEnum
+from app.models.mixins import TimestampMixin, str_enum_column
 
 if TYPE_CHECKING:
     from app.models.device import Device
@@ -33,7 +32,7 @@ class Site(Base, TimestampMixin):
 
     # Delivery: direct device push, or delegate to a fabric controller.
     delivery_mode: Mapped[DeliveryMode] = mapped_column(
-        SAEnum(DeliveryMode), default=DeliveryMode.DIRECT
+        str_enum_column(DeliveryMode), default=DeliveryMode.DIRECT
     )
     controller_id: Mapped[int | None] = mapped_column(
         ForeignKey("controllers.id", ondelete="SET NULL"), nullable=True
