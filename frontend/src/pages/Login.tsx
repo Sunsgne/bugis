@@ -230,13 +230,6 @@ export default function Login() {
                   )}
                 </Button>
               </form>
-
-              <p className="mt-6 flex items-center justify-center gap-2 text-center text-xs text-slate-500">
-                <span className="rounded border border-slate-700 bg-slate-800/60 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                  Demo
-                </span>
-                <span>体验环境 · 账号 admin · 密码请联系管理员</span>
-              </p>
             </CardContent>
           </Card>
         </section>
