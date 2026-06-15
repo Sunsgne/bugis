@@ -203,11 +203,21 @@ def add_interface(
 
 @router.get("/{device_id}/interfaces", response_model=list[DeviceInterfaceOut])
 def list_interfaces(
-    device_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_user)
+    device_id: int,
+    scan: bool = Query(False, description="Refresh S-VID inventory before returning"),
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
 ):
-    return db.execute(
+    device = db.get(Device, device_id)
+    if not device:
+        raise HTTPException(status_code=404, detail="device not found")
+    if scan:
+        port_inventory.scan_device(db, device)
+        db.commit()
+    rows = db.execute(
         select(DeviceInterface).where(DeviceInterface.device_id == device_id)
     ).scalars().all()
+    return sorted(rows, key=lambda i: (i.ifindex or 0, i.name))
 
 
 @router.get("/{device_id}/baseline")

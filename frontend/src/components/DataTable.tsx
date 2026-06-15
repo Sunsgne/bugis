@@ -36,6 +36,9 @@ type Props<TData> = {
   pageSizeOptions?: number[];
   className?: string;
   emptyText?: string;
+  tableLayout?: "fixed" | "auto";
+  dense?: boolean;
+  showPagination?: boolean;
 };
 
 export default function DataTable<TData>({
@@ -50,6 +53,9 @@ export default function DataTable<TData>({
   pageSizeOptions = [20, 50, 100],
   className,
   emptyText = "暂无数据",
+  tableLayout = "fixed",
+  dense = false,
+  showPagination = true,
 }: Props<TData>) {
   const serverMode = total != null && onPageChange != null;
   const pageCount = serverMode ? Math.max(1, Math.ceil(total / pageSize)) : undefined;
@@ -78,12 +84,20 @@ export default function DataTable<TData>({
   return (
     <div className={cn("w-full min-w-0 space-y-3", className)}>
       <div className="w-full overflow-x-auto rounded-lg border bg-card">
-        <Table className="w-full table-fixed">
+        <Table className={cn("w-full", tableLayout === "fixed" ? "table-fixed" : "table-auto")}>
           <TableHeader>
             {table.getHeaderGroups().map((hg) => (
               <TableRow key={hg.id}>
                 {hg.headers.map((header) => (
-                  <TableHead key={header.id} style={{ width: header.getSize() !== 150 ? header.getSize() : undefined }}>
+                  <TableHead
+                    key={header.id}
+                    className={cn(dense && "h-9 px-2 text-xs")}
+                    style={
+                      tableLayout === "fixed" && header.getSize() !== 150
+                        ? { width: header.getSize() }
+                        : undefined
+                    }
+                  >
                     {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
                   </TableHead>
                 ))}
@@ -101,7 +115,9 @@ export default function DataTable<TData>({
               rows.map((row) => (
                 <TableRow key={row.id}>
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
+                    <TableCell key={cell.id} className={cn(dense && "px-2 py-2 text-xs")}>
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </TableCell>
                   ))}
                 </TableRow>
               ))
@@ -116,6 +132,7 @@ export default function DataTable<TData>({
         </Table>
       </div>
 
+      {showPagination ? (
       <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
         <span>共 {displayTotal.toLocaleString()} 条</span>
         <div className="flex items-center gap-2">
@@ -165,6 +182,7 @@ export default function DataTable<TData>({
           </Button>
         </div>
       </div>
+      ) : null}
     </div>
   );
 }

@@ -493,10 +493,12 @@ export default function Devices() {
 
   const siteName = useCallback((id?: number) => sites.find((s) => s.id === id)?.code || "-", [sites]);
 
-  async function loadIfaces(deviceId: number) {
+  async function loadIfaces(deviceId: number, refresh = false) {
     setIfacesLoading(true);
     try {
-      const { data } = await api.get<DeviceInterface[]>(`/devices/${deviceId}/interfaces`);
+      const { data } = await api.get<DeviceInterface[]>(`/devices/${deviceId}/interfaces`, {
+        params: refresh ? { scan: true } : undefined,
+      });
       setIfaces(data);
     } finally {
       setIfacesLoading(false);
@@ -506,7 +508,7 @@ export default function Devices() {
   async function openPorts(device: Device) {
     setDrawerDevice(device);
     setIfaces([]);
-    await loadIfaces(device.id);
+    await loadIfaces(device.id, true);
   }
 
   async function load(p = page, ps = pageSize, q = search) {
@@ -643,6 +645,7 @@ export default function Devices() {
       const { data } = await api.post<DeviceInterface[]>(`/devices/${deviceId}/discover-interfaces`);
       toast.dismiss(tid);
       const simCount = data.filter((i) => i.discovered_via === "snmp-sim").length;
+      const svidCount = data.filter((i) => i.used_s_vids?.length).length;
       if (simCount === data.length) {
         toast.warning(
           "返回的是模拟数据（设备 SNMP 不可达或 Community 错误）。请检查管理 IP、UDP 161 与 Community 后重试",
@@ -650,7 +653,10 @@ export default function Devices() {
       } else if (simCount > 0) {
         toast.warning(`部分接口为模拟数据（${simCount}/${data.length}），请检查 SNMP 配置`);
       } else {
-        toast.success(`SNMP 发现 ${data.length} 个接口`);
+        toast.success(`SNMP 发现 ${data.length} 个接口 · ${svidCount} 个端口有 S-VID 占用`);
+      }
+      if (svidCount === 0 && simCount < data.length) {
+        toast.info("S-VID 需从 running-config 解析，请执行「现网学习」后重新检测");
       }
       setIfaces(data);
     } catch (e: unknown) {
@@ -670,8 +676,8 @@ export default function Devices() {
         toast.success(
           `${d.name} 学习完成 · ${inv?.service_count ?? 0} 个业务 · v${data.snapshot_version}`,
         );
-        if (data.svid_scan?.ports_scanned) {
-          loadIfaces(d.id);
+        if (data.svid_scan?.ports_scanned || drawerDevice?.id === d.id) {
+          await loadIfaces(d.id, true);
         }
       } else {
         toast.error(data.error || toastCopy.failed);
@@ -772,29 +778,30 @@ export default function Devices() {
 
   const ifaceColumns = useMemo<ColumnDef<DeviceInterface, unknown>[]>(
     () => [
-      { accessorKey: "name", header: "接口", size: 120 },
+      {
+        accessorKey: "name",
+        header: "接口",
+        cell: ({ row }) => (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="block max-w-[160px] truncate font-mono text-xs">{row.original.name}</span>
+            </TooltipTrigger>
+            <TooltipContent className="font-mono text-xs">{row.original.name}</TooltipContent>
+          </Tooltip>
+        ),
+      },
       {
         accessorKey: "description",
         header: "描述",
         cell: ({ row }) => {
           const d = row.original.description;
-          if (!d) return "-";
-          if (d.includes("bw(")) {
-            return (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Badge variant="secondary">{d}</Badge>
-                </TooltipTrigger>
-                <TooltipContent>{d}</TooltipContent>
-              </Tooltip>
-            );
-          }
+          if (!d) return <span className="text-muted-foreground">-</span>;
           return (
             <Tooltip>
               <TooltipTrigger asChild>
-                <span className="block max-w-[200px] truncate">{d}</span>
+                <span className="block max-w-[280px] truncate text-xs text-muted-foreground">{d}</span>
               </TooltipTrigger>
-              <TooltipContent>{d}</TooltipContent>
+              <TooltipContent className="max-w-md break-all text-xs">{d}</TooltipContent>
             </Tooltip>
           );
         },
@@ -802,32 +809,45 @@ export default function Devices() {
       {
         accessorKey: "speed_mbps",
         header: "速率",
-        size: 80,
         cell: ({ row }) => {
           const s = row.original.speed_mbps;
           if (!s) return "-";
-          return s >= 1000 ? `${s / 1000}G` : `${s}M`;
+          return (
+            <Badge variant="outline" className="font-mono text-xs">
+              {s >= 1000 ? `${s / 1000}G` : `${s}M`}
+            </Badge>
+          );
         },
       },
       {
         accessorKey: "oper_status",
-        header: "Oper",
-        size: 70,
+        header: "状态",
         cell: ({ row }) => {
           const s = row.original.oper_status;
           return (
-            <Badge variant={s === "up" ? "success" : "secondary"}>{s || "-"}</Badge>
+            <Badge variant={s === "up" ? "success" : "secondary"} className="text-xs">
+              {s || "-"}
+            </Badge>
           );
         },
       },
-      { accessorKey: "ifindex", header: "ifIndex", size: 70 },
+      {
+        accessorKey: "ifindex",
+        header: "ifIndex",
+        cell: ({ row }) => <span className="font-mono text-xs">{row.original.ifindex ?? "-"}</span>,
+      },
       {
         accessorKey: "discovered_via",
-        header: "发现方式",
-        size: 90,
+        header: "来源",
         cell: ({ row }) => {
           const d = row.original.discovered_via;
-          return d ? <Badge variant="outline">{d}</Badge> : null;
+          return d ? (
+            <Badge variant="outline" className="text-xs">
+              {d}
+            </Badge>
+          ) : (
+            "-"
+          );
         },
       },
       {
@@ -838,16 +858,23 @@ export default function Devices() {
       {
         accessorKey: "allocated",
         header: "占用",
-        size: 70,
         cell: ({ row }) => {
           const a = row.original.allocated;
           const hasSvid = row.original.used_s_vids?.length;
-          return a || hasSvid ? <Badge variant="warning">已占用</Badge> : "-";
+          return a || hasSvid ? (
+            <Badge variant="warning" className="text-xs">
+              已占用
+            </Badge>
+          ) : (
+            <span className="text-muted-foreground">-</span>
+          );
         },
       },
     ],
     [],
   );
+
+  const ifaceHasSvid = ifaces.some((i) => (i.used_s_vids?.length ?? 0) > 0);
 
   const columns = useMemo<ColumnDef<Device, unknown>[]>(
     () => [
@@ -1109,41 +1136,78 @@ export default function Devices() {
       />
 
       <Sheet open={!!drawerDevice} onOpenChange={(o) => !o && setDrawerDevice(null)}>
-        <SheetContent side="right" className="flex w-full flex-col sm:max-w-3xl">
-          <SheetHeader className="space-y-0 pb-4">
-            <SheetTitle>{drawerDevice ? `端口清单 · ${drawerDevice.name}` : "端口清单"}</SheetTitle>
+        <SheetContent
+          side="right"
+          className="flex w-full flex-col gap-0 p-0 sm:max-w-5xl lg:max-w-[min(96vw,1280px)]"
+        >
+          <SheetHeader className="space-y-1 border-b px-6 py-4 pr-12 text-left">
+            <SheetTitle className="text-base">
+              {drawerDevice ? `端口清单 · ${drawerDevice.name}` : "端口清单"}
+            </SheetTitle>
+            <p className="text-sm text-muted-foreground">
+              IF-MIB 端口与 S-VID 占用 · SNMP 发现接口，现网学习或检测刷新 VLAN 占用
+            </p>
           </SheetHeader>
+
           {drawerDevice ? (
-            <div className="mb-4 flex gap-2">
+            <div className="flex flex-wrap items-center gap-2 border-b bg-muted/30 px-6 py-3">
               <Button variant="outline" size="sm" onClick={() => check(drawerDevice.id)}>
-                <Cable className="mr-1.5 h-4 w-4" />
+                <Activity className="mr-1.5 h-4 w-4" />
                 检测 S-VID
               </Button>
-              <Button size="sm" onClick={() => discover(drawerDevice.id)}>
+              <Button variant="outline" size="sm" onClick={() => discover(drawerDevice.id)}>
                 <Network className="mr-1.5 h-4 w-4" />
                 SNMP 发现
               </Button>
+              <Button variant="outline" size="sm" onClick={() => learnConfig(drawerDevice)}>
+                <BookOpen className="mr-1.5 h-4 w-4" />
+                现网学习
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="ml-auto text-muted-foreground"
+                onClick={() => loadIfaces(drawerDevice.id, true)}
+              >
+                刷新占用
+              </Button>
             </div>
           ) : null}
-          {ifaces.some((i) => i.discovered_via === "snmp-sim") ? (
-            <Alert variant="warning" className="mb-4">
-              <AlertTriangle className="h-4 w-4" />
-              <AlertTitle>部分端口为模拟数据</AlertTitle>
-              <AlertDescription>
-                发现方式显示 snmp-sim 表示未从设备读到真实 IF-MIB（常见于 Community 错误或 UDP 161 不可达）。Dry-run
-                仅影响配置下发，不影响 SNMP 采集。请确认设备 SNMP Community 与平台「SNMP 采集」设置一致后重新发现。
-              </AlertDescription>
-            </Alert>
-          ) : null}
-          <div className="min-h-0 flex-1 overflow-auto">
-            <DataTable
-              columns={ifaceColumns}
-              data={ifaces}
-              loading={ifacesLoading}
-              pageSize={20}
-              pageSizeOptions={[20, 50, 100]}
-              emptyText="暂无端口数据"
-            />
+
+          <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden px-6 py-4">
+            {ifaces.some((i) => i.discovered_via === "snmp-sim") ? (
+              <Alert variant="warning">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle>部分端口为模拟数据</AlertTitle>
+                <AlertDescription>
+                  snmp-sim 表示未从设备读到真实 IF-MIB。请确认 SNMP Community 与 UDP 161 可达后重新发现。
+                </AlertDescription>
+              </Alert>
+            ) : null}
+
+            {!ifacesLoading && ifaces.length > 0 && !ifaceHasSvid ? (
+              <Alert>
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle>暂无 S-VID 占用数据</AlertTitle>
+                <AlertDescription>
+                  S-VID 从 running-config（service-instance / dot1q 等）解析，SNMP 仅提供端口清单。请先执行「现网学习」拉取配置，再点「检测
+                  S-VID」或「刷新占用」。
+                </AlertDescription>
+              </Alert>
+            ) : null}
+
+            <div className="min-h-0 flex-1 overflow-auto">
+              <DataTable
+                columns={ifaceColumns}
+                data={ifaces}
+                loading={ifacesLoading}
+                pageSize={20}
+                pageSizeOptions={[20, 50, 100]}
+                tableLayout="auto"
+                dense
+                emptyText="暂无端口数据 · 先执行 SNMP 发现"
+              />
+            </div>
           </div>
         </SheetContent>
       </Sheet>

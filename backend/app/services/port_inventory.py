@@ -95,6 +95,144 @@ def _normalize_iface(name: str) -> str:
     return name.strip()
 
 
+def _iface_port_suffix(name: str) -> str | None:
+    """Extract chassis/slot/port suffix e.g. 1/0/25 from any interface name."""
+    m = re.search(r"(\d+(?:/\d+)+)\s*$", name.strip())
+    return m.group(1) if m else None
+
+
+def _iface_aliases(name: str) -> set[str]:
+    """Common H3C/Cisco SNMP vs CLI naming variants."""
+    norm = _normalize_iface(name)
+    aliases = {norm}
+    suffix = _iface_port_suffix(norm)
+    if not suffix:
+        return aliases
+    prefixes = (
+        r"Twenty-FiveGigE",
+        r"Ten-GigabitEthernet",
+        r"TenGigabitEthernet",
+        r"TenGigE",
+        r"HundredGigE",
+        r"FortyGigE",
+        r"GigabitEthernet",
+        r"GE",
+        r"25GE",
+        r"10GE",
+        r"100GE",
+        r"40GE",
+        r"Ethernet",
+        r"xe-",
+        r"ge-",
+        r"et-",
+    )
+    for prefix in prefixes:
+        aliases.add(f"{prefix}{suffix}")
+    if norm.lower().startswith("twenty-fivegige"):
+        aliases.add(f"25GE{suffix}")
+        aliases.add(f"GE{suffix}")
+    elif norm.lower().startswith("hundredgige"):
+        aliases.add(f"100GE{suffix}")
+        aliases.add(f"HE{suffix}")
+    return aliases
+
+
+def _remap_config_usage(
+    config_usage: dict[str, PortUsage],
+    snmp_names: set[str],
+) -> dict[str, PortUsage]:
+    """Map running-config interface keys onto SNMP ifName values."""
+    if not config_usage or not snmp_names:
+        return config_usage
+
+    snmp_by_suffix: dict[str, list[str]] = {}
+    for name in snmp_names:
+        suffix = _iface_port_suffix(name)
+        if suffix:
+            snmp_by_suffix.setdefault(suffix, []).append(name)
+
+    remapped: dict[str, PortUsage] = {}
+    for cfg_iface, usage in config_usage.items():
+        target = cfg_iface if cfg_iface in snmp_names else None
+        if target is None:
+            for alias in _iface_aliases(cfg_iface):
+                if alias in snmp_names:
+                    target = alias
+                    break
+        if target is None:
+            suffix = _iface_port_suffix(cfg_iface)
+            if suffix and suffix in snmp_by_suffix:
+                target = sorted(snmp_by_suffix[suffix])[0]
+        if target is None:
+            continue
+        bucket = remapped.setdefault(target, PortUsage(interface_name=target))
+        for entry in usage.entries:
+            _merge_entries(bucket.entries, entry)
+    return remapped
+
+
+# ifAlias / description hints (operational tagging).
+_DESC_SVID = re.compile(
+    r"(?:s[- ]?vid|svlan|vlan|vid|dot1q)[:=\s]+(\d+)",
+    re.IGNORECASE,
+)
+_DESC_QINQ = re.compile(
+    r"[Ss]:(\d+)\s*/\s*[Cc]:(\d+)",
+)
+_DESC_SI = re.compile(
+    r"service-instance\s+(\d+)",
+    re.IGNORECASE,
+)
+
+
+def _parse_description_entries(text: str | None) -> list[SvidEntry]:
+    if not text:
+        return []
+    entries: list[SvidEntry] = []
+    if re.search(r"untagged|access\s+mode", text, re.I):
+        entries.append(SvidEntry(s_vid=None, access_mode="access", source="device", note="ifAlias"))
+    for m in _DESC_QINQ.finditer(text):
+        entries.append(
+            SvidEntry(
+                s_vid=int(m.group(1)),
+                c_vid=int(m.group(2)),
+                access_mode="qinq",
+                source="device",
+                note="ifAlias",
+            )
+        )
+    for m in _DESC_SVID.finditer(text):
+        svid = int(m.group(1))
+        if not any(e.s_vid == svid for e in entries):
+            entries.append(
+                SvidEntry(s_vid=svid, access_mode="dot1q", source="device", note="ifAlias")
+            )
+    for m in _DESC_SI.finditer(text):
+        svid = int(m.group(1))
+        if not any(e.s_vid == svid for e in entries):
+            entries.append(
+                SvidEntry(s_vid=svid, access_mode="dot1q", source="device", note="ifAlias")
+            )
+    return entries
+
+
+def interface_description_usage(db: Session, device: Device) -> dict[str, PortUsage]:
+    """Derive S-VID hints from persisted IF-MIB ifAlias / descriptions."""
+    rows = db.execute(
+        select(DeviceInterface).where(DeviceInterface.device_id == device.id)
+    ).scalars().all()
+    by_iface: dict[str, PortUsage] = {}
+    for iface in rows:
+        entries = _parse_description_entries(iface.description)
+        if not entries:
+            continue
+        usage = PortUsage(interface_name=iface.name)
+        for entry in entries:
+            _merge_entries(usage.entries, entry)
+        by_iface[iface.name] = usage
+    return by_iface
+
+
 def _merge_entries(existing: list[SvidEntry], new: SvidEntry) -> None:
     keys = {e.key() for e in existing}
     if new.key() not in keys:
@@ -310,17 +448,20 @@ def merge_port_maps(*maps: dict[str, PortUsage]) -> dict[str, PortUsage]:
 
 def scan_device(db: Session, device: Device, *, include_legacy: bool = True) -> dict:
     """Scan and persist S-VID inventory for a device. Returns summary for API."""
-    plat = platform_usage(db, device)
-    dev = device_config_usage(db, device)
-    legacy = legacy_simulated_usage(device) if include_legacy else {}
-    combined = merge_port_maps(plat, dev, legacy)
-
     ifaces = {
         i.name: i
         for i in db.execute(
             select(DeviceInterface).where(DeviceInterface.device_id == device.id)
         ).scalars().all()
     }
+    snmp_names = set(ifaces.keys())
+
+    plat = platform_usage(db, device)
+    dev_raw = device_config_usage(db, device)
+    dev = _remap_config_usage(dev_raw, snmp_names) if snmp_names else dev_raw
+    desc = interface_description_usage(db, device)
+    legacy = legacy_simulated_usage(device) if include_legacy else {}
+    combined = merge_port_maps(plat, dev, desc, legacy)
 
     updated = 0
     port_summaries: list[dict] = []
@@ -340,10 +481,10 @@ def scan_device(db: Session, device: Device, *, include_legacy: bool = True) -> 
             "s_vids": serialized,
         })
 
-    # Clear stale inventory on interfaces with no usage.
-    for name, di in ifaces.items():
-        if name not in combined:
-            if di.used_s_vids:
+    # Clear stale inventory only when we had config/description data to reconcile.
+    if combined:
+        for name, di in ifaces.items():
+            if name not in combined and di.used_s_vids:
                 di.used_s_vids = []
                 di.allocated = False
                 updated += 1
