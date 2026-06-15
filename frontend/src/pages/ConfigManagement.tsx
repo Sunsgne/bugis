@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { Button, Card, Col, Row, Table, Tag, Tabs, App as AntApp, Empty, Modal, Descriptions } from "antd";
+import { Button, Card, Table, Tag, Tabs, App as AntApp, Empty, Descriptions } from "antd";
 import { CloudUploadOutlined, DiffOutlined, ReloadOutlined, BookOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { api } from "../api/client";
 import { configPreviewModalProps, ConfigPreviewPre } from "../utils/configPreview";
+import { dataTableProps } from "../utils/table";
 
 const VENDOR_COLOR: Record<string, string> = {
   h3c: "blue", huawei: "red", juniper: "green", arista: "orange", cisco: "purple", frr: "cyan",
@@ -11,7 +12,7 @@ const VENDOR_COLOR: Record<string, string> = {
 
 function ColoredDiff({ text }: { text: string }) {
   return (
-    <pre className="config-pre">
+    <pre className="config-pre config-pre-fill">
       {text.split("\n").map((line, i) => (
         <div key={i} style={{
           color: line.startsWith("+") ? "#52c41a" : line.startsWith("-") ? "#ff7875"
@@ -102,159 +103,167 @@ export default function ConfigManagement() {
   }
 
   return (
-    <Row gutter={16}>
-      <Col xs={24} md={7}>
-        <Card title="设备配置" extra={<Button size="small" icon={<ReloadOutlined />} onClick={loadDevices} />}>
-          <Table
-            rowKey="device_id"
-            size="small"
-            pagination={false}
-            dataSource={devices}
-            onRow={(r) => ({ onClick: () => select(r.device_id), style: { cursor: "pointer" } })}
-            rowClassName={(r) => (r.device_id === sel ? "ant-table-row-selected" : "")}
-            columns={[
-              { title: "设备", dataIndex: "name" },
-              { title: "厂商", dataIndex: "vendor", render: (v) => <Tag color={VENDOR_COLOR[v]}>{v}</Tag> },
-              { title: "版本", dataIndex: "latest_version", render: (v) => (v ? `v${v}` : "-") },
+    <div className="config-management-page">
+      <Card
+        className="config-panel-card"
+        title="设备配置"
+        extra={<Button size="small" icon={<ReloadOutlined />} onClick={loadDevices} />}
+      >
+        <Table
+          rowKey="device_id"
+          size="small"
+          pagination={false}
+          dataSource={devices}
+          onRow={(r) => ({ onClick: () => select(r.device_id), style: { cursor: "pointer" } })}
+          rowClassName={(r) => (r.device_id === sel ? "ant-table-row-selected" : "")}
+          {...dataTableProps()}
+          columns={[
+            { title: "设备", dataIndex: "name", width: "28%", ellipsis: true },
+            { title: "厂商", dataIndex: "vendor", width: "16%", render: (v) => <Tag color={VENDOR_COLOR[v]}>{v}</Tag> },
+            { title: "版本", dataIndex: "latest_version", width: "16%", render: (v) => (v ? `v${v}` : "-") },
+            {
+              title: "现网学习",
+              dataIndex: "learned_version",
+              width: "40%",
+              render: (v, r) =>
+                v ? (
+                  <Tag color="orange">v{v} · {r.service_count ?? 0} 业务</Tag>
+                ) : (
+                  <Tag>未学习</Tag>
+                ),
+            },
+          ]}
+        />
+      </Card>
+
+      <Card
+        className="config-panel-card"
+        title="配置管理"
+        extra={
+          <Button.Group>
+            <Button icon={<BookOutlined />} onClick={runLearn} disabled={!sel}>
+              现网学习
+            </Button>
+            <Button type="primary" icon={<CloudUploadOutlined />} onClick={backup} disabled={!sel}>
+              备份当前配置
+            </Button>
+          </Button.Group>
+        }
+      >
+        {!sel ? (
+          <Empty description="选择左侧设备" />
+        ) : (
+          <Tabs
+            className="config-tabs"
+            items={[
               {
-                title: "现网学习",
-                dataIndex: "learned_version",
-                render: (v, r) =>
-                  v ? (
-                    <Tag color="orange">v{v} · {r.service_count ?? 0} 业务</Tag>
-                  ) : (
-                    <Tag>未学习</Tag>
-                  ),
+                key: "running",
+                label: "运行配置 (Running)",
+                children: <pre className="config-pre config-pre-fill">{running}</pre>,
+              },
+              {
+                key: "learned",
+                label: "现网学习",
+                children: learned?.has_learned_config ? (
+                  <>
+                    <Descriptions size="small" bordered column={2} style={{ marginBottom: 12 }}>
+                      <Descriptions.Item label="学习版本">v{learned.latest_snapshot_version}</Descriptions.Item>
+                      <Descriptions.Item label="学习时间">
+                        {learned.latest_snapshot_at ? dayjs(learned.latest_snapshot_at).format("YYYY-MM-DD HH:mm:ss") : "-"}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="业务数">
+                        {learned.inventory?.service_count ?? 0}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="VLAN 数">
+                        {learned.inventory?.vlan_ids?.length ?? 0}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="漂移行数">{learned.drift_line_count ?? 0}</Descriptions.Item>
+                    </Descriptions>
+                    {learned.inventory?.l2_services?.length > 0 && (
+                      <Table
+                        size="small"
+                        rowKey="name"
+                        pagination={false}
+                        style={{ marginBottom: 12 }}
+                        dataSource={learned.inventory.l2_services}
+                        {...dataTableProps()}
+                        columns={[
+                          { title: "业务", dataIndex: "name", width: "22%" },
+                          { title: "VNI", dataIndex: "vni", width: "12%" },
+                          { title: "RD", dataIndex: "rd", width: "18%" },
+                          { title: "RT", dataIndex: "rt", width: "18%" },
+                          {
+                            title: "接口",
+                            dataIndex: "interfaces",
+                            width: "30%",
+                            render: (v: string[]) => v?.join(", ") || "-",
+                          },
+                        ]}
+                      />
+                    )}
+                    <Button size="small" icon={<DiffOutlined />} onClick={loadDrift}>
+                      平台 vs 现网 配置漂移
+                    </Button>
+                    {drift && <ColoredDiff text={drift} />}
+                  </>
+                ) : (
+                  <Empty description="尚未执行现网学习">
+                    <Button type="primary" icon={<BookOutlined />} onClick={runLearn}>
+                      立即学习
+                    </Button>
+                  </Empty>
+                ),
+              },
+              {
+                key: "history",
+                label: `版本历史 (${snaps.length})`,
+                children: (
+                  <>
+                    <Button size="small" icon={<DiffOutlined />} onClick={loadDiff} style={{ marginBottom: 8 }}>
+                      对比最近两版
+                    </Button>
+                    {diff && <ColoredDiff text={diff} />}
+                    <Table
+                      size="small"
+                      rowKey="id"
+                      pagination={false}
+                      dataSource={snaps}
+                      {...dataTableProps()}
+                      locale={{ emptyText: <Empty description="暂无快照，点击「备份当前配置」" /> }}
+                      columns={[
+                        { title: "版本", dataIndex: "version", width: "10%", render: (v) => `v${v}` },
+                        {
+                          title: "来源", dataIndex: "source", width: "14%",
+                          render: (s) => (
+                            <Tag
+                              color={
+                                s === "push" ? "green" : s === "learn" ? "orange" : "blue"
+                              }
+                            >
+                              {s === "push"
+                                ? "开通下发"
+                                : s === "backup"
+                                  ? "手动备份"
+                                  : s === "learn"
+                                    ? "现网学习"
+                                    : s}
+                            </Tag>
+                          ),
+                        },
+                        { title: "行数", dataIndex: "lines", width: "10%" },
+                        { title: "操作人", dataIndex: "created_by", width: "14%", ellipsis: true },
+                        { title: "备注", dataIndex: "note", width: "22%", ellipsis: true },
+                        { title: "时间", dataIndex: "created_at", width: "18%", render: (t) => (t ? dayjs(t).format("MM-DD HH:mm:ss") : "-") },
+                        { title: "", width: "12%", render: (_, r) => <a onClick={() => viewSnap(r.id)}>查看</a> },
+                      ]}
+                    />
+                  </>
+                ),
               },
             ]}
           />
-        </Card>
-      </Col>
-      <Col xs={24} md={17}>
-        <Card
-          title="配置管理"
-          extra={
-            <Button.Group>
-              <Button icon={<BookOutlined />} onClick={runLearn} disabled={!sel}>
-                现网学习
-              </Button>
-              <Button type="primary" icon={<CloudUploadOutlined />} onClick={backup} disabled={!sel}>
-                备份当前配置
-              </Button>
-            </Button.Group>
-          }
-        >
-          {!sel ? (
-            <Empty description="选择左侧设备" />
-          ) : (
-            <Tabs
-              items={[
-                {
-                  key: "running",
-                  label: "运行配置 (Running)",
-                  children: <pre className="config-pre">{running}</pre>,
-                },
-                {
-                  key: "learned",
-                  label: "现网学习",
-                  children: learned?.has_learned_config ? (
-                    <>
-                      <Descriptions size="small" bordered column={2} style={{ marginBottom: 12 }}>
-                        <Descriptions.Item label="学习版本">v{learned.latest_snapshot_version}</Descriptions.Item>
-                        <Descriptions.Item label="学习时间">
-                          {learned.latest_snapshot_at ? dayjs(learned.latest_snapshot_at).format("YYYY-MM-DD HH:mm:ss") : "-"}
-                        </Descriptions.Item>
-                        <Descriptions.Item label="业务数">
-                          {learned.inventory?.service_count ?? 0}
-                        </Descriptions.Item>
-                        <Descriptions.Item label="VLAN 数">
-                          {learned.inventory?.vlan_ids?.length ?? 0}
-                        </Descriptions.Item>
-                        <Descriptions.Item label="漂移行数">{learned.drift_line_count ?? 0}</Descriptions.Item>
-                      </Descriptions>
-                      {learned.inventory?.l2_services?.length > 0 && (
-                        <Table
-                          size="small"
-                          rowKey="name"
-                          pagination={false}
-                          style={{ marginBottom: 12 }}
-                          dataSource={learned.inventory.l2_services}
-                          columns={[
-                            { title: "业务", dataIndex: "name" },
-                            { title: "VNI", dataIndex: "vni" },
-                            { title: "RD", dataIndex: "rd" },
-                            { title: "RT", dataIndex: "rt" },
-                            {
-                              title: "接口",
-                              dataIndex: "interfaces",
-                              render: (v: string[]) => v?.join(", ") || "-",
-                            },
-                          ]}
-                        />
-                      )}
-                      <Button size="small" icon={<DiffOutlined />} onClick={loadDrift}>
-                        平台 vs 现网 配置漂移
-                      </Button>
-                      {drift && <ColoredDiff text={drift} />}
-                    </>
-                  ) : (
-                    <Empty description="尚未执行现网学习">
-                      <Button type="primary" icon={<BookOutlined />} onClick={runLearn}>
-                        立即学习
-                      </Button>
-                    </Empty>
-                  ),
-                },
-                {
-                  key: "history",
-                  label: `版本历史 (${snaps.length})`,
-                  children: (
-                    <>
-                      <Button size="small" icon={<DiffOutlined />} onClick={loadDiff} style={{ marginBottom: 8 }}>
-                        对比最近两版
-                      </Button>
-                      {diff && <ColoredDiff text={diff} />}
-                      <Table
-                        size="small"
-                        rowKey="id"
-                        pagination={false}
-                        dataSource={snaps}
-                        locale={{ emptyText: <Empty description="暂无快照，点击「备份当前配置」" /> }}
-                        columns={[
-                          { title: "版本", dataIndex: "version", render: (v) => `v${v}` },
-                          {
-                            title: "来源", dataIndex: "source",
-                            render: (s) => (
-                              <Tag
-                                color={
-                                  s === "push" ? "green" : s === "learn" ? "orange" : "blue"
-                                }
-                              >
-                                {s === "push"
-                                  ? "开通下发"
-                                  : s === "backup"
-                                    ? "手动备份"
-                                    : s === "learn"
-                                      ? "现网学习"
-                                      : s}
-                              </Tag>
-                            ),
-                          },
-                          { title: "行数", dataIndex: "lines" },
-                          { title: "操作人", dataIndex: "created_by" },
-                          { title: "备注", dataIndex: "note", ellipsis: true },
-                          { title: "时间", dataIndex: "created_at", render: (t) => (t ? dayjs(t).format("MM-DD HH:mm:ss") : "-") },
-                          { title: "", render: (_, r) => <a onClick={() => viewSnap(r.id)}>查看</a> },
-                        ]}
-                      />
-                    </>
-                  ),
-                },
-              ]}
-            />
-          )}
-        </Card>
-      </Col>
-    </Row>
+        )}
+      </Card>
+    </div>
   );
 }
