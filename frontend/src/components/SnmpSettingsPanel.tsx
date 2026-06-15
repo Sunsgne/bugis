@@ -72,10 +72,19 @@ const SEC_LEVELS = [
   { value: "authPriv", label: "authPriv" },
 ];
 
+function normalizeSnmpSettings(data: SnmpSettings): SnmpSettings {
+  return {
+    ...data,
+    exclude_name_patterns: data.exclude_name_patterns ?? [],
+    include_name_patterns: data.include_name_patterns ?? [],
+  };
+}
+
 export default function SnmpSettingsPanel() {
   const { message } = AntApp.useApp();
   const [form] = Form.useForm();
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [testOpen, setTestOpen] = useState(false);
   const [testForm] = Form.useForm();
@@ -85,9 +94,20 @@ export default function SnmpSettingsPanel() {
 
   async function load() {
     setLoading(true);
+    setLoadError(null);
     try {
       const { data } = await api.get<SnmpSettings>("/system/snmp");
-      form.setFieldsValue(data);
+      form.setFieldsValue(normalizeSnmpSettings(data));
+    } catch (e: any) {
+      const detail = e?.response?.data?.detail;
+      const msg =
+        typeof detail === "string"
+          ? detail
+          : e?.response?.status === 404
+            ? "SNMP 设置接口未部署，请确认后端已升级并执行数据库迁移"
+            : "加载 SNMP 设置失败";
+      setLoadError(msg);
+      message.error(msg);
     } finally {
       setLoading(false);
     }
@@ -128,8 +148,31 @@ export default function SnmpSettingsPanel() {
     }
   }
 
+  if (loading && !loadError) {
+    return (
+      <div style={{ padding: 48, textAlign: "center" }}>
+        <Typography.Text type="secondary">正在加载 SNMP 设置…</Typography.Text>
+      </div>
+    );
+  }
+
   return (
     <div>
+      {loadError && (
+        <Alert
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message="SNMP 设置加载失败"
+          description={loadError}
+          action={
+            <Button size="small" onClick={load}>
+              重试
+            </Button>
+          }
+        />
+      )}
+
       <Space style={{ marginBottom: 16, width: "100%", justifyContent: "space-between" }}>
         <div>
           <Typography.Title level={5} style={{ margin: 0 }}>
@@ -159,7 +202,7 @@ export default function SnmpSettingsPanel() {
         }
       />
 
-      <Form form={form} layout="vertical" disabled={loading} initialValues={{ version: "2c", enabled: true }}>
+      <Form form={form} layout="vertical" disabled={loading || !!loadError} initialValues={{ version: "2c", enabled: true }}>
         <Tabs
           items={[
             {

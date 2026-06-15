@@ -33,6 +33,8 @@ def to_out(row: SnmpSettings) -> SnmpSettingsOut:
     data = SnmpSettingsOut.model_validate(row, from_attributes=True)
     return data.model_copy(
         update={
+            "exclude_name_patterns": row.exclude_name_patterns or list(DEFAULT_EXCLUDE),
+            "include_name_patterns": row.include_name_patterns or [],
             "v3_auth_password_set": bool(row.v3_auth_password),
             "v3_priv_password_set": bool(row.v3_priv_password),
             "v3_auth_password": None,

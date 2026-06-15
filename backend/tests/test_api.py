@@ -1374,6 +1374,8 @@ def test_snmp_settings_crud(client, auth_headers):
     body = r.json()
     assert body["community"]
     assert body["port"] == 161
+    assert isinstance(body["exclude_name_patterns"], list)
+    assert isinstance(body["include_name_patterns"], list)
 
     r2 = client.patch(
         "/api/v1/system/snmp",
@@ -1394,6 +1396,28 @@ def test_snmp_settings_crud(client, auth_headers):
         assert t.status_code == 200
         assert t.json()["ok"] is True
         assert t.json()["interfaces_found"] > 0
+
+
+def test_snmp_settings_null_patterns(client, auth_headers):
+    from app.core.database import SessionLocal
+    from app.models.snmp_settings import SnmpSettings
+
+    db = SessionLocal()
+    try:
+        row = db.get(SnmpSettings, 1)
+        assert row is not None
+        row.exclude_name_patterns = None
+        row.include_name_patterns = None
+        db.commit()
+    finally:
+        db.close()
+
+    r = client.get("/api/v1/system/snmp", headers=auth_headers)
+    assert r.status_code == 200
+    body = r.json()
+    assert isinstance(body["exclude_name_patterns"], list)
+    assert isinstance(body["include_name_patterns"], list)
+    assert len(body["exclude_name_patterns"]) > 0
 
 
 def test_platform_settings_crud(client, auth_headers):
