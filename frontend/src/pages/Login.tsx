@@ -48,9 +48,10 @@ export default function Login() {
     <div
       className="login-page"
       style={
-        brand.login_background
-          ? ({ ["--login-bg" as string]: brand.login_background } as CSSProperties)
-          : undefined
+        {
+          ...(brand.login_background ? { ["--login-bg" as string]: brand.login_background } : {}),
+          ...(brand.accent_color ? { ["--brand-accent" as string]: brand.accent_color } : {}),
+        } as CSSProperties
       }
     >
       <div className="login-page__bg" aria-hidden>
@@ -63,6 +64,12 @@ export default function Login() {
         <section className="login-page__hero">
           <div className="login-page__brand">
             <BrandLogo brand={brand} variant="login" height={36} />
+            <div>
+              <div className="login-page__product">{brand.product_name}</div>
+              {brand.tagline ? (
+                <div className="login-page__product-tag">{brand.tagline}</div>
+              ) : null}
+            </div>
           </div>
 
           <Typography.Title level={1} className="login-page__headline">
@@ -113,11 +120,14 @@ export default function Login() {
         <section className="login-page__panel">
           <div className="login-page__card">
             <header className="login-page__card-header">
+              <div className="login-page__card-brand">
+                <BrandLogo brand={brand} variant="login" height={32} />
+              </div>
               <Typography.Title level={3} className="login-page__card-title">
-                欢迎回来
+                {brand.login_title || brand.product_name}
               </Typography.Title>
               <Typography.Text className="login-page__card-sub">
-                登录以进入 {brand.product_name || "运营控制台"}
+                {brand.login_subtitle || brand.tagline || `登录以进入 ${brand.product_name}`}
               </Typography.Text>
             </header>
 
@@ -168,7 +178,7 @@ export default function Login() {
 
             <p className="login-page__demo-hint">
               <span className="login-page__demo-badge">Demo</span>
-              <span>体验账号 admin · 密码 admin123</span>
+              <span>体验环境 · admin / admin123</span>
             </p>
           </div>
         </section>
