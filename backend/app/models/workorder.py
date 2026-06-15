@@ -3,12 +3,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Enum, ForeignKey, String, Text
+from sqlalchemy import ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
 from app.models.enums import WorkOrderStatus, WorkOrderType
-from app.models.mixins import TimestampMixin
+from app.models.mixins import TimestampMixin, str_enum_column
 
 if TYPE_CHECKING:
     from app.models.circuit import Circuit
@@ -24,10 +24,10 @@ class WorkOrder(Base, TimestampMixin):
         ForeignKey("circuits.id", ondelete="CASCADE"), index=True
     )
     type: Mapped[WorkOrderType] = mapped_column(
-        Enum(WorkOrderType), default=WorkOrderType.PROVISION
+        str_enum_column(WorkOrderType), default=WorkOrderType.PROVISION
     )
     status: Mapped[WorkOrderStatus] = mapped_column(
-        Enum(WorkOrderStatus), default=WorkOrderStatus.DRAFT
+        str_enum_column(WorkOrderStatus), default=WorkOrderStatus.DRAFT
     )
     title: Mapped[str] = mapped_column(String(255))
     requested_by: Mapped[str | None] = mapped_column(String(64), nullable=True)

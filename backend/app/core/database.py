@@ -8,17 +8,21 @@ from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 from app.core.config import settings
 
-connect_args = {}
+_engine_kwargs: dict = {
+    "echo": settings.db_echo,
+    "pool_pre_ping": True,
+}
 if settings.database_url.startswith("sqlite"):
     # Needed for SQLite when used across threads (FastAPI workers).
-    connect_args = {"check_same_thread": False}
+    _engine_kwargs["connect_args"] = {"check_same_thread": False}
+else:
+    _engine_kwargs.update(
+        pool_size=5,
+        max_overflow=10,
+        pool_recycle=3600,
+    )
 
-engine = create_engine(
-    settings.database_url,
-    echo=settings.db_echo,
-    connect_args=connect_args,
-    pool_pre_ping=True,
-)
+engine = create_engine(settings.database_url, **_engine_kwargs)
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

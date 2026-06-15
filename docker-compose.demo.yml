@@ -1,23 +1,80 @@
-# Self-contained demo stack: SQLite backend + nginx frontend on port 3300.
+# Production-grade demo stack (aligned with docker-compose.yml):
+#   PostgreSQL 16 + backend + frontend + Prometheus + Grafana
+#
+# Primary UI:   http://<host>:3300/
+# Prometheus:   http://<host>:3309/
+# Grafana:      http://<host>:3303/  (admin / $GRAFANA_ADMIN_PASSWORD)
+#
+# Provide secrets via .env (see deploy/demo.env.example). Local smoke test:
+#   cp deploy/demo.env.example deploy/demo.env && docker compose -f docker-compose.demo.yml --env-file deploy/demo.env up --build
+
 services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-bugis}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-bugis-demo-change-me}
+      POSTGRES_DB: ${POSTGRES_DB:-bugis}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-bugis} -d ${POSTGRES_DB:-bugis}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
   backend:
     build: ./backend
     environment:
-      BUGIS_SECRET_KEY: ${BUGIS_SECRET_KEY:-demo-change-me}
+      BUGIS_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-bugis}:${POSTGRES_PASSWORD:-bugis-demo-change-me}@db:5432/${POSTGRES_DB:-bugis}
+      BUGIS_SECRET_KEY: ${BUGIS_SECRET_KEY:-demo-change-me-use-long-random-string}
       BUGIS_DRY_RUN: "true"
-      BUGIS_DATABASE_URL: sqlite:////data/bugis.db
       BUGIS_SCHEDULER_INTERVAL_SECONDS: "20"
-    volumes:
-      - bugis_data:/data
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 90s
     restart: unless-stopped
 
   frontend:
     build: ./frontend
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     ports:
       - "3300:80"
     restart: unless-stopped
 
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./deploy/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+    ports:
+      - "3309:9090"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_DEFAULT_THEME: light
+    volumes:
+      - ./deploy/grafana/provisioning:/etc/grafana/provisioning:ro
+    ports:
+      - "3303:3000"
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
 volumes:
-  bugis_data:
+  pgdata:
