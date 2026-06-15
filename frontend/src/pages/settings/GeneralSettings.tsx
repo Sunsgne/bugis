@@ -100,11 +100,6 @@ export default function GeneralSettings() {
         </Row>
         <Row gutter={16}>
           <Col xs={12} md={6}>
-            <Form.Item name="netconf_timeout" label="NETCONF 超时 (秒)">
-              <InputNumber min={5} max={300} style={{ width: "100%" }} />
-            </Form.Item>
-          </Col>
-          <Col xs={12} md={6}>
             <Form.Item name="scheduler_interval_seconds" label="调度间隔 (秒)">
               <InputNumber min={10} max={3600} style={{ width: "100%" }} />
             </Form.Item>

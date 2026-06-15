@@ -42,6 +42,10 @@ class Settings(BaseSettings):
     # This lets the whole platform run end-to-end without lab hardware.
     dry_run: bool = True
     netconf_timeout: int = 30
+    ssh_timeout: int = 30
+    default_netconf_port: int = 830
+    default_ssh_port: int = 22
+    default_username: str = "admin"
 
     # --- CORS ---
     cors_origins: list[str] = ["*"]

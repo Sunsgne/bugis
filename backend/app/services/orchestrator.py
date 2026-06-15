@@ -39,7 +39,7 @@ from app.models.enums import (
 )
 from app.models.site import Site
 from app.models.workorder import WorkOrder, WorkOrderEvent
-from app.services import controller_client, validation
+from app.services import controller_client, device_management, validation
 
 
 def _log(db: Session, wo: WorkOrder, message: str, level: str = "info",
@@ -489,7 +489,7 @@ def _render_and_push(
         work_order_id=wo.id,
         device_id=device.id,
         operation=operation,
-        transport=driver.transport,
+        transport=device_management.effective_transport(device),
         status=ConfigJobStatus.PENDING,
     )
     db.add(job)

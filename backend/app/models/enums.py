@@ -43,6 +43,14 @@ class DeviceStatus(str, enum.Enum):
     MAINTENANCE = "maintenance"
 
 
+class ManagementTransport(str, enum.Enum):
+    """Southbound transport override for config push / fetch."""
+
+    AUTO = "auto"
+    NETCONF = "netconf"
+    SSH = "ssh"
+
+
 class TenantType(str, enum.Enum):
     """Tenant business / access type."""
 

@@ -24,15 +24,19 @@ from app.schemas.device import (
 )
 from app.schemas.pagination import PaginatedResponse, paginate_query, paginated
 from app.services import baseline, config_learn, config_mgmt, port_inventory, snmp, snmp_settings as snmp_cfg
-from app.services import platform_settings as platform_cfg
+from app.services import device_management, platform_settings as platform_cfg
 
 router = APIRouter()
 
 
 def _normalize_snmp_fields(data: dict) -> dict:
     out = dict(data)
-    if out.get("snmp_community") == "":
-        out["snmp_community"] = None
+    for key in ("snmp_community", "snmp_v3_username"):
+        if out.get(key) == "":
+            out[key] = None
+    for key in ("snmp_v3_auth_password", "snmp_v3_priv_password", "enable_password"):
+        if out.get(key) == "":
+            out.pop(key, None)
     return out
 
 
@@ -149,14 +153,17 @@ def check_device(
         import socket
         reachable = False
         latency = 0.0
+        transport = device_management.effective_transport(device)
         try:
             with socket.create_connection(
-                (device.mgmt_ip, device.netconf_port), timeout=3
+                (device.mgmt_ip, device_management.probe_port(device, transport)),
+                timeout=3,
             ):
                 reachable = True
         except OSError:
             reachable = False
 
+    transport = device_management.effective_transport(device)
     device.status = DeviceStatus.ONLINE if reachable else DeviceStatus.OFFLINE
     svid_scan: dict | None = None
     if reachable:
@@ -168,7 +175,7 @@ def check_device(
     return {
         "device": device.name,
         "mgmt_ip": device.mgmt_ip,
-        "transport": "netconf",
+        "transport": transport,
         "reachable": reachable,
         "latency_ms": latency,
         "status": device.status.value,
@@ -237,7 +244,7 @@ def initialize_device(
     db.commit()
     return {
         "device": device.name,
-        "transport": driver.transport,
+        "transport": device_management.effective_transport(device),
         "dry_run": result.dry_run,
         "success": result.success,
         "version": snap.version,

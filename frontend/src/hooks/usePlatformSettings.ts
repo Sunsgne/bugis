@@ -5,6 +5,10 @@ export interface PlatformSettings {
   id: number;
   dry_run: boolean;
   netconf_timeout: number;
+  ssh_timeout?: number;
+  default_netconf_port?: number;
+  default_ssh_port?: number;
+  default_username?: string;
   baseline_ntp_server: string;
   baseline_syslog_server: string;
   scheduler_enabled: boolean;

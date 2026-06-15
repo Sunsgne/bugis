@@ -17,6 +17,10 @@ def _defaults_from_env() -> dict:
     return {
         "dry_run": settings.dry_run,
         "netconf_timeout": settings.netconf_timeout,
+        "ssh_timeout": settings.ssh_timeout,
+        "default_netconf_port": settings.default_netconf_port,
+        "default_ssh_port": settings.default_ssh_port,
+        "default_username": settings.default_username,
         "baseline_ntp_server": settings.baseline_ntp_server,
         "baseline_syslog_server": settings.baseline_syslog_server,
         "scheduler_enabled": settings.scheduler_enabled,
@@ -59,6 +63,10 @@ def sync_to_runtime(row: PlatformSettings) -> None:
     """Push DB settings into the in-process Settings object used by services."""
     settings.dry_run = row.dry_run
     settings.netconf_timeout = row.netconf_timeout
+    settings.ssh_timeout = getattr(row, "ssh_timeout", 30) or 30
+    settings.default_netconf_port = getattr(row, "default_netconf_port", 830) or 830
+    settings.default_ssh_port = getattr(row, "default_ssh_port", 22) or 22
+    settings.default_username = getattr(row, "default_username", "admin") or "admin"
     settings.baseline_ntp_server = row.baseline_ntp_server
     settings.baseline_syslog_server = row.baseline_syslog_server
     settings.scheduler_enabled = row.scheduler_enabled

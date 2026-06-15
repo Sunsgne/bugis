@@ -23,6 +23,10 @@ class BrandingOut(BaseModel):
 class PlatformSettingsBase(BaseModel):
     dry_run: bool = True
     netconf_timeout: int = Field(default=30, ge=5, le=300)
+    ssh_timeout: int = Field(default=30, ge=5, le=300)
+    default_netconf_port: int = Field(default=830, ge=1, le=65535)
+    default_ssh_port: int = Field(default=22, ge=1, le=65535)
+    default_username: str = "admin"
 
     baseline_ntp_server: str = "10.0.0.1"
     baseline_syslog_server: str = "10.0.0.2"
@@ -59,6 +63,10 @@ class PlatformSettingsBase(BaseModel):
 class PlatformSettingsUpdate(BaseModel):
     dry_run: bool | None = None
     netconf_timeout: int | None = Field(default=None, ge=5, le=300)
+    ssh_timeout: int | None = Field(default=None, ge=5, le=300)
+    default_netconf_port: int | None = Field(default=None, ge=1, le=65535)
+    default_ssh_port: int | None = Field(default=None, ge=1, le=65535)
+    default_username: str | None = None
 
     baseline_ntp_server: str | None = None
     baseline_syslog_server: str | None = None

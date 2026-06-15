@@ -47,6 +47,7 @@ import AlarmSettings from "./pages/settings/AlarmSettings";
 import BaselineSettings from "./pages/settings/BaselineSettings";
 import SmtpSettings from "./pages/settings/SmtpSettings";
 import SnmpSettingsTab from "./pages/settings/SnmpSettingsTab";
+import ManagementSettings from "./pages/settings/ManagementSettings";
 import BrandSettings from "./pages/settings/BrandSettings";
 import IntegrationSettings from "./pages/settings/IntegrationSettings";
 import { nav, action } from "./constants/uiCopy";
@@ -248,6 +249,7 @@ function Shell() {
               <Route path="alarms" element={<AlarmSettings />} />
               <Route path="baseline" element={<BaselineSettings />} />
               <Route path="smtp" element={<SmtpSettings />} />
+              <Route path="management" element={<ManagementSettings />} />
               <Route path="snmp" element={<SnmpSettingsTab />} />
               <Route path="integration" element={<IntegrationSettings />} />
               <Route path="notifications" element={<Notifications embedded />} />

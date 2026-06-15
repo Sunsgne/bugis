@@ -31,6 +31,18 @@ export const SNMP_VERSION_OPTIONS = [
   { value: "3", label: "SNMPv3" },
 ];
 
+export const MANAGEMENT_TRANSPORT_OPTIONS = [
+  { value: "auto", label: "自动（按厂商默认）" },
+  { value: "netconf", label: "NETCONF" },
+  { value: "ssh", label: "SSH CLI" },
+];
+
+export const SNMP_V3_SECURITY_OPTIONS = [
+  { value: "noAuthNoPriv", label: "noAuthNoPriv" },
+  { value: "authNoPriv", label: "authNoPriv" },
+  { value: "authPriv", label: "authPriv" },
+];
+
 export function labelForOption(
   options: readonly { value: string; label: string }[],
   value: string | undefined | null,

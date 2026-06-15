@@ -12,15 +12,17 @@ from app.models.device import Device
 from app.models.device_learn_run import DeviceLearnRun
 from app.models.enums import DeviceStatus
 from app.services import config_fetch, config_learn_parse, config_mgmt, port_inventory, snmp
-from app.services import snmp_settings as snmp_cfg
+from app.services import device_management, snmp_settings as snmp_cfg
 
 
 def _check_reachable(device: Device) -> tuple[bool, str | None]:
     if settings.dry_run:
         return True, None
+    transport = device_management.effective_transport(device)
     try:
         with socket.create_connection(
-            (device.mgmt_ip, device.netconf_port), timeout=3
+            (device.mgmt_ip, device_management.probe_port(device, transport)),
+            timeout=3,
         ):
             return True, None
     except OSError as exc:

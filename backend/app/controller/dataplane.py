@@ -47,10 +47,10 @@ def plan_bindings(
 
 
 def _transport_for(device: Device) -> str:
-    from app.drivers.registry import get_driver
+    from app.services import device_management
 
     try:
-        return get_driver(device.vendor).transport
+        return device_management.effective_transport(device)
     except Exception:
         return "netconf"
 

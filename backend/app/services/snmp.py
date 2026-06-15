@@ -93,20 +93,23 @@ def _auth_proto(name: str | None):
     return mapping.get((name or "").upper())
 
 
-def _build_credentials(cfg: SnmpSettings, community: str):
+def _build_credentials(device: Device, cfg: SnmpSettings, community: str):
     from pysnmp.hlapi import CommunityData, UsmUserData  # pragma: no cover
 
-    if cfg.version == "3":
-        auth_key = cfg.v3_auth_password if cfg.v3_security_level != "noAuthNoPriv" else None
-        priv_key = cfg.v3_priv_password if cfg.v3_security_level == "authPriv" else None
+    eff = snmp_device.effective_snmp(device, cfg)
+    version = eff["version"]
+    if version == "3":
+        level = eff["v3_security_level"] or "authPriv"
+        auth_key = eff["v3_auth_password"] if level != "noAuthNoPriv" else None
+        priv_key = eff["v3_priv_password"] if level == "authPriv" else None
         return UsmUserData(
-            cfg.v3_username or "",
+            eff["v3_username"] or "",
             authKey=auth_key,
             privKey=priv_key,
-            authProtocol=_auth_proto(cfg.v3_auth_protocol),
-            privProtocol=_auth_proto(cfg.v3_priv_protocol),
+            authProtocol=_auth_proto(eff["v3_auth_protocol"]),
+            privProtocol=_auth_proto(eff["v3_priv_protocol"]),
         )
-    return CommunityData(community, mpModel=1 if cfg.version == "2c" else 0)
+    return CommunityData(community, mpModel=1 if version == "2c" else 0)
 
 
 def _walk_oid(
@@ -127,8 +130,13 @@ def _walk_oid(
     )
 
     out: dict[int, str] = {}
-    creds = _build_credentials(cfg, community)
-    ctx = ContextData(cfg.v3_context_name) if cfg.version == "3" and cfg.v3_context_name else ContextData()
+    eff = snmp_device.effective_snmp(device, cfg)
+    creds = _build_credentials(device, cfg, community)
+    ctx = (
+        ContextData(eff["v3_context_name"])
+        if eff["version"] == "3" and eff["v3_context_name"]
+        else ContextData()
+    )
     for (errInd, errStat, _idx, varBinds) in nextCmd(
         SnmpEngine(),
         creds,

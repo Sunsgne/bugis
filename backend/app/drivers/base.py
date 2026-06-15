@@ -139,7 +139,9 @@ class BaseDriver:
         return result
 
     def _real_fetch(self, device: Any) -> str:  # pragma: no cover
-        if self.transport == "netconf":
+        from app.services.device_management import effective_transport
+
+        if effective_transport(device) == "netconf":
             return self._fetch_netconf(device)
         return self._fetch_cli(device)
 
@@ -156,10 +158,31 @@ class BaseDriver:
             username=device.username,
             password=device.password,
             hostkey_verify=False,
-            timeout=30,
+            timeout=self._netconf_timeout(),
         ) as m:
             reply = m.get_config(source="running")
             return str(reply)
+
+    def _netconf_timeout(self) -> int:
+        from app.core.config import settings
+
+        return settings.netconf_timeout
+
+    def _cli_params(self, device: Any) -> dict:
+        from app.core.config import settings
+        from app.services.device_management import netmiko_device_type
+
+        params: dict = {
+            "device_type": netmiko_device_type(device),
+            "host": device.mgmt_ip,
+            "port": device.ssh_port,
+            "username": device.username,
+            "password": device.password,
+            "conn_timeout": getattr(settings, "ssh_timeout", 30),
+        }
+        if getattr(device, "enable_password", None):
+            params["secret"] = device.enable_password
+        return params
 
     def _fetch_cli(self, device: Any) -> str:  # pragma: no cover
         try:
@@ -168,14 +191,7 @@ class BaseDriver:
             raise RuntimeError(
                 "netmiko not installed; install it or run in dry-run mode"
             ) from exc
-        device_type = NETMIKO_DEVICE_TYPES.get(self.vendor, "autodetect")
-        conn = ConnectHandler(
-            device_type=device_type,
-            host=device.mgmt_ip,
-            port=device.ssh_port,
-            username=device.username,
-            password=device.password,
-        )
+        conn = ConnectHandler(**self._cli_params(device))
         try:
             if self.vendor == Vendor.JUNIPER:
                 return conn.send_command("show configuration | display set")
@@ -190,7 +206,9 @@ class BaseDriver:
 
         Default tries NETCONF via ncclient, falling back to CLI via netmiko.
         """
-        if self.transport == "netconf":
+        from app.services.device_management import effective_transport
+
+        if effective_transport(device) == "netconf":
             return self._push_netconf(device, config)
         return self._push_cli(device, config)
 
@@ -207,7 +225,7 @@ class BaseDriver:
             username=device.username,
             password=device.password,
             hostkey_verify=False,
-            timeout=30,
+            timeout=self._netconf_timeout(),
         ) as m:
             reply = m.edit_config(target="running", config=config)
             return str(reply)
@@ -219,14 +237,7 @@ class BaseDriver:
             raise RuntimeError(
                 "netmiko not installed; install it or run in dry-run mode"
             ) from exc
-        device_type = NETMIKO_DEVICE_TYPES.get(self.vendor, "autodetect")
-        conn = ConnectHandler(
-            device_type=device_type,
-            host=device.mgmt_ip,
-            port=device.ssh_port,
-            username=device.username,
-            password=device.password,
-        )
+        conn = ConnectHandler(**self._cli_params(device))
         try:
             return conn.send_config_set(config.splitlines())
         finally:

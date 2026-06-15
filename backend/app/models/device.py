@@ -10,6 +10,7 @@ from app.core.database import Base
 from app.models.enums import (
     DeviceRole,
     DeviceStatus,
+    ManagementTransport,
     OverlayTech,
     Vendor,
 )
@@ -38,18 +39,28 @@ class Device(Base, TimestampMixin):
 
     # Management / southbound connectivity
     mgmt_ip: Mapped[str] = mapped_column(String(64))
+    management_transport: Mapped[ManagementTransport] = mapped_column(
+        str_enum_column(ManagementTransport), default=ManagementTransport.AUTO
+    )
     netconf_port: Mapped[int] = mapped_column(Integer, default=830)
     ssh_port: Mapped[int] = mapped_column(Integer, default=22)
     username: Mapped[str | None] = mapped_column(String(64), nullable=True)
     # NOTE: store credentials encrypted / in a vault in production.
-    # Also used as SNMP read community override when prefer_device_community is on.
     password: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    enable_password: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    netmiko_device_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     # SNMP (optional per device; empty community falls back to platform default)
     snmp_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     snmp_port: Mapped[int] = mapped_column(Integer, default=161)
     snmp_community: Mapped[str | None] = mapped_column(String(64), nullable=True)
     snmp_version: Mapped[str] = mapped_column(String(8), default="2c")
+    snmp_v3_username: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    snmp_v3_auth_password: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    snmp_v3_priv_password: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    snmp_v3_security_level: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    snmp_v3_auth_protocol: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    snmp_v3_priv_protocol: Mapped[str | None] = mapped_column(String(16), nullable=True)
 
     @property
     def password_set(self) -> bool:

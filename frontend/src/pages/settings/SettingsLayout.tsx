@@ -12,6 +12,7 @@ import {
   AuditOutlined,
   RadarChartOutlined,
   BgColorsOutlined,
+  CloudUploadOutlined,
 } from "@ant-design/icons";
 
 const { Sider, Content } = Layout;
@@ -23,6 +24,7 @@ const NAV = [
   { key: "/settings/alarms", icon: <AlertOutlined />, label: "告警阈值" },
   { key: "/settings/baseline", icon: <CloudServerOutlined />, label: "设备基线" },
   { key: "/settings/smtp", icon: <MailOutlined />, label: "邮件 SMTP" },
+  { key: "/settings/management", icon: <CloudUploadOutlined />, label: "南向接口" },
   { key: "/settings/snmp", icon: <RadarChartOutlined />, label: "SNMP 采集" },
   { key: "/settings/integration", icon: <ApiOutlined />, label: "北向集成" },
   { key: "/settings/notifications", icon: <BellOutlined />, label: "通知渠道" },

@@ -72,6 +72,16 @@ export interface SnmpDefaults {
   version: string;
 }
 
+export interface ManagementDefaults {
+  netconf_port: number;
+  ssh_port: number;
+  username: string;
+  management_transport: string;
+  netconf_timeout: number;
+  ssh_timeout: number;
+  snmp: SnmpDefaults;
+}
+
 export interface Device {
   id: number;
   name: string;
@@ -83,10 +93,13 @@ export interface Device {
   overlay_tech: string;
   status: string;
   mgmt_ip: string;
+  management_transport?: string;
   netconf_port?: number;
   ssh_port?: number;
   username?: string;
   password_set?: boolean;
+  enable_password_set?: boolean;
+  netmiko_device_type?: string;
   loopback_ip?: string;
   bgp_asn?: number;
   sr_node_sid?: number;
@@ -96,6 +109,12 @@ export interface Device {
   snmp_port?: number;
   snmp_version?: string;
   snmp_community_set?: boolean;
+  snmp_v3_username?: string;
+  snmp_v3_security_level?: string;
+  snmp_v3_auth_protocol?: string;
+  snmp_v3_priv_protocol?: string;
+  snmp_v3_auth_password_set?: boolean;
+  snmp_v3_priv_password_set?: boolean;
   interfaces?: DeviceInterface[];
 }
 

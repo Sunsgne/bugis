@@ -36,13 +36,15 @@ import {
   SearchOutlined,
 } from "@ant-design/icons";
 import { api } from "../api/client";
-import type { Device, DeviceInterface, Paginated, Site, SnmpDefaults, SvidUsage } from "../api/types";
+import type { Device, DeviceInterface, ManagementDefaults, Paginated, Site, SnmpDefaults, SvidUsage } from "../api/types";
 import { configPreviewModalProps, ConfigPreviewPre } from "../utils/configPreview";
 import { formModalProps } from "../utils/formModal";
 import {
   DEVICE_ROLE_OPTIONS,
   labelForOption,
+  MANAGEMENT_TRANSPORT_OPTIONS,
   OVERLAY_OPTIONS,
+  SNMP_V3_SECURITY_OPTIONS,
   SNMP_VERSION_OPTIONS,
   VENDOR_OPTIONS,
 } from "../constants/formOptions";
@@ -81,6 +83,16 @@ const FALLBACK_SNMP: SnmpDefaults = {
   version: "2c",
 };
 
+const FALLBACK_MGMT: ManagementDefaults = {
+  netconf_port: 830,
+  ssh_port: 22,
+  username: "admin",
+  management_transport: "auto",
+  netconf_timeout: 30,
+  ssh_timeout: 30,
+  snmp: FALLBACK_SNMP,
+};
+
 export default function Devices() {
   const { message, modal } = AntApp.useApp();
   const [rows, setRows] = useState<Device[]>([]);
@@ -94,11 +106,14 @@ export default function Devices() {
   const [credOpen, setCredOpen] = useState(false);
   const [credDevice, setCredDevice] = useState<Device | null>(null);
   const [snmpDefaults, setSnmpDefaults] = useState<SnmpDefaults>(FALLBACK_SNMP);
+  const [mgmtDefaults, setMgmtDefaults] = useState<ManagementDefaults>(FALLBACK_MGMT);
   const [form] = Form.useForm();
   const [credForm] = Form.useForm();
   const [learnOnImport, setLearnOnImport] = useState(true);
   const watchVendor = Form.useWatch("vendor", form);
   const watchSnmpEnabled = Form.useWatch("snmp_enabled", form);
+  const watchSnmpVersion = Form.useWatch("snmp_version", form);
+  const watchCredSnmpVersion = Form.useWatch("snmp_version", credForm);
   const [drawerDevice, setDrawerDevice] = useState<Device | null>(null);
   const [ifaces, setIfaces] = useState<DeviceInterface[]>([]);
   const [ifacesLoading, setIfacesLoading] = useState(false);
@@ -163,26 +178,29 @@ export default function Devices() {
   }, [page, pageSize]);
 
   async function openCreateModal() {
-    let defaults = FALLBACK_SNMP;
+    let mgmt = FALLBACK_MGMT;
     try {
-      const { data } = await api.get<SnmpDefaults>("/system/snmp-defaults");
-      defaults = data;
-      setSnmpDefaults(data);
+      const { data } = await api.get<ManagementDefaults>("/system/management-defaults");
+      mgmt = data;
+      setMgmtDefaults(data);
+      setSnmpDefaults(data.snmp);
     } catch {
-      /* use fallback */
+      setMgmtDefaults(FALLBACK_MGMT);
+      setSnmpDefaults(FALLBACK_SNMP);
     }
     form.setFieldsValue({
       vendor: "h3c",
       role: "leaf",
       overlay_tech: "vxlan_evpn",
       status: "unknown",
-      netconf_port: 830,
-      ssh_port: 22,
-      username: "admin",
-      snmp_enabled: defaults.enabled,
-      snmp_port: defaults.port,
-      snmp_community: defaults.community,
-      snmp_version: defaults.version,
+      management_transport: mgmt.management_transport,
+      netconf_port: mgmt.netconf_port,
+      ssh_port: mgmt.ssh_port,
+      username: mgmt.username,
+      snmp_enabled: mgmt.snmp.enabled,
+      snmp_port: mgmt.snmp.port,
+      snmp_community: mgmt.snmp.community,
+      snmp_version: mgmt.snmp.version,
     });
     setOpen(true);
   }
@@ -211,10 +229,23 @@ export default function Devices() {
   function openCredEdit(d: Device) {
     setCredDevice(d);
     credForm.setFieldsValue({
+      management_transport: d.management_transport || "auto",
       username: d.username || "",
-      netconf_port: d.netconf_port ?? 830,
-      ssh_port: d.ssh_port ?? 22,
+      netconf_port: d.netconf_port ?? mgmtDefaults.netconf_port,
+      ssh_port: d.ssh_port ?? mgmtDefaults.ssh_port,
+      netmiko_device_type: d.netmiko_device_type || "",
       password: "",
+      enable_password: "",
+      snmp_enabled: d.snmp_enabled !== false,
+      snmp_community: "",
+      snmp_port: d.snmp_port ?? snmpDefaults.port,
+      snmp_version: d.snmp_version || snmpDefaults.version,
+      snmp_v3_username: d.snmp_v3_username || "",
+      snmp_v3_security_level: d.snmp_v3_security_level || "authPriv",
+      snmp_v3_auth_protocol: d.snmp_v3_auth_protocol || "SHA",
+      snmp_v3_priv_protocol: d.snmp_v3_priv_protocol || "AES",
+      snmp_v3_auth_password: "",
+      snmp_v3_priv_password: "",
     });
     setCredOpen(true);
   }
@@ -223,11 +254,24 @@ export default function Devices() {
     if (!credDevice) return;
     const v = await credForm.validateFields();
     const payload: Record<string, unknown> = {
+      management_transport: v.management_transport,
       username: v.username || null,
       netconf_port: v.netconf_port,
       ssh_port: v.ssh_port,
+      netmiko_device_type: v.netmiko_device_type || null,
+      snmp_enabled: v.snmp_enabled,
+      snmp_port: v.snmp_port,
+      snmp_version: v.snmp_version,
+      snmp_v3_username: v.snmp_v3_username || null,
+      snmp_v3_security_level: v.snmp_v3_security_level || null,
+      snmp_v3_auth_protocol: v.snmp_v3_auth_protocol || null,
+      snmp_v3_priv_protocol: v.snmp_v3_priv_protocol || null,
     };
     if (v.password) payload.password = v.password;
+    if (v.enable_password) payload.enable_password = v.enable_password;
+    if (v.snmp_community) payload.snmp_community = v.snmp_community;
+    if (v.snmp_v3_auth_password) payload.snmp_v3_auth_password = v.snmp_v3_auth_password;
+    if (v.snmp_v3_priv_password) payload.snmp_v3_priv_password = v.snmp_v3_priv_password;
     try {
       await api.patch(`/devices/${credDevice.id}`, payload);
       message.success(toast.saved);
@@ -415,6 +459,9 @@ export default function Devices() {
       title={pageCopy.devices}
       extra={
         <Space>
+          <Link to="/settings/management">
+            <Button icon={<SettingOutlined />}>南向接口设置</Button>
+          </Link>
           <Link to="/settings/snmp">
             <Button icon={<SettingOutlined />}>SNMP 全局设置</Button>
           </Link>
@@ -501,6 +548,13 @@ export default function Devices() {
             ),
           },
           { title: "管理IP", dataIndex: "mgmt_ip", width: 120 },
+          {
+            title: "南向",
+            width: 96,
+            render: (_, r) => (
+              <Tag>{labelForOption(MANAGEMENT_TRANSPORT_OPTIONS, r.management_transport || "auto")}</Tag>
+            ),
+          },
           {
             title: "凭证",
             width: 88,
@@ -657,9 +711,9 @@ export default function Devices() {
             message="远程登录凭证说明"
             description={
               <Typography.Paragraph style={{ marginBottom: 0 }}>
-                <strong>配置下发 / 初始化</strong> 使用 NETCONF（或 SSH CLI）的 <strong>用户名 + 密码</strong>。
-                <strong> SNMP 发现</strong> 走真实 IF-MIB 采集（与 Dry-run 无关）；请填写正确的只读 Community。
-                Demo 环境 <strong>Dry-run</strong> 仅模拟配置下发，不会阻止 SNMP 端口发现。
+                <strong>配置下发 / 初始化</strong> 使用 NETCONF 或 SSH CLI（可在下方自定义传输方式与端口）。
+                <strong> SNMP 发现</strong> 独立配置 Community / v3 认证；与登录密码分离。
+                全局默认见 <Link to="/settings/management">南向接口</Link> 与 <Link to="/settings/snmp">SNMP 采集</Link>。
               </Typography.Paragraph>
             }
           />
@@ -741,30 +795,47 @@ export default function Devices() {
             </Typography.Text>
           )}
           <Row gutter={16}>
-            <Col xs={24} sm={12}>
+            <Col xs={24} sm={8}>
+              <Form.Item name="management_transport" label="配置下发传输">
+                <Select options={MANAGEMENT_TRANSPORT_OPTIONS} />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={8}>
               <Form.Item name="username" label="用户名 (NETCONF / SSH)">
                 <Input placeholder="admin / netconf" />
               </Form.Item>
             </Col>
-            <Col xs={24} sm={12}>
-              <Form.Item
-                name="password"
-                label="密码 / SNMP Community"
-                extra="SNMP 可在「系统设置 → SNMP 采集」配置全局 Community；此处可覆盖单台设备"
-              >
-                <Input.Password placeholder="登录密码或只读 community" autoComplete="new-password" />
+            <Col xs={24} sm={8}>
+              <Form.Item name="password" label="登录密码">
+                <Input.Password placeholder="NETCONF / SSH 密码" autoComplete="new-password" />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Row gutter={16}>
+            <Col xs={24} sm={8}>
+              <Form.Item name="enable_password" label="Enable 密码 (可选)">
+                <Input.Password placeholder="部分 CLI 设备需要" autoComplete="new-password" />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={8}>
+              <Form.Item name="netconf_port" label="NETCONF 端口">
+                <InputNumber min={1} max={65535} style={{ width: "100%" }} />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={8}>
+              <Form.Item name="ssh_port" label="SSH 端口">
+                <InputNumber min={1} max={65535} style={{ width: "100%" }} />
               </Form.Item>
             </Col>
           </Row>
           <Row gutter={16}>
             <Col xs={24} sm={12}>
-              <Form.Item name="netconf_port" label="NETCONF 端口">
-                <InputNumber min={1} max={65535} style={{ width: "100%" }} />
-              </Form.Item>
-            </Col>
-            <Col xs={24} sm={12}>
-              <Form.Item name="ssh_port" label="SSH 端口">
-                <InputNumber min={1} max={65535} style={{ width: "100%" }} />
+              <Form.Item
+                name="netmiko_device_type"
+                label="Netmiko 设备类型 (可选)"
+                extra="覆盖 SSH CLI 驱动类型，如 hp_comware、cisco_xr"
+              >
+                <Input placeholder="留空则按厂商自动选择" />
               </Form.Item>
             </Col>
           </Row>
@@ -803,6 +874,30 @@ export default function Devices() {
                         <Select disabled={!watchSnmpEnabled} options={SNMP_VERSION_OPTIONS} />
                       </Form.Item>
                     </Col>
+                    {watchSnmpVersion === "3" && (
+                      <>
+                        <Col xs={24} sm={12}>
+                          <Form.Item name="snmp_v3_username" label="SNMPv3 用户名">
+                            <Input disabled={!watchSnmpEnabled} />
+                          </Form.Item>
+                        </Col>
+                        <Col xs={24} sm={12}>
+                          <Form.Item name="snmp_v3_security_level" label="安全级别">
+                            <Select disabled={!watchSnmpEnabled} options={SNMP_V3_SECURITY_OPTIONS} />
+                          </Form.Item>
+                        </Col>
+                        <Col xs={24} sm={12}>
+                          <Form.Item name="snmp_v3_auth_password" label="认证密码">
+                            <Input.Password disabled={!watchSnmpEnabled} autoComplete="new-password" />
+                          </Form.Item>
+                        </Col>
+                        <Col xs={24} sm={12}>
+                          <Form.Item name="snmp_v3_priv_password" label="加密密码">
+                            <Input.Password disabled={!watchSnmpEnabled} autoComplete="new-password" />
+                          </Form.Item>
+                        </Col>
+                      </>
+                    )}
                   </Row>
                 ),
               },
@@ -818,20 +913,26 @@ export default function Devices() {
         onCancel={() => setCredOpen(false)}
         okText={action.save}
         {...formModalProps}
-        width={520}
+        width={640}
       >
         <Alert
           type="warning"
           showIcon
           style={{ marginBottom: 16 }}
-          message="密码不会回显"
-          description="留空密码则保持原值不变。修改后可用于 NETCONF/SSH 下发与 SNMP（若启用设备凭证优先）。"
+          message="敏感字段不会回显"
+          description="留空密码则保持原值。SNMP Community 与登录密码已分离，可分别配置。"
         />
         <Form form={credForm} layout="vertical" className="app-form">
+          <Form.Item name="management_transport" label="配置下发传输">
+            <Select options={MANAGEMENT_TRANSPORT_OPTIONS} />
+          </Form.Item>
           <Form.Item name="username" label="用户名">
             <Input placeholder="admin / netconf" />
           </Form.Item>
-          <Form.Item name="password" label="密码 / SNMP Community">
+          <Form.Item name="password" label="登录密码 (NETCONF / SSH)">
+            <Input.Password placeholder="留空不修改" autoComplete="new-password" />
+          </Form.Item>
+          <Form.Item name="enable_password" label="Enable 密码">
             <Input.Password placeholder="留空不修改" autoComplete="new-password" />
           </Form.Item>
           <Row gutter={16}>
@@ -846,6 +947,57 @@ export default function Devices() {
               </Form.Item>
             </Col>
           </Row>
+          <Form.Item name="netmiko_device_type" label="Netmiko 设备类型 (可选)">
+            <Input placeholder="留空则按厂商自动选择" allowClear />
+          </Form.Item>
+
+          <Divider orientation="left" style={{ margin: "8px 0 12px" }}>
+            SNMP 采集
+          </Divider>
+          <Form.Item name="snmp_enabled" label="启用 SNMP" valuePropName="checked">
+            <Switch checkedChildren="开" unCheckedChildren="关" />
+          </Form.Item>
+          <Row gutter={16}>
+            <Col xs={24} sm={12}>
+              <Form.Item name="snmp_community" label="Community (v2c)">
+                <Input placeholder={credDevice?.snmp_community_set ? "已配置 · 留空不修改" : snmpDefaults.community} />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={6}>
+              <Form.Item name="snmp_port" label="UDP 端口">
+                <InputNumber min={1} max={65535} style={{ width: "100%" }} />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={6}>
+              <Form.Item name="snmp_version" label="版本">
+                <Select options={SNMP_VERSION_OPTIONS} />
+              </Form.Item>
+            </Col>
+          </Row>
+          {watchCredSnmpVersion === "3" && (
+            <Row gutter={16}>
+              <Col xs={24} sm={12}>
+                <Form.Item name="snmp_v3_username" label="SNMPv3 用户名">
+                  <Input />
+                </Form.Item>
+              </Col>
+              <Col xs={24} sm={12}>
+                <Form.Item name="snmp_v3_security_level" label="安全级别">
+                  <Select options={SNMP_V3_SECURITY_OPTIONS} />
+                </Form.Item>
+              </Col>
+              <Col xs={24} sm={12}>
+                <Form.Item name="snmp_v3_auth_password" label="认证密码">
+                  <Input.Password placeholder="留空不修改" autoComplete="new-password" />
+                </Form.Item>
+              </Col>
+              <Col xs={24} sm={12}>
+                <Form.Item name="snmp_v3_priv_password" label="加密密码">
+                  <Input.Password placeholder="留空不修改" autoComplete="new-password" />
+                </Form.Item>
+              </Col>
+            </Row>
+          )}
         </Form>
       </Modal>
     </PageCard>

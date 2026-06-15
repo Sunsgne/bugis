@@ -32,11 +32,19 @@ def public_branding(db: Session = Depends(get_db)):
 
 
 @router.get("/snmp-defaults")
-def snmp_defaults(_: Session = Depends(get_db)):
+def snmp_defaults(db: Session = Depends(get_db)):
     """Platform default SNMP parameters for device onboarding forms."""
     from app.services import snmp_device as snmp_cfg
 
-    return snmp_cfg.snmp_defaults()
+    return snmp_cfg.snmp_defaults(db)
+
+
+@router.get("/management-defaults")
+def southbound_defaults(_: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Platform default NETCONF/SSH/SNMP parameters for device onboarding."""
+    from app.services import device_management
+
+    return device_management.management_defaults(db)
 
 
 @router.get("/scheduler")

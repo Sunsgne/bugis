@@ -17,6 +17,10 @@ class PlatformSettings(Base, TimestampMixin):
 
     dry_run: Mapped[bool] = mapped_column(Boolean, default=True)
     netconf_timeout: Mapped[int] = mapped_column(Integer, default=30)
+    ssh_timeout: Mapped[int] = mapped_column(Integer, default=30)
+    default_netconf_port: Mapped[int] = mapped_column(Integer, default=830)
+    default_ssh_port: Mapped[int] = mapped_column(Integer, default=22)
+    default_username: Mapped[str] = mapped_column(String(64), default="admin")
 
     baseline_ntp_server: Mapped[str] = mapped_column(String(64), default="10.0.0.1")
     baseline_syslog_server: Mapped[str] = mapped_column(String(64), default="10.0.0.2")
