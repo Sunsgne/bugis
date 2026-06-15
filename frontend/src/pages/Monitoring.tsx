@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Button,
   Card,
@@ -12,20 +12,10 @@ import {
   Empty,
 } from "antd";
 import { ReloadOutlined, ExperimentOutlined } from "@ant-design/icons";
-import {
-  Area,
-  AreaChart,
-  CartesianGrid,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-  Legend,
-} from "recharts";
 import { api } from "../api/client";
 import type { Circuit, CircuitHealth, Paginated, TelemetrySample } from "../api/types";
+import EChart from "../components/EChart";
+import { latencyLossOption, trafficAreaOption } from "../charts/options";
 import { action, empty } from "../constants/uiCopy";
 
 export default function Monitoring() {
@@ -80,14 +70,21 @@ export default function Monitoring() {
     if (selected) loadData(selected);
   }
 
-  const chartData = samples.map((s, i) => ({
-    idx: i + 1,
-    rx: s.rx_mbps,
-    tx: s.tx_mbps,
-    util: s.utilization_pct,
-    latency: s.latency_ms,
-    loss: s.packet_loss_pct,
-  }));
+  const chartData = useMemo(
+    () =>
+      samples.map((s, i) => ({
+        idx: i + 1,
+        rx: s.rx_mbps,
+        tx: s.tx_mbps,
+        util: s.utilization_pct,
+        latency: s.latency_ms,
+        loss: s.packet_loss_pct,
+      })),
+    [samples],
+  );
+
+  const trafficOpt = useMemo(() => trafficAreaOption(chartData, "idx"), [chartData]);
+  const slaOpt = useMemo(() => latencyLossOption(chartData), [chartData]);
 
   const scoreColor = (v: number) => (v >= 90 ? "#52c41a" : v >= 70 ? "#fa8c16" : "#cf1322");
 
@@ -126,6 +123,7 @@ export default function Monitoring() {
           <Row gutter={[16, 16]} align="stretch">
             <Col xs={24} md={6}>
               <Card
+                className="chart-card"
                 style={{ height: "100%" }}
                 styles={{
                   body: {
@@ -155,6 +153,7 @@ export default function Monitoring() {
             ].map((m) => (
               <Col xs={12} md={4} key={m.t}>
                 <Card
+                  className="chart-card"
                   style={{ height: "100%" }}
                   styles={{ body: { display: "flex", alignItems: "center", height: "100%" } }}
                 >
@@ -165,6 +164,7 @@ export default function Monitoring() {
             ))}
             <Col xs={24} md={6}>
               <Card
+                className="chart-card"
                 style={{ height: "100%" }}
                 styles={{ body: { display: "flex", flexDirection: "column", justifyContent: "center", height: "100%" } }}
               >
@@ -182,6 +182,7 @@ export default function Monitoring() {
           </Row>
 
           <Card
+            className="chart-card"
             title="95th 计费带宽"
             extra={
               <Select
@@ -229,38 +230,17 @@ export default function Monitoring() {
             )}
           </Card>
 
-          <Card title="流量曲线 · Rx / Tx">
+          <Card className="chart-card" title="流量曲线 · Rx / Tx">
             {chartData.length ? (
-              <ResponsiveContainer width="100%" height={260}>
-                <AreaChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="idx" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Area type="monotone" dataKey="rx" stroke="#1677ff" fill="#1677ff33" name="Rx" />
-                  <Area type="monotone" dataKey="tx" stroke="#52c41a" fill="#52c41a33" name="Tx" />
-                </AreaChart>
-              </ResponsiveContainer>
+              <EChart option={trafficOpt} height={280} />
             ) : (
               <Empty description={empty.traffic} />
             )}
           </Card>
 
-          <Card title="时延 · 丢包">
+          <Card className="chart-card" title="时延 · 丢包">
             {chartData.length ? (
-              <ResponsiveContainer width="100%" height={220}>
-                <LineChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="idx" />
-                  <YAxis yAxisId="left" />
-                  <YAxis yAxisId="right" orientation="right" />
-                  <Tooltip />
-                  <Legend />
-                  <Line yAxisId="left" type="monotone" dataKey="latency" stroke="#fa8c16" name="时延(ms)" dot={false} />
-                  <Line yAxisId="right" type="monotone" dataKey="loss" stroke="#cf1322" name="丢包(%)" dot={false} />
-                </LineChart>
-              </ResponsiveContainer>
+              <EChart option={slaOpt} height={260} />
             ) : (
               <Empty description={empty.traffic} />
             )}

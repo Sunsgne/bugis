@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card, Col, Row, Statistic, Spin, Tag, Empty, Progress, Table, Badge } from "antd";
 import {
   TeamOutlined,
@@ -11,46 +11,26 @@ import {
   SafetyCertificateOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
-import {
-  Area,
-  AreaChart,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-  Legend,
-  CartesianGrid,
-} from "recharts";
 import { api } from "../api/client";
 import type { Dashboard as DashboardData } from "../api/types";
+import EChart from "../components/EChart";
+import {
+  donutOption,
+  gradientBarOption,
+  rosePieOption,
+  severityColors,
+  statusColors,
+  trafficAreaOption,
+  utilColor,
+  vendorColors,
+} from "../charts/options";
 import { empty } from "../constants/uiCopy";
 import { useBrand } from "../context/BrandContext";
 
-const VENDOR_COLORS: Record<string, string> = {
-  h3c: "#1677ff", huawei: "#cf1322", juniper: "#52c41a",
-  arista: "#fa8c16", cisco: "#722ed1", frr: "#13c2c2",
-};
-const STATUS_COLORS: Record<string, string> = {
-  active: "#52c41a", draft: "#8c8c8c", provisioning: "#1677ff",
-  failed: "#cf1322", degraded: "#fa8c16", decommissioned: "#bfbfbf",
-};
-const SEV_COLORS: Record<string, string> = {
-  critical: "#cf1322", major: "#fa541c", minor: "#fa8c16",
-  warning: "#faad14", info: "#1677ff",
-};
 const WO_STATUS: Record<string, string> = {
   completed: "green", failed: "red", running: "processing",
   approved: "blue", submitted: "gold", draft: "default",
 };
-
-function utilColor(p: number) {
-  return p >= 85 ? "#cf1322" : p >= 60 ? "#fa8c16" : "#52c41a";
-}
 
 export default function Dashboard() {
   const { brand } = useBrand();
@@ -84,16 +64,31 @@ export default function Dashboard() {
     return () => clearInterval(t);
   }, []);
 
+  const vendorData = useMemo(
+    () => Object.entries(data?.devices_by_vendor ?? {}).map(([name, value]) => ({ name, value: value as number })),
+    [data],
+  );
+  const statusData = useMemo(
+    () => Object.entries(data?.circuits_by_status ?? {}).map(([name, value]) => ({ name, value: value as number })),
+    [data],
+  );
+  const sevData = useMemo(
+    () => Object.entries(alarms?.by_severity || {}).map(([name, value]) => ({ name, value: value as number })),
+    [alarms],
+  );
+
+  const trafficOpt = useMemo(() => trafficAreaOption(traffic, "t"), [traffic]);
+  const alarmOpt = useMemo(() => donutOption(sevData, severityColors, "告警"), [sevData]);
+  const vendorOpt = useMemo(() => rosePieOption(vendorData, vendorColors), [vendorData]);
+  const statusOpt = useMemo(() => gradientBarOption(statusData, statusColors), [statusData]);
+
   if (!data) return <Spin size="large" style={{ display: "block", margin: "80px auto" }} />;
 
-  const vendorData = Object.entries(data.devices_by_vendor).map(([name, value]) => ({ name, value }));
-  const statusData = Object.entries(data.circuits_by_status).map(([name, value]) => ({ name, value }));
-  const sevData = Object.entries(alarms?.by_severity || {}).map(([name, value]) => ({ name, value: value as number }));
   const totalCap = sites.reduce((a, s) => a + s.capacity_mbps, 0);
   const usedCap = sites.reduce((a, s) => a + s.used_mbps, 0);
 
   const kpi = (icon: any, title: string, value: any, suffix?: string, color?: string) => (
-    <Card styles={{ body: { padding: 16 } }}>
+    <Card className="chart-card" styles={{ body: { padding: 16 } }}>
       <Statistic title={title} value={value} suffix={suffix} prefix={icon}
         valueStyle={color ? { color } : undefined} />
     </Card>
@@ -101,7 +96,6 @@ export default function Dashboard() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      {/* Hero banner */}
       <div
         style={{
           background: "linear-gradient(120deg, #0b1f3a 0%, #1668dc 60%, #13c2c2 100%)",
@@ -113,9 +107,7 @@ export default function Dashboard() {
       >
         <div>
           <div style={{ fontSize: 22, fontWeight: 700 }}>{brand.hero_title}</div>
-          <div style={{ opacity: 0.85, marginTop: 4 }}>
-            {brand.hero_subtitle}
-          </div>
+          <div style={{ opacity: 0.85, marginTop: 4 }}>{brand.hero_subtitle}</div>
           <div style={{ marginTop: 10 }}>
             <Badge status={sched?.running ? "processing" : "default"} />
             <span style={{ opacity: 0.9 }}>
@@ -138,7 +130,6 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* KPI cards */}
       <Row gutter={[16, 16]}>
         <Col xs={12} md={4}>{kpi(<TeamOutlined />, "客户租户", data.tenants)}</Col>
         <Col xs={12} md={4}>{kpi(<ClusterOutlined />, "设备 · 在线/总量", data.devices_online, `/ ${data.devices}`)}</Col>
@@ -148,45 +139,20 @@ export default function Dashboard() {
         <Col xs={12} md={4}>{kpi(<AlertOutlined />, "活跃告警", alarms?.active || 0, undefined, (alarms?.active || 0) > 0 ? "#cf1322" : "#52c41a")}</Col>
       </Row>
 
-      {/* Traffic trend + alarm donut */}
       <Row gutter={[16, 16]}>
         <Col xs={24} lg={16}>
-          <Card title="全网流量态势 · Rx/Tx 聚合 (Mbps)" style={{ height: "100%" }}>
+          <Card className="chart-card" title="全网流量态势 · Rx/Tx 聚合 (Mbps)" style={{ height: "100%" }}>
             {traffic.length ? (
-              <ResponsiveContainer width="100%" height={280}>
-                <AreaChart data={traffic}>
-                  <defs>
-                    <linearGradient id="rx" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#1677ff" stopOpacity={0.5} />
-                      <stop offset="95%" stopColor="#1677ff" stopOpacity={0} />
-                    </linearGradient>
-                    <linearGradient id="tx" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#52c41a" stopOpacity={0.5} />
-                      <stop offset="95%" stopColor="#52c41a" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="t" /><YAxis /><Tooltip /><Legend />
-                  <Area type="monotone" dataKey="rx" stroke="#1677ff" fill="url(#rx)" name="Rx" />
-                  <Area type="monotone" dataKey="tx" stroke="#52c41a" fill="url(#tx)" name="Tx" />
-                </AreaChart>
-              </ResponsiveContainer>
+              <EChart option={trafficOpt} height={300} />
             ) : (
               <Empty description={empty.traffic} style={{ padding: 60 }} />
             )}
           </Card>
         </Col>
         <Col xs={24} lg={8}>
-          <Card title="告警态势 · 按严重级别" style={{ height: "100%" }}>
+          <Card className="chart-card" title="告警态势 · 按严重级别" style={{ height: "100%" }}>
             {sevData.length ? (
-              <ResponsiveContainer width="100%" height={280}>
-                <PieChart>
-                  <Pie data={sevData} dataKey="value" nameKey="name" innerRadius={60} outerRadius={100} label>
-                    {sevData.map((d) => <Cell key={d.name} fill={SEV_COLORS[d.name] || "#999"} />)}
-                  </Pie>
-                  <Legend /><Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
+              <EChart option={alarmOpt} height={300} />
             ) : (
               <div style={{ textAlign: "center", padding: "70px 0" }}>
                 <SafetyCertificateOutlined style={{ fontSize: 56, color: "#52c41a" }} />
@@ -197,34 +163,27 @@ export default function Dashboard() {
         </Col>
       </Row>
 
-      {/* Vendor / status / SDN */}
       <Row gutter={[16, 16]}>
         <Col xs={24} md={8}>
-          <Card title="设备厂商 · 异构分布" style={{ height: "100%" }}>
-            <ResponsiveContainer width="100%" height={240}>
-              <PieChart>
-                <Pie data={vendorData} dataKey="value" nameKey="name" outerRadius={90} label>
-                  {vendorData.map((d) => <Cell key={d.name} fill={VENDOR_COLORS[d.name] || "#999"} />)}
-                </Pie>
-                <Legend /><Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
+          <Card className="chart-card" title="设备厂商 · 异构分布" style={{ height: "100%" }}>
+            {vendorData.length ? (
+              <EChart option={vendorOpt} height={260} />
+            ) : (
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={empty.data} style={{ padding: 48 }} />
+            )}
           </Card>
         </Col>
         <Col xs={24} md={8}>
-          <Card title="专线生命周期 · 状态分布" style={{ height: "100%" }}>
-            <ResponsiveContainer width="100%" height={240}>
-              <BarChart data={statusData}>
-                <CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" /><YAxis allowDecimals={false} /><Tooltip />
-                <Bar dataKey="value">
-                  {statusData.map((d) => <Cell key={d.name} fill={STATUS_COLORS[d.name] || "#1677ff"} />)}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+          <Card className="chart-card" title="专线生命周期 · 状态分布" style={{ height: "100%" }}>
+            {statusData.length ? (
+              <EChart option={statusOpt} height={260} />
+            ) : (
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={empty.data} style={{ padding: 48 }} />
+            )}
           </Card>
         </Col>
         <Col xs={24} md={8}>
-          <Card title="SDN 控制面 · Bugis Controller" style={{ height: "100%" }}
+          <Card className="chart-card" title="SDN 控制面 · Bugis Controller" style={{ height: "100%" }}
             extra={<Tag color="green">{sdn?.name ? "在线" : "—"}</Tag>}>
             <Row gutter={16}>
               <Col span={8}><Statistic title="VTEP" value={sdn?.vtep_count ?? 0} prefix={<ShareAltOutlined />} /></Col>
@@ -243,10 +202,9 @@ export default function Dashboard() {
         </Col>
       </Row>
 
-      {/* Capacity + recent work orders */}
       <Row gutter={[16, 16]}>
         <Col xs={24} md={8}>
-          <Card title="Fabric 容量 · 站点分配" style={{ height: "100%" }}>
+          <Card className="chart-card" title="Fabric 容量 · 站点分配" style={{ height: "100%" }}>
             <div style={{ marginBottom: 12 }}>
               <span style={{ color: "#888" }}>全域分配率</span>
               <Progress percent={totalCap ? Math.round((usedCap / totalCap) * 1000) / 10 : 0}
@@ -265,7 +223,7 @@ export default function Dashboard() {
           </Card>
         </Col>
         <Col xs={24} md={8}>
-          <Card title="链路负载 · DCI / Fabric" style={{ height: "100%" }}>
+          <Card className="chart-card" title="链路负载 · DCI / Fabric" style={{ height: "100%" }}>
             {links.map((l) => (
               <div key={l.link_id} style={{ marginBottom: 10 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
@@ -279,7 +237,7 @@ export default function Dashboard() {
           </Card>
         </Col>
         <Col xs={24} md={8}>
-          <Card title="编排工单 · 最近动态" style={{ height: "100%" }}>
+          <Card className="chart-card" title="编排工单 · 最近动态" style={{ height: "100%" }}>
             <Table
               size="small"
               rowKey="id"
