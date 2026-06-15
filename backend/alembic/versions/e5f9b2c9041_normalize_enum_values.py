@@ -31,6 +31,9 @@ def _column_exists(conn, table: str, column: str) -> bool:
 
 def upgrade() -> None:
     conn = op.get_bind()
+    if conn.dialect.name != "sqlite":
+        # PostgreSQL installs use lowercase enum values from ORM/migrations.
+        return
 
     if _table_exists(conn, "circuits") and _column_exists(conn, "circuits", "path_mode"):
         conn.execute(
