@@ -14,7 +14,6 @@ import {
   Tooltip,
   App as AntApp,
   Popconfirm,
-  Descriptions,
   Drawer,
   Collapse,
   Timeline,
@@ -51,6 +50,7 @@ import { buildListQuery, dataTableProps, tablePagination } from "../utils/table"
 import { fetchAllPages } from "../utils/pagination";
 import PageCard from "../components/PageCard";
 import ListToolbar from "../components/ListToolbar";
+import CircuitExpandDetail from "../components/CircuitExpandDetail";
 import CircuitMonitorPanel from "../components/CircuitMonitorPanel";
 import CircuitEndpointsEditor from "../components/CircuitEndpointsEditor";
 
@@ -662,63 +662,13 @@ export default function Circuits() {
                     key: "detail",
                     label: "参数详情",
                     children: (
-                      <Descriptions size="small" column={3} bordered>
-                        <Descriptions.Item label="VNI">{detail.vni}</Descriptions.Item>
-                        <Descriptions.Item label="VSI">{detail.vsi_name || "-"}</Descriptions.Item>
-                        <Descriptions.Item label="VLAN">{detail.vlan_id}</Descriptions.Item>
-                        <Descriptions.Item label="VRF">{detail.vrf_name}</Descriptions.Item>
-                        <Descriptions.Item label="RD">{detail.route_distinguisher}</Descriptions.Item>
-                        <Descriptions.Item label="RT">{detail.route_target}</Descriptions.Item>
-                        <Descriptions.Item label="MTU">{detail.mtu}</Descriptions.Item>
-                        {detail.service_type === "remote_ipt" && (
-                          <>
-                            <Descriptions.Item label="出口国家">{detail.egress_country}</Descriptions.Item>
-                            <Descriptions.Item label="出口站点">{siteName(detail.egress_site_id)}</Descriptions.Item>
-                            <Descriptions.Item label="公网 IP">{detail.ipt_public_ip}</Descriptions.Item>
-                            <Descriptions.Item label="NAT">
-                              {detail.ipt_nat_enabled ? "启用" : "关闭"}
-                            </Descriptions.Item>
-                          </>
-                        )}
-                        <Descriptions.Item label="端点" span={3}>
-                          <Space direction="vertical" size={8} style={{ width: "100%" }}>
-                            <Space wrap>
-                              {detail.endpoints.map((e) => (
-                                <Tag key={e.id}>
-                                  {e.label}: {deviceName(e.device_id)} / {e.interface_name}
-                                  {e.access_mode ? ` · ${e.access_mode}` : ""}
-                                  {e.vlan_id ? ` vlan ${e.vlan_id}` : ""}
-                                  {e.inner_vlan_id ? `/${e.inner_vlan_id}` : ""}
-                                </Tag>
-                              ))}
-                            </Space>
-                            {r.status !== "decommissioned" && (
-                              <Button
-                                size="small"
-                                type="link"
-                                icon={<EditOutlined />}
-                                style={{ padding: 0, height: "auto" }}
-                                onClick={() => openEditEndpoints(r, detail)}
-                              >
-                                修改端点并重新下发
-                              </Button>
-                            )}
-                          </Space>
-                        </Descriptions.Item>
-                        {(detail.path_mode === "explicit_sr" || (detail.path_hops && detail.path_hops.length > 0)) && (
-                          <Descriptions.Item label="SR 路径" span={3}>
-                            <Tag color="purple">{detail.path_mode || "auto"}</Tag>
-                            {(detail.path_hops || []).map((h) => (
-                              <Tag key={h.sequence}>#{h.sequence + 1} {h.device_name || h.device_id}</Tag>
-                            ))}
-                            {detail.segment_list && detail.segment_list.length > 0 && (
-                              <span style={{ marginLeft: 8, color: "#531dab" }}>
-                                SID: {detail.segment_list.join(" → ")}
-                              </span>
-                            )}
-                          </Descriptions.Item>
-                        )}
-                      </Descriptions>
+                      <CircuitExpandDetail
+                        detail={detail}
+                        deviceName={deviceName}
+                        siteName={siteName}
+                        canEditEndpoints={r.status !== "decommissioned"}
+                        onEditEndpoints={() => openEditEndpoints(r, detail)}
+                      />
                     ),
                   },
                   {
