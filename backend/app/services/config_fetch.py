@@ -5,9 +5,29 @@ the learn pipeline can be exercised without live gear.
 """
 from __future__ import annotations
 
+import re
+
 from app.core.config import settings
 from app.drivers import get_driver
 from app.models.device import Device
+from app.models.enums import Vendor
+
+_PROMPT_LINE = re.compile(r"^<[^>]+>$|^\[[^\]]+\]$|^[<\[].*[>\]]$")
+_CONFIG_MARKERS = (
+    "interface ",
+    "sysname ",
+    "hostname ",
+    "bgp ",
+    "router bgp",
+    "l2vpn",
+    "vsi ",
+    "bridge-domain",
+    "set interfaces",
+    "set system",
+    "return",
+    "#",
+    "!",
+)
 
 # Demo running-config snippets keyed by device name (aligned with seed + port_inventory).
 _SIMULATED: dict[str, str] = {
@@ -207,10 +227,51 @@ def simulated_config(device: Device) -> str:
     return body.replace("DEVICE", device.name)
 
 
+def looks_like_running_config(content: str, vendor: Vendor | None = None) -> bool:
+    """Reject empty output, CLI prompt echoes, and other non-config noise."""
+    text = (content or "").strip()
+    if not text:
+        return False
+
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    if len(lines) < 8:
+        return False
+
+    meaningful = [ln for ln in lines if not _PROMPT_LINE.match(ln)]
+    if len(meaningful) < 8:
+        return False
+
+    lowered = text.lower()
+    if not any(marker in lowered for marker in _CONFIG_MARKERS):
+        return False
+
+    if vendor in (Vendor.H3C, Vendor.HUAWEI) and "interface" not in lowered:
+        return False
+
+    return True
+
+
 def fetch_running_config(device: Device) -> tuple[bool, str, str | None]:
     """Pull running-config from device. Returns (success, content, error)."""
     driver = get_driver(device.vendor)
     result = driver.fetch_config(device, dry_run=settings.dry_run)
     if not result.success:
         return False, "", result.output or "fetch failed"
-    return True, result.config, None
+    if settings.dry_run:
+        return True, result.config, None
+    if looks_like_running_config(result.config, device.vendor):
+        return True, result.config, None
+
+    fallback = driver.fetch_config(device, dry_run=False, allow_transport_fallback=True)
+    if fallback.success and looks_like_running_config(fallback.config, device.vendor):
+        return True, fallback.config, None
+
+    line_count = len((result.config or "").splitlines())
+    return (
+        False,
+        "",
+        (
+            f"running-config looks invalid ({line_count} line(s)); "
+            "check SSH paging/timeout or NETCONF access"
+        ),
+    )

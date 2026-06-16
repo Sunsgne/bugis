@@ -115,7 +115,14 @@ class BaseDriver:
         )
         return header + config
 
-    def fetch_config(self, device: Any, dry_run: bool = True) -> DriverResult:
+    def fetch_config(
+        self,
+        device: Any,
+        dry_run: bool = True,
+        *,
+        transport: str | None = None,
+        allow_transport_fallback: bool = False,
+    ) -> DriverResult:
         """Pull running-config from device (NETCONF get-config or CLI show run)."""
         result = DriverResult(success=True, dry_run=dry_run)
         if dry_run:
@@ -129,7 +136,11 @@ class BaseDriver:
             result.finished_at = datetime.now(timezone.utc)
             return result
         try:
-            result.config = self._real_fetch(device)
+            result.config = self._real_fetch(
+                device,
+                transport=transport,
+                allow_transport_fallback=allow_transport_fallback,
+            )
             result.output = f"fetched {len(result.config.splitlines())} line(s)"
             result.success = True
         except Exception as exc:  # pragma: no cover
@@ -138,12 +149,47 @@ class BaseDriver:
         result.finished_at = datetime.now(timezone.utc)
         return result
 
-    def _real_fetch(self, device: Any) -> str:  # pragma: no cover
+    def _real_fetch(
+        self,
+        device: Any,
+        *,
+        transport: str | None = None,
+        allow_transport_fallback: bool = False,
+    ) -> str:  # pragma: no cover
         from app.services.device_management import effective_transport
 
-        if effective_transport(device) == "netconf":
-            return self._fetch_netconf(device)
-        return self._fetch_cli(device)
+        primary = transport or effective_transport(device)
+        tried: list[str] = []
+        last_exc: Exception | None = None
+        for candidate in self._fetch_transport_order(primary, allow_transport_fallback):
+            if candidate in tried:
+                continue
+            tried.append(candidate)
+            try:
+                if candidate == "netconf":
+                    return self._fetch_netconf(device)
+                return self._fetch_cli(device)
+            except Exception as exc:
+                last_exc = exc
+        if last_exc is not None:
+            raise last_exc
+        raise RuntimeError("no transport available for config fetch")
+
+    @staticmethod
+    def _fetch_transport_order(primary: str, allow_fallback: bool) -> list[str]:
+        if primary == "netconf":
+            order = ["netconf", "ssh", "cli"]
+        elif primary in ("ssh", "cli"):
+            order = ["ssh", "cli", "netconf"]
+        else:
+            order = [primary]
+        if not allow_fallback:
+            return order[:1]
+        deduped: list[str] = []
+        for item in order:
+            if item not in deduped:
+                deduped.append(item)
+        return deduped
 
     def _fetch_netconf(self, device: Any) -> str:  # pragma: no cover
         try:
@@ -179,10 +225,23 @@ class BaseDriver:
             "username": device.username,
             "password": device.password,
             "conn_timeout": getattr(settings, "ssh_timeout", 30),
+            "fast_cli": False,
         }
         if getattr(device, "enable_password", None):
             params["secret"] = device.enable_password
         return params
+
+    def _cli_read_timeout(self) -> int:
+        from app.core.config import settings
+
+        return getattr(settings, "ssh_read_timeout", 120) or 120
+
+    def _prepare_cli_session(self, conn: Any) -> None:  # pragma: no cover
+        read_timeout = self._cli_read_timeout()
+        if self.vendor == Vendor.H3C:
+            conn.send_command("screen-length disable", read_timeout=read_timeout)
+        elif self.vendor == Vendor.HUAWEI:
+            conn.send_command("screen-length 0 temporary", read_timeout=read_timeout)
 
     def _fetch_cli(self, device: Any) -> str:  # pragma: no cover
         try:
@@ -191,13 +250,21 @@ class BaseDriver:
             raise RuntimeError(
                 "netmiko not installed; install it or run in dry-run mode"
             ) from exc
+        read_timeout = self._cli_read_timeout()
         conn = ConnectHandler(**self._cli_params(device))
         try:
+            self._prepare_cli_session(conn)
             if self.vendor == Vendor.JUNIPER:
-                return conn.send_command("show configuration | display set")
+                return conn.send_command(
+                    "show configuration | display set",
+                    read_timeout=read_timeout,
+                )
             if self.vendor in (Vendor.H3C, Vendor.HUAWEI):
-                return conn.send_command("display current-configuration")
-            return conn.send_command("show running-config")
+                return conn.send_command(
+                    "display current-configuration",
+                    read_timeout=read_timeout,
+                )
+            return conn.send_command("show running-config", read_timeout=read_timeout)
         finally:
             conn.disconnect()
 

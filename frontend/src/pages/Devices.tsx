@@ -318,9 +318,13 @@ export default function Devices() {
       hide();
       if (data.success) {
         const inv = data.inventory;
+        const svidTotal = data.svid_scan?.total_s_vids ?? 0;
         message.success(
           `${d.name} 学习完成 · ${inv?.service_count ?? 0} 个业务 · v${data.snapshot_version}`,
         );
+        if (svidTotal === 0) {
+          message.info("未解析到 S-VID，请确认设备 running-config 含 service-instance / dot1q 配置");
+        }
         if (data.svid_scan?.ports_scanned || drawerDevice?.id === d.id) {
           await loadIfaces(d.id, true);
         }

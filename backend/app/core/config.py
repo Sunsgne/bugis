@@ -42,6 +42,7 @@ class Settings(BaseSettings):
     dry_run: bool = False
     netconf_timeout: int = 30
     ssh_timeout: int = 30
+    ssh_read_timeout: int = 120
     default_netconf_port: int = 830
     default_ssh_port: int = 22
     default_username: str = "admin"
