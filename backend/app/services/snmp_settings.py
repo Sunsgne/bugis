@@ -10,7 +10,7 @@ from app.models.device import Device
 from app.models.snmp_settings import SnmpSettings
 from app.schemas.snmp_settings import SnmpSettingsOut, SnmpSettingsUpdate
 
-DEFAULT_EXCLUDE = ["Null0", "Loopback", "Vlan-interface", "Management", "Console"]
+DEFAULT_EXCLUDE = ["Null0", "Loopback", "Management", "Console", "InLoopBack", "MEth"]
 
 
 def get_or_create(db: Session) -> SnmpSettings:

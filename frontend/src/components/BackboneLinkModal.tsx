@@ -28,6 +28,25 @@ function fmtBw(mbps: number) {
   return mbps >= 1000 ? `${Math.round(mbps / 1000)} Gbps` : `${mbps} Mbps`;
 }
 
+function portOptionLabel(c: UplinkCandidate) {
+  return `${formatInterfaceShort(c.name)} · ${fmtBw(c.speed_mbps)}`;
+}
+
+function PortCandidateOption({ candidate }: { candidate: UplinkCandidate }) {
+  return (
+    <div className="backbone-port-option">
+      <div className="backbone-port-option-name">
+        <InterfaceNameCell name={candidate.name} />
+      </div>
+      <div className="backbone-port-option-meta">
+        {fmtBw(candidate.speed_mbps)}
+        {candidate.oper_status === "up" ? " · 在线" : candidate.oper_status ? ` · ${candidate.oper_status}` : ""}
+        {candidate.reason ? ` · ${candidate.reason}` : ""}
+      </div>
+    </div>
+  );
+}
+
 type Props = {
   open: boolean;
   devices: Device[];
@@ -181,7 +200,7 @@ export default function BackboneLinkModal({ open, devices, onClose, onCreated }:
       }
     >
       <Typography.Paragraph type="secondary">
-        系统按站点、设备角色、端口速率/在线状态/描述语义，为每对站点推荐最优 DCI 上联口。你可勾选后批量创建，或手动指定设备与端口。
+        骨干 / DCI 链路优先选用 VLAN 子接口（H3C Vlan-interface、华为 Vlanif），其次聚合口与物理上联口。请确保已 SNMP 发现或现网学习。
       </Typography.Paragraph>
 
       <Table<LinkPlan>
@@ -294,11 +313,17 @@ export default function BackboneLinkModal({ open, devices, onClose, onCreated }:
           <Form.Item name="interface_a" label="A 端端口">
             <Select
               showSearch
-              placeholder="自动推荐最优上联"
+              placeholder="优先 VLAN 子接口"
+              popupMatchSelectWidth={false}
+              styles={{ popup: { root: { minWidth: 360 } } }}
               options={candidatesA.map((c) => ({
                 value: c.name,
-                label: `${formatInterfaceShort(c.name)} · ${fmtBw(c.speed_mbps)} · ${c.reason}`,
+                label: portOptionLabel(c),
+                candidate: c,
               }))}
+              optionRender={(opt) => (
+                <PortCandidateOption candidate={(opt.data as { candidate: UplinkCandidate }).candidate} />
+              )}
               onChange={(name) => {
                 const aId = form.getFieldValue("device_a_id");
                 const zId = form.getFieldValue("device_z_id");
@@ -309,11 +334,17 @@ export default function BackboneLinkModal({ open, devices, onClose, onCreated }:
           <Form.Item name="interface_z" label="Z 端端口">
             <Select
               showSearch
-              placeholder="自动推荐最优上联"
+              placeholder="优先 VLAN 子接口"
+              popupMatchSelectWidth={false}
+              styles={{ popup: { root: { minWidth: 360 } } }}
               options={candidatesZ.map((c) => ({
                 value: c.name,
-                label: `${formatInterfaceShort(c.name)} · ${fmtBw(c.speed_mbps)} · ${c.reason}`,
+                label: portOptionLabel(c),
+                candidate: c,
               }))}
+              optionRender={(opt) => (
+                <PortCandidateOption candidate={(opt.data as { candidate: UplinkCandidate }).candidate} />
+              )}
               onChange={(name) => {
                 const aId = form.getFieldValue("device_a_id");
                 const zId = form.getFieldValue("device_z_id");

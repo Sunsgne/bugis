@@ -1047,3 +1047,35 @@ body {
 .capacity-section-card .ant-table-wrapper {
   width: 100%;
 }
+
+.capacity-link-table .capacity-device-name {
+  display: inline-block;
+  max-width: 168px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
+.capacity-link-table .ant-table-cell {
+  vertical-align: middle;
+}
+
+.backbone-port-option {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 2px 0;
+  line-height: 1.35;
+}
+
+.backbone-port-option-name {
+  white-space: nowrap;
+}
+
+.backbone-port-option-meta {
+  color: var(--ant-color-text-secondary);
+  font-size: 12px;
+  white-space: normal;
+  word-break: break-word;
+}

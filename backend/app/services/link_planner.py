@@ -1,4 +1,8 @@
-"""Suggest optimal backbone links between devices based on SNMP-discovered ports."""
+"""Suggest optimal backbone links between devices based on discovered interfaces.
+
+Backbone / DCI links use L3 VLAN interfaces (H3C Vlan-interface, Huawei Vlanif),
+not customer L2 sub-interfaces or access physical ports.
+"""
 from __future__ import annotations
 
 import re
@@ -13,6 +17,7 @@ from app.models.link import Link
 from app.models.site import Site
 from app.services.bw_parser import parse_bw_mbps
 from app.services.link_monitor import capacity_from_interface
+from app.services.port_inventory import is_huawei_subinterface
 
 _UPSTREAM_HINTS = re.compile(
     r"uplink|backbone|dci|trunk|core|peer|ix|transit|互联|上联|骨干|border|spine",
@@ -22,10 +27,15 @@ _CUSTOMER_HINTS = re.compile(
     r"svr:|customer|cus-|接入|客户|service-instance|vmni|demo",
     re.IGNORECASE,
 )
-_SKIP_IFACE = re.compile(
-    r"loop|null|vlan|mgmt|management|console|inloop|register|meth",
+_SYSTEM_IFACE = re.compile(
+    r"loop(?:back)?|null0|inloop|console|register|meth\d|management|mgmt",
     re.IGNORECASE,
 )
+_VLAN_IFACE = re.compile(
+    r"^(?:Vlan-interface|Vlanif|VlanIF|Vlan)\d+$",
+    re.IGNORECASE,
+)
+_BRIDGE_AGG = re.compile(r"^Bridge-Aggregation\d+$", re.IGNORECASE)
 
 _ROLE_PRIORITY: dict[DeviceRole, int] = {
     DeviceRole.DCI_GW: 0,
@@ -47,15 +57,59 @@ class ScoredInterface:
     oper_status: str | None
     score: float
     reason: str
+    kind: str = "physical"
 
 
-def _score_interface(iface: DeviceInterface) -> ScoredInterface:
+def is_vlan_interface(name: str) -> bool:
+    return bool(_VLAN_IFACE.match(name.strip()))
+
+
+def is_bridge_aggregation(name: str) -> bool:
+    return bool(_BRIDGE_AGG.match(name.strip()))
+
+
+def _interface_kind(name: str) -> str:
+    if is_vlan_interface(name):
+        return "vlan"
+    if is_bridge_aggregation(name):
+        return "lag"
+    if is_huawei_subinterface(name):
+        return "subif"
+    return "physical"
+
+
+def _is_backbone_candidate(iface: DeviceInterface) -> bool:
+    name = iface.name
+    if _SYSTEM_IFACE.search(name):
+        return False
+    if is_huawei_subinterface(name):
+        return False
+    if iface.allocated or (iface.used_s_vids and len(iface.used_s_vids) > 0):
+        return False
+    if _CUSTOMER_HINTS.search(iface.description or ""):
+        return False
+    kind = _interface_kind(name)
+    return kind in {"vlan", "lag", "physical"}
+
+
+def _score_interface(iface: DeviceInterface, *, prefer_vlan: bool) -> ScoredInterface:
     speed = iface.speed_mbps or 0
+    kind = _interface_kind(iface.name)
     score = 0.0
     reasons: list[str] = []
 
-    if _SKIP_IFACE.search(iface.name):
-        return ScoredInterface(iface.name, speed, iface.oper_status, -1000.0, "系统口")
+    if not _is_backbone_candidate(iface):
+        return ScoredInterface(iface.name, speed, iface.oper_status, -1000.0, "不可用", kind)
+
+    if kind == "vlan":
+        score += 200
+        reasons.append("VLAN 子接口")
+    elif kind == "lag":
+        score += 80
+        reasons.append("聚合口")
+    elif prefer_vlan:
+        score -= 120
+        reasons.append("物理口")
 
     score += min(speed / 1000.0, 120.0)
     if speed >= 100_000:
@@ -75,16 +129,10 @@ def _score_interface(iface: DeviceInterface) -> ScoredInterface:
     if _UPSTREAM_HINTS.search(desc) or _UPSTREAM_HINTS.search(iface.name):
         score += 45
         reasons.append("上联语义")
-    if _CUSTOMER_HINTS.search(desc):
-        score -= 60
-        reasons.append("客户口")
-    if iface.allocated or (iface.used_s_vids and len(iface.used_s_vids) > 0):
-        score -= 40
-        reasons.append("已有占用")
 
     parsed_bw = parse_bw_mbps(desc)
     if parsed_bw:
-        score += 10
+        score += 15
         reasons.append(f"bw({parsed_bw}M)")
 
     return ScoredInterface(
@@ -92,18 +140,32 @@ def _score_interface(iface: DeviceInterface) -> ScoredInterface:
         speed_mbps=speed,
         oper_status=iface.oper_status,
         score=round(score, 1),
-        reason=" · ".join(reasons) if reasons else "物理口",
+        reason=" · ".join(reasons) if reasons else kind,
+        kind=kind,
     )
 
 
-def rank_interfaces(db: Session, device_id: int, *, limit: int = 12) -> list[ScoredInterface]:
-    rows = db.execute(
+def _device_interfaces(db: Session, device_id: int) -> list[DeviceInterface]:
+    return db.execute(
         select(DeviceInterface)
         .where(DeviceInterface.device_id == device_id)
         .order_by(DeviceInterface.ifindex.asc().nullslast(), DeviceInterface.id.asc())
     ).scalars().all()
-    scored = [_score_interface(row) for row in rows]
+
+
+def _prefer_vlan_on_device(rows: list[DeviceInterface]) -> bool:
+    return any(is_vlan_interface(row.name) for row in rows)
+
+
+def rank_interfaces(db: Session, device_id: int, *, limit: int = 12) -> list[ScoredInterface]:
+    rows = _device_interfaces(db, device_id)
+    prefer_vlan = _prefer_vlan_on_device(rows)
+    scored = [_score_interface(row, prefer_vlan=prefer_vlan) for row in rows]
     scored = [row for row in scored if row.score > 0]
+    if prefer_vlan:
+        vlan_rows = [row for row in scored if row.kind == "vlan"]
+        if vlan_rows:
+            scored = vlan_rows
     scored.sort(key=lambda row: (-row.score, -row.speed_mbps, row.name))
     return scored[:limit]
 
@@ -240,7 +302,6 @@ def suggest_backbone_links(db: Session) -> list[dict]:
     site_ids = [sid for sid in by_site if sid is not None]
     suggestions: list[dict] = []
 
-    # Cross-site DCI: best device pair per site pair without an existing link.
     for i, site_a_id in enumerate(site_ids):
         for site_z_id in site_ids[i + 1 :]:
             candidates: list[dict] = []
@@ -265,7 +326,6 @@ def suggest_backbone_links(db: Session) -> list[dict]:
             best["recommended"] = True
             suggestions.append(best)
 
-    # Intra-site: border/spine ↔ leaf when multiple devices share a site.
     for site_id, members in by_site.items():
         if site_id is None or len(members) < 2:
             continue
@@ -302,7 +362,7 @@ def resolve_link_payload(db: Session, payload: dict) -> dict:
         interface_z=payload.get("interface_z"),
     )
     if not plan:
-        raise ValueError("未找到可用上联端口，请先执行 SNMP 发现")
+        raise ValueError("未找到可用 VLAN 子接口/上联口，请先执行 SNMP 发现或现网学习")
 
     out = dict(payload)
     out.setdefault("name", plan["name"])

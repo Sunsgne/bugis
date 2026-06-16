@@ -13,8 +13,9 @@ from app.services import link_planner
 _seq = itertools.count(1)
 
 
-def _site(db, code: str) -> Site:
-    site = Site(name=code, code=code, bgp_asn=65000)
+def _site(db, code: str | None = None) -> Site:
+    n = next(_seq)
+    site = Site(name=code or f"DC{n}", code=code or f"DC{n}", bgp_asn=65000)
     db.add(site)
     db.flush()
     return site
@@ -46,11 +47,50 @@ def _iface(db, device: Device, name: str, speed: int, desc: str, oper: str = "up
     )
 
 
+def test_plan_link_prefers_vlan_interface():
+    db = SessionLocal()
+    try:
+        site_a = _site(db)
+        site_z = _site(db)
+        dev_a = _device(db, site_a, "gw-a", DeviceRole.DCI_GW)
+        dev_z = _device(db, site_z, "gw-z", DeviceRole.DCI_GW)
+        _iface(db, dev_a, "HundredGigE1/0/30", 100000, "uplink to HKG DCI", "up")
+        _iface(db, dev_a, "Vlan-interface4001", 20000, "DCI peer VLAN bw(20000M)", "up")
+        _iface(db, dev_z, "HundredGigE1/0/30", 100000, "backbone peer", "up")
+        _iface(db, dev_z, "Vlan-interface4001", 20000, "DCI peer VLAN", "up")
+        db.commit()
+
+        plan = link_planner.plan_link(db, dev_a, dev_z)
+        assert plan is not None
+        assert plan["interface_a"] == "Vlan-interface4001"
+        assert plan["interface_z"] == "Vlan-interface4001"
+    finally:
+        db.close()
+
+
+def test_rank_interfaces_excludes_customer_subif():
+    db = SessionLocal()
+    try:
+        site = _site(db)
+        dev = _device(db, site, "hw-leaf", DeviceRole.LEAF)
+        dev.vendor = Vendor.HUAWEI
+        _iface(db, dev, "10GE1/0/2.1050", 10000, "customer", "up")
+        _iface(db, dev, "Vlanif3001", 20000, "DCI uplink", "up")
+        db.commit()
+
+        ranked = link_planner.rank_interfaces(db, dev.id)
+        names = [row.name for row in ranked]
+        assert "Vlanif3001" in names
+        assert "10GE1/0/2.1050" not in names
+    finally:
+        db.close()
+
+
 def test_plan_link_prefers_uplink_ports():
     db = SessionLocal()
     try:
-        site_a = _site(db, "SIN")
-        site_z = _site(db, "HKG")
+        site_a = _site(db)
+        site_z = _site(db)
         dev_a = _device(db, site_a, "leaf-a", DeviceRole.LEAF)
         dev_z = _device(db, site_z, "leaf-z", DeviceRole.LEAF)
         _iface(db, dev_a, "Twenty-FiveGigE1/0/1", 25000, "SVR customer", "up")
@@ -72,8 +112,8 @@ def test_plan_link_prefers_uplink_ports():
 def test_suggest_skips_existing_pairs():
     db = SessionLocal()
     try:
-        site_a = _site(db, "A")
-        site_z = _site(db, "Z")
+        site_a = _site(db)
+        site_z = _site(db)
         dev_a = _device(db, site_a, "a1", DeviceRole.DCI_GW)
         dev_z = _device(db, site_z, "z1", DeviceRole.DCI_GW)
         _iface(db, dev_a, "HundredGigE1/0/1", 100000, "uplink", "up")

@@ -141,7 +141,7 @@ export default function Capacity() {
         }
       >
         <div className="capacity-link-hint">
-          先配置设备间骨干链路并选定上联口；端口描述标注 <Tag>bw(100Mbps)</Tag> 或 <Tag>bw(10Gbps)</Tag> 可自动写入容量 · 利用率超 85% 触发告警
+          骨干链路请选用 VLAN 子接口（Vlan-interface / Vlanif）；端口描述标注 <Tag>bw(100Mbps)</Tag> 或 <Tag>bw(10Gbps)</Tag> 可自动写入合同带宽 · 利用率超 85% 触发告警
         </div>
         {linkChart.length > 0 && (
           <div className="capacity-link-chart">
@@ -150,56 +150,79 @@ export default function Capacity() {
         )}
         <Table
           rowKey="link_id"
+          className="capacity-link-table"
           style={{ width: "100%" }}
           dataSource={links}
           pagination={false}
+          scroll={{ x: 1280 }}
           locale={{ emptyText: <Empty description="暂无链路 · 点击「配置骨干链路」智能推荐或手动选配" /> }}
           {...dataTableProps(undefined, false)}
           columns={[
-            { title: "链路", dataIndex: "name", width: "14%", ellipsis: true },
+            { title: "链路", dataIndex: "name", width: 140, ellipsis: true },
             {
               title: "类型",
               dataIndex: "type",
-              width: "10%",
+              width: 108,
               render: (t) => <Tag>{LINK_TYPE_LABEL[t] || t}</Tag>,
             },
-            { title: "A 端设备", dataIndex: "device_a", width: "14%", ellipsis: true },
+            {
+              title: "A 端设备",
+              dataIndex: "device_a",
+              width: 180,
+              ellipsis: { showTitle: false },
+              render: (v: string) => (
+                <Tooltip title={v}>
+                  <span className="capacity-device-name">{v}</span>
+                </Tooltip>
+              ),
+            },
             {
               title: "A 端口",
               dataIndex: "interface_a",
-              width: "10%",
+              width: 148,
               render: (v?: string) => (v ? <InterfaceNameCell name={v} /> : "—"),
             },
-            { title: "Z 端设备", dataIndex: "device_z", width: "14%", ellipsis: true },
+            {
+              title: "Z 端设备",
+              dataIndex: "device_z",
+              width: 180,
+              ellipsis: { showTitle: false },
+              render: (v: string) => (
+                <Tooltip title={v}>
+                  <span className="capacity-device-name">{v}</span>
+                </Tooltip>
+              ),
+            },
             {
               title: "Z 端口",
               dataIndex: "interface_z",
-              width: "10%",
+              width: 148,
               render: (v?: string) => (v ? <InterfaceNameCell name={v} /> : "—"),
             },
             {
               title: "合同带宽",
               dataIndex: "capacity_mbps",
-              width: "9%",
+              width: 100,
               render: (v) => fmtBw(v),
             },
             {
               title: "实时流量",
               dataIndex: "traffic_mbps",
-              width: "9%",
+              width: 100,
               render: (v) => (v != null ? fmtBw(v) : "—"),
             },
             {
               title: "峰值利用率",
               dataIndex: "utilization_pct",
-              width: "10%",
+              width: 148,
               render: (v) => (
-                <Progress percent={v} size="small" strokeColor={utilColor(v)} style={{ minWidth: 80, maxWidth: 140 }} />
+                <Progress percent={v} size="small" strokeColor={utilColor(v)} style={{ minWidth: 96, maxWidth: 132 }} />
               ),
             },
             {
               title: "",
-              width: "6%",
+              width: 48,
+              fixed: "right",
               render: (_, row) => (
                 <Popconfirm title="删除此骨干链路？" onConfirm={() => deleteLink(row.link_id)}>
                   <Button size="small" type="text" danger icon={<DeleteOutlined />} />

@@ -44,9 +44,17 @@ export function huaweiPhysicalPort(name: string): string {
   return parseHuaweiSubinterface(name)?.parent ?? name.trim();
 }
 
+export function isVlanInterface(name: string): boolean {
+  return /^(?:Vlan-interface|Vlanif|Vlan)\d+$/i.test(name.trim());
+}
+
 /** Short display label, e.g. Twenty-FiveGigE1/0/1 → 25G·1/0/1 */
 export function formatInterfaceShort(name: string): string {
   const trimmed = name.trim();
+  const vlanMatch = trimmed.match(/^(?:Vlan-interface|Vlanif|Vlan)(\d+)$/i);
+  if (vlanMatch) return `VLAN·${vlanMatch[1]}`;
+  const bAggMatch = trimmed.match(/^Bridge-Aggregation(\d+)$/i);
+  if (bAggMatch) return `BAGG·${bAggMatch[1]}`;
   const sub = parseHuaweiSubinterface(trimmed);
   if (sub) {
     return `${formatInterfaceShort(sub.parent)}·${sub.vlan}`;
