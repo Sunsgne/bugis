@@ -280,6 +280,7 @@ def test_circuit_probe(client, auth_headers):
     assert r.status_code == 200
     body = r.json()
     assert "reachable" in body
+    assert body.get("mode") == "simulated"
     assert body["hop_count"] == len(body["hops"]) >= 2
     # Probe recorded a telemetry sample.
     samples = client.get(

@@ -447,21 +447,79 @@ export default function Circuits() {
     try {
       const { data } = await api.post(`/circuits/${c.id}/probe`);
       hide();
+
+      const modeLabel =
+        data.mode === "live"
+          ? { text: "实测", color: "blue" as const }
+          : { text: "模拟", color: "default" as const };
+      const methodLabels: Record<string, string> = {
+        simulated: "模拟估算",
+        simulated_inactive: "非激活 · 模拟",
+        h3c_vsi_mac: "H3C VSI MAC Ping",
+        vni_ping: "VNI Ping",
+        fabric_loopback: "Fabric 逐跳 Ping",
+        underlay_ip: "Underlay IP Ping",
+      };
+      const probeMethod = data.probe_method || data.service_plane?.method || "—";
+      const sp = data.service_plane;
+      const fabric = data.fabric;
+
       modal.info({
         title: `拨测结果 · ${data.circuit}`,
-        width: 640,
+        width: 720,
         content: (
           <div>
-            <div style={{ marginBottom: 8 }}>
+            <div style={{ marginBottom: 12 }}>
+              <Tag color={modeLabel.color}>{modeLabel.text}</Tag>
+              <Tag>{methodLabels[probeMethod] || probeMethod}</Tag>
+              {data.path_mode && (
+                <Tag color="geekblue">
+                  路径 {data.path_mode === "explicit_sr" ? "SR 显式" : "IGP 自动"}
+                </Tag>
+              )}
               <Tag color={data.reachable ? "green" : "red"}>
                 {data.reachable ? "可达" : "不可达"}
               </Tag>
-              {data.rtt_ms != null && <Tag>RTT {data.rtt_ms} ms</Tag>}
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              {data.rtt_ms != null && <Tag>端到端 RTT {data.rtt_ms} ms</Tag>}
               <Tag>抖动 {data.jitter_ms} ms</Tag>
               <Tag color={data.packet_loss_pct > 1 ? "red" : undefined}>
                 丢包 {data.packet_loss_pct}%
               </Tag>
             </div>
+            {data.path_reason && (
+              <div style={{ marginBottom: 12, color: "var(--text-secondary, #666)", fontSize: 12 }}>
+                {data.path_reason}
+              </div>
+            )}
+            {sp && (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontWeight: 600, marginBottom: 6 }}>业务面 (A→Z)</div>
+                <Space wrap size={[8, 4]}>
+                  {sp.source_device && sp.target_device && (
+                    <Tag>
+                      {sp.source_device} → {sp.target_device}
+                    </Tag>
+                  )}
+                  {sp.vsi_name && <Tag>VSI {sp.vsi_name}</Tag>}
+                  {sp.vni != null && <Tag>VNI {sp.vni}</Tag>}
+                  {sp.remote_mac && <Tag>MAC {sp.remote_mac}</Tag>}
+                  {sp.samples != null && <Tag>{sp.samples} 次采样</Tag>}
+                </Space>
+              </div>
+            )}
+            {fabric && (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontWeight: 600, marginBottom: 6 }}>Fabric 逐跳</div>
+                <Tag color={fabric.reachable ? "green" : "red"}>
+                  {fabric.reachable ? "Underlay 可达" : "Underlay 异常"}
+                </Tag>
+                {fabric.samples_per_hop != null && (
+                  <Tag>每跳 {fabric.samples_per_hop} 次 Ping</Tag>
+                )}
+              </div>
+            )}
             <Table
               size="small"
               rowKey="hop"
@@ -473,9 +531,19 @@ export default function Circuits() {
                 { title: "厂商", dataIndex: "vendor", render: (v) => <Tag>{v}</Tag> },
                 { title: "IP", dataIndex: "ip" },
                 {
-                  title: "RTT(ms)",
+                  title: "探测目标",
+                  dataIndex: "target",
+                  render: (v) => v || "—",
+                },
+                {
+                  title: "段 RTT(ms)",
+                  dataIndex: "segment_rtt_ms",
+                  render: (v) => (v == null ? "—" : v),
+                },
+                {
+                  title: "累计 RTT(ms)",
                   dataIndex: "rtt_ms",
-                  render: (v) => (v == null ? "*" : v),
+                  render: (v) => (v == null ? "—" : v),
                 },
                 {
                   title: "状态",
