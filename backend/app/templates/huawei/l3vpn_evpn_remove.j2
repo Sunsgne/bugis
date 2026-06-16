@@ -6,6 +6,8 @@
 #
 undo interface Vbdif{{ circuit.vni }}
 undo interface {{ hw.l2_ifname(endpoint, mode, svid) }}
+#
+{{ hw.qos_policy_remove(circuit) }}
 interface Nve1
  undo vni {{ circuit.vni }} head-end peer-list protocol bgp
 #

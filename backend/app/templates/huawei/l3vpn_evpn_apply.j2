@@ -13,6 +13,7 @@ ip vpn-instance {{ circuit.vrf_name }}
   vpn-target {{ circuit.route_target }} import-extcommunity evpn
  vxlan vni {{ circuit.vni }}
 #
+{{ hw.qos_policy_objects(circuit) }}
 {{ hw.bridge_domain_evpn(circuit) }}
 #
 interface Vbdif{{ circuit.vni }}

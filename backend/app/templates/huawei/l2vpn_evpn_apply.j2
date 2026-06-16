@@ -6,6 +6,7 @@
 # Huawei VRP (Datacom) - EVPN VXLAN L2VPN  circuit={{ circuit.code }} vni={{ circuit.vni }}
 # device={{ device.name }} ac={{ mode }} s-vid={{ svid }}{% if cvid %} ce-vid={{ cvid }}{% endif %}
 #
+{{ hw.qos_policy_objects(circuit) }}
 {{ hw.bridge_domain_evpn(circuit) }}
 #
 {{ hw.l2_subif(endpoint, circuit, mode, svid, cvid) }}

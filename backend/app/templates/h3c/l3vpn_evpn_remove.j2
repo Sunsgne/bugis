@@ -1,3 +1,5 @@
+{% import 'h3c/_macros.j2' as h3c %}
+{% set svid = endpoint.vlan_id or circuit.vlan_id %}
 #
 # H3C Comware7 - remove EVPN VXLAN L3VPN  circuit {{ circuit.code }}
 #
@@ -5,6 +7,7 @@ undo interface Vsi-interface{{ circuit.vni }}
 interface {{ endpoint.interface_name }}
  undo service-instance {{ circuit.vlan_id or endpoint.vlan_id }}
 #
+{{ h3c.qos_policy_remove(circuit) }}
 undo vsi {{ circuit.vsi_name }}
 undo ip vpn-instance {{ circuit.vrf_name }}
 #

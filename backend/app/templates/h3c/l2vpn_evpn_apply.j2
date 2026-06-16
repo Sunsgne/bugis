@@ -8,6 +8,7 @@
 #
 l2vpn enable
 #
+{{ h3c.qos_policy_objects(circuit) }}
 {{ h3c.vsi_evpn_header(circuit, l3=false) }}
 #
 interface {{ endpoint.interface_name }}

@@ -15,6 +15,7 @@ undo ip vpn-instance {{ circuit.vrf_name }}
 interface {{ endpoint.interface_name }}
  undo service-instance {{ svid }}
 #
+{{ h3c.qos_policy_remove(circuit) }}
 undo interface Vsi-interface{{ circuit.vni }}
 undo vsi {{ circuit.vsi_name }}
 undo ip vpn-instance {{ circuit.vrf_name }}

@@ -12,12 +12,22 @@ vsi cus-demo-001
  vxlan 10148
  evpn encapsulation vxlan
   route-distinguisher 10.1.1.1:10148
+traffic classifier tc-demo operator and
+ if-match any
+#
+traffic behavior tb-demo
+ car cir 204800 cbs 12800000 ebs 0 green pass red discard yellow pass
+#
+qos policy qp-demo
+ classifier tc-demo behavior tb-demo
+#
 interface GE1/0/50
  description ISP: uplink port
  service-instance 2501
   description AC for customer A
   encapsulation s-vid 2501
-  qos car inbound any cir 200000 cbs 5000000
+  qos apply policy qp-demo inbound
+  qos apply policy qp-demo outbound
   xconnect vsi cus-demo-001
 """
     parsed = port_inventory._parse_interface_blocks(config, Vendor.H3C)
@@ -126,3 +136,45 @@ def test_parse_description_svid():
     entries = port_inventory._parse_description_entries("cust-ac vlan=120 bw(1Gbps)")
     assert entries[0].s_vid == 120
     assert entries[0].source == "device"
+
+
+def test_parse_h3c_qos_apply_policy_rate_limit():
+    config = """
+traffic classifier tc-rl operator and
+ if-match any
+#
+traffic behavior tb-rl
+ car cir 51200 cbs 3200000 ebs 0 green pass red discard yellow pass
+#
+qos policy qp-rl
+ classifier tc-rl behavior tb-rl
+#
+interface GE1/0/1
+ service-instance 100
+  encapsulation s-vid 100
+  qos apply policy qp-rl inbound
+  xconnect vsi vsi_test
+"""
+    parsed = port_inventory._parse_interface_blocks(config, Vendor.H3C)
+    assert parsed["GE1/0/1"][0].rate_limit_mbps == 50
+
+
+def test_parse_huawei_traffic_policy_rate_limit():
+    config = """
+traffic classifier tc-rl operator or
+ if-match any
+#
+traffic behavior tb-rl
+ car cir 614400 cbs 38400000 green pass red discard yellow pass
+#
+traffic policy tp-rl
+ classifier tc-rl behavior tb-rl
+#
+interface GE1/0/1.100 mode l2
+ encapsulation dot1q vid 100
+ traffic-policy tp-rl inbound
+ traffic-policy tp-rl outbound
+ bridge-domain 100
+"""
+    parsed = port_inventory._parse_interface_blocks(config, Vendor.HUAWEI)
+    assert parsed["GE1/0/1.100"][0].rate_limit_mbps == 600

@@ -7,6 +7,34 @@
 {%- endif -%}
 {%- endmacro %}
 
+{% macro qos_policy_name(circuit) -%}
+tp-{{ circuit.code }}
+{%- endmacro %}
+
+{% macro qos_policy_objects(circuit) -%}
+{% if circuit.bandwidth_mbps %}
+# QoS CAR via classifier/behavior/traffic-policy (VRP); cir unit = kbps
+traffic classifier tc-{{ circuit.code }} operator or
+ if-match any
+#
+traffic behavior tb-{{ circuit.code }}
+ car cir {{ circuit.bandwidth_mbps * 1024 }} cbs {{ circuit.bandwidth_mbps * 64000 }} green pass red discard yellow pass
+#
+traffic policy {{ qos_policy_name(circuit) }}
+ classifier tc-{{ circuit.code }} behavior tb-{{ circuit.code }}
+#
+{% endif %}
+{%- endmacro %}
+
+{% macro qos_policy_remove(circuit) -%}
+{% if circuit.bandwidth_mbps %}
+undo traffic policy {{ qos_policy_name(circuit) }}
+undo traffic behavior tb-{{ circuit.code }}
+undo traffic classifier tc-{{ circuit.code }}
+#
+{% endif %}
+{%- endmacro %}
+
 {% macro bridge_domain_evpn(circuit) -%}
 bridge-domain {{ circuit.vni }}
  vxlan vni {{ circuit.vni }}
@@ -29,9 +57,9 @@ interface {{ l2_ifname(endpoint, mode, svid) }} mode l2
 {% endif %}
  bridge-domain {{ circuit.vni }}
 {% if circuit.bandwidth_mbps %}
- # rate-limit on AC sub-interface (line rate), cir unit = kbps
- qos lr cir {{ circuit.bandwidth_mbps * 1000 }} inbound
- qos lr cir {{ circuit.bandwidth_mbps * 1000 }} outbound
+ # rate-limit: traffic-policy on AC sub-interface
+ traffic-policy {{ qos_policy_name(circuit) }} inbound
+ traffic-policy {{ qos_policy_name(circuit) }} outbound
 {% endif %}
 {%- endmacro %}
 
