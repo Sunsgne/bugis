@@ -1085,8 +1085,6 @@ def list_port_bindings(db: Session, device: Device) -> dict:
         return _canonical_iface_for_device(device, name, alias_to_canonical)
 
     for iface in ifaces:
-        if device.vendor == Vendor.HUAWEI and is_huawei_subinterface(iface.name):
-            continue
         canonical = _canonical_iface(iface.name)
         for raw in iface.used_s_vids or []:
             btype = "platform" if raw.get("source") == "platform" else "device"
