@@ -66,10 +66,21 @@ def backup_config(
     device = db.get(Device, device_id)
     if not device:
         raise HTTPException(status_code=404, detail="device not found")
-    snap = config_mgmt.snapshot_device(db, device, source="backup", note=note,
-                                       created_by=user.username)
+    try:
+        snap, meta = config_mgmt.backup_device_running_config(
+            db, device, note=note, created_by=user.username
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
     db.commit()
-    return {"device": device.name, "version": snap.version, "id": snap.id}
+    return {
+        "device": device.name,
+        "version": snap.version,
+        "id": snap.id,
+        "lines": meta["lines"],
+        "fetched_live": meta["fetched_live"],
+        "from_learned_version": meta["from_learned_version"],
+    }
 
 
 @router.get("/devices/{device_id}/snapshots")

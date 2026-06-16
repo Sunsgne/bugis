@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Button, Card, Table, Tag, Tabs, App as AntApp, Empty, Descriptions } from "antd";
+import { Button, Card, Table, Tag, Tabs, App as AntApp, Empty, Descriptions, Typography } from "antd";
 import { CloudUploadOutlined, DiffOutlined, ReloadOutlined, BookOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { api } from "../api/client";
@@ -56,9 +56,19 @@ export default function ConfigManagement() {
 
   async function backup() {
     if (!sel) return;
-    await api.post(`/config/devices/${sel}/backup`);
-    message.success("已生成配置备份快照");
-    select(sel);
+    const hide = message.loading("正在拉取设备 running-config...", 0);
+    try {
+      const { data } = await api.post(`/config/devices/${sel}/backup`);
+      hide();
+      const via = data.fetched_live
+        ? "现网拉取"
+        : `复用学习 v${data.from_learned_version}`;
+      message.success(`备份完成 v${data.version} · ${data.lines} 行 · ${via}`);
+      select(sel);
+    } catch (e: any) {
+      hide();
+      message.error(e?.response?.data?.detail || "备份失败");
+    }
   }
 
   async function loadDrift() {
@@ -145,7 +155,7 @@ export default function ConfigManagement() {
               现网学习
             </Button>
             <Button type="primary" icon={<CloudUploadOutlined />} onClick={backup} disabled={!sel}>
-              备份当前配置
+              备份现网配置
             </Button>
           </Button.Group>
         }
@@ -159,7 +169,14 @@ export default function ConfigManagement() {
               {
                 key: "running",
                 label: "平台期望配置 (Desired)",
-                children: <pre className="config-pre config-pre-fill">{running}</pre>,
+                children: (
+                  <>
+                    <Typography.Text type="secondary" style={{ display: "block", marginBottom: 8, fontSize: 12 }}>
+                      由平台纳管专线拼装的目标配置；与设备现网配置可能不同。备份请使用右上角「备份现网配置」。
+                    </Typography.Text>
+                    <pre className="config-pre config-pre-fill">{running}</pre>
+                  </>
+                ),
               },
               {
                 key: "learned",
@@ -229,7 +246,7 @@ export default function ConfigManagement() {
                       pagination={false}
                       dataSource={snaps}
                       {...dataTableProps()}
-                      locale={{ emptyText: <Empty description="暂无快照，点击「备份当前配置」" /> }}
+                      locale={{ emptyText: <Empty description="暂无快照，点击「备份现网配置」" /> }}
                       columns={[
                         { title: "版本", dataIndex: "version", width: "10%", render: (v) => `v${v}` },
                         {

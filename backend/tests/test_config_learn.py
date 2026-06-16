@@ -143,6 +143,42 @@ def test_port_inventory_uses_learned_config(client, auth_headers):
         db.close()
 
 
+def test_backup_live_running_config(client, auth_headers):
+    site = _site(client, auth_headers)
+    n = next(_seq)
+    leaf = client.post(
+        "/api/v1/devices",
+        headers=auth_headers,
+        json={
+            "name": f"BACKUP-H3C-{n}",
+            "vendor": "h3c",
+            "role": "leaf",
+            "overlay_tech": "vxlan_evpn",
+            "status": "online",
+            "mgmt_ip": f"10.3.{n}.11",
+            "site_id": site["id"],
+        },
+        params={"learn": False},
+    ).json()
+
+    learn = client.post(f"/api/v1/devices/{leaf['id']}/learn", headers=auth_headers).json()
+    assert learn["success"] is True
+
+    backup = client.post(
+        f"/api/v1/config/devices/{leaf['id']}/backup", headers=auth_headers
+    ).json()
+    assert backup["version"] >= 1
+    assert backup["lines"] >= 8
+    assert backup["fetched_live"] is True
+
+    snap = client.get(
+        f"/api/v1/config/devices/{leaf['id']}/snapshots/{backup['id']}",
+        headers=auth_headers,
+    ).json()
+    assert "interface" in snap["content"].lower()
+    assert "no active service configuration" not in snap["content"]
+
+
 def test_diff_platform_vs_learned(client, auth_headers):
     site = _site(client, auth_headers)
     leaf = client.post(
