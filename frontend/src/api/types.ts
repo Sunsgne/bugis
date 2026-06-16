@@ -65,6 +65,7 @@ export interface DevicePortBinding {
   tenant_id?: number | null;
   tenant_name?: string | null;
   tenant_code?: string | null;
+  business_name?: string | null;
   circuit_id?: number | null;
   circuit_code?: string | null;
   circuit_name?: string | null;
@@ -74,6 +75,9 @@ export interface DevicePortBinding {
   s_vid?: number | null;
   c_vid?: number | null;
   vni?: number | null;
+  vsi_name?: string | null;
+  description?: string | null;
+  rate_limit_mbps?: number | null;
   bandwidth_mbps?: number | null;
   source?: string;
   note?: string | null;

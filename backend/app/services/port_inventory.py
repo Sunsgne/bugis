@@ -682,7 +682,92 @@ def scan_device(db: Session, device: Device, *, include_legacy: bool = True) -> 
 
 
 def list_port_bindings(db: Session, device: Device) -> dict:
-    """List customer/circuit bindings and device-only S-VID occupancy per interface."""
+    """Customer · interface · service relationship rows (one per S-VID binding)."""
+    catalog = _build_circuit_catalog(db)
+    items: list[dict] = []
+    seen_keys: set[tuple] = set()
+
+    def _binding_key(
+        iface: str, mode: str, svid: int | None, cvid: int | None
+    ) -> tuple:
+        return (_normalize_iface(iface), mode, svid, cvid)
+
+    def _append_row(
+        *,
+        interface_name: str,
+        raw: dict,
+        binding_type: str,
+        circuit: Circuit | None = None,
+        tenant: Tenant | None = None,
+        endpoint_label: str | None = None,
+    ) -> None:
+        mode = raw.get("access_mode") or "dot1q"
+        svid = raw.get("s_vid")
+        cvid = raw.get("c_vid")
+        key = _binding_key(interface_name, mode, svid, cvid)
+        if key in seen_keys:
+            return
+        seen_keys.add(key)
+
+        if circuit is None and raw.get("circuit_code"):
+            circuit = catalog.by_code.get(raw["circuit_code"])
+        if circuit is None and raw.get("vni") is not None:
+            circuit = catalog.by_vni.get(raw["vni"])
+        if tenant is None and circuit is not None:
+            tenant = catalog.tenants.get(circuit.tenant_id)
+
+        tenant_name = raw.get("tenant_name") or (tenant.name if tenant else None)
+        tenant_code = raw.get("tenant_code") or (tenant.code if tenant else None)
+        circuit_name = raw.get("circuit_name") or (circuit.name if circuit else None)
+        circuit_code = raw.get("circuit_code") or (circuit.code if circuit else None)
+        rate = raw.get("rate_limit_mbps") or raw.get("bandwidth_mbps")
+        if rate is None and circuit is not None:
+            rate = circuit.bandwidth_mbps
+        business_name = (
+            circuit_name
+            or raw.get("vsi_name")
+            or raw.get("description")
+            or circuit_code
+        )
+
+        items.append({
+            "interface_name": _normalize_iface(interface_name),
+            "binding_type": binding_type,
+            "tenant_id": tenant.id if tenant else None,
+            "tenant_name": tenant_name,
+            "tenant_code": tenant_code,
+            "business_name": business_name,
+            "circuit_id": circuit.id if circuit else None,
+            "circuit_code": circuit_code,
+            "circuit_name": circuit_name,
+            "circuit_status": circuit.status.value if circuit else None,
+            "endpoint_label": endpoint_label,
+            "access_mode": mode,
+            "s_vid": svid,
+            "c_vid": cvid,
+            "vni": raw.get("vni") or (circuit.vni if circuit else None),
+            "vsi_name": raw.get("vsi_name") or (circuit.vsi_name if circuit else None),
+            "description": raw.get("description"),
+            "rate_limit_mbps": raw.get("rate_limit_mbps"),
+            "bandwidth_mbps": rate,
+            "source": raw.get("source") or ("platform" if circuit else "device"),
+            "note": raw.get("note"),
+        })
+
+    ifaces = db.execute(
+        select(DeviceInterface).where(DeviceInterface.device_id == device.id)
+    ).scalars().all()
+    snmp_names = {i.name for i in ifaces}
+
+    for iface in ifaces:
+        for raw in iface.used_s_vids or []:
+            btype = "platform" if raw.get("source") == "platform" else "device"
+            _append_row(
+                interface_name=iface.name,
+                raw=raw,
+                binding_type=btype,
+            )
+
     rows = db.execute(
         select(CircuitEndpoint, Circuit, Tenant)
         .join(Circuit, Circuit.id == CircuitEndpoint.circuit_id)
@@ -691,69 +776,41 @@ def list_port_bindings(db: Session, device: Device) -> dict:
         .order_by(CircuitEndpoint.interface_name, Circuit.code)
     ).all()
 
-    items: list[dict] = []
-    platform_keys: set[tuple] = set()
     for ep, circuit, tenant in rows:
         mode = ep.access_mode.value if ep.access_mode else AccessMode.DOT1Q.value
         svid = ep.vlan_id or circuit.vlan_id
-        platform_keys.add(
-            (_normalize_iface(ep.interface_name), mode, svid, ep.inner_vlan_id)
-        )
-        items.append({
-            "interface_name": _normalize_iface(ep.interface_name),
-            "binding_type": "platform",
-            "tenant_id": tenant.id,
-            "tenant_name": tenant.name,
-            "tenant_code": tenant.code,
-            "circuit_id": circuit.id,
-            "circuit_code": circuit.code,
-            "circuit_name": circuit.name,
-            "circuit_status": circuit.status.value,
-            "endpoint_label": ep.label,
-            "access_mode": mode,
-            "s_vid": svid,
-            "c_vid": ep.inner_vlan_id,
-            "vni": circuit.vni,
-            "bandwidth_mbps": circuit.bandwidth_mbps,
-            "source": "platform",
-            "note": None,
-        })
-
-    ifaces = db.execute(
-        select(DeviceInterface).where(DeviceInterface.device_id == device.id)
-    ).scalars().all()
-    snmp_names = {i.name for i in ifaces}
-    for iface in ifaces:
-        for raw in iface.used_s_vids or []:
-            if raw.get("source") == "platform":
-                continue
-            mode = raw.get("access_mode") or "dot1q"
-            svid = raw.get("s_vid")
-            cvid = raw.get("c_vid")
-            key = (_normalize_iface(iface.name), mode, svid, cvid)
-            if key in platform_keys:
-                continue
-            items.append({
-                "interface_name": _normalize_iface(iface.name),
-                "binding_type": "device",
-                "tenant_id": None,
-                "tenant_name": None,
-                "tenant_code": None,
-                "circuit_id": None,
-                "circuit_code": raw.get("circuit_code"),
-                "circuit_name": None,
-                "circuit_status": None,
-                "endpoint_label": None,
-                "access_mode": mode,
+        key = _binding_key(ep.interface_name, mode, svid, ep.inner_vlan_id)
+        if key in seen_keys:
+            continue
+        _append_row(
+            interface_name=ep.interface_name,
+            raw={
                 "s_vid": svid,
-                "c_vid": cvid,
-                "vni": None,
-                "bandwidth_mbps": None,
-                "source": raw.get("source") or "device",
-                "note": raw.get("note"),
-            })
+                "c_vid": ep.inner_vlan_id,
+                "access_mode": mode,
+                "circuit_code": circuit.code,
+                "circuit_name": circuit.name,
+                "tenant_name": tenant.name,
+                "tenant_code": tenant.code,
+                "vni": circuit.vni,
+                "vsi_name": circuit.vsi_name,
+                "bandwidth_mbps": circuit.bandwidth_mbps,
+                "description": circuit.description or circuit.name,
+                "source": "platform",
+            },
+            binding_type="platform",
+            circuit=circuit,
+            tenant=tenant,
+            endpoint_label=ep.label,
+        )
 
-    items.sort(key=lambda row: (row["interface_name"], row["binding_type"], row["s_vid"] or 0))
+    items.sort(
+        key=lambda row: (
+            row.get("tenant_name") or "zzz",
+            row["interface_name"],
+            row.get("s_vid") or 0,
+        )
+    )
     bound_ifaces = {row["interface_name"] for row in items}
     unbound_ifaces = sorted(snmp_names - bound_ifaces) if snmp_names else []
 

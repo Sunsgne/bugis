@@ -24,6 +24,7 @@ import { api } from "../api/client";
 import type {
   Device,
   DeviceInterface,
+  DevicePortBinding,
   DevicePortBindings,
   SvidUsage,
 } from "../api/types";
@@ -52,9 +53,21 @@ function formatVlan(accessMode?: string, sVid?: number | null, cVid?: number | n
   return "—";
 }
 
+function formatBandwidth(mbps?: number | null) {
+  if (!mbps) return "—";
+  return mbps >= 1000 ? `${mbps / 1000}G` : `${mbps}M`;
+}
+
 function formatPortSpeed(mbps?: number) {
   if (!mbps) return "—";
   return mbps >= 1000 ? `${mbps / 1000}G` : `${mbps}M`;
+}
+
+function formatCustomerLabel(row: DevicePortBinding) {
+  if (row.tenant_name) {
+    return row.tenant_code ? `${row.tenant_name} (${row.tenant_code})` : row.tenant_name;
+  }
+  return "未纳管";
 }
 
 interface DevicePortDrawerProps {
@@ -83,10 +96,12 @@ export default function DevicePortDrawer({
   const [ifaceStatus, setIfaceStatus] = useState<"all" | "up" | "down" | "allocated">("all");
   const [activeTab, setActiveTab] = useState("ports");
 
-  async function loadBindings(deviceId: number) {
+  async function loadBindings(deviceId: number, refresh = false) {
     setBindingsLoading(true);
     try {
-      const { data } = await api.get<DevicePortBindings>(`/devices/${deviceId}/port-bindings`);
+      const { data } = await api.get<DevicePortBindings>(`/devices/${deviceId}/port-bindings`, {
+        params: refresh ? { scan: true } : undefined,
+      });
       setBindings(data);
     } finally {
       setBindingsLoading(false);
@@ -121,7 +136,7 @@ export default function DevicePortDrawer({
     (async () => {
       const [rows] = await Promise.all([
         loadIfaces(device.id, true),
-        loadBindings(device.id),
+        loadBindings(device.id, true),
       ]);
       if (cancelled || !rows) return;
       if (refreshVersion === 0 && rows.length === 0) {
@@ -167,7 +182,7 @@ export default function DevicePortDrawer({
     if (!device) return;
     await Promise.all([
       loadIfaces(device.id, refreshScan),
-      loadBindings(device.id),
+      loadBindings(device.id, refreshScan),
     ]);
   }
 
@@ -367,14 +382,14 @@ export default function DevicePortDrawer({
           },
           {
             key: "bindings",
-            label: `客户接入绑定 (${bindings?.total_bindings ?? 0})`,
+            label: `客户·接口·业务 (${bindings?.total_bindings ?? 0})`,
             children: (
               <>
                 <Alert
                   type="info"
                   showIcon
-                  message="客户与接口的关联关系"
-                  description="平台纳管：专线端点已绑定客户与物理口；现网占用：设备 running-config 中存在但尚未在平台创建专线的 VLAN。"
+                  message="客户 · 接口 · 业务 关联关系"
+                  description="每一行表示一个 S-VID 绑定：客户是谁、落在哪个物理口、承载哪条业务，以及端口限速带宽。"
                   style={{ marginBottom: 12 }}
                 />
 
@@ -389,27 +404,39 @@ export default function DevicePortDrawer({
                   </div>
                 ) : null}
 
-                <Table
+                <Table<DevicePortBinding>
                   rowKey={(row) =>
-                    `${row.interface_name}-${row.binding_type}-${row.s_vid ?? "u"}-${row.c_vid ?? ""}-${row.circuit_id ?? row.source}`
+                    `${row.interface_name}-${row.s_vid ?? "u"}-${row.c_vid ?? ""}-${row.circuit_id ?? row.business_name ?? row.source}`
                   }
                   size="small"
                   loading={bindingsLoading}
                   dataSource={bindings?.items ?? []}
-                  locale={{ emptyText: "暂无客户接入绑定 · 可在专线编排中为该设备配置端点" }}
+                  locale={{ emptyText: "暂无关联关系 · 请先现网学习并刷新占用" }}
                   pagination={{
                     defaultPageSize: 50,
                     showSizeChanger: true,
                     pageSizeOptions: ["20", "50", "100"],
-                    showTotal: (total) => `共 ${total} 条绑定`,
+                    showTotal: (total) => `共 ${total} 条关联`,
                   }}
-                  scroll={{ x: 1180, y: "calc(100vh - 360px)" }}
+                  scroll={{ x: 1280, y: "calc(100vh - 360px)" }}
                   columns={[
+                    {
+                      title: "客户",
+                      width: 160,
+                      fixed: "left",
+                      render: (_: unknown, row) =>
+                        row.tenant_id ? (
+                          <Link to={`/circuits?tenant=${row.tenant_id}`}>
+                            {formatCustomerLabel(row)}
+                          </Link>
+                        ) : (
+                          <Typography.Text type="secondary">{formatCustomerLabel(row)}</Typography.Text>
+                        ),
+                    },
                     {
                       title: "接口",
                       dataIndex: "interface_name",
                       width: 200,
-                      fixed: "left",
                       render: (name: string) => (
                         <Typography.Text code copyable={{ text: name }}>
                           {name}
@@ -417,70 +444,55 @@ export default function DevicePortDrawer({
                       ),
                     },
                     {
-                      title: "客户",
-                      width: 180,
-                      render: (_: unknown, row) =>
-                        row.tenant_id ? (
-                          <Link to={`/circuits?tenant=${row.tenant_id}`}>
-                            {row.tenant_name}
-                            <Typography.Text type="secondary"> ({row.tenant_code})</Typography.Text>
-                          </Link>
-                        ) : (
-                          <Typography.Text type="secondary">未纳管</Typography.Text>
-                        ),
-                    },
-                    {
-                      title: "专线",
+                      title: "业务",
+                      dataIndex: "business_name",
                       width: 200,
-                      render: (_: unknown, row) =>
-                        row.circuit_id ? (
-                          <Space direction="vertical" size={0}>
-                            <Typography.Text>{row.circuit_name}</Typography.Text>
-                            <Typography.Text type="secondary" code>
-                              {row.circuit_code}
-                            </Typography.Text>
-                          </Space>
-                        ) : row.circuit_code ? (
-                          <Typography.Text code>{row.circuit_code}</Typography.Text>
-                        ) : (
-                          "—"
-                        ),
+                      ellipsis: true,
+                      render: (v?: string, row?: DevicePortBinding) => (
+                        <Tooltip title={row?.description || row?.circuit_code || row?.vsi_name}>
+                          <span>{v || row?.vsi_name || row?.circuit_code || "—"}</span>
+                        </Tooltip>
+                      ),
                     },
                     {
-                      title: "端点",
-                      dataIndex: "endpoint_label",
-                      width: 64,
-                      render: (v?: string) => v || "—",
+                      title: "S-VID",
+                      width: 120,
+                      render: (_: unknown, row) => (
+                        <Tag color={row.binding_type === "platform" ? "blue" : "orange"}>
+                          {formatVlan(row.access_mode, row.s_vid, row.c_vid)}
+                        </Tag>
+                      ),
                     },
                     {
-                      title: "封装 / VLAN",
-                      width: 140,
+                      title: "限速带宽",
+                      width: 96,
                       render: (_: unknown, row) =>
-                        formatVlan(row.access_mode, row.s_vid, row.c_vid),
+                        formatBandwidth(row.rate_limit_mbps ?? row.bandwidth_mbps),
                     },
                     {
                       title: "VNI",
                       dataIndex: "vni",
-                      width: 72,
+                      width: 80,
                       render: (v?: number) => (v != null ? v : "—"),
                     },
                     {
-                      title: "带宽",
-                      dataIndex: "bandwidth_mbps",
-                      width: 80,
-                      render: (v?: number) => (v != null ? `${v}M` : "—"),
+                      title: "VSI",
+                      dataIndex: "vsi_name",
+                      width: 160,
+                      ellipsis: true,
+                      render: (v?: string) => v || "—",
                     },
                     {
-                      title: "专线状态",
-                      dataIndex: "circuit_status",
-                      width: 96,
-                      render: (s?: string) =>
-                        s ? <Tag color={CIRCUIT_STATUS_COLOR[s] || "default"}>{s}</Tag> : "—",
+                      title: "描述",
+                      dataIndex: "description",
+                      width: 180,
+                      ellipsis: true,
+                      render: (v?: string) => v || "—",
                     },
                     {
                       title: "来源",
                       dataIndex: "source",
-                      width: 96,
+                      width: 88,
                       render: (source: string, row) => {
                         const meta =
                           BINDING_SOURCE[source] ||

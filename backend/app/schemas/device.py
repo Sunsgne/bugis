@@ -51,6 +51,7 @@ class DevicePortBindingOut(BaseModel):
     tenant_id: int | None = None
     tenant_name: str | None = None
     tenant_code: str | None = None
+    business_name: str | None = None
     circuit_id: int | None = None
     circuit_code: str | None = None
     circuit_name: str | None = None
@@ -60,6 +61,9 @@ class DevicePortBindingOut(BaseModel):
     s_vid: int | None = None
     c_vid: int | None = None
     vni: int | None = None
+    vsi_name: str | None = None
+    description: str | None = None
+    rate_limit_mbps: int | None = None
     bandwidth_mbps: int | None = None
     source: str = "platform"
     note: str | None = None

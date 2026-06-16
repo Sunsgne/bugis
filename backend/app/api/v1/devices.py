@@ -210,13 +210,17 @@ def list_interfaces(
 @router.get("/{device_id}/port-bindings", response_model=DevicePortBindingsOut)
 def list_port_bindings(
     device_id: int,
+    scan: bool = Query(False, description="Refresh S-VID inventory before building relationships"),
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
-    """Customer/circuit bindings and device-only S-VID occupancy on this device."""
+    """Customer · interface · service relationship table for this device."""
     device = db.get(Device, device_id)
     if not device:
         raise HTTPException(status_code=404, detail="device not found")
+    if scan:
+        port_inventory.scan_device(db, device)
+        db.commit()
     return port_inventory.list_port_bindings(db, device)
 
 
