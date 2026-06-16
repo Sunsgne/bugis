@@ -187,6 +187,28 @@ def test_huawei_subinterface_helpers():
     assert not port_inventory.is_huawei_subinterface("10GE1/0/2")
 
 
+def test_list_physical_interfaces_from_config_huawei():
+    config = """
+interface 10GE1/0/2.1050 mode l2
+ encapsulation dot1q vid 1050
+#
+interface 10GE1/0/3
+ description uplink
+#
+interface LoopBack0
+ ip address 10.1.1.1 255.255.255.255
+#
+interface Vlanif201
+ ip address 10.2.2.1 255.255.255.0
+"""
+    names = port_inventory.list_physical_interfaces_from_config(config, Vendor.HUAWEI)
+    assert "10GE1/0/2" in names
+    assert "10GE1/0/3" in names
+    assert "10GE1/0/2.1050" not in names
+    assert "LoopBack0" not in names
+    assert "Vlanif201" not in names
+
+
 def test_rollup_huawei_subif_usage_to_physical_port():
     config = """
 interface 10GE1/0/2.1050 mode l2

@@ -275,6 +275,27 @@ def test_fetch_running_config_failover_to_backup():
     assert device.mgmt_ip_active_role == "backup"
 
 
+def test_snmp_ip_candidates_huawei_prefers_mgmt_network():
+    device = Device(
+        name="hw",
+        vendor=Vendor.HUAWEI,
+        mgmt_ip="23.248.190.251",
+        mgmt_ip_primary_label="公网",
+        mgmt_ip_backup="10.88.91.1",
+        mgmt_ip_backup_label="管理网",
+    )
+    ordered = device_management.snmp_ip_candidates(device)
+    assert ordered[0]["ip"] == "10.88.91.1"
+    assert ordered[0]["label"] == "管理网"
+
+
+def test_snmp_ports_huawei_16161_first():
+    device = Device(name="hw", vendor=Vendor.HUAWEI, snmp_enabled=True)
+    mock_cfg = type("Cfg", (), {"port": 161})()
+    ports = device_management.snmp_ports_to_try(device, mock_cfg, {"port": 161})
+    assert ports[0] == 16161
+
+
 def test_resolve_snmp_huawei_tries_port_16161():
     device = Device(
         name="hw-ce",

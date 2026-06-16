@@ -274,10 +274,15 @@ export default function Devices() {
       const { data } = await api.post<DeviceInterface[]>(`/devices/${deviceId}/discover-interfaces`);
       hide();
       const simCount = data.filter((i) => i.discovered_via === "snmp-sim").length;
+      const cfgCount = data.filter((i) => i.discovered_via === "running-config").length;
       const svidCount = data.filter((i) => i.used_s_vids?.length).length;
       if (simCount === data.length) {
         message.warning(
           "返回的是模拟数据（设备 SNMP 不可达或 Community/端口错误）。华为请确认 UDP 16161 与管理网 IP 可达后重试",
+        );
+      } else if (cfgCount > 0 && !data.some((i) => i.discovered_via === "snmp")) {
+        message.info(
+          `SNMP 不可达，已从 running-config 解析 ${data.length} 个物理口（${svidCount} 个有 S-VID 占用）`,
         );
       } else if (simCount > 0) {
         message.warning(`部分接口为模拟数据（${simCount}/${data.length}），请检查 SNMP 配置`);

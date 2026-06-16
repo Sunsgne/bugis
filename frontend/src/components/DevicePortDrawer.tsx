@@ -156,6 +156,7 @@ export default function DevicePortDrawer({
         try {
           const discovered = await onDiscover(device.id);
           if (!cancelled && Array.isArray(discovered)) {
+            setDiscoverError(null);
             setIfaces(discovered.filter((iface) => !isHuaweiSubinterface(iface.name) || device.vendor !== "huawei"));
           }
         } catch (e: unknown) {
@@ -284,10 +285,26 @@ export default function DevicePortDrawer({
             <>
               {discoverError}
               {device?.vendor === "huawei" ? (
-                <> 华为设备请确认 SNMP 端口（常见 <strong>16161</strong>）、Community，以及管理网 IP 是否可达（SNMP 可能仅在 mgt VPN 实例上监听）。</>
+                <>
+                  {" "}
+                  华为 SNMP 仅在管理网/mgt VRF（UDP <strong>16161</strong>）监听，公网 IP 通常不通 SNMP。
+                  请确认：<strong>主管理 IP = 管理网</strong>（如 10.x）、<strong>备管理 IP = 公网</strong>，Community 正确，且平台能路由到管理网。
+                  若 SNMP 不可达，可先点「现网学习」后平台会从 running-config 解析物理口。
+                </>
               ) : null}
             </>
           }
+          style={{ marginBottom: 12 }}
+        />
+      ) : null}
+
+      {physicalPorts.some((i) => i.discovered_via === "running-config") &&
+      !physicalPorts.some((i) => i.discovered_via === "snmp") ? (
+        <Alert
+          type="info"
+          showIcon
+          message="物理口来自 running-config 解析"
+          description="SNMP 未采集到 IF-MIB，已从现网配置/SSH 拉取的 running-config 提取物理接口名。如需速率/状态，请确保管理网 SNMP 16161 可达。"
           style={{ marginBottom: 12 }}
         />
       ) : null}

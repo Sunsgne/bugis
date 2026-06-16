@@ -275,6 +275,42 @@ def _walk_with_mgmt_failover(
     )
 
 
+def discover_interfaces_from_config(db: Session, device: Device) -> list[dict]:
+    """Fallback: parse physical ports from learned or live running-config."""
+    from app.services import config_fetch, config_mgmt, port_inventory
+
+    learned = config_mgmt.latest_learned(db, device.id)
+    config = (learned.content if learned else "") or ""
+    if not config.strip() and not settings.dry_run:
+        ok, content, _err = config_fetch.fetch_running_config(device, db=db)
+        if ok and content.strip():
+            config = content
+    if not config.strip():
+        return []
+    names = port_inventory.list_physical_interfaces_from_config(config, device.vendor)
+    return [
+        {
+            "name": name,
+            "description": None,
+            "speed_mbps": None,
+            "oper_status": None,
+            "ifindex": None,
+            "discovered_via": "running-config",
+        }
+        for name in names
+    ]
+
+
+def _try_config_interface_fallback(db: Session, device: Device) -> list[dict]:
+    """When SNMP fails but southbound SSH/NETCONF works, seed ports from config."""
+    from app.services import device_management
+
+    probe = device_management.probe_reachability(db, device, persist=True)
+    if not probe.get("reachable"):
+        return []
+    return discover_interfaces_from_config(db, device)
+
+
 def discover_interfaces(db: Session, device: Device) -> list[DeviceInterface]:
     """Discover and upsert a device's interfaces. Returns the current set."""
     from app.services import link_monitor
@@ -294,7 +330,9 @@ def discover_interfaces(db: Session, device: Device) -> list[DeviceInterface]:
             if settings.dry_run:
                 discovered = _synthesize(device)
             else:
-                raise
+                discovered = _try_config_interface_fallback(db, device)
+                if not discovered:
+                    raise
         except Exception as exc:
             msg = str(exc)
             if "asyncore" in msg:
@@ -304,7 +342,9 @@ def discover_interfaces(db: Session, device: Device) -> list[DeviceInterface]:
             if settings.dry_run:
                 discovered = _synthesize(device)
             else:
-                raise RuntimeError(msg) from exc
+                discovered = _try_config_interface_fallback(db, device)
+                if not discovered:
+                    raise RuntimeError(msg) from exc
 
     if device.vendor == Vendor.HUAWEI:
         discovered = [d for d in discovered if not is_huawei_subinterface(d["name"])]

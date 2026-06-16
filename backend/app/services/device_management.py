@@ -50,6 +50,39 @@ def mgmt_ip_candidates(device: Device) -> list[dict[str, str]]:
     return items
 
 
+def _is_private_ip(ip: str) -> bool:
+    parts = ip.split(".")
+    if len(parts) != 4:
+        return False
+    try:
+        a, b, _, _ = (int(x) for x in parts)
+    except ValueError:
+        return False
+    if a == 10:
+        return True
+    if a == 172 and 16 <= b <= 31:
+        return True
+    if a == 192 and b == 168:
+        return True
+    return False
+
+
+def snmp_ip_candidates(device: Device) -> list[dict[str, str]]:
+    """SNMP probe order — Huawei CE listens on 管理网/mgt VRF, not 公网."""
+    cands = mgmt_ip_candidates(device)
+    if device.vendor != Vendor.HUAWEI or len(cands) < 2:
+        return cands
+
+    def rank(c: dict[str, str]) -> tuple[int, int, int]:
+        label = c.get("label") or ""
+        ip_rank = 0 if _is_private_ip(c["ip"]) else 1
+        label_rank = 0 if "管理" in label else (1 if "公网" in label else 2)
+        role_rank = 0 if c["role"] == "primary" else 1
+        return (label_rank, ip_rank, role_rank)
+
+    return sorted(cands, key=rank)
+
+
 def effective_mgmt_ip(device: Device) -> str:
     return device.active_mgmt_ip
 
@@ -135,15 +168,14 @@ def _snmp_probe(
 def snmp_ports_to_try(device: Device, cfg, eff: dict) -> list[int]:
     """Candidate UDP ports — Huawei CE often uses 16161 instead of 161."""
     ports: list[int] = []
-    for p in (eff.get("port"), cfg.port):
+    if device.vendor == Vendor.HUAWEI:
+        for p in (16161, eff.get("port"), cfg.port, 161):
+            if p and int(p) not in ports:
+                ports.append(int(p))
+        return ports
+    for p in (eff.get("port"), cfg.port, 161):
         if p and int(p) not in ports:
             ports.append(int(p))
-    if device.vendor == Vendor.HUAWEI:
-        for p in (16161, 161):
-            if p not in ports:
-                ports.append(p)
-    elif 161 not in ports:
-        ports.append(161)
     return ports
 
 
@@ -163,7 +195,7 @@ def resolve_snmp_endpoint(
 
     ports = snmp_ports_to_try(device, cfg, eff)
     errors: list[str] = []
-    for cand in mgmt_ip_candidates(device):
+    for cand in snmp_ip_candidates(device):
         for port in ports:
             probe = _snmp_probe(db, device, cand["ip"], port=port)
             if probe.get("skipped"):
@@ -182,7 +214,10 @@ def resolve_snmp_endpoint(
             errors.append(f"{cand['label']} {cand['ip']}:{port} {err}")
 
     detail = "；".join(errors) if errors else "请检查 Community、端口（华为常见 16161）与网络可达性"
-    raise MgmtUnreachableError(f"SNMP 不可达（{detail}）")
+    hint = ""
+    if device.vendor == Vendor.HUAWEI and device.mgmt_ip_backup:
+        hint = "。华为 SNMP 通常在管理网/mgt VRF（UDP 16161），公网 IP 一般不通 SNMP；请确认主管理 IP 填管理网、备 IP 填公网，且平台能路由到管理网"
+    raise MgmtUnreachableError(f"SNMP 不可达（{detail}）{hint}")
 
 
 def _probe_host(db: Session, device: Device, host: str, role: str, label: str) -> dict[str, Any] | None:

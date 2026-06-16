@@ -138,6 +138,32 @@ def huawei_physical_port(name: str) -> str:
     return parts[0] if parts else _normalize_iface(name)
 
 
+_SKIP_IFACE_RE = re.compile(
+    r"^(loopback|vlanif|null|meth|inloopback|register-tunnel|vbdif)",
+    re.IGNORECASE,
+)
+
+
+def list_physical_interfaces_from_config(config: str, vendor: Vendor) -> list[str]:
+    """Extract physical port names from running-config when SNMP is unavailable."""
+    names: set[str] = set()
+    for m in re.finditer(
+        r"^interface\s+(\S+)(?:\s+mode\s+\S+)?\s*$",
+        config,
+        re.MULTILINE | re.IGNORECASE,
+    ):
+        raw = _normalize_iface(m.group(1))
+        if vendor == Vendor.HUAWEI and is_huawei_subinterface(raw):
+            names.add(huawei_physical_port(raw))
+            continue
+        if _SKIP_IFACE_RE.match(raw):
+            continue
+        if vendor == Vendor.HUAWEI and not re.search(r"\d+/\d+", raw):
+            continue
+        names.add(raw)
+    return sorted(names)
+
+
 def _iface_port_suffix(name: str) -> str | None:
     """Extract chassis/slot/port suffix e.g. 1/0/25 from any interface name."""
     m = re.search(r"(\d+(?:/\d+)+)\s*$", name.strip())
