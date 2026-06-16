@@ -376,6 +376,11 @@ def _enrich_svid_entry(
     if entry.rate_limit_mbps and not entry.bandwidth_mbps:
         entry.bandwidth_mbps = entry.rate_limit_mbps
 
+    if not entry.tenant_name:
+        entry.tenant_name = _infer_customer_from_text(entry.description) or _infer_customer_from_text(
+            entry.vsi_name
+        )
+
 
 def platform_usage(db: Session, device: Device) -> dict[str, PortUsage]:
     """Collect S-VID reservations from circuit endpoints in the platform DB."""
