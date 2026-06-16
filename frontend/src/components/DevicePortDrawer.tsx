@@ -29,6 +29,7 @@ import type {
   SvidUsage,
 } from "../api/types";
 import SvidUsageCell from "./SvidUsageCell";
+import AdoptBindingModal from "./AdoptBindingModal";
 import InterfaceNameCell from "./InterfaceNameCell";
 import {
   formatDiscoveredVia,
@@ -100,6 +101,7 @@ export default function DevicePortDrawer({
   const [ifaceSearch, setIfaceSearch] = useState("");
   const [ifaceStatus, setIfaceStatus] = useState<"all" | "up" | "down" | "allocated">("all");
   const [activeTab, setActiveTab] = useState("ports");
+  const [adoptBinding, setAdoptBinding] = useState<DevicePortBinding | null>(null);
 
   async function loadBindings(deviceId: number, refresh = false) {
     setBindingsLoading(true);
@@ -499,6 +501,21 @@ export default function DevicePortDrawer({
                         return <Tag color={meta.color}>{meta.label}</Tag>;
                       },
                     },
+                    {
+                      title: "操作",
+                      width: 88,
+                      fixed: "right",
+                      render: (_: unknown, row: DevicePortBinding) =>
+                        row.binding_type === "device" && !row.circuit_id ? (
+                          <Button type="link" size="small" onClick={() => setAdoptBinding(row)}>
+                            纳管
+                          </Button>
+                        ) : row.circuit_id ? (
+                          <Link to={`/circuits?circuit=${row.circuit_id}`}>查看</Link>
+                        ) : (
+                          "—"
+                        ),
+                    },
                   ]}
                 />
 
@@ -532,6 +549,15 @@ export default function DevicePortDrawer({
           },
         ]}
       />
+      {device ? (
+        <AdoptBindingModal
+          open={!!adoptBinding}
+          binding={adoptBinding}
+          deviceId={device.id}
+          onClose={() => setAdoptBinding(null)}
+          onSuccess={() => loadBindings(device.id, true)}
+        />
+      ) : null}
     </Drawer>
   );
 }

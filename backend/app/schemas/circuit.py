@@ -59,6 +59,27 @@ class CircuitBase(BaseModel):
     path_mode: PathMode = PathMode.AUTO
 
 
+class CircuitAdoptBinding(BaseModel):
+    device_id: int
+    label: str = "A"
+    interface_name: str
+    access_mode: AccessMode = AccessMode.DOT1Q
+    vlan_id: int | None = None
+    inner_vlan_id: int | None = None
+
+
+class CircuitAdoptCreate(BaseModel):
+    name: str
+    tenant_id: int
+    service_type: ServiceType = ServiceType.L2VPN_EVPN
+    bindings: list[CircuitAdoptBinding]
+    vni: int | None = None
+    vsi_name: str | None = None
+    vlan_id: int | None = None
+    bandwidth_mbps: int | None = None
+    description: str | None = None
+
+
 class CircuitCreate(CircuitBase):
     code: str | None = None  # auto-generated when omitted
     endpoints: list[CircuitEndpointCreate] = []
@@ -95,6 +116,7 @@ class CircuitListOut(CircuitBase, TimestampedSchema):
     id: int
     code: str
     status: CircuitStatus
+    adopted: bool = False
     endpoints: list[CircuitEndpointOut] = []
 
 

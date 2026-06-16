@@ -199,3 +199,48 @@ def learn_devices_batch(
         results.append(learn_device(db, device, created_by=created_by))
     ok = sum(1 for r in results if r.get("success"))
     return {"total": len(results), "success": ok, "failed": len(results) - ok, "results": results}
+
+
+def scheduled_learn_all_online(
+    db: Session,
+    *,
+    created_by: str = "scheduler",
+) -> dict:
+    """Refresh learned inventory for every online device (read-only, no config push)."""
+    from app.services import platform_settings as platform_cfg
+
+    plat = platform_cfg.get_or_create(db)
+    if not plat.auto_learn_enabled:
+        return {"skipped": True, "reason": "auto_learn_disabled"}
+
+    devices = db.execute(
+        select(Device).where(Device.status == DeviceStatus.ONLINE)
+    ).scalars().all()
+    results: list[dict] = []
+    conflicts = 0
+    for device in devices:
+        try:
+            result = learn_device(
+                db,
+                device,
+                created_by=created_by,
+                discover_snmp=False,
+            )
+            if result.get("success"):
+                conflicts += int((result.get("svid_scan") or {}).get("conflicts") or 0)
+            results.append(result)
+        except Exception as exc:  # noqa: BLE001
+            results.append({
+                "device": device.name,
+                "success": False,
+                "error": str(exc),
+            })
+    ok = sum(1 for r in results if r.get("success"))
+    return {
+        "skipped": False,
+        "devices": len(devices),
+        "success": ok,
+        "failed": len(devices) - ok,
+        "conflicts": conflicts,
+        "results": results,
+    }

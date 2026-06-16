@@ -101,11 +101,30 @@ export default function GeneralSettings() {
               <Switch checkedChildren="开" unCheckedChildren="关" />
             </Form.Item>
           </Col>
+          <Col xs={24} md={8}>
+            <Form.Item
+              name="auto_learn_enabled"
+              label="定时现网自学习"
+              valuePropName="checked"
+              tooltip="后台调度器按间隔自动拉取所有在线设备的 running-config，发现线下新增 S-VID 占用"
+            >
+              <Switch checkedChildren="开" unCheckedChildren="关" />
+            </Form.Item>
+          </Col>
         </Row>
         <Row gutter={16}>
           <Col xs={12} md={6}>
             <Form.Item name="scheduler_interval_seconds" label="调度间隔 (秒)">
               <InputNumber min={10} max={3600} style={{ width: "100%" }} />
+            </Form.Item>
+          </Col>
+          <Col xs={12} md={6}>
+            <Form.Item
+              name="auto_learn_interval_seconds"
+              label="自学习间隔 (秒)"
+              tooltip="建议 60 秒，与调度器独立计时"
+            >
+              <InputNumber min={30} max={3600} style={{ width: "100%" }} />
             </Form.Item>
           </Col>
           <Col xs={12} md={6}>

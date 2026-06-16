@@ -1,12 +1,13 @@
 """Background scheduler for autonomous operations.
 
 Periodically collects SNMP telemetry, rotates on-demand circuit probes for QoS
-metrics, and re-evaluates SLA/capacity alarms.
+metrics, re-evaluates SLA/capacity alarms, and refreshes live-network inventory.
 """
 from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from datetime import datetime, timezone
 
 from sqlalchemy import select
@@ -16,19 +17,23 @@ from app.core.database import SessionLocal
 from app.models.circuit import Circuit
 from app.models.enums import CircuitStatus
 from app.models.link import Link
-from app.services import alarm_service, link_monitor, telemetry_service
+from app.services import alarm_service, config_learn, link_monitor, platform_settings, telemetry_service
 from app.controller import bgp_peering, ha
 
 logger = logging.getLogger("bugis.scheduler")
 
 _task: asyncio.Task | None = None
 _probe_cursor = 0
+_last_learn_monotonic = 0.0
 _state: dict = {
     "running": False,
     "ticks": 0,
     "last_tick": None,
     "last_samples": 0,
     "last_probes": 0,
+    "last_learn": None,
+    "last_learn_devices": 0,
+    "last_learn_conflicts": 0,
     "interval": settings.scheduler_interval_seconds,
 }
 
@@ -50,9 +55,35 @@ def _probe_one_circuit(db, circuits: list[Circuit]) -> bool:
         return False
 
 
+def _maybe_learn_inventory(db) -> dict | None:
+    """Run scheduled auto-learn when the configured interval has elapsed."""
+    global _last_learn_monotonic
+    plat = platform_settings.get_or_create(db)
+    if not plat.auto_learn_enabled:
+        return None
+    interval = max(30, int(plat.auto_learn_interval_seconds or 60))
+    now = time.monotonic()
+    if _last_learn_monotonic and (now - _last_learn_monotonic) < interval:
+        return None
+    summary = config_learn.scheduled_learn_all_online(db, created_by="scheduler")
+    _last_learn_monotonic = now
+    _state["last_learn"] = datetime.now(timezone.utc).isoformat()
+    _state["last_learn_devices"] = summary.get("devices", 0)
+    _state["last_learn_conflicts"] = summary.get("conflicts", 0)
+    return summary
+
+
 def _tick() -> int:
     db = SessionLocal()
     try:
+        learn_summary = _maybe_learn_inventory(db)
+        if learn_summary and not learn_summary.get("skipped"):
+            logger.info(
+                "scheduled learn: %s/%s devices, %s conflicts",
+                learn_summary.get("success"),
+                learn_summary.get("devices"),
+                learn_summary.get("conflicts"),
+            )
         circuits = db.execute(
             select(Circuit).where(Circuit.status == CircuitStatus.ACTIVE)
         ).scalars().all()
