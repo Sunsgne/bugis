@@ -227,6 +227,24 @@ def _capacity_for_pair(
     return min(caps) if caps else fallback
 
 
+def _resolve_named_interface(
+    db: Session,
+    device_id: int,
+    ifname: str,
+) -> ScoredInterface:
+    """Honor an operator-specified interface even before SNMP inventory exists."""
+    for row in rank_interfaces(db, device_id, limit=50):
+        if row.name == ifname:
+            return row
+    rows = _device_interfaces(db, device_id)
+    prefer_vlan = _prefer_vlan_on_device(rows)
+    iface = next((row for row in rows if row.name == ifname), None)
+    if iface:
+        return _score_interface(iface, prefer_vlan=prefer_vlan)
+    kind = _interface_kind(ifname)
+    return ScoredInterface(ifname, 10_000, "up", 50.0, "手动指定", kind)
+
+
 def plan_link(
     db: Session,
     device_a: Device,
@@ -239,21 +257,13 @@ def plan_link(
     if device_a.id == device_z.id:
         return None
 
-    pick_a = None
-    pick_z = None
     if interface_a:
-        for row in rank_interfaces(db, device_a.id, limit=50):
-            if row.name == interface_a:
-                pick_a = row
-                break
-    if interface_z:
-        for row in rank_interfaces(db, device_z.id, limit=50):
-            if row.name == interface_z:
-                pick_z = row
-                break
-    if pick_a is None:
+        pick_a = _resolve_named_interface(db, device_a.id, interface_a)
+    else:
         pick_a = best_interface(db, device_a.id)
-    if pick_z is None:
+    if interface_z:
+        pick_z = _resolve_named_interface(db, device_z.id, interface_z)
+    else:
         pick_z = best_interface(db, device_z.id)
     if pick_a is None or pick_z is None:
         return None

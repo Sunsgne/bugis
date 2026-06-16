@@ -33,8 +33,14 @@ def _latest_probe_qos(db: Session, circuit_id: int, *, max_age_sec: int = 3600) 
         .order_by(TelemetrySample.id.desc())
         .limit(1)
     ).scalar_one_or_none()
-    if row and row.created_at and row.created_at >= since:
-        return row
+    if row and row.created_at:
+        created = (
+            row.created_at.replace(tzinfo=timezone.utc)
+            if row.created_at.tzinfo is None
+            else row.created_at.astimezone(timezone.utc)
+        )
+        if created >= since:
+            return row
     return None
 
 

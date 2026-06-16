@@ -200,6 +200,8 @@ def test_alarms_lifecycle(client, auth_headers):
 
 def test_capacity_and_topology(client, auth_headers):
     _, _, dev_a, dev_z = _bootstrap_topology(client, auth_headers)
+    client.post(f"/api/v1/devices/{dev_a['id']}/discover-interfaces", headers=auth_headers)
+    client.post(f"/api/v1/devices/{dev_z['id']}/discover-interfaces", headers=auth_headers)
     link = client.post(
         "/api/v1/capacity/links",
         headers=auth_headers,
@@ -710,7 +712,7 @@ def test_bulk_csv_devices(client, auth_headers):
 
 
 def test_sse_requires_valid_token(client):
-    r = client.get("/api/v1/stream/events?token=invalid")
+    r = client.get("/api/v1/stream/events?ticket=invalid")
     assert r.status_code == 401
 
 
@@ -732,6 +734,7 @@ def test_access_encapsulation_modes(client, auth_headers):
         json={"name": f"HW-{next(_seq)}", "vendor": "huawei", "role": "leaf",
               "overlay_tech": "vxlan_evpn", "status": "online",
               "mgmt_ip": "10.77.0.1", "bgp_asn": 65010, "site_id": site["id"]},
+        params={"learn": False},
     ).json()
 
     # QinQ on H3C + untagged(access) on Huawei.
@@ -1057,7 +1060,19 @@ def test_telemetry_and_health(client, auth_headers):
     client.post(
         f"/api/v1/work-orders/provision/{circuit['id']}", headers=auth_headers
     )
-    client.post("/api/v1/telemetry/simulate", headers=auth_headers)
+    client.post(
+        "/api/v1/telemetry/samples",
+        headers=auth_headers,
+        json={
+            "circuit_id": circuit["id"],
+            "rx_mbps": 120.0,
+            "tx_mbps": 80.0,
+            "latency_ms": 4.5,
+            "jitter_ms": 0.3,
+            "packet_loss_pct": 0.01,
+            "tunnel_state": "up",
+        },
+    )
 
     health = client.get(
         f"/api/v1/telemetry/circuits/{circuit['id']}/health", headers=auth_headers
@@ -1361,7 +1376,7 @@ def test_sr_explicit_circuit_path(client, auth_headers):
 
 
 def test_device_check_svid_scan(client, auth_headers, monkeypatch):
-    monkeypatch.setattr("app.services.device_management.random.random", lambda: 0.99)
+    monkeypatch.setattr("app.services.snmp.random.random", lambda: 0.99)
 
     dev = client.post(
         "/api/v1/devices", headers=auth_headers,

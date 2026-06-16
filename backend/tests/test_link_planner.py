@@ -15,7 +15,7 @@ _seq = itertools.count(1)
 
 def _site(db, code: str | None = None) -> Site:
     n = next(_seq)
-    site = Site(name=code or f"DC{n}", code=code or f"DC{n}", bgp_asn=65000)
+    site = Site(name=code or f"LP-DC{n}", code=code or f"LP-DC{n}", bgp_asn=65000)
     db.add(site)
     db.flush()
     return site

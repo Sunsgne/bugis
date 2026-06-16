@@ -10,6 +10,7 @@ import pytest
 _db_fd, _db_path = tempfile.mkstemp(suffix=".db")
 os.environ["BUGIS_DATABASE_URL"] = f"sqlite:///{_db_path}"
 os.environ["BUGIS_DRY_RUN"] = "true"
+os.environ["BUGIS_TELEMETRY_SIMULATION"] = "1"
 os.environ["BUGIS_SECRET_KEY"] = "test-secret"
 os.environ["BUGIS_SKIP_MIGRATE"] = "1"
 

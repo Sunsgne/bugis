@@ -152,7 +152,11 @@ def check_device(
     device.status = DeviceStatus.ONLINE if reachable else DeviceStatus.OFFLINE
     svid_scan: dict | None = None
     if reachable:
-        svid_scan = port_inventory.scan_device(db, device)
+        from app.core.config import settings
+
+        svid_scan = port_inventory.scan_device(
+            db, device, include_legacy=settings.dry_run
+        )
         cfg = snmp_cfg.get_or_create(db)
         if cfg.auto_discover_on_check:
             snmp.discover_interfaces(db, device)
