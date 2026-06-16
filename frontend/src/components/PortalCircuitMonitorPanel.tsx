@@ -46,6 +46,19 @@ function buildTrafficParams(mode: RangeMode, hours: number, customRange: [Dayjs,
   return { hours };
 }
 
+function timeLabel(iso: string | undefined, spanHours: number) {
+  if (!iso) return "";
+  const fmt = spanHours > 24 ? "MM-DD HH:mm" : "HH:mm";
+  return dayjs(iso).format(fmt);
+}
+
+function spanHoursFor(mode: RangeMode, hours: number, customRange: [Dayjs, Dayjs] | null) {
+  if (mode === "custom" && customRange) {
+    return Math.max(1, Math.ceil(customRange[1].diff(customRange[0], "hour", true)));
+  }
+  return hours;
+}
+
 export default function PortalCircuitMonitorPanel({
   circuitId,
   compact = false,
@@ -69,16 +82,11 @@ export default function PortalCircuitMonitorPanel({
     setLoading(true);
     try {
       const trafficParams = buildTrafficParams(rangeMode, hours, customRange);
-      const availHours =
-        rangeMode === "custom" && customRange
-          ? Math.max(1, Math.ceil(customRange[1].diff(customRange[0], "hour", true)))
-          : hours;
+      const availParams = buildTrafficParams(rangeMode, hours, customRange);
       const [h, t, a, b] = await Promise.all([
         api.get<CircuitHealth>(`${base}/health`),
         api.get<TrafficSummary>(`${base}/traffic-summary`, { params: trafficParams }),
-        api.get<CircuitAvailability>(`${base}/availability`, {
-          params: { hours: Math.min(availHours, 720) },
-        }),
+        api.get<CircuitAvailability>(`${base}/availability`, { params: availParams }),
         api.get<TrafficBilling>(`${base}/billing`, {
           params: billingMonth && rangeMode === "preset" ? { period: billingMonth } : {},
         }),
@@ -105,17 +113,19 @@ export default function PortalCircuitMonitorPanel({
     return () => clearInterval(t);
   }, [circuitId, pollSec, load, rangeMode]);
 
+  const spanHours = spanHoursFor(rangeMode, hours, customRange);
+
   const chartData = useMemo(
     () =>
       (traffic?.samples || []).map((s) => ({
-        t: s.created_at ? dayjs(s.created_at).format("MM-DD HH:mm") : "",
+        t: timeLabel(s.created_at, spanHours),
         rx: s.rx_mbps,
         tx: s.tx_mbps,
         latency: s.latency_ms,
         jitter: s.jitter_ms,
         loss: s.packet_loss_pct,
       })),
-    [traffic],
+    [traffic, spanHours],
   );
 
   const trafficOpt = useMemo(
@@ -150,12 +160,14 @@ export default function PortalCircuitMonitorPanel({
             <>
               <RangePicker
                 size="small"
-                showTime
+                showTime={{ format: "HH:mm" }}
+                format="YYYY-MM-DD HH:mm"
                 value={customRange}
                 onChange={(vals) => setCustomRange(vals as [Dayjs, Dayjs] | null)}
+                disabledDate={(current) => !!current && current > dayjs().endOf("day")}
               />
               <Button size="small" type="primary" loading={loading} onClick={load}>
-                计算 95
+                查询
               </Button>
             </>
           )}
@@ -167,6 +179,10 @@ export default function PortalCircuitMonitorPanel({
           </Text>
         )}
       </Space>
+
+      {rangeMode === "custom" && !customRange && (
+        <Alert type="info" showIcon message="请选择起始与终止时间后点击「查询」" />
+      )}
 
       {rangeMode === "preset" && billing?.available_months?.length ? (
         <Space wrap>

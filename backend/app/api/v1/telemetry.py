@@ -1,7 +1,9 @@
 """Telemetry, SLA health and dashboard summary endpoints."""
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from datetime import datetime
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -58,6 +60,8 @@ def circuit_traffic_summary(
     circuit_id: int,
     limit: int = 120,
     hours: int | None = 24,
+    start_at: datetime | None = Query(None),
+    end_at: datetime | None = Query(None),
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
@@ -65,8 +69,17 @@ def circuit_traffic_summary(
     circuit = db.get(Circuit, circuit_id)
     if not circuit:
         raise HTTPException(status_code=404, detail="circuit not found")
+    if (start_at and not end_at) or (end_at and not start_at):
+        raise HTTPException(status_code=400, detail="start_at and end_at must be provided together")
+    if start_at and end_at and start_at >= end_at:
+        raise HTTPException(status_code=400, detail="start_at must be before end_at")
     samples = telemetry_service.list_circuit_samples(
-        db, circuit_id, limit=limit, hours=hours
+        db,
+        circuit_id,
+        limit=limit,
+        hours=hours if not (start_at and end_at) else None,
+        start_at=start_at,
+        end_at=end_at,
     )
     p95 = telemetry_service.chart_p95(samples) if samples else {
         "in_95_mbps": 0.0,
@@ -85,6 +98,8 @@ def circuit_traffic_summary(
 def circuit_availability(
     circuit_id: int,
     hours: int = 24,
+    start_at: datetime | None = Query(None),
+    end_at: datetime | None = Query(None),
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
@@ -93,7 +108,17 @@ def circuit_availability(
     circuit = db.get(Circuit, circuit_id)
     if not circuit:
         raise HTTPException(status_code=404, detail="circuit not found")
-    return availability_service.compute_availability(db, circuit, hours=hours)
+    if (start_at and not end_at) or (end_at and not start_at):
+        raise HTTPException(status_code=400, detail="start_at and end_at must be provided together")
+    if start_at and end_at and start_at >= end_at:
+        raise HTTPException(status_code=400, detail="start_at must be before end_at")
+    return availability_service.compute_availability(
+        db,
+        circuit,
+        hours=hours,
+        start_at=start_at,
+        end_at=end_at,
+    )
 
 
 @router.get("/circuits/{circuit_id}/billing")

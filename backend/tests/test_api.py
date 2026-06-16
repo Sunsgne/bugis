@@ -1044,6 +1044,26 @@ def test_circuit_monitoring_apis(client, auth_headers):
     assert "uptime_pct" in avail
     assert isinstance(avail["events"], list)
 
+    from datetime import datetime, timedelta, timezone
+
+    end = datetime.now(timezone.utc)
+    start = end - timedelta(hours=2)
+    custom = client.get(
+        f"/api/v1/telemetry/circuits/{circuit['id']}/traffic-summary",
+        headers=auth_headers,
+        params={"start_at": start.isoformat(), "end_at": end.isoformat()},
+    )
+    assert custom.status_code == 200
+    assert len(custom.json()["samples"]) >= 1
+
+    custom_avail = client.get(
+        f"/api/v1/telemetry/circuits/{circuit['id']}/availability",
+        headers=auth_headers,
+        params={"start_at": start.isoformat(), "end_at": end.isoformat()},
+    )
+    assert custom_avail.status_code == 200
+    assert "uptime_pct" in custom_avail.json()
+
 
 def test_delete_decommissioned_circuit(client, auth_headers):
     _, tenant, dev_a, _ = _bootstrap_topology(client, auth_headers)

@@ -90,17 +90,28 @@ def compute_availability(
     circuit: Circuit,
     *,
     hours: int = 24,
+    start_at: datetime | None = None,
+    end_at: datetime | None = None,
 ) -> dict:
     """Summarize uptime, interruptions and recent events for a circuit."""
-    hours = max(1, min(hours, 24 * 30))
-    since = _utcnow() - timedelta(hours=hours)
-    window_sec = hours * 3600.0
+    now = _utcnow()
+    if start_at and end_at:
+        since = start_at.astimezone(timezone.utc) if start_at.tzinfo else start_at.replace(tzinfo=timezone.utc)
+        until = end_at.astimezone(timezone.utc) if end_at.tzinfo else end_at.replace(tzinfo=timezone.utc)
+        window_sec = max((until - since).total_seconds(), 1.0)
+        hours = max(1, int(window_sec // 3600) or 1)
+    else:
+        hours = max(1, min(hours, 24 * 30))
+        since = now - timedelta(hours=hours)
+        until = now
+        window_sec = hours * 3600.0
 
     events = db.execute(
         select(CircuitAvailabilityEvent)
         .where(
             CircuitAvailabilityEvent.circuit_id == circuit.id,
             CircuitAvailabilityEvent.started_at >= since,
+            CircuitAvailabilityEvent.started_at <= until,
         )
         .order_by(CircuitAvailabilityEvent.started_at.desc())
         .limit(50)
@@ -111,6 +122,7 @@ def compute_availability(
         .where(
             TelemetrySample.circuit_id == circuit.id,
             TelemetrySample.created_at >= since,
+            TelemetrySample.created_at <= until,
         )
         .order_by(TelemetrySample.id.asc())
     ).scalars().all()

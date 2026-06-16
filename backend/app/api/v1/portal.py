@@ -188,11 +188,19 @@ def portal_billing(
 def portal_availability(
     circuit_id: int,
     hours: int = 24,
+    start_at: datetime | None = Query(None),
+    end_at: datetime | None = Query(None),
     user: User = Depends(require_tenant_user),
     db: Session = Depends(get_db),
 ):
     circuit = get_tenant_circuit(db, user, circuit_id)
-    return compute_availability(db, circuit, hours=hours)
+    return compute_availability(
+        db,
+        circuit,
+        hours=hours,
+        start_at=start_at,
+        end_at=end_at,
+    )
 
 
 @router.get("/circuits/{circuit_id}/health")
