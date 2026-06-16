@@ -4,6 +4,7 @@
 #
 l2vpn enable
 vsi {{ circuit.vsi_name }}
+ description {{ vsi_description }}
  vxlan {{ circuit.vni }}
  evpn encapsulation vxlan
   route-distinguisher {{ circuit.route_distinguisher }}

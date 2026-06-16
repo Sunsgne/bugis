@@ -1,7 +1,7 @@
 {# H3C Comware7 EVPN VXLAN shared fragments #}
-{% macro vsi_evpn_header(circuit, l3=false) -%}
+{% macro vsi_evpn_header(circuit, vsi_description, l3=false) -%}
 vsi {{ circuit.vsi_name }}
- description {{ circuit.name }} (tenant={{ circuit.tenant_id }})
+ description {{ vsi_description }}
 {% if l3 %}
  gateway vsi-interface Vsi-interface{{ circuit.vni }}
 {% endif %}
@@ -12,8 +12,8 @@ vsi {{ circuit.vsi_name }}
   vpn-target {{ circuit.route_target }} export-extcommunity
 {%- endmacro %}
 
-{% macro service_instance_ac(endpoint, circuit, mode, svid, cvid) -%}
-{% set ac_desc = endpoint.interface_description or ('CUST_' ~ circuit.tenant_id ~ '_' ~ circuit.code) %}
+{% macro service_instance_ac(endpoint, circuit, mode, svid, cvid, ac_description_default) -%}
+{% set ac_desc = endpoint.interface_description or ac_description_default %}
  service-instance {{ svid or 1 }}
   description {{ ac_desc }}
 {% if mode == 'access' %}

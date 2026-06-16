@@ -38,8 +38,9 @@ from app.models.enums import (
     WorkOrderType,
 )
 from app.models.site import Site
+from app.models.tenant import Tenant
 from app.models.workorder import WorkOrder, WorkOrderEvent
-from app.services import controller_client, device_management, validation
+from app.services import controller_client, device_management, labeling, validation
 
 
 def _log(db: Session, wo: WorkOrder, message: str, level: str = "info",
@@ -140,6 +141,12 @@ def _build_context(
         "path_devices": [],
         "is_sr_headend": False,
     }
+    tenant = circuit.tenant
+    if tenant is None and db is not None:
+        tenant = db.get(Tenant, circuit.tenant_id)
+    ctx["tenant"] = tenant
+    ctx["vsi_description"] = labeling.format_vsi_description(circuit, tenant)
+    ctx["ac_description_default"] = labeling.format_ac_description_default(circuit, tenant)
     if db is not None:
         from app.services import path_service
 

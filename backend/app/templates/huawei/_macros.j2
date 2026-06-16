@@ -16,8 +16,8 @@ bridge-domain {{ circuit.vni }}
   vpn-target {{ circuit.route_target }} import-extcommunity
 {%- endmacro %}
 
-{% macro l2_subif(endpoint, circuit, mode, svid, cvid) -%}
-{% set ac_desc = endpoint.interface_description or ('CUST_' ~ circuit.tenant_id ~ '_' ~ circuit.code) %}
+{% macro l2_subif(endpoint, circuit, mode, svid, cvid, ac_description_default) -%}
+{% set ac_desc = endpoint.interface_description or ac_description_default %}
 interface {{ l2_ifname(endpoint, mode, svid) }} mode l2
  description {{ ac_desc }}
 {% if mode == 'access' %}

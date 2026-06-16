@@ -16,7 +16,7 @@ ip vpn-instance {{ circuit.vrf_name }}
   vpn-target {{ circuit.route_target }} export-extcommunity
 #
 l2vpn enable
-{{ h3c.vsi_evpn_header(circuit, l3=true) }}
+{{ h3c.vsi_evpn_header(circuit, vsi_description, l3=true) }}
 #
 interface Vsi-interface{{ circuit.vni }}
  ip binding vpn-instance {{ circuit.vrf_name }}
@@ -27,6 +27,6 @@ interface Vsi-interface{{ circuit.vni }}
 interface {{ endpoint.interface_name }}
  port link-mode bridge
  mtu {{ circuit.mtu }}
-{{ h3c.service_instance_ac(endpoint, circuit, mode, svid, cvid) }}
+{{ h3c.service_instance_ac(endpoint, circuit, mode, svid, cvid, ac_description_default) }}
 #
 return

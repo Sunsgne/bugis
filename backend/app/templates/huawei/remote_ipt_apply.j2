@@ -48,7 +48,7 @@ interface Vbdif{{ circuit.vni }}
  arp distribute-gateway enable
  arp collect host enable
 #
-{{ hw.l2_subif(endpoint, circuit, mode, svid, endpoint.inner_vlan_id) }}
+{{ hw.l2_subif(endpoint, circuit, mode, svid, endpoint.inner_vlan_id, ac_description_default) }}
 #
 {{ hw.nve_vni(circuit) }}
 {% endif %}

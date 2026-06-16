@@ -21,7 +21,7 @@ interface Vbdif{{ circuit.vni }}
  arp distribute-gateway enable
  arp collect host enable
 #
-{{ hw.l2_subif(endpoint, circuit, mode, svid, cvid) }}
+{{ hw.l2_subif(endpoint, circuit, mode, svid, cvid, ac_description_default) }}
 #
 {{ hw.nve_vni(circuit) }}
 #
