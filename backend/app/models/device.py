@@ -3,7 +3,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, ForeignKey, Integer, JSON, String
+from datetime import datetime
+
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, JSON, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -39,6 +41,14 @@ class Device(Base, TimestampMixin):
 
     # Management / southbound connectivity
     mgmt_ip: Mapped[str] = mapped_column(String(64))
+    mgmt_ip_backup: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    mgmt_ip_primary_label: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    mgmt_ip_backup_label: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    mgmt_ip_active: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    mgmt_ip_active_role: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    last_reachability_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_reachability_latency_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+    last_reachability_method: Mapped[str | None] = mapped_column(String(32), nullable=True)
     management_transport: Mapped[ManagementTransport] = mapped_column(
         str_enum_column(ManagementTransport), default=ManagementTransport.AUTO
     )
@@ -78,6 +88,11 @@ class Device(Base, TimestampMixin):
         ForeignKey("sites.id", ondelete="SET NULL"), nullable=True
     )
     site: Mapped["Site | None"] = relationship(back_populates="devices")
+
+    @property
+    def active_mgmt_ip(self) -> str:
+        """Southbound target: last successful IP or primary."""
+        return self.mgmt_ip_active or self.mgmt_ip
 
     interfaces: Mapped[list["DeviceInterface"]] = relationship(
         back_populates="device", cascade="all, delete-orphan"

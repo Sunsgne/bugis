@@ -362,13 +362,16 @@ export default function Devices() {
         const svidCount = scan?.total_s_vids ?? 0;
         const conflictCount = scan?.conflicts?.length ?? 0;
         const dryTag = data.dry_run ? " · 配置 dry-run" : "";
+        const activeTag = data.mgmt_ip_active
+          ? ` · 当前 ${data.mgmt_ip_active_label || data.mgmt_ip_active_role} ${data.mgmt_ip_active}`
+          : "";
         if (conflictCount > 0) {
           message.warning(
             `${data.device} 可达 · 发现 ${svidCount} 个 S-VID · ${conflictCount} 处冲突`,
           );
         } else {
           message.success(
-            `${data.device} 可达${data.method ? ` · ${data.method}` : ""} (${data.latency_ms}ms) · 已扫描 ${svidCount} 个 S-VID 占用${dryTag}`,
+            `${data.device} 可达${data.method ? ` · ${data.method}` : ""} (${data.latency_ms}ms) · 已扫描 ${svidCount} 个 S-VID 占用${activeTag}${dryTag}`,
           );
         }
         bumpPortDrawer();
@@ -536,9 +539,39 @@ export default function Devices() {
           {
             title: "管理 IP",
             dataIndex: "mgmt_ip",
-            width: "14%",
+            width: "18%",
             ellipsis: true,
-            render: (ip: string) => <Typography.Text code>{ip}</Typography.Text>,
+            render: (_ip: string, d: Device) => {
+              const primaryLabel = d.mgmt_ip_primary_label || "管理网";
+              const backupLabel = d.mgmt_ip_backup_label || "公网";
+              const active = d.mgmt_ip_active;
+              const activeRole = d.mgmt_ip_active_role;
+              return (
+                <div style={{ minWidth: 0 }}>
+                  <div>
+                    <Tag bordered={false} color={activeRole === "primary" ? "blue" : "default"} style={{ marginRight: 4 }}>
+                      {primaryLabel}
+                    </Tag>
+                    <Typography.Text code={activeRole === "primary"}>{d.mgmt_ip}</Typography.Text>
+                  </div>
+                  {d.mgmt_ip_backup ? (
+                    <div style={{ marginTop: 4 }}>
+                      <Tag bordered={false} color={activeRole === "backup" ? "blue" : "default"} style={{ marginRight: 4 }}>
+                        {backupLabel}
+                      </Tag>
+                      <Typography.Text code={activeRole === "backup"} type={activeRole === "backup" ? undefined : "secondary"}>
+                        {d.mgmt_ip_backup}
+                      </Typography.Text>
+                    </div>
+                  ) : null}
+                  {active && activeRole ? (
+                    <Typography.Text type="secondary" style={{ fontSize: 11, display: "block", marginTop: 2 }}>
+                      当前使用 {activeRole === "backup" ? backupLabel : primaryLabel} · {active}
+                    </Typography.Text>
+                  ) : null}
+                </div>
+              );
+            },
           },
           {
             title: "站点",

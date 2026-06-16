@@ -133,7 +133,7 @@ def _walk_oid(
     )
     walk_port = port or cfg.port
     return snmp_hlapi.walk_oid(
-        device.mgmt_ip,
+        device.active_mgmt_ip,
         walk_port,
         float(cfg.timeout_sec),
         int(cfg.retries),

@@ -32,6 +32,9 @@ export type DeviceFormValues = {
   role: string;
   overlay_tech: string;
   mgmt_ip: string;
+  mgmt_ip_backup?: string;
+  mgmt_ip_primary_label?: string;
+  mgmt_ip_backup_label?: string;
   loopback_ip?: string;
   bgp_asn?: number | null;
   site_id?: number | null;
@@ -78,6 +81,8 @@ function defaultValues(mgmt: ManagementDefaults, snmp: SnmpDefaults): Partial<De
     snmp_version: snmp.version,
     snmp_v3_security_level: "authPriv",
     is_route_reflector: false,
+    mgmt_ip_primary_label: mgmt.mgmt_ip_primary_label || "管理网",
+    mgmt_ip_backup_label: mgmt.mgmt_ip_backup_label || "公网",
   };
 }
 
@@ -93,6 +98,9 @@ export function deviceToFormValues(
     role: device.role,
     overlay_tech: device.overlay_tech,
     mgmt_ip: device.mgmt_ip,
+    mgmt_ip_backup: device.mgmt_ip_backup || "",
+    mgmt_ip_primary_label: device.mgmt_ip_primary_label || "管理网",
+    mgmt_ip_backup_label: device.mgmt_ip_backup_label || "公网",
     loopback_ip: device.loopback_ip || "",
     bgp_asn: device.bgp_asn ?? null,
     site_id: device.site_id ?? null,
@@ -236,9 +244,29 @@ export default function DeviceFormDialog({
               <Select options={OVERLAY_OPTIONS} />
             </Form.Item>
           </Col>
-          <Col xs={24} sm={12}>
-            <Form.Item name="mgmt_ip" label="管理 IP" rules={[{ required: true, message: "请输入管理 IP" }]}>
-              <Input placeholder="10.1.0.11" />
+          <Col xs={24}>
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              主/备管理 IP 互为主备：主地址不可达时自动切换至备地址进行 SSH/SNMP/拨测。
+            </Typography.Text>
+          </Col>
+          <Col xs={24} sm={8}>
+            <Form.Item name="mgmt_ip_primary_label" label="主 IP 类型">
+              <Input placeholder="管理网" />
+            </Form.Item>
+          </Col>
+          <Col xs={24} sm={16}>
+            <Form.Item name="mgmt_ip" label="主管理 IP" rules={[{ required: true, message: "请输入主管理 IP" }]}>
+              <Input placeholder="10.1.0.11 或内网地址" />
+            </Form.Item>
+          </Col>
+          <Col xs={24} sm={8}>
+            <Form.Item name="mgmt_ip_backup_label" label="备 IP 类型">
+              <Input placeholder="公网" />
+            </Form.Item>
+          </Col>
+          <Col xs={24} sm={16}>
+            <Form.Item name="mgmt_ip_backup" label="备管理 IP">
+              <Input placeholder="公网 IP（可选）" />
             </Form.Item>
           </Col>
           <Col xs={24} sm={12}>

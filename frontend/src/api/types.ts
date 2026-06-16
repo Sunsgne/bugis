@@ -123,6 +123,8 @@ export interface ManagementDefaults {
   netconf_timeout: number;
   ssh_timeout: number;
   snmp: SnmpDefaults;
+  mgmt_ip_primary_label?: string;
+  mgmt_ip_backup_label?: string;
 }
 
 export interface Device {
@@ -136,6 +138,14 @@ export interface Device {
   overlay_tech: string;
   status: string;
   mgmt_ip: string;
+  mgmt_ip_backup?: string;
+  mgmt_ip_primary_label?: string;
+  mgmt_ip_backup_label?: string;
+  mgmt_ip_active?: string;
+  mgmt_ip_active_role?: "primary" | "backup";
+  last_reachability_at?: string;
+  last_reachability_latency_ms?: number;
+  last_reachability_method?: string;
   management_transport?: string;
   netconf_port?: number;
   ssh_port?: number;

@@ -160,6 +160,18 @@ def check_device(
     return {
         "device": device.name,
         "mgmt_ip": device.mgmt_ip,
+        "mgmt_ip_backup": device.mgmt_ip_backup,
+        "mgmt_ip_primary_label": device.mgmt_ip_primary_label or "管理网",
+        "mgmt_ip_backup_label": device.mgmt_ip_backup_label or "公网",
+        "mgmt_ip_active": device.mgmt_ip_active,
+        "mgmt_ip_active_role": device.mgmt_ip_active_role,
+        "mgmt_ip_active_label": (
+            (device.mgmt_ip_primary_label or "管理网")
+            if device.mgmt_ip_active_role == "primary"
+            else (device.mgmt_ip_backup_label or "公网")
+            if device.mgmt_ip_active_role == "backup"
+            else None
+        ),
         "transport": transport,
         "reachable": reachable,
         "latency_ms": latency,
@@ -167,6 +179,7 @@ def check_device(
         "probes": probe.get("probes") or [],
         "status": device.status.value,
         "dry_run": settings.dry_run,
+        "last_reachability_at": device.last_reachability_at,
         "svid_scan": svid_scan,
     }
 

@@ -260,8 +260,69 @@ def probe_circuit(
     if not circuit:
         raise HTTPException(status_code=404, detail="circuit not found")
     result = probe.probe_circuit(db, circuit)
+    from app.services import probe_log_service
+
+    log = probe_log_service.save_probe_log(db, circuit, result)
     db.commit()
-    return result
+    return {**result, "probe_log_id": log.id}
+
+
+@router.get("/{circuit_id}/probe/latest")
+def latest_probe(
+    circuit_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    """Return the most recent persisted probe result (frontend reads DB only)."""
+    circuit = db.get(Circuit, circuit_id)
+    if not circuit:
+        raise HTTPException(status_code=404, detail="circuit not found")
+    from app.services import probe_log_service
+
+    row = probe_log_service.latest_probe_log(db, circuit_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="no probe history")
+    return row.result_json or {
+        "circuit": circuit.code,
+        "mode": row.mode,
+        "probe_method": row.probe_method,
+        "reachable": row.reachable,
+        "rtt_ms": row.rtt_ms,
+        "jitter_ms": row.jitter_ms,
+        "packet_loss_pct": row.packet_loss_pct,
+        "path_mode": row.path_mode,
+        "probe_log_id": row.id,
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+    }
+
+
+@router.get("/{circuit_id}/probe/history")
+def probe_history(
+    circuit_id: int,
+    limit: int = 20,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    circuit = db.get(Circuit, circuit_id)
+    if not circuit:
+        raise HTTPException(status_code=404, detail="circuit not found")
+    from app.services import probe_log_service
+
+    rows = probe_log_service.list_probe_logs(db, circuit_id, limit=limit)
+    return [
+        {
+            "id": r.id,
+            "created_at": r.created_at,
+            "mode": r.mode,
+            "probe_method": r.probe_method,
+            "reachable": r.reachable,
+            "rtt_ms": r.rtt_ms,
+            "jitter_ms": r.jitter_ms,
+            "packet_loss_pct": r.packet_loss_pct,
+            "path_mode": r.path_mode,
+        }
+        for r in rows
+    ]
 
 
 @router.get("/{circuit_id}/config-history")

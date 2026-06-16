@@ -11,6 +11,7 @@ from app.models.enums import AccessMode, CircuitStatus, PathMode, ServiceType
 from app.models.mixins import TimestampMixin, str_enum_column
 
 if TYPE_CHECKING:
+    from app.models.circuit_probe_log import CircuitProbeLog
     from app.models.device import Device
     from app.models.tenant import Tenant
     from app.models.workorder import WorkOrder
@@ -76,6 +77,10 @@ class Circuit(Base, TimestampMixin):
     )
     work_orders: Mapped[list["WorkOrder"]] = relationship(
         back_populates="circuit", cascade="all, delete-orphan"
+    )
+    probe_logs: Mapped[list["CircuitProbeLog"]] = relationship(
+        back_populates="circuit", cascade="all, delete-orphan",
+        order_by="CircuitProbeLog.id.desc()",
     )
 
 

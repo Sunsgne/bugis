@@ -110,7 +110,7 @@ class BaseDriver:
         header = (
             f"[DRY-RUN] vendor={self.vendor.value} "
             f"device={getattr(device, 'name', 'unknown')} "
-            f"({getattr(device, 'mgmt_ip', '-')}) transport={self.transport}\n"
+            f"({getattr(device, 'active_mgmt_ip', getattr(device, 'mgmt_ip', '-'))}) transport={self.transport}\n"
             f"[DRY-RUN] {len(lines)} config line(s) would be applied:\n"
         )
         return header + config
@@ -199,7 +199,7 @@ class BaseDriver:
                 "ncclient not installed; install it or run in dry-run mode"
             ) from exc
         with manager.connect(
-            host=device.mgmt_ip,
+            host=device.active_mgmt_ip,
             port=device.netconf_port,
             username=device.username,
             password=device.password,
@@ -220,7 +220,7 @@ class BaseDriver:
 
         params: dict = {
             "device_type": netmiko_device_type(device),
-            "host": device.mgmt_ip,
+            "host": device.active_mgmt_ip,
             "port": device.ssh_port,
             "username": device.username,
             "password": device.password,
@@ -287,7 +287,7 @@ class BaseDriver:
                 "ncclient not installed; install it or run in dry-run mode"
             ) from exc
         with manager.connect(
-            host=device.mgmt_ip,
+            host=device.active_mgmt_ip,
             port=device.netconf_port,
             username=device.username,
             password=device.password,

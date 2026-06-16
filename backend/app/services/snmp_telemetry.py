@@ -69,7 +69,7 @@ def _get_oid(
         else ContextData()
     )
     raw = snmp_hlapi.get_oid(
-        device.mgmt_ip,
+        device.active_mgmt_ip,
         port or eff["port"] or cfg.port,
         float(cfg.timeout_sec),
         int(cfg.retries),

@@ -1,6 +1,8 @@
 """Device & interface schemas."""
 from __future__ import annotations
 
+from datetime import datetime
+
 from pydantic import BaseModel, Field, model_validator
 
 from app.models.enums import DeviceRole, DeviceStatus, ManagementTransport, OverlayTech, Vendor
@@ -90,6 +92,14 @@ class DeviceBase(BaseModel):
     overlay_tech: OverlayTech = OverlayTech.VXLAN_EVPN
     status: DeviceStatus = DeviceStatus.UNKNOWN
     mgmt_ip: str
+    mgmt_ip_backup: str | None = None
+    mgmt_ip_primary_label: str | None = "管理网"
+    mgmt_ip_backup_label: str | None = "公网"
+    mgmt_ip_active: str | None = None
+    mgmt_ip_active_role: str | None = None
+    last_reachability_at: datetime | None = None
+    last_reachability_latency_ms: float | None = None
+    last_reachability_method: str | None = None
     management_transport: ManagementTransport = ManagementTransport.AUTO
     netconf_port: int = 830
     ssh_port: int = 22
@@ -127,6 +137,9 @@ class DeviceUpdate(BaseModel):
     overlay_tech: OverlayTech | None = None
     status: DeviceStatus | None = None
     mgmt_ip: str | None = None
+    mgmt_ip_backup: str | None = None
+    mgmt_ip_primary_label: str | None = None
+    mgmt_ip_backup_label: str | None = None
     management_transport: ManagementTransport | None = None
     netconf_port: int | None = None
     ssh_port: int | None = None
