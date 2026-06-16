@@ -136,6 +136,13 @@ class UserRole(str, enum.Enum):
     ADMIN = "admin"
     OPERATOR = "operator"
     VIEWER = "viewer"
+    TENANT_ADMIN = "tenant_admin"
+    TENANT_VIEWER = "tenant_viewer"
+
+
+class UserScope(str, enum.Enum):
+    PLATFORM = "platform"
+    TENANT = "tenant"
 
 
 class AlarmSeverity(str, enum.Enum):

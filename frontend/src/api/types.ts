@@ -304,6 +304,21 @@ export interface TrafficSummary {
   bandwidth_mbps: number;
 }
 
+export interface TrafficBilling {
+  circuit_id: number;
+  circuit_code: string;
+  period?: string | null;
+  available_months: string[];
+  samples: number;
+  bandwidth_mbps: number;
+  in_95_mbps: number;
+  out_95_mbps: number;
+  billable_95_mbps: number;
+  peak_mbps: number;
+  avg_mbps: number;
+  utilization_pct: number;
+}
+
 export interface AvailabilityEvent {
   id: number;
   circuit_id: number;

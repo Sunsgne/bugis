@@ -15,6 +15,7 @@ import {
 import { PlusOutlined, SearchOutlined } from "@ant-design/icons";
 import { api } from "../api/client";
 import type { Paginated, Tenant } from "../api/types";
+import TenantPortalUsersModal from "../components/TenantPortalUsersModal";
 import ListToolbar from "../components/ListToolbar";
 import PageCard from "../components/PageCard";
 import { dataTableProps, PAGE_SIZE_OPTIONS, pageRangeLabel, tablePagination } from "../utils/table";
@@ -41,6 +42,7 @@ export default function Tenants() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
+  const [portalTenant, setPortalTenant] = useState<Tenant | null>(null);
   const [form] = Form.useForm();
 
   async function load(p = page, ps = pageSize, q = search) {
@@ -176,6 +178,9 @@ export default function Tenants() {
             render: (_, r) => (
               <Space size={4} className="table-actions">
                 <Link to={`/circuits?tenant=${r.id}`}>查看专线</Link>
+                <Button type="link" size="small" onClick={() => setPortalTenant(r)}>
+                  门户账号
+                </Button>
                 <Popconfirm title="确认删除?" onConfirm={() => remove(r.id)}>
                   <Button type="link" size="small" danger>
                     删除
@@ -213,6 +218,13 @@ export default function Tenants() {
           </Form.Item>
         </Form>
       </Modal>
+
+      <TenantPortalUsersModal
+        tenantId={portalTenant?.id ?? 0}
+        tenantName={portalTenant?.name ?? ""}
+        open={!!portalTenant}
+        onClose={() => setPortalTenant(null)}
+      />
     </PageCard>
   );
 }

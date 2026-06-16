@@ -1,32 +1,43 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { api, getToken, setToken } from "./api/client";
 
-interface User {
+export interface User {
   id: number;
   username: string;
   full_name?: string;
+  email?: string;
   role: string;
+  scope?: string;
+  tenant_id?: number | null;
 }
 
 interface AuthCtx {
   user: User | null;
   ready: boolean;
-  loginWithToken: (token: string) => Promise<void>;
+  isTenantUser: boolean;
+  loginWithToken: (token: string) => Promise<User | null>;
   logout: () => void;
 }
 
 const Ctx = createContext<AuthCtx>(null as any);
 
+export function isTenantAccount(user: User | null | undefined): boolean {
+  if (!user) return false;
+  return user.scope === "tenant" || user.tenant_id != null;
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [ready, setReady] = useState(false);
 
-  async function fetchMe() {
+  async function fetchMe(): Promise<User | null> {
     try {
-      const { data } = await api.get("/auth/me");
+      const { data } = await api.get<User>("/auth/me");
       setUser(data);
+      return data;
     } catch {
       setUser(null);
+      return null;
     } finally {
       setReady(true);
     }
@@ -39,7 +50,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   async function loginWithToken(token: string) {
     setToken(token);
-    await fetchMe();
+    return fetchMe();
   }
 
   function logout() {
@@ -49,7 +60,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <Ctx.Provider value={{ user, ready, loginWithToken, logout }}>
+    <Ctx.Provider
+      value={{
+        user,
+        ready,
+        isTenantUser: isTenantAccount(user),
+        loginWithToken,
+        logout,
+      }}
+    >
       {children}
     </Ctx.Provider>
   );

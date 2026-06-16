@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user
+from app.api.deps import require_platform_user
 from app.core.config import settings
 from app.core.database import get_db
 from app.drivers import list_drivers
@@ -95,14 +95,15 @@ def webhook_provision(
 
 @router.get("/ansible/inventory")
 def ansible_inventory(
-    db: Session = Depends(get_db), _: User = Depends(get_current_user)
+    db: Session = Depends(get_db),
+    _: User = Depends(require_platform_user),
 ):
     text = ansible_export.export_inventory(db)
     return Response(content=text, media_type="text/plain")
 
 
 @router.get("/catalog")
-def integration_catalog(_: User = Depends(get_current_user)):
+def integration_catalog(_: User = Depends(require_platform_user)):
     return {
         "drivers": list_drivers(),
         "webhook": {

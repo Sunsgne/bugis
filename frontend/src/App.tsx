@@ -20,7 +20,8 @@ import {
   KeyRound,
 } from "lucide-react";
 import { useMemo, useState, useEffect } from "react";
-import { useAuth } from "./auth";
+import PortalApp from "./portal/PortalApp";
+import { isTenantAccount, useAuth } from "./auth";
 import { api, getToken } from "./api/client";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
@@ -315,7 +316,7 @@ function Shell() {
 }
 
 export default function App() {
-  const { user, ready } = useAuth();
+  const { user, ready, isTenantUser } = useAuth();
 
   if (!ready) {
     return (
@@ -325,10 +326,28 @@ export default function App() {
     );
   }
 
+  const tenant = isTenantUser || isTenantAccount(user);
+
   return (
     <Routes>
-      <Route path="/login" element={user ? <Navigate to="/" replace /> : <Login />} />
-      <Route path="/*" element={user ? <Shell /> : <Navigate to="/login" replace />} />
+      <Route
+        path="/login"
+        element={
+          user ? <Navigate to={tenant ? "/portal" : "/"} replace /> : <Login />
+        }
+      />
+      <Route
+        path="/portal/*"
+        element={
+          user ? tenant ? <PortalApp /> : <Navigate to="/" replace /> : <Navigate to="/login" replace />
+        }
+      />
+      <Route
+        path="/*"
+        element={
+          user ? tenant ? <Navigate to="/portal" replace /> : <Shell /> : <Navigate to="/login" replace />
+        }
+      />
     </Routes>
   );
 }

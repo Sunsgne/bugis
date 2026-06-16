@@ -8,7 +8,8 @@ from app.controller.engine import CONTROLLER_VERSION
 from app.core.config import settings
 from app.core.security import hash_password
 from app.models.controller import Controller
-from app.models.enums import ControllerType, UserRole
+from app.models.enums import ControllerType, UserRole, UserScope
+from app.models.tenant import Tenant
 from app.models.user import User
 
 
@@ -58,11 +59,45 @@ def ensure_superuser(db: Session) -> None:
         username=settings.first_superuser,
         full_name="Platform Administrator",
         role=UserRole.ADMIN,
+        scope=UserScope.PLATFORM,
         hashed_password=hash_password(settings.first_superuser_password),
         is_active=True,
     )
     db.add(user)
     db.commit()
+
+
+def ensure_tenant_portal_demo_user(
+    db: Session,
+    *,
+    tenant_code: str = "BANK01",
+    username: str = "bank_portal",
+    password: str = "Portal@Demo2026",
+) -> User | None:
+    """Ensure a demo tenant portal account exists (idempotent)."""
+    tenant = db.execute(
+        select(Tenant).where(Tenant.code == tenant_code)
+    ).scalar_one_or_none()
+    if not tenant:
+        return None
+    existing = db.execute(
+        select(User).where(User.username == username)
+    ).scalar_one_or_none()
+    if existing:
+        return existing
+    user = User(
+        username=username,
+        full_name=f"{tenant.name} · 门户",
+        role=UserRole.TENANT_VIEWER,
+        scope=UserScope.TENANT,
+        tenant_id=tenant.id,
+        hashed_password=hash_password(password),
+        is_active=True,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
 
 
 def ensure_snmp_settings(db: Session) -> None:
