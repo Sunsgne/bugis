@@ -398,6 +398,35 @@ export interface LinkUsage {
   samples?: number;
 }
 
+export interface LinkPlan {
+  device_a_id: number;
+  device_z_id: number;
+  device_a: string;
+  device_z: string;
+  site_a?: string | null;
+  site_z?: string | null;
+  type: string;
+  name: string;
+  interface_a: string;
+  interface_z: string;
+  interface_a_score?: number;
+  interface_z_score?: number;
+  interface_a_reason?: string;
+  interface_z_reason?: string;
+  capacity_mbps: number;
+  score: number;
+  reason: string;
+  recommended?: boolean;
+}
+
+export interface UplinkCandidate {
+  name: string;
+  speed_mbps: number;
+  oper_status?: string | null;
+  score: number;
+  reason: string;
+}
+
 export interface AuditEntry {
   id: number;
   actor: string;

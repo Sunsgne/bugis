@@ -35,3 +35,36 @@ class LinkUpdate(BaseModel):
 
 class LinkOut(LinkBase, TimestampedSchema):
     id: int
+
+
+class LinkPlanOut(BaseModel):
+    device_a_id: int
+    device_z_id: int
+    device_a: str
+    device_z: str
+    site_a: str | None = None
+    site_z: str | None = None
+    type: LinkType
+    name: str
+    interface_a: str
+    interface_z: str
+    interface_a_score: float | None = None
+    interface_z_score: float | None = None
+    interface_a_reason: str | None = None
+    interface_z_reason: str | None = None
+    capacity_mbps: int
+    score: float
+    reason: str
+    recommended: bool = False
+
+
+class LinkBulkCreate(BaseModel):
+    links: list[LinkCreate]
+
+
+class InterfaceCandidateOut(BaseModel):
+    name: str
+    speed_mbps: int
+    oper_status: str | None = None
+    score: float
+    reason: str

@@ -1,28 +1,54 @@
 import { useEffect, useMemo, useState } from "react";
-import { Button, Card, Empty, Progress, Statistic, Table, Tag, Tooltip } from "antd";
-import { SyncOutlined } from "@ant-design/icons";
+import {
+  App as AntApp,
+  Button,
+  Card,
+  Empty,
+  Popconfirm,
+  Progress,
+  Statistic,
+  Table,
+  Tag,
+  Tooltip,
+} from "antd";
+import { DeleteOutlined, PlusOutlined, SyncOutlined } from "@ant-design/icons";
 import { api } from "../api/client";
-import type { LinkUsage, SiteCapacity } from "../api/types";
+import type { Device, LinkUsage, SiteCapacity } from "../api/types";
+import BackboneLinkModal from "../components/BackboneLinkModal";
+import InterfaceNameCell from "../components/InterfaceNameCell";
 import EChart from "../components/EChart";
 import { linkUtilBarOption, utilColor } from "../charts/options";
 import { dataTableProps } from "../utils/table";
+import { fetchAllPages } from "../utils/pagination";
+
+const LINK_TYPE_LABEL: Record<string, string> = {
+  dci: "跨站点 DCI",
+  intra_dc: "站内互联",
+  access: "接入",
+  uplink: "上联",
+};
 
 function fmtBw(mbps: number) {
   return mbps >= 1000 ? `${Math.round(mbps / 1000)} Gbps` : `${mbps} Mbps`;
 }
 
 export default function Capacity() {
+  const { message } = AntApp.useApp();
   const [sites, setSites] = useState<SiteCapacity[]>([]);
   const [links, setLinks] = useState<LinkUsage[]>([]);
+  const [devices, setDevices] = useState<Device[]>([]);
   const [syncing, setSyncing] = useState(false);
+  const [linkModalOpen, setLinkModalOpen] = useState(false);
 
   async function load() {
-    const [s, l] = await Promise.all([
+    const [s, l, d] = await Promise.all([
       api.get<SiteCapacity[]>("/capacity/sites"),
       api.get<LinkUsage[]>("/capacity/links/usage"),
+      fetchAllPages<Device>("/devices"),
     ]);
     setSites(s.data);
     setLinks(l.data);
+    setDevices(d);
   }
 
   async function syncBandwidth() {
@@ -30,9 +56,16 @@ export default function Capacity() {
     try {
       await api.post("/capacity/links/sync-bandwidth");
       await load();
+      message.success("已从端口描述同步合同带宽");
     } finally {
       setSyncing(false);
     }
+  }
+
+  async function deleteLink(linkId: number) {
+    await api.delete(`/capacity/links/${linkId}`);
+    message.success("骨干链路已删除");
+    await load();
   }
 
   useEffect(() => {
@@ -95,15 +128,20 @@ export default function Capacity() {
         className="capacity-section-card"
         title="骨干链路 · 利用率"
         extra={
-          <Tooltip title="从端口描述 bw(100Mbps) 同步链路合同带宽">
-            <Button icon={<SyncOutlined />} loading={syncing} onClick={syncBandwidth}>
-              同步端口带宽
+          <Button.Group>
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => setLinkModalOpen(true)}>
+              配置骨干链路
             </Button>
-          </Tooltip>
+            <Tooltip title="从端口描述 bw(100Mbps) 同步链路合同带宽">
+              <Button icon={<SyncOutlined />} loading={syncing} onClick={syncBandwidth}>
+                同步端口带宽
+              </Button>
+            </Tooltip>
+          </Button.Group>
         }
       >
         <div className="capacity-link-hint">
-          端口描述标注 <Tag>bw(100Mbps)</Tag> 或 <Tag>bw(10Gbps)</Tag> · SNMP 发现后自动写入容量 · 利用率超 85% 触发告警
+          先配置设备间骨干链路并选定上联口；端口描述标注 <Tag>bw(100Mbps)</Tag> 或 <Tag>bw(10Gbps)</Tag> 可自动写入容量 · 利用率超 85% 触发告警
         </div>
         {linkChart.length > 0 && (
           <div className="capacity-link-chart">
@@ -115,24 +153,41 @@ export default function Capacity() {
           style={{ width: "100%" }}
           dataSource={links}
           pagination={false}
-          locale={{ emptyText: <Empty description="暂无链路 · 添加 DCI/Fabric 链路或同步端口带宽" /> }}
+          locale={{ emptyText: <Empty description="暂无链路 · 点击「配置骨干链路」智能推荐或手动选配" /> }}
           {...dataTableProps(undefined, false)}
           columns={[
-            { title: "链路", dataIndex: "name", width: "18%", ellipsis: true },
-            { title: "类型", dataIndex: "type", width: "8%", render: (t) => <Tag>{t}</Tag> },
-            { title: "A 端", dataIndex: "device_a", width: "16%", ellipsis: true },
-            { title: "Z 端", dataIndex: "device_z", width: "16%", ellipsis: true },
+            { title: "链路", dataIndex: "name", width: "14%", ellipsis: true },
+            {
+              title: "类型",
+              dataIndex: "type",
+              width: "10%",
+              render: (t) => <Tag>{LINK_TYPE_LABEL[t] || t}</Tag>,
+            },
+            { title: "A 端设备", dataIndex: "device_a", width: "14%", ellipsis: true },
+            {
+              title: "A 端口",
+              dataIndex: "interface_a",
+              width: "10%",
+              render: (v?: string) => (v ? <InterfaceNameCell name={v} /> : "—"),
+            },
+            { title: "Z 端设备", dataIndex: "device_z", width: "14%", ellipsis: true },
+            {
+              title: "Z 端口",
+              dataIndex: "interface_z",
+              width: "10%",
+              render: (v?: string) => (v ? <InterfaceNameCell name={v} /> : "—"),
+            },
             {
               title: "合同带宽",
               dataIndex: "capacity_mbps",
-              width: "12%",
+              width: "9%",
               render: (v) => fmtBw(v),
             },
             {
               title: "实时流量",
               dataIndex: "traffic_mbps",
-              width: "12%",
-              render: (v) => (v != null ? fmtBw(v) : "-"),
+              width: "9%",
+              render: (v) => (v != null ? fmtBw(v) : "—"),
             },
             {
               title: "峰值利用率",
@@ -143,14 +198,24 @@ export default function Capacity() {
               ),
             },
             {
-              title: "已预留",
-              dataIndex: "reserved_mbps",
-              width: "8%",
-              render: (v) => fmtBw(v),
+              title: "",
+              width: "6%",
+              render: (_, row) => (
+                <Popconfirm title="删除此骨干链路？" onConfirm={() => deleteLink(row.link_id)}>
+                  <Button size="small" type="text" danger icon={<DeleteOutlined />} />
+                </Popconfirm>
+              ),
             },
           ]}
         />
       </Card>
+
+      <BackboneLinkModal
+        open={linkModalOpen}
+        devices={devices}
+        onClose={() => setLinkModalOpen(false)}
+        onCreated={load}
+      />
     </div>
   );
 }
