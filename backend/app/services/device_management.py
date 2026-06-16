@@ -212,15 +212,29 @@ def _probe_host(db: Session, device: Device, host: str, role: str, label: str) -
                 "mgmt_ip_active_label": label,
             }
 
-    snmp_probe = _snmp_probe(db, device, host)
-    if not snmp_probe.get("skipped"):
-        snmp_probe["role"] = role
-        snmp_probe["label"] = label
-        probes.append(snmp_probe)
-    if snmp_probe.get("ok"):
+    snmp_ports: list[int | None] = [None]
+    if db is not None:
+        from app.services import snmp_device, snmp_settings as snmp_cfg
+
+        cfg = snmp_cfg.get_or_create(db)
+        eff = snmp_device.effective_snmp(device, cfg)
+        if cfg.enabled and eff["enabled"]:
+            snmp_ports = snmp_ports_to_try(device, cfg, eff)
+
+    snmp_ok: dict[str, Any] | None = None
+    for walk_port in snmp_ports:
+        snmp_probe = _snmp_probe(db, device, host, port=walk_port)
+        if not snmp_probe.get("skipped"):
+            snmp_probe["role"] = role
+            snmp_probe["label"] = label
+            probes.append(snmp_probe)
+        if snmp_probe.get("ok"):
+            snmp_ok = snmp_probe
+            break
+    if snmp_ok:
         return {
             "reachable": True,
-            "latency_ms": snmp_probe.get("latency_ms"),
+            "latency_ms": snmp_ok.get("latency_ms"),
             "method": "snmp",
             "probes": probes,
             "mgmt_ip_active": host,
@@ -332,6 +346,23 @@ def probe_reachability(db: Session, device: Device, *, persist: bool = True) -> 
             if persist:
                 _persist_reachability(device, result)
             return result
+
+    if settings.dry_run and candidates:
+        first = candidates[0]
+        result = {
+            "reachable": True,
+            "latency_ms": 1.0,
+            "method": "dry_run",
+            "probes": all_probes,
+            "dry_run": True,
+            "mgmt_ip_active": first["ip"],
+            "mgmt_ip_active_role": first["role"],
+            "mgmt_ip_active_label": first["label"],
+            "mgmt_ip_candidates": candidates,
+        }
+        if persist:
+            _persist_reachability(device, result)
+        return result
 
     result = {
         "reachable": False,

@@ -251,8 +251,8 @@ def looks_like_running_config(content: str, vendor: Vendor | None = None) -> boo
     return True
 
 
-def fetch_running_config(device: Device) -> tuple[bool, str, str | None]:
-    """Pull running-config from device. Returns (success, content, error)."""
+def _fetch_once(device: Device) -> tuple[bool, str, str | None]:
+    """Single fetch attempt via device.active_mgmt_ip."""
     driver = get_driver(device.vendor)
     result = driver.fetch_config(device, dry_run=settings.dry_run)
     if not result.success:
@@ -275,3 +275,61 @@ def fetch_running_config(device: Device) -> tuple[bool, str, str | None]:
             "check SSH paging/timeout or NETCONF access"
         ),
     )
+
+
+def _ordered_mgmt_candidates(device: Device) -> list[dict[str, str]]:
+    from app.services import device_management
+
+    candidates = device_management.mgmt_ip_candidates(device)
+    active = device.mgmt_ip_active
+    if not active:
+        return candidates
+    ordered: list[dict[str, str]] = []
+    rest: list[dict[str, str]] = []
+    for cand in candidates:
+        if cand["ip"] == active:
+            ordered.append(cand)
+        else:
+            rest.append(cand)
+    seen = {c["ip"] for c in ordered}
+    for cand in rest:
+        if cand["ip"] not in seen:
+            ordered.append(cand)
+            seen.add(cand["ip"])
+    return ordered or candidates
+
+
+def fetch_running_config(
+    device: Device,
+    db: Session | None = None,
+) -> tuple[bool, str, str | None]:
+    """Pull running-config; refresh reachability and failover across mgmt IPs."""
+    from app.services import device_management
+
+    if db is not None:
+        device_management.probe_reachability(db, device, persist=True)
+
+    if settings.dry_run:
+        return _fetch_once(device)
+
+    last_err: str | None = None
+    for cand in _ordered_mgmt_candidates(device):
+        prev_active = device.mgmt_ip_active
+        prev_role = device.mgmt_ip_active_role
+        device.mgmt_ip_active = cand["ip"]
+        device.mgmt_ip_active_role = cand["role"]
+        ok, content, err = _fetch_once(device)
+        if ok:
+            if db is not None:
+                device_management.persist_active_endpoint(
+                    device,
+                    cand["ip"],
+                    cand["role"],
+                    method="fetch",
+                )
+            return True, content, None
+        last_err = err
+        device.mgmt_ip_active = prev_active
+        device.mgmt_ip_active_role = prev_role
+
+    return False, "", last_err or "fetch failed on all management IPs"

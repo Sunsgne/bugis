@@ -32,7 +32,7 @@ PING_INTERVAL_MS = 200
 
 
 def _device_ip(device: Device) -> str | None:
-    return device.loopback_ip or device.mgmt_ip
+    return device.loopback_ip or device.active_mgmt_ip
 
 
 def _hop_row(

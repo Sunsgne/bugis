@@ -144,7 +144,7 @@ def backup_device_running_config(
         detail = "; ".join(errors) if errors else "unreachable"
         raise ValueError(f"设备不可达，无法备份现网配置 ({detail})")
 
-    ok, content, fetch_err = config_fetch.fetch_running_config(device)
+    ok, content, fetch_err = config_fetch.fetch_running_config(device, db=db)
     fetched_live = ok and bool(content.strip())
     from_learned_version: int | None = None
 

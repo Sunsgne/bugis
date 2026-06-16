@@ -8,8 +8,32 @@ from app.models.enums import Vendor
 from app.services import device_management
 
 
+def test_probe_reachability_dry_run_simulated_when_all_fail():
+    """When every real probe fails in dry-run, fall back to simulated primary reachability."""
+    device = Device(
+        name="t",
+        vendor=Vendor.H3C,
+        mgmt_ip="10.0.0.1",
+        mgmt_ip_backup="203.0.113.10",
+    )
+    with patch("app.services.device_management.settings") as mock_settings:
+        mock_settings.dry_run = True
+        with patch(
+            "app.services.device_management._tcp_probe",
+            return_value=(False, None, "timeout"),
+        ):
+            with patch(
+                "app.services.device_management._snmp_probe",
+                return_value={"method": "snmp", "ok": False, "skipped": True},
+            ):
+                result = device_management.probe_reachability(None, device)
+    assert result["reachable"] is True
+    assert result["method"] == "dry_run"
+    assert result["mgmt_ip_active"] == "10.0.0.1"
+
+
 def test_probe_reachability_dry_run_still_tcp():
-    """Dry-run no longer fakes reachability — always attempts real TCP/SNMP."""
+    """Dry-run attempts real TCP/SNMP before simulated fallback."""
     device = Device(name="t", vendor=Vendor.H3C, mgmt_ip="10.0.0.1")
     with patch("app.services.device_management.settings") as mock_settings:
         mock_settings.dry_run = True

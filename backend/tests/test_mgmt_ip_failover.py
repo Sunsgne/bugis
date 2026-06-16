@@ -85,16 +85,18 @@ def test_ensure_reachable_raises_with_candidate_ips():
         mgmt_ip_primary_label="管理网",
         mgmt_ip_backup_label="公网",
     )
-    with patch(
-        "app.services.device_management._tcp_probe",
-        return_value=(False, None, "timeout"),
-    ):
+    with patch("app.services.device_management.settings") as mock_settings:
+        mock_settings.dry_run = False
         with patch(
-            "app.services.device_management._snmp_probe",
-            return_value={"method": "snmp", "ok": False, "skipped": True},
+            "app.services.device_management._tcp_probe",
+            return_value=(False, None, "timeout"),
         ):
-            with pytest.raises(device_management.MgmtUnreachableError) as exc:
-                device_management.ensure_reachable_mgmt_ip(None, device, persist=False)
+            with patch(
+                "app.services.device_management._snmp_probe",
+                return_value={"method": "snmp", "ok": False, "skipped": True},
+            ):
+                with pytest.raises(device_management.MgmtUnreachableError) as exc:
+                    device_management.ensure_reachable_mgmt_ip(None, device, persist=False)
 
     assert "10.0.0.1" in str(exc.value)
     assert "203.0.113.10" in str(exc.value)
@@ -184,6 +186,93 @@ def test_discover_interfaces_api_failover(client: TestClient, auth_headers: dict
     dev = client.get(f"/api/v1/devices/{dev_id}", headers=auth_headers).json()
     assert dev["mgmt_ip_active"] == "203.0.113.99"
     assert dev["mgmt_ip_active_role"] == "backup"
+
+
+def test_probe_host_huawei_snmp_tries_16161():
+    device = Device(
+        name="hw",
+        vendor=Vendor.HUAWEI,
+        mgmt_ip="10.88.91.1",
+        snmp_enabled=True,
+    )
+    attempts: list[int | None] = []
+
+    def fake_snmp(db, dev, host, *, port=None):
+        attempts.append(port)
+        if port == 16161:
+            return {"method": "snmp", "ok": True, "latency_ms": 2.0, "host": host, "port": port}
+        return {"method": "snmp", "ok": False, "error": "timeout", "host": host, "port": port}
+
+    mock_cfg = type("Cfg", (), {"enabled": True, "port": 161})()
+
+    with patch(
+        "app.services.device_management._tcp_probe",
+        return_value=(False, None, "timeout"),
+    ):
+        with patch("app.services.snmp_settings.get_or_create", return_value=mock_cfg):
+            with patch(
+                "app.services.snmp_device.effective_snmp",
+                return_value={"enabled": True, "port": 161},
+            ):
+                with patch("app.services.device_management._snmp_probe", side_effect=fake_snmp):
+                    result = device_management._probe_host(object(), device, "10.88.91.1", "primary", "管理网")
+
+    assert result is not None
+    assert result["reachable"] is True
+    assert result["method"] == "snmp"
+    assert 16161 in attempts
+
+
+def test_fetch_running_config_failover_to_backup():
+    from app.services import config_fetch
+
+    device = Device(
+        name="edge",
+        vendor=Vendor.H3C,
+        mgmt_ip="10.0.0.1",
+        mgmt_ip_backup="203.0.113.10",
+        mgmt_ip_active="10.0.0.1",
+        mgmt_ip_active_role="primary",
+    )
+    fetch_hosts: list[str] = []
+
+    def fake_fetch(dev, dry_run=False, transport=None, allow_transport_fallback=False):
+        from app.drivers.base import DriverResult
+
+        host = dev.active_mgmt_ip
+        fetch_hosts.append(host)
+        if host == "10.0.0.1":
+            return DriverResult(success=False, output="primary fetch failed", dry_run=dry_run)
+        return DriverResult(
+            success=True,
+            config=(
+                "sysname BACKUP\n"
+                "interface GE1/0/1\n"
+                " description backup-fetch\n"
+                " port link-mode route\n"
+                " ip address 10.0.0.1 255.255.255.0\n"
+                "bgp 65001\n"
+                " router-id 10.0.0.1\n"
+                "return\n"
+            ),
+            dry_run=dry_run,
+        )
+
+    with patch.object(config_fetch.settings, "dry_run", False):
+        with patch(
+            "app.services.device_management.probe_reachability",
+            return_value={"reachable": True, "mgmt_ip_active": "10.0.0.1"},
+        ):
+            with patch("app.services.config_fetch.get_driver") as mock_driver:
+                mock_driver.return_value.fetch_config.side_effect = fake_fetch
+                ok, content, err = config_fetch.fetch_running_config(device, db=object())
+
+    assert ok is True, err
+    assert "backup-fetch" in content
+    assert fetch_hosts[0] == "10.0.0.1"
+    assert "203.0.113.10" in fetch_hosts
+    assert device.mgmt_ip_active == "203.0.113.10"
+    assert device.mgmt_ip_active_role == "backup"
 
 
 def test_resolve_snmp_huawei_tries_port_16161():

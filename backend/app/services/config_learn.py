@@ -63,7 +63,7 @@ def learn_device(
             "run_id": run.id,
         }
 
-    ok, content, fetch_err = config_fetch.fetch_running_config(device)
+    ok, content, fetch_err = config_fetch.fetch_running_config(device, db=db)
     if not ok or not content.strip():
         run = DeviceLearnRun(
             device_id=device.id,
