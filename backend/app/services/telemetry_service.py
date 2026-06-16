@@ -17,6 +17,14 @@ from app.models.enums import CircuitStatus
 from app.models.telemetry import TelemetrySample
 from app.schemas.telemetry import CircuitHealth
 from app.services import availability_service, snmp_telemetry
+from app.services.telemetry_buckets import (
+    BUCKET_MINUTES,
+    aggregate_5min_buckets,
+    p95_from_buckets,
+    percentile,
+)
+
+# Raw telemetry samples are retained indefinitely (no TTL purge).
 
 
 def record_sample(db: Session, **kwargs) -> TelemetrySample:
@@ -65,46 +73,127 @@ def collect_circuit_sample(
     return sample
 
 
+def _parse_range(
+    *,
+    hours: int | None,
+    start_at: datetime | None,
+    end_at: datetime | None,
+) -> tuple[datetime | None, datetime | None]:
+    if start_at and end_at:
+        start = start_at.astimezone(timezone.utc) if start_at.tzinfo else start_at.replace(tzinfo=timezone.utc)
+        end = end_at.astimezone(timezone.utc) if end_at.tzinfo else end_at.replace(tzinfo=timezone.utc)
+        if end < start:
+            start, end = end, start
+        return start, end
+    if hours is not None:
+        end = datetime.now(timezone.utc)
+        start = end - timedelta(hours=max(1, min(hours, 24 * 366)))
+        return start, end
+    return None, None
+
+
+def query_circuit_samples(
+    db: Session,
+    circuit_id: int,
+    *,
+    start_at: datetime | None = None,
+    end_at: datetime | None = None,
+    hours: int | None = None,
+    limit: int | None = None,
+) -> list[TelemetrySample]:
+    """Load raw samples oldest-first. No automatic deletion — full history kept."""
+    range_start, range_end = _parse_range(
+        hours=hours, start_at=start_at, end_at=end_at
+    )
+    stmt = select(TelemetrySample).where(TelemetrySample.circuit_id == circuit_id)
+    if range_start is not None:
+        stmt = stmt.where(TelemetrySample.created_at >= range_start)
+    if range_end is not None:
+        stmt = stmt.where(TelemetrySample.created_at <= range_end)
+    stmt = stmt.order_by(TelemetrySample.created_at.asc(), TelemetrySample.id.asc())
+    if limit is not None:
+        limit = max(1, min(limit, 500_000))
+        stmt = stmt.limit(limit)
+    return list(db.execute(stmt).scalars().all())
+
+
 def list_circuit_samples(
     db: Session,
     circuit_id: int,
     *,
     limit: int = 120,
     hours: int | None = None,
+    start_at: datetime | None = None,
+    end_at: datetime | None = None,
 ) -> list[TelemetrySample]:
-    """Return samples oldest-first for charting."""
-    limit = max(1, min(limit, 2000))
-    stmt = (
-        select(TelemetrySample)
-        .where(TelemetrySample.circuit_id == circuit_id)
-        .order_by(TelemetrySample.id.desc())
-        .limit(limit)
+    """Return samples oldest-first for charting (raw poll points)."""
+    return query_circuit_samples(
+        db,
+        circuit_id,
+        hours=hours,
+        start_at=start_at,
+        end_at=end_at,
+        limit=max(1, min(limit, 2000)),
     )
-    if hours is not None:
-        since = datetime.now(timezone.utc) - timedelta(hours=max(1, min(hours, 24 * 30)))
-        stmt = (
-            select(TelemetrySample)
-            .where(
-                TelemetrySample.circuit_id == circuit_id,
-                TelemetrySample.created_at >= since,
-            )
-            .order_by(TelemetrySample.id.desc())
-            .limit(limit)
-        )
-    rows = list(db.execute(stmt).scalars().all())
-    rows.reverse()
-    return rows
 
 
 def chart_p95(samples: list[TelemetrySample]) -> dict:
+    buckets = aggregate_5min_buckets(samples)
+    if buckets:
+        return p95_from_buckets(buckets)
     rx = [s.rx_mbps for s in samples]
     tx = [s.tx_mbps for s in samples]
-    rx95 = _percentile(rx, 95)
-    tx95 = _percentile(tx, 95)
+    rx95 = percentile(rx, 95)
+    tx95 = percentile(tx, 95)
     return {
         "in_95_mbps": rx95,
         "out_95_mbps": tx95,
         "billable_95_mbps": max(rx95, tx95),
+        "bucket_count": 0,
+        "granularity_minutes": BUCKET_MINUTES,
+    }
+
+
+def traffic_summary(
+    db: Session,
+    circuit: Circuit,
+    *,
+    hours: int | None = 24,
+    start_at: datetime | None = None,
+    end_at: datetime | None = None,
+    limit: int | None = None,
+) -> dict:
+    """5-minute bucketed traffic series + 95th-percentile for the selected window."""
+    samples = query_circuit_samples(
+        db,
+        circuit.id,
+        hours=hours,
+        start_at=start_at,
+        end_at=end_at,
+        limit=limit,
+    )
+    buckets = aggregate_5min_buckets(samples)
+    p95 = p95_from_buckets(buckets) if buckets else {
+        "in_95_mbps": 0.0,
+        "out_95_mbps": 0.0,
+        "billable_95_mbps": 0.0,
+        "bucket_count": 0,
+        "granularity_minutes": BUCKET_MINUTES,
+    }
+    range_start, range_end = _parse_range(
+        hours=hours, start_at=start_at, end_at=end_at
+    )
+    return {
+        "circuit_id": circuit.id,
+        "samples": samples,
+        "buckets": [b.to_dict() for b in buckets],
+        "p95": p95,
+        "bandwidth_mbps": circuit.bandwidth_mbps,
+        "granularity_minutes": BUCKET_MINUTES,
+        "raw_sample_count": len(samples),
+        "range_start": range_start.isoformat() if range_start else None,
+        "range_end": range_end.isoformat() if range_end else None,
+        "retention": "permanent",
     }
 
 
@@ -198,52 +287,64 @@ def overview_traffic(
 
 
 def _percentile(values: list[float], pct: float) -> float:
-    if not values:
-        return 0.0
-    s = sorted(values)
-    import math
-    idx = max(0, math.ceil(pct / 100 * len(s)) - 1)
-    return round(s[idx], 2)
+    return percentile(values, pct)
 
 
-def billing_95th(db: Session, circuit: Circuit, period: str | None = None) -> dict:
-    """95th-percentile (月95) bandwidth billing for a circuit.
+def billing_95th(
+    db: Session,
+    circuit: Circuit,
+    period: str | None = None,
+    *,
+    start_at: datetime | None = None,
+    end_at: datetime | None = None,
+) -> dict:
+    """95th-percentile billing on 5-minute buckets (ISP 月95 / custom window)."""
+    if start_at and end_at:
+        samples = query_circuit_samples(
+            db, circuit.id, start_at=start_at, end_at=end_at
+        )
+        sel_label = (
+            f"{start_at.astimezone(timezone.utc).strftime('%Y-%m-%d %H:%M')} ~ "
+            f"{end_at.astimezone(timezone.utc).strftime('%Y-%m-%d %H:%M')}"
+        )
+        available_months: list[str] = []
+    else:
+        samples = query_circuit_samples(db, circuit.id)
+        by_month: dict[str, list[TelemetrySample]] = {}
+        for s in samples:
+            if not s.created_at:
+                continue
+            by_month.setdefault(s.created_at.strftime("%Y-%m"), []).append(s)
+        available_months = sorted(by_month.keys(), reverse=True)
+        sel = period if period in by_month else (available_months[0] if available_months else None)
+        sel_label = sel
+        samples = by_month.get(sel, [])
 
-    Buckets samples by month; for the selected month computes the 95th
-    percentile of inbound and outbound, billing the higher (ISP convention).
-    """
-    samples = db.execute(
-        select(TelemetrySample).where(TelemetrySample.circuit_id == circuit.id)
-    ).scalars().all()
-
-    by_month: dict[str, list[TelemetrySample]] = {}
-    for s in samples:
-        if not s.created_at:
-            continue
-        by_month.setdefault(s.created_at.strftime("%Y-%m"), []).append(s)
-
-    months = sorted(by_month.keys(), reverse=True)
-    sel = period if period in by_month else (months[0] if months else None)
-    rows = by_month.get(sel, [])
-
-    rx = [s.rx_mbps for s in rows]
-    tx = [s.tx_mbps for s in rows]
-    rx95 = _percentile(rx, 95)
-    tx95 = _percentile(tx, 95)
+    buckets = aggregate_5min_buckets(samples)
+    p95 = p95_from_buckets(buckets)
+    rx = [b.rx_mbps for b in buckets]
+    tx = [b.tx_mbps for b in buckets]
+    billable = [b.billable_mbps for b in buckets]
     return {
         "circuit_id": circuit.id,
         "circuit_code": circuit.code,
-        "period": sel,
-        "available_months": months,
-        "samples": len(rows),
+        "period": sel_label,
+        "available_months": available_months,
+        "range_start": start_at.isoformat() if start_at else None,
+        "range_end": end_at.isoformat() if end_at else None,
+        "raw_samples": len(samples),
+        "samples": len(buckets),
+        "granularity_minutes": BUCKET_MINUTES,
         "bandwidth_mbps": circuit.bandwidth_mbps,
-        "in_95_mbps": rx95,
-        "out_95_mbps": tx95,
-        "billable_95_mbps": max(rx95, tx95),
-        "peak_mbps": round(max([*rx, *tx], default=0.0), 2),
-        "avg_mbps": round((sum(rx) + sum(tx)) / (2 * len(rows)), 2) if rows else 0.0,
-        "utilization_pct": round(max(rx95, tx95) / circuit.bandwidth_mbps * 100, 1)
-        if circuit.bandwidth_mbps else 0.0,
+        "in_95_mbps": p95["in_95_mbps"],
+        "out_95_mbps": p95["out_95_mbps"],
+        "billable_95_mbps": p95["billable_95_mbps"],
+        "peak_mbps": round(max(billable, default=0.0), 2),
+        "avg_mbps": round(sum(billable) / len(billable), 2) if billable else 0.0,
+        "utilization_pct": round(p95["billable_95_mbps"] / circuit.bandwidth_mbps * 100, 1)
+        if circuit.bandwidth_mbps
+        else 0.0,
+        "retention": "permanent",
     }
 
 

@@ -1,7 +1,9 @@
 """Telemetry, SLA health and dashboard summary endpoints."""
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from datetime import datetime
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -42,6 +44,8 @@ def circuit_samples(
     circuit_id: int,
     limit: int = 120,
     hours: int | None = None,
+    start_at: datetime | None = Query(None, description="Range start (ISO 8601, UTC)"),
+    end_at: datetime | None = Query(None, description="Range end (ISO 8601, UTC)"),
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
@@ -49,36 +53,37 @@ def circuit_samples(
     if not circuit:
         raise HTTPException(status_code=404, detail="circuit not found")
     return telemetry_service.list_circuit_samples(
-        db, circuit_id, limit=limit, hours=hours
+        db,
+        circuit_id,
+        limit=limit,
+        hours=hours,
+        start_at=start_at,
+        end_at=end_at,
     )
 
 
 @router.get("/circuits/{circuit_id}/traffic-summary")
 def circuit_traffic_summary(
     circuit_id: int,
-    limit: int = 120,
+    limit: int | None = None,
     hours: int | None = 24,
+    start_at: datetime | None = Query(None, description="Custom range start"),
+    end_at: datetime | None = Query(None, description="Custom range end"),
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
-    """Traffic samples plus in-window 95th percentile for chart overlay."""
+    """5-minute bucketed traffic + 95th percentile for the selected window."""
     circuit = db.get(Circuit, circuit_id)
     if not circuit:
         raise HTTPException(status_code=404, detail="circuit not found")
-    samples = telemetry_service.list_circuit_samples(
-        db, circuit_id, limit=limit, hours=hours
+    return telemetry_service.traffic_summary(
+        db,
+        circuit,
+        hours=hours if not (start_at and end_at) else None,
+        start_at=start_at,
+        end_at=end_at,
+        limit=limit,
     )
-    p95 = telemetry_service.chart_p95(samples) if samples else {
-        "in_95_mbps": 0.0,
-        "out_95_mbps": 0.0,
-        "billable_95_mbps": 0.0,
-    }
-    return {
-        "circuit_id": circuit_id,
-        "samples": samples,
-        "p95": p95,
-        "bandwidth_mbps": circuit.bandwidth_mbps,
-    }
 
 
 @router.get("/circuits/{circuit_id}/availability", response_model=CircuitAvailabilityOut)
@@ -100,14 +105,22 @@ def circuit_availability(
 def circuit_billing(
     circuit_id: int,
     period: str | None = None,
+    start_at: datetime | None = Query(None, description="Custom billing window start"),
+    end_at: datetime | None = Query(None, description="Custom billing window end"),
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
-    """95th-percentile (月95) bandwidth billing for a circuit."""
+    """95th-percentile billing on 5-minute buckets (month or custom range)."""
     circuit = db.get(Circuit, circuit_id)
     if not circuit:
         raise HTTPException(status_code=404, detail="circuit not found")
-    return telemetry_service.billing_95th(db, circuit, period)
+    return telemetry_service.billing_95th(
+        db,
+        circuit,
+        period,
+        start_at=start_at,
+        end_at=end_at,
+    )
 
 
 @router.get("/circuits/{circuit_id}/health", response_model=CircuitHealth)

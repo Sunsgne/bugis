@@ -283,13 +283,50 @@ export interface TrafficP95 {
   in_95_mbps: number;
   out_95_mbps: number;
   billable_95_mbps: number;
+  bucket_count?: number;
+  granularity_minutes?: number;
+}
+
+export interface TrafficBucket {
+  bucket_at: string;
+  t: string;
+  rx_mbps: number;
+  tx_mbps: number;
+  billable_mbps: number;
+  sample_count: number;
 }
 
 export interface TrafficSummary {
   circuit_id: number;
   samples: TelemetrySample[];
+  buckets?: TrafficBucket[];
   p95: TrafficP95;
   bandwidth_mbps: number;
+  granularity_minutes?: number;
+  raw_sample_count?: number;
+  range_start?: string;
+  range_end?: string;
+  retention?: string;
+}
+
+export interface TrafficBilling {
+  circuit_id: number;
+  circuit_code: string;
+  period?: string;
+  available_months?: string[];
+  range_start?: string;
+  range_end?: string;
+  raw_samples?: number;
+  samples?: number;
+  granularity_minutes?: number;
+  bandwidth_mbps: number;
+  in_95_mbps: number;
+  out_95_mbps: number;
+  billable_95_mbps: number;
+  peak_mbps?: number;
+  avg_mbps?: number;
+  utilization_pct?: number;
+  retention?: string;
 }
 
 export interface AvailabilityEvent {
