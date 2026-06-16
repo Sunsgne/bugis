@@ -23,6 +23,7 @@ class ConfigJobOut(TimestampedSchema):
     id: int
     work_order_id: int
     device_id: int
+    device_name: str | None = None
     status: ConfigJobStatus
     operation: str
     transport: str
@@ -53,6 +54,12 @@ class WorkOrderOut(TimestampedSchema):
     notes: str | None = None
     events: list[WorkOrderEventOut] = []
     config_jobs: list[ConfigJobOut] = []
+
+
+class ProvisionResultOut(WorkOrderOut):
+    circuit_status: str
+    circuit_code: str | None = None
+    dry_run: bool = False
 
 
 class ApprovalRequest(BaseModel):

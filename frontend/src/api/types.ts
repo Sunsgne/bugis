@@ -217,6 +217,7 @@ export interface ConfigJob {
   id: number;
   work_order_id: number;
   device_id: number;
+  device_name?: string | null;
   status: string;
   operation: string;
   transport: string;
@@ -246,6 +247,12 @@ export interface WorkOrder {
   events: WorkOrderEvent[];
   config_jobs: ConfigJob[];
   created_at?: string;
+}
+
+export interface ProvisionResult extends WorkOrder {
+  circuit_status: string;
+  circuit_code?: string | null;
+  dry_run?: boolean;
 }
 
 export interface Dashboard {

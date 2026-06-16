@@ -203,7 +203,7 @@ export default function WorkOrders() {
                   key: j.id,
                   label: (
                     <span>
-                      设备 #{j.device_id} · {j.operation} ·{" "}
+                      {j.device_name || `设备 #${j.device_id}`} · {j.operation} ·{" "}
                       <Tag color={j.status.includes("fail") ? "red" : "green"}>{j.status}</Tag>
                       <Tag>{j.transport}</Tag>
                     </span>

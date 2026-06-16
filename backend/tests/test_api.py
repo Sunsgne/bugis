@@ -77,6 +77,8 @@ def test_frr_provisioning(client, auth_headers):
         f"/api/v1/work-orders/provision/{circuit['id']}", headers=auth_headers
     ).json()
     assert wo["status"] == "completed"
+    assert wo["circuit_status"] == "active"
+    assert wo["config_jobs"][0].get("device_name") == "WB-FRR-1"
     cfg = wo["config_jobs"][0]["rendered_config"]
     assert "advertise-all-vni" in cfg and "l2vpn evpn" in cfg
     # Ansible export uses vtysh for FRR.

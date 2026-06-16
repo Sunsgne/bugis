@@ -7,14 +7,17 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, require_operator
+from app.core.config import settings
 from app.core.database import get_db
 from app.drivers import get_driver
 from app.models.circuit import Circuit
+from app.models.device import Device
 from app.models.enums import WorkOrderType
 from app.models.user import User
 from app.models.workorder import WorkOrder
 from app.schemas.workorder import (
     ApprovalRequest,
+    ProvisionResultOut,
     WorkOrderCreate,
     WorkOrderOut,
     WorkOrderUpdate,
@@ -23,6 +26,29 @@ from app.models.enums import WorkOrderStatus
 from app.services import ansible_export, orchestrator
 
 router = APIRouter()
+
+
+def _enrich_work_order(db: Session, wo: WorkOrder) -> dict:
+    device_names = {
+        d.id: d.name
+        for d in db.execute(
+            select(Device).where(
+                Device.id.in_({job.device_id for job in wo.config_jobs} or {0})
+            )
+        ).scalars().all()
+    }
+    data = WorkOrderOut.model_validate(wo).model_dump()
+    for job in data.get("config_jobs") or []:
+        job["device_name"] = device_names.get(job["device_id"])
+    return data
+
+
+def _provision_result(db: Session, wo: WorkOrder, circuit: Circuit) -> dict:
+    payload = _enrich_work_order(db, wo)
+    payload["circuit_status"] = circuit.status.value
+    payload["circuit_code"] = circuit.code
+    payload["dry_run"] = settings.dry_run
+    return payload
 
 
 @router.get("", response_model=list[WorkOrderOut])
@@ -181,7 +207,7 @@ def execute_work_order(
     return wo
 
 
-@router.post("/provision/{circuit_id}", response_model=WorkOrderOut, status_code=201)
+@router.post("/provision/{circuit_id}", response_model=ProvisionResultOut, status_code=201)
 def provision_circuit(
     circuit_id: int,
     wo_type: WorkOrderType = WorkOrderType.PROVISION,
@@ -200,7 +226,7 @@ def provision_circuit(
     orchestrator.execute(db, wo, actor=user.username)
     db.commit()
     db.refresh(wo)
-    return wo
+    return _provision_result(db, wo, circuit)
 
 
 @router.get("/{wo_id}/preview")

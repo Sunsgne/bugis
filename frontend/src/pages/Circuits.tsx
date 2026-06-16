@@ -42,7 +42,7 @@ import {
   ApartmentOutlined,
 } from "@ant-design/icons";
 import { api } from "../api/client";
-import type { Circuit, Device, Paginated, Site, Tenant } from "../api/types";
+import type { Circuit, Device, Paginated, ProvisionResult, Site, Tenant } from "../api/types";
 import { configPreviewModalProps, ConfigPreviewPre, createCircuitModalProps } from "../utils/configPreview";
 import { formModalProps } from "../utils/formModal";
 import { TenantSearchSelect, useTenantSearch } from "../components/TenantSearchSelect";
@@ -54,6 +54,7 @@ import CircuitExpandDetail from "../components/CircuitExpandDetail";
 import { formatOperStatus } from "../utils/networkDisplay";
 import CircuitMonitorPanel from "../components/CircuitMonitorPanel";
 import CircuitEndpointsEditor from "../components/CircuitEndpointsEditor";
+import ProvisionFeedbackModal from "../components/ProvisionFeedbackModal";
 
 const SERVICE_LABEL: Record<string, string> = {
   l2vpn_evpn: "EVPN L2VPN",
@@ -146,6 +147,11 @@ export default function Circuits() {
   const [historyCircuit, setHistoryCircuit] = useState<Circuit | null>(null);
   const [history, setHistory] = useState<any>(null);
   const [diffText, setDiffText] = useState<Record<number, string>>({});
+  const [provisionCircuit, setProvisionCircuit] = useState<Circuit | null>(null);
+  const [provisionLoading, setProvisionLoading] = useState(false);
+  const [provisionResult, setProvisionResult] = useState<ProvisionResult | null>(null);
+  const [provisionError, setProvisionError] = useState<string | null>(null);
+  const [provisioningId, setProvisioningId] = useState<number | null>(null);
 
   async function loadCircuits(p = page, ps = pageSize, q = search) {
     setLoading(true);
@@ -317,18 +323,46 @@ export default function Circuits() {
     }
   }
 
-  async function runProvision(c: Circuit) {
+  function closeProvisionFeedback() {
+    setProvisionCircuit(null);
+    setProvisionResult(null);
+    setProvisionError(null);
+    setProvisionLoading(false);
+    setProvisioningId(null);
+  }
+
+  async function executeProvision(c: Circuit, woType = "provision") {
+    setProvisionCircuit(c);
+    setProvisionLoading(true);
+    setProvisionResult(null);
+    setProvisionError(null);
+    setProvisioningId(c.id);
     try {
-      const { data } = await api.post(`/work-orders/provision/${c.id}`);
+      const url =
+        woType === "provision"
+          ? `/work-orders/provision/${c.id}`
+          : `/work-orders/provision/${c.id}?wo_type=${woType}`;
+      const { data } = await api.post<ProvisionResult>(url);
+      setProvisionResult(data);
       if (data.status === "failed") {
-        message.error(`开通工单 ${data.code} 失败（预检未通过）`);
-      } else {
-        message.success(`开通工单 ${data.code}: ${data.status}`);
+        message.error(`工单 ${data.code} 执行失败，请查看下发详情`);
       }
+      setDetailCache((prev) => {
+        const next = { ...prev };
+        delete next[c.id];
+        return next;
+      });
       loadCircuits();
     } catch (e: any) {
-      message.error(e?.response?.data?.detail || "开通失败");
+      setProvisionError(e?.response?.data?.detail || "开通失败");
+    } finally {
+      setProvisionLoading(false);
+      setProvisioningId(null);
     }
+  }
+
+  async function runProvision(c: Circuit) {
+    await executeProvision(c);
   }
 
   async function provision(c: Circuit) {
@@ -430,22 +464,9 @@ export default function Circuits() {
         editEndpointsTarget.status === "active" || editEndpointsTarget.status === "degraded"
           ? "modify"
           : "provision";
-      const { data } = await api.post(
-        `/work-orders/provision/${circuitId}?wo_type=${woType}`,
-      );
-      message.success(
-        woType === "modify"
-          ? `端点已更新，变更工单 ${data.code}: ${data.status}`
-          : `端点已更新，开通工单 ${data.code}: ${data.status}`,
-      );
       setEditEndpointsTarget(null);
       editEndpointsForm.resetFields();
-      setDetailCache((prev) => {
-        const next = { ...prev };
-        delete next[circuitId];
-        return next;
-      });
-      loadCircuits();
+      await executeProvision({ ...editEndpointsTarget, id: circuitId }, woType);
     } catch (e: any) {
       message.error(e?.response?.data?.detail || "端点更新失败");
     } finally {
@@ -817,12 +838,13 @@ export default function Circuits() {
                         : "一键开通 (下发配置)"
                     }
                   >
-                    <Button
-                      size="small"
-                      type="primary"
-                      icon={<ThunderboltOutlined />}
-                      onClick={() => provision(r)}
-                    >
+                  <Button
+                    size="small"
+                    type="primary"
+                    icon={<ThunderboltOutlined />}
+                    loading={provisioningId === r.id}
+                    onClick={() => provision(r)}
+                  >
                       {r.status === "active" ? "重新下发" : "开通"}
                     </Button>
                   </Tooltip>
@@ -1038,6 +1060,14 @@ export default function Circuits() {
           />
         )}
       </Drawer>
+
+      <ProvisionFeedbackModal
+        circuit={provisionCircuit}
+        loading={provisionLoading}
+        result={provisionResult}
+        error={provisionError}
+        onClose={closeProvisionFeedback}
+      />
     </PageCard>
   );
 }
