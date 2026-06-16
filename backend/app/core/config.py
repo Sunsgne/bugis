@@ -60,6 +60,8 @@ class Settings(BaseSettings):
     # --- Built-in Bugis SDN controller ---
     controller_bgp_asn: int = 65000
     controller_node_id: str = "bugis-1"
+    # Skip VNI/VSI already present on devices when auto-allocating new circuits.
+    smart_overlay_allocation: bool = True
 
     # --- Alarm thresholds (SLA / capacity) ---
     threshold_packet_loss_pct: float = 0.5

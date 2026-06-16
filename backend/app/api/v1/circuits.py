@@ -154,21 +154,15 @@ def create_circuit(
     if circuit.vni is not None:
         if not (validation.VNI_MIN <= circuit.vni <= validation.VNI_MAX):
             raise HTTPException(status_code=400, detail=f"VNI {circuit.vni} 超出有效范围")
-        other = allocation.vni_in_use(db, circuit.vni)
-        if other:
-            raise HTTPException(
-                status_code=409,
-                detail=f"VNI {circuit.vni} 已被专线 {other.code} 占用",
-            )
+        vni_msg = allocation.vni_unavailable_message(db, circuit.vni)
+        if vni_msg:
+            raise HTTPException(status_code=409, detail=vni_msg)
 
     if circuit.vsi_name:
         circuit.vsi_name = allocation.normalize_vsi_name(circuit.vsi_name)
-        other = allocation.vsi_in_use(db, circuit.vsi_name)
-        if other:
-            raise HTTPException(
-                status_code=409,
-                detail=f"VSI {circuit.vsi_name} 已被专线 {other.code} 占用",
-            )
+        vsi_msg = allocation.vsi_unavailable_message(db, circuit.vsi_name)
+        if vsi_msg:
+            raise HTTPException(status_code=409, detail=vsi_msg)
 
     db.add(circuit)
     db.flush()

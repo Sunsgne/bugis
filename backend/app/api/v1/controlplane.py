@@ -12,6 +12,7 @@ from app.controller import bgp_peering, controller as bugis, dataplane, ha
 from app.core.database import get_db
 from app.models.controlplane import EvpnRoute, VtepPeer
 from app.models.user import User
+from app.services import overlay_inventory
 
 router = APIRouter()
 
@@ -122,3 +123,21 @@ def list_dataplane_bindings(
     _: User = Depends(get_current_user),
 ):
     return dataplane.list_bindings(db, circuit_id)
+
+
+@router.get("/overlay-inventory")
+def get_overlay_inventory(
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    """Fleet-wide VNI/VSI inventory from learned configs (read-only)."""
+    return overlay_inventory.fleet_overlay_inventory(db)
+
+
+@router.post("/overlay-inventory/scan")
+def scan_overlay_inventory(
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
+    """Re-scan overlay identifiers from latest learned configs; no device push."""
+    return overlay_inventory.scan_fleet_overlay(db)

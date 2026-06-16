@@ -220,6 +220,21 @@ def list_port_bindings(
     return port_inventory.list_port_bindings(db, device)
 
 
+@router.get("/{device_id}/overlay-inventory")
+def get_device_overlay_inventory(
+    device_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    """Per-device VNI/VSI services from learned running-config (read-only)."""
+    device = db.get(Device, device_id)
+    if not device:
+        raise HTTPException(status_code=404, detail="device not found")
+    from app.services import overlay_inventory
+
+    return overlay_inventory.device_overlay_inventory(db, device)
+
+
 @router.get("/{device_id}/baseline")
 def device_baseline(
     device_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_user)

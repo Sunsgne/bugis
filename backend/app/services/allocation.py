@@ -11,6 +11,7 @@ import secrets
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.models.circuit import Circuit
 
 VNI_BASE = 10000
@@ -22,14 +23,24 @@ VSI_MAX_LEN = 63
 
 def _used_vnis(db: Session) -> set[int]:
     rows = db.execute(select(Circuit.vni).where(Circuit.vni.is_not(None))).all()
-    return {r[0] for r in rows}
+    used = {r[0] for r in rows}
+    if settings.smart_overlay_allocation:
+        from app.services.overlay_inventory import network_reserved_vnis
+
+        used |= network_reserved_vnis(db)
+    return used
 
 
 def _used_vsis(db: Session) -> set[str]:
     rows = db.execute(
         select(Circuit.vsi_name).where(Circuit.vsi_name.is_not(None))
     ).all()
-    return {r[0] for r in rows}
+    used = {r[0] for r in rows}
+    if settings.smart_overlay_allocation:
+        from app.services.overlay_inventory import network_reserved_vsis
+
+        used |= network_reserved_vsis(db)
+    return used
 
 
 def build_vsi_name(code: str) -> str:
@@ -67,6 +78,38 @@ def vsi_in_use(db: Session, vsi_name: str, *, exclude_circuit_id: int | None = N
     if exclude_circuit_id is not None:
         stmt = stmt.where(Circuit.id != exclude_circuit_id)
     return db.execute(stmt).scalars().first()
+
+
+def vni_unavailable_message(
+    db: Session, vni: int, *, exclude_circuit_id: int | None = None
+) -> str | None:
+    other = vni_in_use(db, vni, exclude_circuit_id=exclude_circuit_id)
+    if other:
+        return f"VNI {vni} 已被专线 {other.code} 占用"
+    if settings.smart_overlay_allocation:
+        from app.services.overlay_inventory import vni_conflict_on_network
+
+        conflict = vni_conflict_on_network(db, vni, exclude_circuit_id=exclude_circuit_id)
+        if conflict:
+            return conflict["message"]
+    return None
+
+
+def vsi_unavailable_message(
+    db: Session, vsi_name: str, *, exclude_circuit_id: int | None = None
+) -> str | None:
+    other = vsi_in_use(db, vsi_name, exclude_circuit_id=exclude_circuit_id)
+    if other:
+        return f"VSI {vsi_name} 已被专线 {other.code} 占用"
+    if settings.smart_overlay_allocation:
+        from app.services.overlay_inventory import vsi_conflict_on_network
+
+        conflict = vsi_conflict_on_network(
+            db, vsi_name, exclude_circuit_id=exclude_circuit_id
+        )
+        if conflict:
+            return conflict["message"]
+    return None
 
 
 def _used_vlans(db: Session) -> set[int]:

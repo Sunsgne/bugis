@@ -85,13 +85,15 @@ export default function ControlPlane() {
   const [bgp, setBgp] = useState<any[]>([]);
   const [cluster, setCluster] = useState<any>(null);
   const [bindings, setBindings] = useState<any[]>([]);
+  const [overlay, setOverlay] = useState<any>(null);
   const [vni, setVni] = useState<number | undefined>(undefined);
   const [syncing, setSyncing] = useState(false);
+  const [scanningOverlay, setScanningOverlay] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   async function load() {
     try {
-      const [s, v, r, t, b, c, d] = await Promise.all([
+      const [s, v, r, t, b, c, d, o] = await Promise.all([
         api.get("/controller/status"),
         api.get("/controller/vteps"),
         api.get("/controller/routes" + (vni != null ? `?vni=${vni}` : "")),
@@ -99,6 +101,7 @@ export default function ControlPlane() {
         api.get("/controller/bgp/sessions"),
         api.get("/controller/cluster"),
         api.get("/controller/dataplane/bindings"),
+        api.get("/controller/overlay-inventory"),
       ]);
       setStatus(s.data);
       setVteps(Array.isArray(v.data) ? v.data : []);
@@ -107,6 +110,7 @@ export default function ControlPlane() {
       setBgp(Array.isArray(b.data) ? b.data : []);
       setCluster(c.data);
       setBindings(Array.isArray(d.data) ? d.data : []);
+      setOverlay(o.data);
       setLoadError(null);
     } catch (e: any) {
       setLoadError(e?.response?.data?.detail || e?.message || "加载控制器数据失败");
@@ -121,6 +125,19 @@ export default function ControlPlane() {
       load();
     } finally {
       setSyncing(false);
+    }
+  }
+
+  async function scanOverlay() {
+    setScanningOverlay(true);
+    try {
+      const { data } = await api.post("/controller/overlay-inventory/scan");
+      setOverlay(data);
+      message.success(
+        `现网扫描完成 · ${data.network_only_services ?? 0} 个未纳管服务 · 保留 ${data.reserved_vni_count ?? 0} 个 VNI`,
+      );
+    } finally {
+      setScanningOverlay(false);
     }
   }
 
@@ -189,14 +206,69 @@ export default function ControlPlane() {
         <Col xs={12} md={6}>
           <Card>
             <Statistic
-              title="数据面绑定"
-              value={bindings.filter((b) => b.state === "applied").length}
-              suffix={`/ ${bindings.length}`}
+              title="现网保留 VNI"
+              value={overlay?.reserved_vni_count ?? 0}
+              suffix={overlay?.smart_allocation_enabled ? "智能避让" : ""}
               prefix={<CloudServerOutlined />}
             />
           </Card>
         </Col>
       </Row>
+
+      <Card
+        title="现网 VNI / VSI 占用扫描"
+        size="small"
+        extra={
+          <Button loading={scanningOverlay} onClick={scanOverlay}>
+            扫描现网标识
+          </Button>
+        }
+      >
+        <Space wrap style={{ marginBottom: 12 }}>
+          <Tag color="blue">平台纳管 {overlay?.platform_services ?? 0}</Tag>
+          <Tag color="orange">现网未纳管 {overlay?.network_only_services ?? 0}</Tag>
+          <Tag>已扫描设备 {overlay?.devices_with_inventory ?? 0}/{overlay?.devices_scanned ?? 0}</Tag>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            只读扫描 learned running-config，不会下发或修改设备配置；新建专线自动避开已占用 VNI/VSI
+          </Text>
+        </Space>
+        <Table
+          rowKey={(row: { device_id?: number; service_name?: string; vni?: number }) =>
+            `${row.device_id}-${row.service_name}-${row.vni ?? "u"}`
+          }
+          dataSource={(overlay?.items ?? []).slice(0, 100)}
+          pagination={{ pageSize: 20, showSizeChanger: true }}
+          size="small"
+          locale={{ emptyText: <Empty description="暂无现网 Overlay 数据 · 请对设备执行现网学习后扫描" /> }}
+          columns={[
+            { title: "设备", dataIndex: "device", width: 180, ellipsis: true },
+            { title: "VSI / 服务", dataIndex: "service_name", width: 180, ellipsis: true },
+            { title: "VNI", dataIndex: "vni", width: 80 },
+            { title: "RD", dataIndex: "rd", width: 140, ellipsis: true },
+            {
+              title: "来源",
+              dataIndex: "source",
+              width: 100,
+              render: (s: string) => (
+                <Tag color={s === "platform" ? "blue" : "orange"}>
+                  {s === "platform" ? "平台纳管" : "现网占用"}
+                </Tag>
+              ),
+            },
+            {
+              title: "专线",
+              dataIndex: "circuit_code",
+              width: 120,
+              render: (code?: string) => code || "—",
+            },
+            {
+              title: "接入接口",
+              dataIndex: "interfaces",
+              render: (ifs: string[] | undefined) => (ifs?.length ? ifs.join(", ") : "—"),
+            },
+          ]}
+        />
+      </Card>
 
       <Card title="控制器集群 · HA" size="small">
         <Table

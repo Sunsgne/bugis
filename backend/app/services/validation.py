@@ -16,6 +16,7 @@ from app.models.device import Device
 from app.models.enums import AccessMode, DeviceRole, PathMode, ServiceType
 from app.models.site import Site
 from app.services import port_inventory
+from app.services import overlay_inventory
 
 
 @dataclass
@@ -163,6 +164,14 @@ def validate_circuit(db: Session, circuit: Circuit) -> list[Issue]:
                 Issue("error", "vni_collision",
                       f"VNI {circuit.vni} 与专线 {other.code} 冲突")
             )
+        else:
+            net = overlay_inventory.vni_conflict_on_network(
+                db, circuit.vni, exclude_circuit_id=circuit.id
+            )
+            if net and net.get("type") == "network":
+                issues.append(
+                    Issue("warning", "vni_network_in_use", net["message"])
+                )
 
     # VSI collision
     if circuit.vsi_name:
@@ -176,6 +185,14 @@ def validate_circuit(db: Session, circuit: Circuit) -> list[Issue]:
                 Issue("error", "vsi_collision",
                       f"VSI {circuit.vsi_name} 与专线 {other.code} 冲突")
             )
+        else:
+            net = overlay_inventory.vsi_conflict_on_network(
+                db, circuit.vsi_name, exclude_circuit_id=circuit.id
+            )
+            if net and net.get("type") == "network":
+                issues.append(
+                    Issue("warning", "vsi_network_in_use", net["message"])
+                )
 
     # Endpoint interface naming present
     for ep in circuit.endpoints:

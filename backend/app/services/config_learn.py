@@ -10,7 +10,7 @@ from app.core.config import settings
 from app.models.device import Device
 from app.models.device_learn_run import DeviceLearnRun
 from app.models.enums import DeviceStatus
-from app.services import config_fetch, config_learn_parse, config_mgmt, port_inventory, snmp
+from app.services import config_fetch, config_learn_parse, config_mgmt, overlay_inventory, port_inventory, snmp
 from app.services import device_management, snmp_settings as snmp_cfg
 
 
@@ -104,6 +104,7 @@ def learn_device(
         if cfg.auto_discover_on_check:
             snmp.discover_interfaces(db, device)
     svid_scan = port_inventory.scan_device(db, device, include_legacy=False)
+    overlay = overlay_inventory.device_overlay_inventory(db, device)
 
     summary = {
         "dry_run": settings.dry_run,
@@ -111,6 +112,11 @@ def learn_device(
         "config_lines": len(content.splitlines()),
         "inventory": inventory.as_dict(),
         "enriched": enriched,
+        "overlay_inventory": {
+            "service_count": overlay.get("service_count", 0),
+            "network_only_count": overlay.get("network_only_count", 0),
+            "vnis": overlay.get("vnis", []),
+        },
         "svid_scan": {
             "ports_scanned": svid_scan.get("ports_scanned", 0),
             "total_s_vids": svid_scan.get("total_s_vids", 0),
@@ -141,6 +147,7 @@ def learn_device(
         "inventory": inventory.as_dict(),
         "enriched": enriched,
         "svid_scan": svid_scan,
+        "overlay_inventory": overlay,
         "dry_run": settings.dry_run,
     }
 
