@@ -62,6 +62,11 @@ class Settings(BaseSettings):
     scheduler_enabled: bool = True
     scheduler_interval_seconds: int = 30
 
+    # --- Container / HA bootstrap (production multi-node) ---
+    run_migrations: bool = True
+    run_seed: bool = True
+    run_demo: bool = True
+
     # --- Built-in Bugis SDN controller ---
     controller_bgp_asn: int = 65000
     controller_node_id: str = "bugis-1"

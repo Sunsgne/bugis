@@ -195,6 +195,22 @@ docker compose -f docker-compose.demo.yml --env-file deploy/demo.env up --build
 
 Workflow 文件：`.github/workflows/demo-deploy.yml`（push `main` 或手动触发）。
 
+### 生产高可用（多节点）
+
+详见 **[docs/ha-deployment.md](docs/ha-deployment.md)**。
+
+| 方案 | 服务器数 | 适用 |
+|------|----------|------|
+| 最小 HA | 4 台 | LB + 2×App + 1×PostgreSQL |
+| 推荐生产 | 6 台 | 双 LB + 2×App + DB 主从 |
+| 企业级 | 8 台+ | 托管 DB / Patroni + 独立监控 |
+
+```bash
+./scripts/ha/generate-inventory.sh          # 交互生成清单
+# 或 cp deploy/ha/inventory.env.example deploy/ha/inventory.env
+source deploy/ha/inventory.env && ./scripts/ha/deploy-ha.sh
+```
+
 ## ⚠️ 说明
 
 - 默认 **生产模式**（`BUGIS_DRY_RUN=false`），配置会通过 NETCONF/SSH 真实下发；开发/演示可设为 dry-run。

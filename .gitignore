@@ -20,6 +20,7 @@ frontend/.vite/
 deploy/_remote*.py
 deploy/remote.py
 deploy/demo.env
+deploy/ha/inventory.env
 
 # Editor / OS
 .DS_Store

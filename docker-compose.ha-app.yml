@@ -1,0 +1,40 @@
+# Bugis HA — application node (run on each App server).
+# Connects to external PostgreSQL via BUGIS_DATABASE_URL.
+#
+# Node 1 (leader): BUGIS_SCHEDULER_ENABLED=true  BUGIS_RUN_MIGRATIONS=true
+# Node 2+ (follower): BUGIS_SCHEDULER_ENABLED=false BUGIS_RUN_MIGRATIONS=false
+#
+# Usage:
+#   docker compose -f docker-compose.ha-app.yml --env-file deploy/ha/app.env up -d --build
+
+services:
+  backend:
+    build: ./backend
+    environment:
+      BUGIS_DATABASE_URL: ${BUGIS_DATABASE_URL}
+      BUGIS_SECRET_KEY: ${BUGIS_SECRET_KEY}
+      BUGIS_APP_ENV: production
+      BUGIS_DRY_RUN: ${BUGIS_DRY_RUN:-false}
+      BUGIS_SCHEDULER_ENABLED: ${BUGIS_SCHEDULER_ENABLED:-true}
+      BUGIS_SCHEDULER_INTERVAL_SECONDS: ${BUGIS_SCHEDULER_INTERVAL_SECONDS:-30}
+      BUGIS_CONTROLLER_NODE_ID: ${BUGIS_CONTROLLER_NODE_ID:-bugis-1}
+      BUGIS_RUN_MIGRATIONS: ${BUGIS_RUN_MIGRATIONS:-false}
+      BUGIS_RUN_SEED: ${BUGIS_RUN_SEED:-false}
+      BUGIS_RUN_DEMO: ${BUGIS_RUN_DEMO:-false}
+      BUGIS_EXPOSE_OPENAPI: ${BUGIS_EXPOSE_OPENAPI:-false}
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 120s
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${HA_APP_HTTP_PORT:-3300}:80"
+    restart: unless-stopped

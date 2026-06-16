@@ -1,0 +1,36 @@
+# Bugis HA — PostgreSQL primary (single writer).
+# For production DB HA use managed RDS / Patroni; this is the self-hosted primary.
+#
+# Usage:
+#   docker compose -f docker-compose.ha-db.yml --env-file deploy/ha/db.env up -d
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-bugis}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-bugis}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "${HA_DB_PORT:-5432}:5432"
+    command:
+      - postgres
+      - -c
+      - wal_level=replica
+      - -c
+      - max_wal_senders=5
+      - -c
+      - max_replication_slots=5
+      - -c
+      - hot_standby=on
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-bugis} -d ${POSTGRES_DB:-bugis}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  pgdata:
