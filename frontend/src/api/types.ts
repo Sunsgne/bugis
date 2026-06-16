@@ -170,6 +170,7 @@ export interface CircuitEndpoint {
   access_mode?: string;
   vlan_id?: number;
   inner_vlan_id?: number;
+  interface_description?: string;
   ip_address?: string;
   gateway_ip?: string;
 }

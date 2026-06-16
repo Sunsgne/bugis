@@ -343,6 +343,24 @@ export default function CircuitEndpointsEditor({
                         )}
 
                         <Row gutter={[16, 0]} style={{ marginTop: 12 }}>
+                          <Col xs={24}>
+                            <Form.Item
+                              name={[field.name, "interface_description"]}
+                              label="接口描述"
+                              tooltip="下发到设备 S-VID / 子接口的 description，便于现网识别业务"
+                              rules={[{ max: 255, message: "最多 255 个字符" }]}
+                            >
+                              <Input
+                                placeholder="例如 ruiyou-sha-tyo-4008（留空则使用默认 CUST_租户_专线编码）"
+                                allowClear
+                                maxLength={255}
+                                showCount
+                              />
+                            </Form.Item>
+                          </Col>
+                        </Row>
+
+                        <Row gutter={[16, 0]}>
                           <Col xs={24} sm={12} md={8}>
                             <Form.Item name={[field.name, "access_mode"]} label="封装模式" initialValue="dot1q">
                               <Select

@@ -13,7 +13,9 @@ vsi {{ circuit.vsi_name }}
 {%- endmacro %}
 
 {% macro service_instance_ac(endpoint, circuit, mode, svid, cvid) -%}
+{% set ac_desc = endpoint.interface_description or ('CUST_' ~ circuit.tenant_id ~ '_' ~ circuit.code) %}
  service-instance {{ svid or 1 }}
+  description {{ ac_desc }}
 {% if mode == 'access' %}
   encapsulation untagged
 {% elif mode == 'qinq' %}

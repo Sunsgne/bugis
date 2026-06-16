@@ -17,8 +17,9 @@ bridge-domain {{ circuit.vni }}
 {%- endmacro %}
 
 {% macro l2_subif(endpoint, circuit, mode, svid, cvid) -%}
+{% set ac_desc = endpoint.interface_description or ('CUST_' ~ circuit.tenant_id ~ '_' ~ circuit.code) %}
 interface {{ l2_ifname(endpoint, mode, svid) }} mode l2
- description CUST_{{ circuit.tenant_id }}_{{ circuit.code }}
+ description {{ ac_desc }}
 {% if mode == 'access' %}
  encapsulation untag
 {% elif mode == 'qinq' %}

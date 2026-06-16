@@ -389,6 +389,7 @@ export default function Circuits() {
         access_mode: e.access_mode || "dot1q",
         vlan_id: e.vlan_id,
         inner_vlan_id: e.inner_vlan_id,
+        interface_description: e.interface_description,
       })),
     });
   }
@@ -397,13 +398,24 @@ export default function Circuits() {
     if (!editEndpointsTarget) return;
     const values = await editEndpointsForm.validateFields();
     const endpoints = (values.endpoints || []).map(
-      ({ label, device_id, interface_name, access_mode, vlan_id, inner_vlan_id }: Record<string, unknown>) => ({
+      ({
+        label,
+        device_id,
+        interface_name,
+        access_mode,
+        vlan_id,
+        inner_vlan_id,
+        interface_description,
+      }: Record<string, unknown>) => ({
         label,
         device_id,
         interface_name,
         access_mode: access_mode || "dot1q",
         ...(vlan_id != null && vlan_id !== "" ? { vlan_id } : {}),
         ...(inner_vlan_id != null && inner_vlan_id !== "" ? { inner_vlan_id } : {}),
+        ...(interface_description != null && String(interface_description).trim()
+          ? { interface_description: String(interface_description).trim() }
+          : {}),
       }),
     );
     const minEps = editEndpointsTarget.service_type === "remote_ipt" ? 1 : 2;
@@ -676,6 +688,7 @@ export default function Circuits() {
                               {detail.endpoints.map((e) => (
                                 <Tag key={e.id}>
                                   {e.label}: {deviceName(e.device_id)} / {e.interface_name}
+                                  {e.interface_description ? ` · ${e.interface_description}` : ""}
                                   {e.access_mode ? ` · ${e.access_mode}` : ""}
                                   {e.vlan_id ? ` vlan ${e.vlan_id}` : ""}
                                   {e.inner_vlan_id ? `/${e.inner_vlan_id}` : ""}

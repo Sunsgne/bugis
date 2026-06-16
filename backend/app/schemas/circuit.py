@@ -14,6 +14,7 @@ class CircuitEndpointBase(BaseModel):
     access_mode: AccessMode = AccessMode.DOT1Q
     vlan_id: int | None = None
     inner_vlan_id: int | None = None
+    interface_description: str | None = None
     ip_address: str | None = None
     gateway_ip: str | None = None
 

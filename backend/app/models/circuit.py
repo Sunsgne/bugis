@@ -100,6 +100,8 @@ class CircuitEndpoint(Base, TimestampMixin):
     )
     vlan_id: Mapped[int | None] = mapped_column(Integer, nullable=True)  # S-VID / access VLAN
     inner_vlan_id: Mapped[int | None] = mapped_column(Integer, nullable=True)  # C-VID (QinQ)
+    # Pushed to device S-VID / AC sub-interface description on provision.
+    interface_description: Mapped[str | None] = mapped_column(String(255), nullable=True)
     # Customer-facing IP (for L3VPN IRB gateway)
     ip_address: Mapped[str | None] = mapped_column(String(64), nullable=True)
     gateway_ip: Mapped[str | None] = mapped_column(String(64), nullable=True)
