@@ -221,6 +221,8 @@ def list_interfaces(
     rows = db.execute(
         select(DeviceInterface).where(DeviceInterface.device_id == device_id)
     ).scalars().all()
+    if device.vendor == Vendor.HUAWEI:
+        rows = [r for r in rows if not port_inventory.is_huawei_subinterface(r.name)]
     return sorted(rows, key=lambda i: (i.ifindex or 0, i.name))
 
 

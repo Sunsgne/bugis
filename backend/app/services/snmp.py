@@ -286,6 +286,7 @@ def _walk_with_mgmt_failover(
 def discover_interfaces(db: Session, device: Device) -> list[DeviceInterface]:
     """Discover and upsert a device's interfaces. Returns the current set."""
     from app.services import link_monitor
+    from app.services.port_inventory import is_huawei_subinterface
 
     cfg = snmp_cfg.get_or_create(db)
     device_snmp = snmp_device.effective_snmp(device)
@@ -312,6 +313,9 @@ def discover_interfaces(db: Session, device: Device) -> list[DeviceInterface]:
                 discovered = _synthesize(device)
             else:
                 raise RuntimeError(msg) from exc
+
+    if device.vendor == Vendor.HUAWEI:
+        discovered = [d for d in discovered if not is_huawei_subinterface(d["name"])]
 
     existing = {
         i.name: i
@@ -346,4 +350,6 @@ def discover_interfaces(db: Session, device: Device) -> list[DeviceInterface]:
     if cfg.sync_link_capacity:
         link_monitor.enrich_interface_descriptions(db, device)
         link_monitor.sync_all_link_capacity(db)
+    if device.vendor == Vendor.HUAWEI:
+        return [iface for iface in existing.values() if not is_huawei_subinterface(iface.name)]
     return list(existing.values())

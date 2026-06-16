@@ -178,3 +178,62 @@ interface GE1/0/1.100 mode l2
 """
     parsed = port_inventory._parse_interface_blocks(config, Vendor.HUAWEI)
     assert parsed["GE1/0/1.100"][0].rate_limit_mbps == 600
+
+
+def test_huawei_subinterface_helpers():
+    assert port_inventory.is_huawei_subinterface("10GE1/0/2.1050")
+    assert port_inventory.parse_huawei_subinterface("10GE1/0/2.1050") == ("10GE1/0/2", 1050)
+    assert port_inventory.huawei_physical_port("10GE1/0/2.1050") == "10GE1/0/2"
+    assert not port_inventory.is_huawei_subinterface("10GE1/0/2")
+
+
+def test_rollup_huawei_subif_usage_to_physical_port():
+    config = """
+interface 10GE1/0/2.1050 mode l2
+ encapsulation dot1q vid 1050
+ traffic-policy tp-rl inbound
+#
+interface 10GE1/0/2.1064 mode l2
+ encapsulation dot1q vid 1064
+#
+interface 10GE1/0/3.1125 mode l2
+ encapsulation dot1q vid 1125
+"""
+    parsed = port_inventory._parse_interface_blocks(config, Vendor.HUAWEI)
+    port_map = {
+        iface: port_inventory.PortUsage(interface_name=iface, entries=entries)
+        for iface, entries in parsed.items()
+    }
+    rolled = port_inventory._rollup_huawei_subif_usage(port_map)
+    assert "10GE1/0/2.1050" not in rolled
+    assert rolled["10GE1/0/2"].entries[0].s_vid == 1050
+    assert rolled["10GE1/0/2"].entries[1].s_vid == 1064
+    assert rolled["10GE1/0/3"].entries[0].s_vid == 1125
+
+
+def test_remap_huawei_subif_config_to_snmp_physical():
+    config = """
+interface 10GE1/0/2.1050 mode l2
+ encapsulation dot1q vid 1050
+"""
+    parsed = port_inventory._parse_interface_blocks(config, Vendor.HUAWEI)
+    port_map = {
+        iface: port_inventory.PortUsage(interface_name=iface, entries=entries)
+        for iface, entries in parsed.items()
+    }
+    rolled = port_inventory._rollup_huawei_subif_usage(port_map)
+    remapped = port_inventory._remap_config_usage(
+        rolled,
+        {"10GE1/0/2", "10GE1/0/3"},
+    )
+    assert "10GE1/0/2" in remapped
+    assert remapped["10GE1/0/2"].entries[0].s_vid == 1050
+
+
+def test_resolve_huawei_subif_to_parent_snmp_name():
+    alias_map = port_inventory._build_alias_map({"10GE1/0/2", "10GE1/0/3"})
+    assert (
+        port_inventory._resolve_iface_name("10GE1/0/2.1050", alias_map)
+        == "10GE1/0/2"
+    )
+

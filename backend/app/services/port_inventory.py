@@ -112,6 +112,32 @@ def _normalize_iface(name: str) -> str:
     return name.strip()
 
 
+_HUAWEI_SUBIF = re.compile(r"^(.+)\.(\d+)$")
+
+
+def is_huawei_subinterface(name: str) -> bool:
+    """True for Huawei L2 sub-interfaces like GE1/0/1.1050 or 10GE1/0/2.2001."""
+    return parse_huawei_subinterface(name) is not None
+
+
+def parse_huawei_subinterface(name: str) -> tuple[str, int] | None:
+    """Split Huawei sub-interface into parent physical port and VLAN id."""
+    norm = _normalize_iface(name)
+    m = _HUAWEI_SUBIF.match(norm)
+    if not m:
+        return None
+    parent, vlan_s = m.group(1), m.group(2)
+    if not _iface_port_suffix(parent) and not re.search(r"\d+/\d+", parent):
+        return None
+    return parent, int(vlan_s)
+
+
+def huawei_physical_port(name: str) -> str:
+    """Map Huawei sub-interface names onto their parent physical port."""
+    parts = parse_huawei_subinterface(name)
+    return parts[0] if parts else _normalize_iface(name)
+
+
 def _iface_port_suffix(name: str) -> str | None:
     """Extract chassis/slot/port suffix e.g. 1/0/25 from any interface name."""
     m = re.search(r"(\d+(?:/\d+)+)\s*$", name.strip())
@@ -199,7 +225,7 @@ def _build_iface_resolver(
     return snmp_names, _build_alias_map(snmp_names)
 
 
-def _resolve_iface_name(name: str, alias_to_canonical: dict[str, str]) -> str | None:
+def _resolve_iface_name_direct(name: str, alias_to_canonical: dict[str, str]) -> str | None:
     norm = _normalize_iface(name)
     if norm in alias_to_canonical:
         return alias_to_canonical[norm]
@@ -212,6 +238,37 @@ def _resolve_iface_name(name: str, alias_to_canonical: dict[str, str]) -> str | 
             if alias in alias_to_canonical:
                 return alias_to_canonical[alias]
     return None
+
+
+def _resolve_iface_name(name: str, alias_to_canonical: dict[str, str]) -> str | None:
+    """Resolve CLI/platform/config names onto canonical SNMP ifNames."""
+    resolved = _resolve_iface_name_direct(name, alias_to_canonical)
+    if resolved:
+        return resolved
+    parts = parse_huawei_subinterface(name)
+    if parts:
+        return _resolve_iface_name_direct(parts[0], alias_to_canonical)
+    return None
+
+
+def _rollup_huawei_subif_usage(by_iface: dict[str, PortUsage]) -> dict[str, PortUsage]:
+    """Aggregate Huawei sub-interface VLAN bindings onto parent physical ports."""
+    rolled: dict[str, PortUsage] = {}
+    for iface, usage in by_iface.items():
+        parent = huawei_physical_port(iface)
+        bucket = rolled.setdefault(parent, PortUsage(interface_name=parent))
+        for entry in usage.entries:
+            _merge_entries(bucket.entries, entry)
+    return rolled
+
+
+def _canonical_iface_for_device(
+    device: Device,
+    name: str,
+    alias_to_canonical: dict[str, str],
+) -> str:
+    lookup = huawei_physical_port(name) if device.vendor == Vendor.HUAWEI else name
+    return _resolve_iface_name(lookup, alias_to_canonical) or lookup
 
 
 def _remap_usage_map(
@@ -710,6 +767,15 @@ def device_config_usage(db: Session, device: Device) -> dict[str, PortUsage]:
     learned = config_mgmt.latest_learned(db, device.id)
     config = learned.content if learned else config_mgmt.build_running_config(db, device)
     parsed = _parse_interface_blocks(config, device.vendor)
+    if device.vendor == Vendor.HUAWEI:
+        port_map = {
+            iface: PortUsage(interface_name=iface, entries=entries)
+            for iface, entries in parsed.items()
+        }
+        parsed = {
+            iface: usage.entries
+            for iface, usage in _rollup_huawei_subif_usage(port_map).items()
+        }
     vsi_map = _parse_h3c_vsi_map(config) if device.vendor == Vendor.H3C else {}
     catalog = _build_circuit_catalog(db)
     by_iface: dict[str, PortUsage] = {}
@@ -797,7 +863,8 @@ def _dedupe_device_interfaces(
 
     groups: dict[str, list[DeviceInterface]] = {}
     for row in rows:
-        canonical = _resolve_iface_name(row.name, alias_to_canonical) or row.name
+        lookup = huawei_physical_port(row.name) if device.vendor == Vendor.HUAWEI else row.name
+        canonical = _resolve_iface_name(lookup, alias_to_canonical) or lookup
         groups.setdefault(canonical, []).append(row)
 
     canonical_rows: dict[str, DeviceInterface] = {}
@@ -843,6 +910,35 @@ def _reconcile_endpoint_names(
             ep.interface_name = canonical
             updated += 1
     return updated
+
+
+def _cleanup_huawei_subif_rows(
+    db: Session,
+    ifaces: dict[str, DeviceInterface],
+    alias_to_canonical: dict[str, str],
+) -> int:
+    """Remove merged Huawei sub-interface rows after rollup onto physical ports."""
+    removed = 0
+    for name in list(ifaces.keys()):
+        parts = parse_huawei_subinterface(name)
+        if not parts:
+            continue
+        parent = _resolve_iface_name(parts[0], alias_to_canonical) or parts[0]
+        if parent == name:
+            continue
+        sub_row = ifaces.get(name)
+        parent_row = ifaces.get(parent)
+        if not sub_row or not parent_row:
+            continue
+        merged_entries = _entries_from_json(parent_row.used_s_vids)
+        for entry in _entries_from_json(sub_row.used_s_vids):
+            _merge_entries(merged_entries, entry)
+        parent_row.used_s_vids = [e.as_dict() for e in merged_entries]
+        parent_row.allocated = parent_row.allocated or sub_row.allocated
+        db.delete(sub_row)
+        del ifaces[name]
+        removed += 1
+    return removed
 
 
 def scan_device(db: Session, device: Device, *, include_legacy: bool = False) -> dict:
@@ -891,6 +987,9 @@ def scan_device(db: Session, device: Device, *, include_legacy: bool = False) ->
                 di.used_s_vids = []
                 di.allocated = False
                 updated += 1
+
+    if device.vendor == Vendor.HUAWEI:
+        updated += _cleanup_huawei_subif_rows(db, ifaces, alias_to_canonical)
 
     conflicts = find_conflicts(combined)
     return {
@@ -983,9 +1082,11 @@ def list_port_bindings(db: Session, device: Device) -> dict:
     snmp_names, alias_to_canonical = _build_iface_resolver(ifaces)
 
     def _canonical_iface(name: str) -> str:
-        return _resolve_iface_name(name, alias_to_canonical) or _normalize_iface(name)
+        return _canonical_iface_for_device(device, name, alias_to_canonical)
 
     for iface in ifaces:
+        if device.vendor == Vendor.HUAWEI and is_huawei_subinterface(iface.name):
+            continue
         canonical = _canonical_iface(iface.name)
         for raw in iface.used_s_vids or []:
             btype = "platform" if raw.get("source") == "platform" else "device"
@@ -1039,7 +1140,12 @@ def list_port_bindings(db: Session, device: Device) -> dict:
         )
     )
     bound_ifaces = {row["interface_name"] for row in items}
-    unbound_ifaces = sorted(snmp_names - bound_ifaces) if snmp_names else []
+    snmp_physical = (
+        {n for n in snmp_names if not is_huawei_subinterface(n)}
+        if device.vendor == Vendor.HUAWEI
+        else snmp_names
+    )
+    unbound_ifaces = sorted(snmp_physical - bound_ifaces) if snmp_physical else []
 
     return {
         "device_id": device.id,

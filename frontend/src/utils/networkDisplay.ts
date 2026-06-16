@@ -26,6 +26,24 @@ export function interfacePortSuffix(name: string): string | null {
   return match ? match[1] : null;
 }
 
+/** Huawei L2 sub-interface e.g. 10GE1/0/2.1050 → parent 10GE1/0/2, vlan 1050 */
+export function parseHuaweiSubinterface(name: string): { parent: string; vlan: number } | null {
+  const trimmed = name.trim();
+  const match = trimmed.match(/^(.+)\.(\d+)$/);
+  if (!match) return null;
+  const parent = match[1];
+  if (!interfacePortSuffix(parent) && !/\d+\/\d+/.test(parent)) return null;
+  return { parent, vlan: Number(match[2]) };
+}
+
+export function isHuaweiSubinterface(name: string): boolean {
+  return parseHuaweiSubinterface(name) !== null;
+}
+
+export function huaweiPhysicalPort(name: string): string {
+  return parseHuaweiSubinterface(name)?.parent ?? name.trim();
+}
+
 /** Short display label, e.g. Twenty-FiveGigE1/0/1 → 25G·1/0/1 */
 export function formatInterfaceShort(name: string): string {
   const trimmed = name.trim();

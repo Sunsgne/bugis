@@ -37,6 +37,7 @@ import {
   formatInterfaceTooltip,
   formatOperStatus,
   formatVlanLabel,
+  isHuaweiSubinterface,
 } from "../utils/networkDisplay";
 
 const BINDING_SOURCE: Record<string, { label: string; color: string }> = {
@@ -167,11 +168,16 @@ export default function DevicePortDrawer({
     };
   }, [device?.id, refreshVersion]);
 
-  const ifaceHasSvid = ifaces.some((i) => (i.used_s_vids?.length ?? 0) > 0);
+  const physicalPorts = useMemo(() => {
+    if (device?.vendor !== "huawei") return ifaces;
+    return ifaces.filter((iface) => !isHuaweiSubinterface(iface.name));
+  }, [ifaces, device?.vendor]);
+
+  const ifaceHasSvid = physicalPorts.some((i) => (i.used_s_vids?.length ?? 0) > 0);
 
   const ifaceRows = useMemo(() => {
     const q = ifaceSearch.trim().toLowerCase();
-    return ifaces.filter((iface) => {
+    return physicalPorts.filter((iface) => {
       if (ifaceSvidOnly && !(iface.used_s_vids?.length ?? 0)) return false;
       if (ifaceStatus === "up" && iface.oper_status !== "up") return false;
       if (ifaceStatus === "down" && iface.oper_status === "up") return false;
@@ -182,11 +188,11 @@ export default function DevicePortDrawer({
         (iface.description || "").toLowerCase().includes(q)
       );
     });
-  }, [ifaces, ifaceSvidOnly, ifaceSearch, ifaceStatus]);
+  }, [physicalPorts, ifaceSvidOnly, ifaceSearch, ifaceStatus]);
 
   const ifaceSvidTotal = useMemo(
-    () => ifaces.reduce((sum, i) => sum + (i.used_s_vids?.length ?? 0), 0),
-    [ifaces],
+    () => physicalPorts.reduce((sum, i) => sum + (i.used_s_vids?.length ?? 0), 0),
+    [physicalPorts],
   );
 
   async function refreshAll(refreshScan = true) {
@@ -239,6 +245,9 @@ export default function DevicePortDrawer({
     >
       <Typography.Paragraph type="secondary" style={{ marginTop: 0 }}>
         物理端口来自 SNMP IF-MIB；客户接入绑定来自平台专线端点；S-VID 占用来自 running-config 与平台纳管合并。
+        {device?.vendor === "huawei" ? (
+          <> 华为 dot1q/qinq 以子接口配置，平台按物理口汇总展示（与华三 service-instance 逻辑一致）。</>
+        ) : null}
         {device?.mgmt_ip_active ? (
           <>
             {" "}
@@ -270,10 +279,10 @@ export default function DevicePortDrawer({
         items={[
           {
             key: "ports",
-            label: `物理端口 (${ifaces.length})`,
+            label: `物理端口 (${physicalPorts.length})`,
             children: (
               <>
-                {!ifacesLoading && ifaces.length > 0 && !ifaceHasSvid ? (
+                {!ifacesLoading && physicalPorts.length > 0 && !ifaceHasSvid ? (
                   <Alert
                     type="info"
                     showIcon
@@ -314,8 +323,8 @@ export default function DevicePortDrawer({
                   {ifaceHasSvid ? (
                     <Space size={6}>
                       <Typography.Text type="secondary">
-                        {ifaceSvidTotal} 个 S-VID · {ifaces.length} 个端口
-                        {ifaceRows.length !== ifaces.length
+                        {ifaceSvidTotal} 个 S-VID · {physicalPorts.length} 个端口
+                        {ifaceRows.length !== physicalPorts.length
                           ? ` · 筛选后 ${ifaceRows.length}`
                           : ""}
                       </Typography.Text>
@@ -324,8 +333,8 @@ export default function DevicePortDrawer({
                     </Space>
                   ) : (
                     <Typography.Text type="secondary">
-                      共 {ifaces.length} 个端口
-                      {ifaceRows.length !== ifaces.length ? ` · 筛选后 ${ifaceRows.length}` : ""}
+                      共 {physicalPorts.length} 个端口
+                      {ifaceRows.length !== physicalPorts.length ? ` · 筛选后 ${ifaceRows.length}` : ""}
                     </Typography.Text>
                   )}
                 </div>
