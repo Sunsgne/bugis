@@ -14,7 +14,6 @@ l2vpn enable
 interface {{ endpoint.interface_name }}
  port link-mode bridge
  description CUST_{{ circuit.tenant_id }}_{{ circuit.code }}
- mtu {{ circuit.mtu }}
 {{ h3c.service_instance_ac(endpoint, circuit, mode, svid, cvid) }}
 #
 return

@@ -784,22 +784,27 @@ def test_rate_limit_rendering(client, auth_headers):
     cfgs = {j["device_id"]: j["rendered_config"] for j in wo["config_jobs"]}
     h3c = cfgs[dev_h3c["id"]]
     hw = cfgs[huawei["id"]]
-    # H3C: classifier/behavior/policy globals + qos apply on AC (cir unit = kbps)
+    # H3C: classifier/behavior/policy globals + qos apply on VSI
     assert "traffic classifier tc-" in h3c
     assert "car cir 204800 cbs 12800000" in h3c  # 200 Mbps * 1024 / * 64000
     assert "qos policy qp-" in h3c
     assert "qos apply policy qp-" in h3c
     assert "qos car inbound" not in h3c
-    si = h3c.index("service-instance")
+    assert "mtu 9000" in h3c or "mtu 1500" in h3c
+    vsi = h3c.index("vsi ")
     apply = h3c.index("qos apply policy")
-    xconn = h3c.index("xconnect")
-    assert si < apply < xconn
-    assert h3c.index("encapsulation") < apply
-    # Huawei: traffic policy objects + traffic-policy on sub-interface
+    si = h3c.index("service-instance")
+    assert vsi < apply < si
+    assert "encapsulation s-vid" in h3c[si:]
+    # Huawei: traffic policy objects + traffic-policy on bridge-domain
     assert "traffic policy tp-" in hw
     assert "traffic-policy tp-" in hw
     assert "car cir 204800" in hw
     assert "qos lr cir" not in hw
+    bd = hw.index("bridge-domain")
+    tp = hw.index("traffic-policy tp-")
+    subif = hw.index("interface GE1/0/7")
+    assert bd < tp < subif
 
 
 def test_h3c_huawei_template_quality(client, auth_headers):
@@ -827,7 +832,10 @@ def test_h3c_huawei_template_quality(client, auth_headers):
     assert "gateway vsi-interface Vsi-interface" in h3c
     assert "distributed-gateway local" in h3c
     assert "statistics enable" in h3c
-    assert h3c.index("service-instance") < h3c.index("qos apply policy") < h3c.index("xconnect")
+    vsi = h3c.index("vsi ")
+    apply = h3c.index("qos apply policy")
+    si = h3c.index("service-instance")
+    assert vsi < apply < si
 
     l2 = client.post(
         "/api/v1/circuits", headers=auth_headers,
@@ -846,6 +854,11 @@ def test_h3c_huawei_template_quality(client, auth_headers):
     assert "GE1/0/8." not in hw_cfg
     assert "encapsulation untag" in hw_cfg
     assert "head-end peer-list protocol bgp" in hw_cfg
+    bd = hw_cfg.index("bridge-domain")
+    tp = hw_cfg.index("traffic-policy tp-")
+    subif = hw_cfg.index("interface GE1/0/8")
+    assert bd < tp < subif
+    assert " mtu " in hw_cfg.split("bridge-domain", 1)[1].split("interface", 1)[0]
 
 
 def test_srmpls_vendor_template_quality(client, auth_headers):

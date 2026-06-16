@@ -37,11 +37,16 @@ undo traffic classifier tc-{{ circuit.code }}
 
 {% macro bridge_domain_evpn(circuit) -%}
 bridge-domain {{ circuit.vni }}
+ mtu {{ circuit.mtu }}
  vxlan vni {{ circuit.vni }}
  evpn
   route-distinguisher {{ circuit.route_distinguisher }}
   vpn-target {{ circuit.route_target }} export-extcommunity
   vpn-target {{ circuit.route_target }} import-extcommunity
+{% if circuit.bandwidth_mbps %}
+ traffic-policy {{ qos_policy_name(circuit) }} inbound
+ traffic-policy {{ qos_policy_name(circuit) }} outbound
+{% endif %}
 {%- endmacro %}
 
 {% macro l2_subif(endpoint, circuit, mode, svid, cvid) -%}
@@ -56,11 +61,6 @@ interface {{ l2_ifname(endpoint, mode, svid) }} mode l2
  rewrite pop single
 {% endif %}
  bridge-domain {{ circuit.vni }}
-{% if circuit.bandwidth_mbps %}
- # rate-limit: traffic-policy on AC sub-interface
- traffic-policy {{ qos_policy_name(circuit) }} inbound
- traffic-policy {{ qos_policy_name(circuit) }} outbound
-{% endif %}
 {%- endmacro %}
 
 {% macro nve_vni(circuit) -%}

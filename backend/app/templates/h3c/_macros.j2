@@ -2,6 +2,7 @@
 {% macro vsi_evpn_header(circuit, l3=false) -%}
 vsi {{ circuit.vsi_name }}
  description {{ circuit.name }} (tenant={{ circuit.tenant_id }})
+ mtu {{ circuit.mtu }}
 {% if l3 %}
  gateway vsi-interface Vsi-interface{{ circuit.vni }}
 {% endif %}
@@ -10,6 +11,10 @@ vsi {{ circuit.vsi_name }}
   route-distinguisher {{ circuit.route_distinguisher }}
   vpn-target {{ circuit.route_target }} import-extcommunity
   vpn-target {{ circuit.route_target }} export-extcommunity
+{% if circuit.bandwidth_mbps %}
+ qos apply policy {{ qos_policy_name(circuit) }} inbound
+ qos apply policy {{ qos_policy_name(circuit) }} outbound
+{% endif %}
 {%- endmacro %}
 
 {% macro qos_policy_name(circuit) -%}
@@ -19,7 +24,7 @@ qp-{{ circuit.code }}
 {% macro qos_policy_objects(circuit) -%}
 {% if circuit.bandwidth_mbps %}
 # QoS CAR via classifier/behavior/policy (Comware); cir unit = kbps
-traffic classifier tc-{{ circuit.code }} operator and
+traffic classifier tc-{{ circuit.code }} operator or
  if-match any
 #
 traffic behavior tb-{{ circuit.code }}
@@ -48,11 +53,6 @@ undo traffic classifier tc-{{ circuit.code }}
   encapsulation s-vid {{ svid }} c-vid {{ cvid }}
 {% else %}
   encapsulation s-vid {{ svid }}
-{% endif %}
-{% if circuit.bandwidth_mbps %}
-  # rate-limit: apply QoS policy on AC (not inline qos car)
-  qos apply policy {{ qos_policy_name(circuit) }} inbound
-  qos apply policy {{ qos_policy_name(circuit) }} outbound
 {% endif %}
   statistics enable
   xconnect vsi {{ circuit.vsi_name }}
