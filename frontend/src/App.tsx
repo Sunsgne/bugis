@@ -141,7 +141,6 @@ function AlarmBell({ onClick }: { onClick: () => void }) {
 
     async function connectSse() {
       try {
-        const { fetchStreamTicket } = await import("./api/client");
         const ticket = await fetchStreamTicket();
         if (cancelled || !("EventSource" in window)) return;
         es = new EventSource(`/api/v1/stream/events?ticket=${encodeURIComponent(ticket)}`);
