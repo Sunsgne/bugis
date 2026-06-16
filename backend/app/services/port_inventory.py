@@ -346,6 +346,17 @@ def _apply_circuit_context(entry: SvidEntry, circuit: Circuit, catalog: _Circuit
         entry.tenant_code = entry.tenant_code or tenant.code
 
 
+def _infer_customer_from_text(text: str | None) -> str | None:
+    if not text:
+        return None
+    match = re.search(r"cn\(([^)]+)\)", text, re.I)
+    if match:
+        return match.group(1).strip()
+    if text.lower().startswith("cus-"):
+        return text
+    return None
+
+
 def _enrich_svid_entry(
     entry: SvidEntry,
     *,
