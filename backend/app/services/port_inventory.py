@@ -67,6 +67,14 @@ class SvidEntry:
     circuit_code: str | None = None
     source: str = "platform"  # platform | device | legacy
     note: str | None = None
+    description: str | None = None
+    rate_limit_mbps: int | None = None
+    vni: int | None = None
+    vsi_name: str | None = None
+    tenant_name: str | None = None
+    tenant_code: str | None = None
+    circuit_name: str | None = None
+    bandwidth_mbps: int | None = None
 
     def as_dict(self) -> dict:
         return {
@@ -75,7 +83,15 @@ class SvidEntry:
             "access_mode": self.access_mode,
             "circuit_code": self.circuit_code,
             "source": self.source,
-            **({"note": self.note} if self.note else {}),
+            "note": self.note,
+            "description": self.description,
+            "rate_limit_mbps": self.rate_limit_mbps,
+            "vni": self.vni,
+            "vsi_name": self.vsi_name,
+            "tenant_name": self.tenant_name,
+            "tenant_code": self.tenant_code,
+            "circuit_name": self.circuit_name,
+            "bandwidth_mbps": self.bandwidth_mbps,
         }
 
     def key(self) -> tuple:
@@ -235,13 +251,124 @@ def interface_description_usage(db: Session, device: Device) -> dict[str, PortUs
 
 
 def _merge_entries(existing: list[SvidEntry], new: SvidEntry) -> None:
-    keys = {e.key() for e in existing}
-    if new.key() not in keys:
-        existing.append(new)
+    for entry in existing:
+        if entry.key() == new.key():
+            for field in (
+                "circuit_code",
+                "note",
+                "description",
+                "rate_limit_mbps",
+                "vni",
+                "vsi_name",
+                "tenant_name",
+                "tenant_code",
+                "circuit_name",
+                "bandwidth_mbps",
+            ):
+                incoming = getattr(new, field)
+                if incoming and not getattr(entry, field):
+                    setattr(entry, field, incoming)
+            if new.source == "platform":
+                entry.source = "platform"
+            return
+    existing.append(new)
+
+
+def _parse_rate_limit_kbps(text: str) -> int | None:
+    car = re.search(r"qos\s+car\s+inbound\s+any\s+cir\s+(\d+)", text, re.I)
+    if car:
+        return int(car.group(1))
+    lr = re.search(r"qos\s+lr\s+cir\s+(\d+)", text, re.I)
+    if lr:
+        return int(lr.group(1))
+    bw = re.search(r"bw\((\d+)\s*([MmGg])bps\)", text, re.I)
+    if bw:
+        value = int(bw.group(1))
+        unit = bw.group(2).lower()
+        if unit == "g":
+            return value * 1_000_000
+        return value * 1_000
+    return None
+
+
+def _kbps_to_mbps(kbps: int | None) -> int | None:
+    if kbps is None:
+        return None
+    return max(1, kbps // 1000) if kbps >= 1000 else 1
+
+
+def _parse_h3c_vsi_map(config: str) -> dict[str, dict]:
+    out: dict[str, dict] = {}
+    for m in re.finditer(
+        r"^vsi\s+(\S+)\s*$(.+?)(?=^vsi\s|\Z)",
+        config,
+        re.MULTILINE | re.DOTALL | re.IGNORECASE,
+    ):
+        name = m.group(1)
+        body = m.group(2)
+        vni_m = re.search(r"vxlan\s+(\d+)", body, re.I)
+        desc_m = re.search(r"^\s*description\s+(.+)$", body, re.MULTILINE | re.IGNORECASE)
+        out[name] = {
+            "vni": int(vni_m.group(1)) if vni_m else None,
+            "description": desc_m.group(1).strip() if desc_m else None,
+        }
+    return out
+
+
+@dataclass
+class _CircuitCatalog:
+    by_vni: dict[int, Circuit]
+    by_code: dict[str, Circuit]
+    tenants: dict[int, Tenant]
+
+
+def _build_circuit_catalog(db: Session) -> _CircuitCatalog:
+    circuits = db.execute(select(Circuit)).scalars().all()
+    tenants = {
+        t.id: t for t in db.execute(select(Tenant)).scalars().all()
+    }
+    return _CircuitCatalog(
+        by_vni={c.vni: c for c in circuits if c.vni is not None},
+        by_code={c.code: c for c in circuits},
+        tenants=tenants,
+    )
+
+
+def _apply_circuit_context(entry: SvidEntry, circuit: Circuit, catalog: _CircuitCatalog) -> None:
+    entry.circuit_code = entry.circuit_code or circuit.code
+    entry.circuit_name = entry.circuit_name or circuit.name
+    entry.vni = entry.vni or circuit.vni
+    entry.bandwidth_mbps = entry.bandwidth_mbps or circuit.bandwidth_mbps
+    entry.vsi_name = entry.vsi_name or circuit.vsi_name
+    tenant = catalog.tenants.get(circuit.tenant_id)
+    if tenant:
+        entry.tenant_name = entry.tenant_name or tenant.name
+        entry.tenant_code = entry.tenant_code or tenant.code
+
+
+def _enrich_svid_entry(
+    entry: SvidEntry,
+    *,
+    catalog: _CircuitCatalog,
+    vsi_map: dict[str, dict] | None = None,
+) -> None:
+    if entry.vsi_name and vsi_map and entry.vsi_name in vsi_map:
+        meta = vsi_map[entry.vsi_name]
+        entry.vni = entry.vni or meta.get("vni")
+        entry.description = entry.description or meta.get("description")
+
+    if entry.circuit_code and entry.circuit_code in catalog.by_code:
+        _apply_circuit_context(entry, catalog.by_code[entry.circuit_code], catalog)
+    elif entry.vni is not None and entry.vni in catalog.by_vni:
+        _apply_circuit_context(entry, catalog.by_vni[entry.vni], catalog)
+
+    if entry.rate_limit_mbps and not entry.bandwidth_mbps:
+        entry.bandwidth_mbps = entry.rate_limit_mbps
 
 
 def platform_usage(db: Session, device: Device) -> dict[str, PortUsage]:
     """Collect S-VID reservations from circuit endpoints in the platform DB."""
+    catalog = _build_circuit_catalog(db)
     rows = db.execute(
         select(CircuitEndpoint, Circuit)
         .join(Circuit, Circuit.id == CircuitEndpoint.circuit_id)
@@ -257,48 +384,82 @@ def platform_usage(db: Session, device: Device) -> dict[str, PortUsage]:
         usage = by_iface.setdefault(iface, PortUsage(interface_name=iface))
         mode = ep.access_mode.value if ep.access_mode else AccessMode.DOT1Q.value
         svid = ep.vlan_id or circuit.vlan_id
-        if mode == AccessMode.ACCESS.value:
-            _merge_entries(
-                usage.entries,
-                SvidEntry(
-                    s_vid=None,
-                    access_mode=mode,
-                    circuit_code=circuit.code,
-                    source="platform",
-                ),
-            )
-        elif svid is not None:
-            _merge_entries(
-                usage.entries,
-                SvidEntry(
-                    s_vid=svid,
-                    c_vid=ep.inner_vlan_id,
-                    access_mode=mode,
-                    circuit_code=circuit.code,
-                    source="platform",
-                ),
-            )
+        tenant = catalog.tenants.get(circuit.tenant_id)
+        entry = SvidEntry(
+            s_vid=None if mode == AccessMode.ACCESS.value else svid,
+            c_vid=ep.inner_vlan_id,
+            access_mode=mode,
+            circuit_code=circuit.code,
+            source="platform",
+            description=circuit.description or circuit.name,
+            vni=circuit.vni,
+            vsi_name=circuit.vsi_name,
+            tenant_name=tenant.name if tenant else None,
+            tenant_code=tenant.code if tenant else None,
+            circuit_name=circuit.name,
+            bandwidth_mbps=circuit.bandwidth_mbps,
+            rate_limit_mbps=circuit.bandwidth_mbps,
+        )
+        _merge_entries(usage.entries, entry)
     return by_iface
 
 
 def _parse_h3c_block(iface: str, block: str) -> list[SvidEntry]:
     entries: list[SvidEntry] = []
+    iface_desc_m = re.search(r"^\s*description\s+(.+)$", block, re.MULTILINE | re.IGNORECASE)
+    iface_desc = iface_desc_m.group(1).strip() if iface_desc_m else None
+
     for m in re.finditer(
-        r"service-instance\s+(\d+).*?"
-        r"(encapsulation\s+untagged|encapsulation\s+s-vid\s+(\d+)(?:\s+c-vid\s+(\d+))?)",
+        r"service-instance\s+\d+\s*\n(.*?)(?=^\s*service-instance\s|\Z)",
         block,
-        re.DOTALL | re.IGNORECASE,
+        re.MULTILINE | re.DOTALL | re.IGNORECASE,
     ):
-        enc = m.group(2).lower()
-        if "untagged" in enc:
-            entries.append(SvidEntry(s_vid=None, access_mode="access", source="device"))
-        else:
+        si_body = m.group(1)
+        desc_m = re.search(r"^\s*description\s+(.+)$", si_body, re.MULTILINE | re.IGNORECASE)
+        vsi_m = re.search(r"xconnect\s+vsi\s+(\S+)", si_body, re.I)
+        rate_kbps = _parse_rate_limit_kbps(si_body)
+        description = (desc_m.group(1).strip() if desc_m else None) or iface_desc
+
+        if re.search(r"encapsulation\s+untagged", si_body, re.I):
             entries.append(
                 SvidEntry(
-                    s_vid=int(m.group(3)),
-                    c_vid=int(m.group(4)) if m.group(4) else None,
-                    access_mode="qinq" if m.group(4) else "dot1q",
+                    s_vid=None,
+                    access_mode="access",
                     source="device",
+                    description=description,
+                    rate_limit_mbps=_kbps_to_mbps(rate_kbps),
+                    vsi_name=vsi_m.group(1) if vsi_m else None,
+                )
+            )
+            continue
+
+        qinq_m = re.search(
+            r"encapsulation\s+s-vid\s+(\d+)\s+c-vid\s+(\d+)", si_body, re.I
+        )
+        if qinq_m:
+            entries.append(
+                SvidEntry(
+                    s_vid=int(qinq_m.group(1)),
+                    c_vid=int(qinq_m.group(2)),
+                    access_mode="qinq",
+                    source="device",
+                    description=description,
+                    rate_limit_mbps=_kbps_to_mbps(rate_kbps),
+                    vsi_name=vsi_m.group(1) if vsi_m else None,
+                )
+            )
+            continue
+
+        dot1q_m = re.search(r"encapsulation\s+s-vid\s+(\d+)", si_body, re.I)
+        if dot1q_m:
+            entries.append(
+                SvidEntry(
+                    s_vid=int(dot1q_m.group(1)),
+                    access_mode="dot1q",
+                    source="device",
+                    description=description,
+                    rate_limit_mbps=_kbps_to_mbps(rate_kbps),
+                    vsi_name=vsi_m.group(1) if vsi_m else None,
                 )
             )
     return entries
@@ -408,11 +569,14 @@ def device_config_usage(db: Session, device: Device) -> dict[str, PortUsage]:
     learned = config_mgmt.latest_learned(db, device.id)
     config = learned.content if learned else config_mgmt.build_running_config(db, device)
     parsed = _parse_interface_blocks(config, device.vendor)
+    vsi_map = _parse_h3c_vsi_map(config) if device.vendor == Vendor.H3C else {}
+    catalog = _build_circuit_catalog(db)
     by_iface: dict[str, PortUsage] = {}
     for iface, entries in parsed.items():
         usage = PortUsage(interface_name=iface)
-        for e in entries:
-            _merge_entries(usage.entries, e)
+        for entry in entries:
+            _enrich_svid_entry(entry, catalog=catalog, vsi_map=vsi_map or None)
+            _merge_entries(usage.entries, entry)
         by_iface[iface] = usage
     return by_iface
 

@@ -49,6 +49,14 @@ export interface SvidUsage {
   circuit_code?: string | null;
   source?: string;
   note?: string | null;
+  description?: string | null;
+  rate_limit_mbps?: number | null;
+  vni?: number | null;
+  vsi_name?: string | null;
+  tenant_name?: string | null;
+  tenant_code?: string | null;
+  circuit_name?: string | null;
+  bandwidth_mbps?: number | null;
 }
 
 export interface DevicePortBinding {

@@ -5,6 +5,34 @@ from app.models.enums import Vendor
 from app.services import port_inventory
 
 
+def test_parse_h3c_svid_details():
+    config = """
+vsi cus-demo-001
+ description Customer Demo Link
+ vxlan 10148
+ evpn encapsulation vxlan
+  route-distinguisher 10.1.1.1:10148
+interface GE1/0/50
+ description ISP: uplink port
+ service-instance 2501
+  description AC for customer A
+  encapsulation s-vid 2501
+  qos car inbound any cir 200000 cbs 5000000
+  xconnect vsi cus-demo-001
+"""
+    parsed = port_inventory._parse_interface_blocks(config, Vendor.H3C)
+    entry = parsed["GE1/0/50"][0]
+    assert entry.s_vid == 2501
+    assert entry.vsi_name == "cus-demo-001"
+    assert entry.rate_limit_mbps == 200
+    assert "customer A" in (entry.description or "")
+
+    vsi_map = port_inventory._parse_h3c_vsi_map(config)
+    assert vsi_map["cus-demo-001"]["vni"] == 10148
+    port_inventory._enrich_svid_entry(entry, catalog=port_inventory._CircuitCatalog({}, {}, {}), vsi_map=vsi_map)
+    assert entry.vni == 10148
+
+
 def test_parse_h3c_svid():
     config = """
 interface GE1/0/1

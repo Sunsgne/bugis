@@ -18,13 +18,33 @@ export function svidUsageLabel(u: SvidUsage): string {
 export function svidUsageTitle(u: SvidUsage): string {
   const src = SVID_SOURCE[u.source || "platform"]?.label || u.source || "平台";
   const parts = [`来源: ${src}`];
+  if (u.tenant_name) parts.push(`客户 ${u.tenant_name}`);
   if (u.circuit_code) parts.push(`专线 ${u.circuit_code}`);
+  if (u.vni != null) parts.push(`VNI ${u.vni}`);
+  if (u.rate_limit_mbps) parts.push(`限速 ${u.rate_limit_mbps}M`);
+  if (u.description) parts.push(u.description);
   if (u.note) parts.push(u.note);
   return parts.join(" · ");
 }
 
 function tagColor(u: SvidUsage): string {
   return SVID_SOURCE[u.source || ""]?.color || SVID_SOURCE.platform.color;
+}
+
+function formatRateLimit(u: SvidUsage): string {
+  const mbps = u.rate_limit_mbps ?? u.bandwidth_mbps;
+  if (!mbps) return "—";
+  return mbps >= 1000 ? `${mbps / 1000}G` : `${mbps}M`;
+}
+
+function formatCustomer(u: SvidUsage): string {
+  if (u.tenant_name) {
+    return u.tenant_code ? `${u.tenant_name} (${u.tenant_code})` : u.tenant_name;
+  }
+  if (u.vsi_name?.toLowerCase().startsWith("cus-")) {
+    return u.vsi_name;
+  }
+  return "—";
 }
 
 type DetailProps = {
@@ -38,26 +58,31 @@ function SvidUsageDetailPanel({ list }: DetailProps) {
     const q = search.trim().toLowerCase();
     if (!q) return list;
     return list.filter((u) => {
-      const label = svidUsageLabel(u).toLowerCase();
-      const circuit = u.circuit_code?.toLowerCase() || "";
-      const note = u.note?.toLowerCase() || "";
-      const src = (SVID_SOURCE[u.source || "platform"]?.label || u.source || "").toLowerCase();
-      return (
-        label.includes(q) ||
-        circuit.includes(q) ||
-        note.includes(q) ||
-        src.includes(q) ||
-        String(u.s_vid ?? "").includes(q) ||
-        String(u.c_vid ?? "").includes(q)
-      );
+      const haystack = [
+        svidUsageLabel(u),
+        u.circuit_code,
+        u.circuit_name,
+        u.tenant_name,
+        u.tenant_code,
+        u.description,
+        u.note,
+        u.vsi_name,
+        u.vni != null ? String(u.vni) : "",
+        SVID_SOURCE[u.source || "platform"]?.label || u.source || "",
+        formatRateLimit(u),
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(q);
     });
   }, [list, search]);
 
   return (
-    <div style={{ width: 420, maxWidth: "min(92vw, 420px)" }}>
+    <div style={{ width: 760, maxWidth: "min(96vw, 760px)" }}>
       <Input.Search
         allowClear
-        placeholder="搜索 S-VID / 专线 / 来源"
+        placeholder="搜索 S-VID / 客户 / VNI / 描述 / 专线"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         style={{ marginBottom: 8 }}
@@ -73,34 +98,54 @@ function SvidUsageDetailPanel({ list }: DetailProps) {
           pageSizeOptions: ["10", "20", "50"],
           showTotal: (t) => `共 ${t} 个`,
         }}
-        scroll={{ y: 280 }}
+        scroll={{ x: 700, y: 300 }}
         columns={[
           {
             title: "VLAN",
-            width: 120,
-            render: (_: unknown, u: SvidUsage) => (
-              <Tag color={tagColor(u)} style={{ margin: 0 }}>
-                {svidUsageLabel(u)}
+            width: 96,
+            fixed: "left",
+            render: (_: unknown, u?: SvidUsage) => (
+              <Tag color={tagColor(u || {})} style={{ margin: 0 }}>
+                {svidUsageLabel(u || {})}
               </Tag>
             ),
           },
           {
+            title: "描述",
+            dataIndex: "description",
+            width: 160,
+            ellipsis: true,
+            render: (v?: string, u?: SvidUsage) => v || u?.circuit_name || u?.note || "—",
+          },
+          {
+            title: "限速",
+            width: 72,
+            render: (_: unknown, u?: SvidUsage) => formatRateLimit(u || {}),
+          },
+          {
+            title: "VNI",
+            dataIndex: "vni",
+            width: 72,
+            render: (v?: number) => (v != null ? v : "—"),
+          },
+          {
+            title: "关联客户",
+            width: 140,
+            ellipsis: true,
+            render: (_: unknown, u?: SvidUsage) => formatCustomer(u || {}),
+          },
+          {
             title: "专线",
             dataIndex: "circuit_code",
-            width: 100,
+            width: 96,
             ellipsis: true,
             render: (v?: string) => v || "—",
           },
           {
             title: "来源",
             width: 72,
-            render: (_: unknown, u: SvidUsage) => SVID_SOURCE[u.source || "platform"]?.label || u.source || "—",
-          },
-          {
-            title: "备注",
-            dataIndex: "note",
-            ellipsis: true,
-            render: (v?: string) => v || "—",
+            render: (_: unknown, u?: SvidUsage) =>
+              SVID_SOURCE[u?.source || "platform"]?.label || u?.source || "—",
           },
         ]}
       />
@@ -149,7 +194,13 @@ export default function SvidUsageCell({ list, inlineMax = 2, summaryThreshold = 
         <Popover trigger="click" placement="left" title={popoverTitle} content={popoverContent}>
           <Tag style={{ margin: 0, cursor: "pointer" }}>+{rest}</Tag>
         </Popover>
-      ) : null}
+      ) : (
+        <Popover trigger="click" placement="left" title={popoverTitle} content={popoverContent}>
+          <Button type="link" size="small" style={{ padding: 0, height: "auto" }}>
+            明细
+          </Button>
+        </Popover>
+      )}
     </Space>
   );
 }

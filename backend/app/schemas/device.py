@@ -14,6 +14,14 @@ class SvidUsageOut(BaseModel):
     circuit_code: str | None = None
     source: str = "platform"
     note: str | None = None
+    description: str | None = None
+    rate_limit_mbps: int | None = None
+    vni: int | None = None
+    vsi_name: str | None = None
+    tenant_name: str | None = None
+    tenant_code: str | None = None
+    circuit_name: str | None = None
+    bandwidth_mbps: int | None = None
 
 
 class DeviceInterfaceBase(BaseModel):
