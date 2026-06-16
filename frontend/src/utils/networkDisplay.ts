@@ -47,6 +47,10 @@ export function huaweiPhysicalPort(name: string): string {
 /** Short display label, e.g. Twenty-FiveGigE1/0/1 → 25G·1/0/1 */
 export function formatInterfaceShort(name: string): string {
   const trimmed = name.trim();
+  const sub = parseHuaweiSubinterface(trimmed);
+  if (sub) {
+    return `${formatInterfaceShort(sub.parent)}·${sub.vlan}`;
+  }
   const suffix = interfacePortSuffix(trimmed);
   if (!suffix) return trimmed;
 

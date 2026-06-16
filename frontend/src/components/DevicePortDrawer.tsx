@@ -38,6 +38,7 @@ import {
   formatOperStatus,
   formatVlanLabel,
   isHuaweiSubinterface,
+  huaweiPhysicalPort,
 } from "../utils/networkDisplay";
 
 const BINDING_SOURCE: Record<string, { label: string; color: string }> = {
@@ -362,8 +363,9 @@ export default function DevicePortDrawer({
                     {
                       title: "接口",
                       dataIndex: "name",
-                      width: 120,
+                      width: 148,
                       fixed: "left",
+                      ellipsis: true,
                       render: (name: string) => <InterfaceNameCell name={name} />,
                     },
                     {
@@ -473,8 +475,18 @@ export default function DevicePortDrawer({
                     {
                       title: "接口",
                       dataIndex: "interface_name",
-                      width: 120,
-                      render: (name: string) => <InterfaceNameCell name={name} />,
+                      width: 156,
+                      ellipsis: true,
+                      render: (name: string) => (
+                        <InterfaceNameCell
+                          name={
+                            device?.vendor === "huawei" && isHuaweiSubinterface(name)
+                              ? huaweiPhysicalPort(name)
+                              : name
+                          }
+                          copyText={name}
+                        />
+                      ),
                     },
                     {
                       title: "业务",
