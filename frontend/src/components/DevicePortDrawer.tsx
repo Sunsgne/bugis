@@ -101,7 +101,7 @@ export default function DevicePortDrawer({
   const [ifaceSearch, setIfaceSearch] = useState("");
   const [ifaceStatus, setIfaceStatus] = useState<"all" | "up" | "down" | "allocated">("all");
   const [activeTab, setActiveTab] = useState("ports");
-  const [adoptBinding, setAdoptBinding] = useState<DevicePortBinding | null>(null);
+  const [discovering, setDiscovering] = useState(false);
 
   async function loadBindings(deviceId: number, refresh = false) {
     setBindingsLoading(true);
@@ -147,6 +147,7 @@ export default function DevicePortDrawer({
       ]);
       if (cancelled || !rows) return;
       if (refreshVersion === 0 && rows.length === 0) {
+        setDiscovering(true);
         try {
           const discovered = await onDiscover(device.id);
           if (!cancelled && Array.isArray(discovered)) {
@@ -154,6 +155,8 @@ export default function DevicePortDrawer({
           }
         } catch {
           // discover errors are surfaced by parent handler
+        } finally {
+          if (!cancelled) setDiscovering(false);
         }
       }
     })();
@@ -209,10 +212,16 @@ export default function DevicePortDrawer({
             <Button
               size="small"
               icon={<NodeIndexOutlined />}
+              loading={discovering}
               onClick={async () => {
-                const data = await onDiscover(device.id);
-                if (Array.isArray(data)) setIfaces(data);
-                await loadBindings(device.id);
+                setDiscovering(true);
+                try {
+                  const data = await onDiscover(device.id);
+                  if (Array.isArray(data)) setIfaces(data);
+                  await loadBindings(device.id);
+                } finally {
+                  setDiscovering(false);
+                }
               }}
             >
               SNMP 发现
@@ -229,6 +238,19 @@ export default function DevicePortDrawer({
     >
       <Typography.Paragraph type="secondary" style={{ marginTop: 0 }}>
         物理端口来自 SNMP IF-MIB；客户接入绑定来自平台专线端点；S-VID 占用来自 running-config 与平台纳管合并。
+        {device?.mgmt_ip_active ? (
+          <>
+            {" "}
+            当前南向{" "}
+            {device.mgmt_ip_active_role === "backup"
+              ? device.mgmt_ip_backup_label || "备"
+              : device.mgmt_ip_primary_label || "主"}{" "}
+            {device.mgmt_ip_active}
+            {device.mgmt_ip_backup ? "（主备自动切换）" : ""}。
+          </>
+        ) : device?.mgmt_ip_backup ? (
+          <> 主 {device.mgmt_ip} / 备 {device.mgmt_ip_backup}，不可达时自动切换。</>
+        ) : null}
       </Typography.Paragraph>
 
       {ifaces.some((i) => i.discovered_via === "snmp-sim") ? (
@@ -310,12 +332,14 @@ export default function DevicePortDrawer({
                 <Table
                   rowKey={(r) => `${r.device_id}-${r.name}`}
                   size="small"
-                  loading={ifacesLoading}
+                  loading={ifacesLoading || discovering}
                   dataSource={ifaceRows}
                   locale={{
-                    emptyText: ifaceSvidOnly
-                      ? "暂无 S-VID 占用端口"
-                      : "暂无端口数据 · 将自动尝试 SNMP 发现",
+                    emptyText: discovering
+                      ? "SNMP 接口扫描中…（主备管理 IP 自动探测）"
+                      : ifaceSvidOnly
+                        ? "暂无 S-VID 占用端口"
+                        : "暂无端口数据 · 将自动尝试 SNMP 发现",
                   }}
                   pagination={{
                     defaultPageSize: 50,

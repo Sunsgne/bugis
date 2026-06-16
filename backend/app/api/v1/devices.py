@@ -212,6 +212,10 @@ def list_interfaces(
     if not device:
         raise HTTPException(status_code=404, detail="device not found")
     if scan:
+        try:
+            device_management.ensure_reachable_mgmt_ip(db, device)
+        except device_management.MgmtUnreachableError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
         port_inventory.scan_device(db, device)
         db.commit()
     rows = db.execute(
@@ -232,6 +236,10 @@ def list_port_bindings(
     if not device:
         raise HTTPException(status_code=404, detail="device not found")
     if scan:
+        try:
+            device_management.ensure_reachable_mgmt_ip(db, device)
+        except device_management.MgmtUnreachableError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
         port_inventory.scan_device(db, device)
         db.commit()
     return port_inventory.list_port_bindings(db, device)
@@ -311,6 +319,8 @@ def discover_interfaces(
         raise HTTPException(status_code=400, detail="该设备未启用 SNMP，请在设备设置中开启")
     try:
         ifaces = snmp.discover_interfaces(db, device)
+    except device_management.MgmtUnreachableError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
     except (RuntimeError, ImportError, ModuleNotFoundError) as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     port_inventory.scan_device(db, device)

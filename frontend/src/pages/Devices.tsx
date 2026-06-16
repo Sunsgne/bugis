@@ -381,7 +381,7 @@ export default function Devices() {
           .filter(Boolean)
           .join(" / ");
         message.warning(
-          `${data.device} 管理面不可达 (${data.mgmt_ip})${tried ? ` · 已探测 ${tried}` : ""} · 请检查 IP、端口、SNMP Community 与防火墙`,
+          `${data.device} 管理面不可达${data.mgmt_ip_backup ? `（主 ${data.mgmt_ip} / 备 ${data.mgmt_ip_backup}）` : ` (${data.mgmt_ip})`}${tried ? ` · 已探测 ${tried}` : ""} · 请检查 IP、端口、SNMP Community 与防火墙`,
           6,
         );
       }

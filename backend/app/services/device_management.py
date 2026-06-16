@@ -17,6 +17,14 @@ from app.services import platform_settings as platform_cfg
 SYS_UPTIME_OID = "1.3.6.1.2.1.1.3.0"
 
 
+class MgmtUnreachableError(RuntimeError):
+    """Raised when no primary/backup management IP is reachable."""
+
+    def __init__(self, message: str, *, probe: dict[str, Any] | None = None):
+        super().__init__(message)
+        self.probe = probe or {}
+
+
 def effective_transport(device: Device) -> str:
     """Resolve config push / fetch transport for a device."""
     override = getattr(device, "management_transport", None)
@@ -154,6 +162,90 @@ def _probe_host(db: Session, device: Device, host: str, role: str, label: str) -
         }
 
     return {"reachable": False, "probes": probes, "mgmt_ip_active": host, "mgmt_ip_active_role": role, "mgmt_ip_active_label": label}
+
+
+def format_unreachable_detail(device: Device, probe: dict[str, Any] | None = None) -> str:
+    """Human-readable summary listing each management IP that was tried."""
+    candidates = (probe or {}).get("mgmt_ip_candidates") or mgmt_ip_candidates(device)
+    parts: list[str] = []
+    for cand in candidates:
+        label = cand.get("label") or cand.get("role") or "管理"
+        parts.append(f"{label} {cand['ip']}")
+    tried = "、".join(parts) if parts else device.mgmt_ip
+    return f"设备管理面不可达（已尝试 {tried}）"
+
+
+def persist_active_endpoint(
+    device: Device,
+    host: str,
+    role: str,
+    *,
+    method: str = "snmp",
+    latency_ms: float | None = None,
+) -> None:
+    now = datetime.now(timezone.utc)
+    device.mgmt_ip_active = host
+    device.mgmt_ip_active_role = role
+    device.last_reachability_at = now
+    device.last_reachability_latency_ms = latency_ms
+    device.last_reachability_method = method
+
+
+def ensure_reachable_mgmt_ip(
+    db: Session,
+    device: Device,
+    *,
+    persist: bool = True,
+) -> dict[str, Any]:
+    """Probe primary then backup; raise if neither is reachable."""
+    result = probe_reachability(db, device, persist=persist)
+    if not result.get("reachable"):
+        raise MgmtUnreachableError(format_unreachable_detail(device, result), probe=result)
+    return result
+
+
+def ensure_snmp_mgmt_ip(
+    db: Session,
+    device: Device,
+    *,
+    persist: bool = True,
+) -> str:
+    """Return a management IP that answers SNMP; fall back to TCP reachability probe."""
+    from app.services import snmp_device, snmp_settings as snmp_cfg
+
+    cfg = snmp_cfg.get_or_create(db)
+    eff = snmp_device.effective_snmp(device, cfg)
+    if not cfg.enabled or not eff["enabled"]:
+        return device.active_mgmt_ip
+
+    candidates = mgmt_ip_candidates(device)
+    ordered: list[dict[str, str]] = []
+    if device.mgmt_ip_active:
+        active = next((c for c in candidates if c["ip"] == device.mgmt_ip_active), None)
+        if active:
+            ordered.append(active)
+    for cand in candidates:
+        if cand not in ordered:
+            ordered.append(cand)
+
+    for cand in ordered:
+        snmp_probe = _snmp_probe(db, device, cand["ip"])
+        if snmp_probe.get("ok"):
+            if persist:
+                persist_active_endpoint(
+                    device,
+                    cand["ip"],
+                    cand["role"],
+                    method="snmp",
+                    latency_ms=snmp_probe.get("latency_ms"),
+                )
+            return cand["ip"]
+
+    result = probe_reachability(db, device, persist=persist)
+    if result.get("reachable") and result.get("mgmt_ip_active"):
+        return str(result["mgmt_ip_active"])
+
+    raise MgmtUnreachableError(format_unreachable_detail(device, result), probe=result)
 
 
 def _persist_reachability(device: Device, result: dict[str, Any]) -> None:

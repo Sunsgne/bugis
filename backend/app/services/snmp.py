@@ -119,6 +119,7 @@ def _walk_oid(
     community: str,
     *,
     port: int | None = None,
+    host: str | None = None,
 ) -> dict[int, str]:
     from pysnmp.hlapi.asyncio import ContextData  # pragma: no cover
 
@@ -132,8 +133,9 @@ def _walk_oid(
         else ContextData()
     )
     walk_port = port or cfg.port
+    target_host = host or device.active_mgmt_ip
     return snmp_hlapi.walk_oid(
-        device.active_mgmt_ip,
+        target_host,
         walk_port,
         float(cfg.timeout_sec),
         int(cfg.retries),
@@ -151,6 +153,8 @@ def probe_interfaces(
     community_override: str | None = None,
 ) -> list[dict]:
     """Walk IF-MIB once and return raw interface dicts (no DB write)."""
+    from app.services import device_management
+
     cfg = snmp_cfg.get_or_create(db)
     device_snmp = snmp_device.effective_snmp(device)
     if not cfg.enabled:
@@ -158,7 +162,10 @@ def probe_interfaces(
     if not device_snmp["enabled"]:
         raise RuntimeError("该设备已关闭 SNMP 采集")
     community = snmp_cfg.effective_community(db, device, community_override)
-    return _walk_real(device, cfg, community, port=device_snmp["port"])
+    results, _used = _walk_with_mgmt_failover(
+        db, device, cfg, community, port=device_snmp["port"]
+    )
+    return results
 
 
 def _walk_real(
@@ -167,6 +174,7 @@ def _walk_real(
     community: str,
     *,
     port: int | None = None,
+    host: str | None = None,
 ) -> list[dict]:  # pragma: no cover
     try:
         import pysnmp  # noqa: F401
@@ -177,11 +185,11 @@ def _walk_real(
 
     walk_port = port or cfg.port
     names_descr = (
-        _walk_oid(device, IF_MIB.ifDescr.oid, cfg, community, port=walk_port)
+        _walk_oid(device, IF_MIB.ifDescr.oid, cfg, community, port=walk_port, host=host)
         if cfg.walk_if_descr
         else {}
     )
-    names_canonical = _walk_oid(device, IF_MIB.ifName.oid, cfg, community, port=walk_port)
+    names_canonical = _walk_oid(device, IF_MIB.ifName.oid, cfg, community, port=walk_port, host=host)
     names = names_descr.copy()
     for ifindex, if_name in names_canonical.items():
         if if_name.strip():
@@ -190,17 +198,17 @@ def _walk_real(
         raise RuntimeError("未采集到 ifDescr/ifName，请检查 community / 网络可达性 / SNMP 版本")
 
     aliases = (
-        _walk_oid(device, IF_MIB.ifAlias.oid, cfg, community, port=walk_port)
+        _walk_oid(device, IF_MIB.ifAlias.oid, cfg, community, port=walk_port, host=host)
         if cfg.walk_if_alias
         else {}
     )
     speeds = (
-        _walk_oid(device, IF_MIB.ifHighSpeed.oid, cfg, community, port=walk_port)
+        _walk_oid(device, IF_MIB.ifHighSpeed.oid, cfg, community, port=walk_port, host=host)
         if cfg.walk_if_high_speed
         else {}
     )
     opers = (
-        _walk_oid(device, IF_MIB.ifOperStatus.oid, cfg, community, port=walk_port)
+        _walk_oid(device, IF_MIB.ifOperStatus.oid, cfg, community, port=walk_port, host=host)
         if cfg.walk_if_oper_status
         else {}
     )
@@ -226,6 +234,55 @@ def _walk_real(
     return results
 
 
+def _walk_with_mgmt_failover(
+    db: Session,
+    device: Device,
+    cfg: SnmpSettings,
+    community: str,
+    *,
+    port: int | None = None,
+) -> tuple[list[dict], dict[str, str] | None]:
+    """Try IF-MIB walk on each management IP (primary then backup)."""
+    from app.services import device_management
+
+    candidates = device_management.mgmt_ip_candidates(device)
+    ordered: list[dict[str, str]] = []
+    if device.mgmt_ip_active:
+        active = next((c for c in candidates if c["ip"] == device.mgmt_ip_active), None)
+        if active:
+            ordered.append(active)
+    for cand in candidates:
+        if cand not in ordered:
+            ordered.append(cand)
+
+    errors: list[str] = []
+    for cand in ordered:
+        if db is not None:
+            snmp_probe = device_management._snmp_probe(db, device, cand["ip"])
+            if not snmp_probe.get("skipped") and not snmp_probe.get("ok"):
+                err = snmp_probe.get("error") or "SNMP 不可达"
+                errors.append(f"{cand['label']} {cand['ip']}: {err}")
+                continue
+        try:
+            results = _walk_real(device, cfg, community, port=port, host=cand["ip"])
+            if results:
+                device_management.persist_active_endpoint(
+                    device, cand["ip"], cand["role"], method="snmp"
+                )
+                return results, cand
+        except (RuntimeError, ImportError, ModuleNotFoundError, Exception) as exc:
+            msg = str(exc)
+            if "asyncore" in msg:
+                raise RuntimeError(
+                    "SNMP 库与 Python 3.12 不兼容，请升级 PySNMP（>=6.2）后重试"
+                ) from exc
+            errors.append(f"{cand['label']} {cand['ip']}: {msg}")
+
+    if errors:
+        raise RuntimeError("；".join(errors))
+    raise RuntimeError("未采集到接口数据，请检查主备管理 IP、SNMP Community 与 UDP 161 可达性")
+
+
 def discover_interfaces(db: Session, device: Device) -> list[DeviceInterface]:
     """Discover and upsert a device's interfaces. Returns the current set."""
     from app.services import link_monitor
@@ -237,8 +294,15 @@ def discover_interfaces(db: Session, device: Device) -> list[DeviceInterface]:
     else:
         community = snmp_cfg.effective_community(db, device)
         try:
-            discovered = _walk_real(device, cfg, community, port=device_snmp["port"])
-        except (RuntimeError, ImportError, ModuleNotFoundError, Exception) as exc:
+            discovered, _used = _walk_with_mgmt_failover(
+                db, device, cfg, community, port=device_snmp["port"]
+            )
+        except (RuntimeError, ImportError, ModuleNotFoundError) as exc:
+            if settings.dry_run:
+                discovered = _synthesize(device)
+            else:
+                raise
+        except Exception as exc:
             msg = str(exc)
             if "asyncore" in msg:
                 raise RuntimeError(
@@ -247,7 +311,7 @@ def discover_interfaces(db: Session, device: Device) -> list[DeviceInterface]:
             if settings.dry_run:
                 discovered = _synthesize(device)
             else:
-                raise
+                raise RuntimeError(msg) from exc
 
     existing = {
         i.name: i

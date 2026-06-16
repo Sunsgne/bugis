@@ -18,12 +18,7 @@ def _check_reachable(db: Session, device: Device) -> tuple[bool, str | None]:
     probe = device_management.probe_reachability(db, device)
     if probe["reachable"]:
         return True, None
-    errors = [
-        f"{p.get('method')}:{p.get('error')}"
-        for p in probe.get("probes") or []
-        if p.get("error")
-    ]
-    return False, "; ".join(errors) if errors else "unreachable"
+    return False, device_management.format_unreachable_detail(device, probe)
 
 
 def _enrich_device(device: Device, inventory: config_learn_parse.LearnedInventory) -> dict:
