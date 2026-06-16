@@ -8,6 +8,7 @@ from app.models.enums import (
     WorkOrderStatus,
     WorkOrderType,
 )
+from app.schemas.circuit import CircuitEndpointCreate
 from app.schemas.common import TimestampedSchema
 
 
@@ -60,6 +61,12 @@ class ProvisionResultOut(WorkOrderOut):
     circuit_status: str
     circuit_code: str | None = None
     dry_run: bool = False
+
+
+class ProvisionRequest(BaseModel):
+    """Optional body for one-shot provision (e.g. endpoint migration)."""
+
+    previous_endpoints: list[CircuitEndpointCreate] | None = None
 
 
 class ApprovalRequest(BaseModel):

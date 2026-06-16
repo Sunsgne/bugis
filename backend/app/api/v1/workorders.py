@@ -1,6 +1,8 @@
 """Work order (工单) endpoints driving the provisioning lifecycle."""
 from __future__ import annotations
 
+import json
+
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 from sqlalchemy import select
@@ -17,6 +19,7 @@ from app.models.user import User
 from app.models.workorder import WorkOrder
 from app.schemas.workorder import (
     ApprovalRequest,
+    ProvisionRequest,
     ProvisionResultOut,
     WorkOrderCreate,
     WorkOrderOut,
@@ -211,6 +214,7 @@ def execute_work_order(
 def provision_circuit(
     circuit_id: int,
     wo_type: WorkOrderType = WorkOrderType.PROVISION,
+    body: ProvisionRequest | None = None,
     db: Session = Depends(get_db),
     user: User = Depends(require_operator),
 ):
@@ -218,8 +222,17 @@ def provision_circuit(
     circuit = db.get(Circuit, circuit_id)
     if not circuit:
         raise HTTPException(status_code=404, detail="circuit not found")
+    payload: str | None = None
+    if body and body.previous_endpoints:
+        payload = json.dumps(
+            {
+                "previous_endpoints": [
+                    ep.model_dump(mode="json") for ep in body.previous_endpoints
+                ]
+            }
+        )
     wo = orchestrator.create_work_order(
-        db, circuit, wo_type, requested_by=user.username
+        db, circuit, wo_type, requested_by=user.username, payload=payload
     )
     orchestrator.submit(db, wo, actor=user.username)
     orchestrator.approve(db, wo, user.username, approve_it=True)

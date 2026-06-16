@@ -53,7 +53,7 @@ function vlanConflict(
   vlanId?: number | null,
   accessMode?: string,
   innerVlanId?: number | null,
-  excludeCircuitId?: number,
+  excludeCircuitCode?: string,
 ): string | null {
   if (!usage?.length) return null;
   if (accessMode === "access") {
@@ -70,7 +70,7 @@ function vlanConflict(
       return `QinQ S:${vlanId}/C:${innerVlanId} 已被占用`;
     }
     if (accessMode !== "qinq" && u.access_mode !== "qinq" && u.s_vid === vlanId) {
-      if (excludeCircuitId && u.circuit_code) continue;
+      if (excludeCircuitCode && u.circuit_code === excludeCircuitCode) continue;
       return `S-VID ${vlanId} 已被占用`;
     }
   }
@@ -128,15 +128,23 @@ function PortDetailPanel({
   vlanId,
   accessMode,
   innerVlanId,
+  excludeCircuitCode,
 }: {
   iface?: DeviceInterface;
   vlanId?: number | null;
   accessMode?: string;
   innerVlanId?: number | null;
+  excludeCircuitCode?: string;
 }) {
   if (!iface) return null;
   const speed = formatPortSpeed(iface.speed_mbps);
-  const conflict = vlanConflict(iface.used_s_vids, vlanId, accessMode, innerVlanId);
+  const conflict = vlanConflict(
+    iface.used_s_vids,
+    vlanId,
+    accessMode,
+    innerVlanId,
+    excludeCircuitCode,
+  );
   const short = formatInterfaceShort(iface.name);
   return (
     <div className="port-detail-panel">
@@ -172,6 +180,8 @@ export interface CircuitEndpointsEditorProps {
   /** Pre-load interface lists when editing existing endpoints. */
   preloadDeviceIds?: number[];
   minEndpoints?: number;
+  /** Ignore S-VID conflicts owned by this circuit (endpoint edit). */
+  excludeCircuitCode?: string;
 }
 
 export default function CircuitEndpointsEditor({
@@ -180,6 +190,7 @@ export default function CircuitEndpointsEditor({
   formLoading = false,
   preloadDeviceIds = [],
   minEndpoints = 1,
+  excludeCircuitCode,
 }: CircuitEndpointsEditorProps) {
   const { message } = AntApp.useApp();
   const [ifaceByDevice, setIfaceByDevice] = useState<Record<number, DeviceInterface[]>>({});
@@ -350,6 +361,7 @@ export default function CircuitEndpointsEditor({
                             vlanId={ep.vlan_id}
                             accessMode={ep.access_mode}
                             innerVlanId={ep.inner_vlan_id}
+                            excludeCircuitCode={excludeCircuitCode}
                           />
                         )}
 

@@ -127,6 +127,7 @@ def _build_context(
     is_egress: bool = False,
     is_gateway: bool = False,
     db: Session | None = None,
+    partial: bool = False,
 ) -> dict:
     ctx = {
         "circuit": circuit,
@@ -139,6 +140,7 @@ def _build_context(
         "path_segments": [],
         "path_devices": [],
         "is_sr_headend": False,
+        "partial": partial,
     }
     if db is not None:
         from app.services import path_service
@@ -212,6 +214,85 @@ def _dci_gateways(db: Session, circuit: Circuit) -> list[Device]:
     return list(rows)
 
 
+def _endpoint_binding_key(ep: CircuitEndpoint) -> tuple:
+    mode = ep.access_mode.value if ep.access_mode else AccessMode.DOT1Q.value
+    return (
+        ep.device_id,
+        ep.interface_name,
+        mode,
+        ep.vlan_id,
+        ep.inner_vlan_id,
+    )
+
+
+def _endpoint_from_payload(row: dict) -> CircuitEndpoint:
+    mode = row.get("access_mode", AccessMode.DOT1Q)
+    if not isinstance(mode, AccessMode):
+        mode = AccessMode(mode)
+    return CircuitEndpoint(
+        circuit_id=row.get("circuit_id") or 0,
+        device_id=row["device_id"],
+        label=row.get("label", "A"),
+        interface_name=row["interface_name"],
+        access_mode=mode,
+        vlan_id=row.get("vlan_id"),
+        inner_vlan_id=row.get("inner_vlan_id"),
+        gateway_ip=row.get("gateway_ip"),
+        ip_address=row.get("ip_address"),
+    )
+
+
+def _parse_previous_endpoints(wo: WorkOrder) -> list[CircuitEndpoint]:
+    if not wo.payload:
+        return []
+    import json
+
+    try:
+        data = json.loads(wo.payload)
+    except json.JSONDecodeError:
+        return []
+    rows = data.get("previous_endpoints") or []
+    return [_endpoint_from_payload(row) for row in rows]
+
+
+def _remove_previous_endpoints(
+    db: Session,
+    wo: WorkOrder,
+    circuit: Circuit,
+    previous_eps: list[CircuitEndpoint],
+    service_type: ServiceType,
+    actor: str | None,
+) -> bool:
+    """Tear down old AC bindings only (keep VSI/BD) before applying new endpoints."""
+    failed = False
+    current_keys = {_endpoint_binding_key(ep) for ep in circuit.endpoints}
+    for prev in previous_eps:
+        if _endpoint_binding_key(prev) in current_keys:
+            continue
+        device = db.get(Device, prev.device_id)
+        if not device:
+            continue
+        _log(
+            db,
+            wo,
+            f"拆除旧端点 {prev.label}: {device.name} {prev.interface_name}",
+            actor=actor,
+        )
+        ok = _render_and_push(
+            db,
+            wo,
+            circuit,
+            prev,
+            device,
+            service_type,
+            "remove",
+            actor,
+            partial=True,
+        )
+        failed = failed or not ok
+    return not failed
+
+
 def execute(db: Session, wo: WorkOrder, actor: str | None = None) -> WorkOrder:
     """Render and apply configuration for a work order."""
     if wo.status not in (WorkOrderStatus.APPROVED, WorkOrderStatus.SCHEDULED):
@@ -267,6 +348,16 @@ def execute(db: Session, wo: WorkOrder, actor: str | None = None) -> WorkOrder:
     service_type: ServiceType = circuit.service_type
     _log(db, wo, f"Execution started: {operation} {service_type.value}", actor=actor)
 
+    failed = False
+    if wo.type == WorkOrderType.MODIFY and operation == "apply":
+        previous_eps = _parse_previous_endpoints(wo)
+        if previous_eps:
+            _log(db, wo, f"端点变更：先拆除 {len(previous_eps)} 个旧接入配置", actor=actor)
+            if not _remove_previous_endpoints(
+                db, wo, circuit, previous_eps, service_type, actor
+            ):
+                failed = True
+
     # Split endpoints into controller-delegated (by site) and direct device push.
     controller_groups: dict[int, list[CircuitEndpoint]] = {}
     direct_targets: list[tuple[CircuitEndpoint | None, Device]] = []
@@ -298,8 +389,6 @@ def execute(db: Session, wo: WorkOrder, actor: str | None = None) -> WorkOrder:
                 )
             ).scalars().all()
         )
-
-    failed = False
 
     # Controller-managed delivery.
     for controller_id, eps in controller_groups.items():
@@ -496,6 +585,8 @@ def _render_and_push(
     actor: str | None,
     is_gateway: bool = False,
     is_egress: bool = False,
+    *,
+    partial: bool = False,
 ) -> bool:
     driver = get_driver(device.vendor)
     site = device.site
@@ -511,6 +602,7 @@ def _render_and_push(
     )
     context = _build_context(
         circuit, ep, device, site, is_egress=is_egress, is_gateway=is_gateway, db=db,
+        partial=partial,
     )
 
     job = ConfigJob(

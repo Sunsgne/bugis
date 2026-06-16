@@ -331,7 +331,11 @@ export default function Circuits() {
     setProvisioningId(null);
   }
 
-  async function executeProvision(c: Circuit, woType = "provision") {
+  async function executeProvision(
+    c: Circuit,
+    woType = "provision",
+    body?: { previous_endpoints?: Array<Record<string, unknown>> },
+  ) {
     setProvisionCircuit(c);
     setProvisionLoading(true);
     setProvisionResult(null);
@@ -342,7 +346,7 @@ export default function Circuits() {
         woType === "provision"
           ? `/work-orders/provision/${c.id}`
           : `/work-orders/provision/${c.id}?wo_type=${woType}`;
-      const { data } = await api.post<ProvisionResult>(url);
+      const { data } = await api.post<ProvisionResult>(url, body ?? undefined);
       setProvisionResult(data);
       if (data.status === "failed") {
         message.error(`工单 ${data.code} 执行失败，请查看下发详情`);
@@ -456,8 +460,17 @@ export default function Circuits() {
       message.warning(`至少需要 ${minEps} 个端点`);
       return;
     }
+    const previousEndpoints = (editEndpointsTarget.endpoints || []).map((e) => ({
+      label: e.label,
+      device_id: e.device_id,
+      interface_name: e.interface_name,
+      access_mode: e.access_mode || "dot1q",
+      ...(e.vlan_id != null ? { vlan_id: e.vlan_id } : {}),
+      ...(e.inner_vlan_id != null ? { inner_vlan_id: e.inner_vlan_id } : {}),
+    }));
     setEditEndpointsSaving(true);
     const circuitId = editEndpointsTarget.id;
+    const circuitCode = editEndpointsTarget.code;
     try {
       await api.put(`/circuits/${circuitId}/endpoints`, { endpoints });
       const woType =
@@ -466,7 +479,11 @@ export default function Circuits() {
           : "provision";
       setEditEndpointsTarget(null);
       editEndpointsForm.resetFields();
-      await executeProvision({ ...editEndpointsTarget, id: circuitId }, woType);
+      await executeProvision(
+        { ...editEndpointsTarget, id: circuitId, code: circuitCode },
+        woType,
+        woType === "modify" ? { previous_endpoints: previousEndpoints } : undefined,
+      );
     } catch (e: any) {
       message.error(e?.response?.data?.detail || "端点更新失败");
     } finally {
@@ -973,7 +990,7 @@ export default function Circuits() {
           showIcon
           style={{ marginBottom: 12 }}
           message="修改接入端点"
-          description="可更换设备、物理端口、封装模式与 S-VID。保存后将创建变更/开通工单并重新下发各端设备配置。"
+          description="可更换设备、物理端口、封装模式与 S-VID。保存后将先拆除变更前的旧接入配置，再下发新端点配置（创建变更/开通工单）。"
         />
         <Form form={editEndpointsForm} layout="vertical" className="app-form">
           <CircuitEndpointsEditor
@@ -981,6 +998,7 @@ export default function Circuits() {
             devices={devices}
             preloadDeviceIds={editEndpointsTarget?.endpoints.map((e) => e.device_id) || []}
             minEndpoints={editEndpointsTarget?.service_type === "remote_ipt" ? 1 : 2}
+            excludeCircuitCode={editEndpointsTarget?.code}
           />
         </Form>
       </Modal>

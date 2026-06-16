@@ -336,20 +336,54 @@ def test_replace_circuit_endpoints(client, auth_headers):
             "service_type": "l2vpn_evpn",
             "bandwidth_mbps": 100,
             "endpoints": [
-                {"label": "A", "device_id": dev_a["id"], "interface_name": "GE1/0/1"},
-                {"label": "Z", "device_id": dev_z["id"], "interface_name": "GE1/0/1"},
+                {
+                    "label": "A",
+                    "device_id": dev_a["id"],
+                    "interface_name": "GE1/0/1",
+                    "vlan_id": 2001,
+                },
+                {
+                    "label": "Z",
+                    "device_id": dev_z["id"],
+                    "interface_name": "GE1/0/1",
+                    "vlan_id": 2001,
+                },
             ],
         },
     ).json()
     client.post(f"/api/v1/work-orders/provision/{circuit['id']}", headers=auth_headers)
 
+    previous = [
+        {
+            "label": "A",
+            "device_id": dev_a["id"],
+            "interface_name": "GE1/0/1",
+            "vlan_id": 2001,
+        },
+        {
+            "label": "Z",
+            "device_id": dev_z["id"],
+            "interface_name": "GE1/0/1",
+            "vlan_id": 2001,
+        },
+    ]
     updated = client.put(
         f"/api/v1/circuits/{circuit['id']}/endpoints",
         headers=auth_headers,
         json={
             "endpoints": [
-                {"label": "A", "device_id": dev_a["id"], "interface_name": "GE1/0/2"},
-                {"label": "Z", "device_id": dev_z["id"], "interface_name": "GE1/0/2"},
+                {
+                    "label": "A",
+                    "device_id": dev_a["id"],
+                    "interface_name": "GE1/0/2",
+                    "vlan_id": 2001,
+                },
+                {
+                    "label": "Z",
+                    "device_id": dev_z["id"],
+                    "interface_name": "GE1/0/2",
+                    "vlan_id": 2001,
+                },
             ],
         },
     ).json()
@@ -359,8 +393,20 @@ def test_replace_circuit_endpoints(client, auth_headers):
     wo = client.post(
         f"/api/v1/work-orders/provision/{circuit['id']}?wo_type=modify",
         headers=auth_headers,
+        json={"previous_endpoints": previous},
     ).json()
     assert wo["type"] == "modify"
+    jobs = wo["config_jobs"]
+    remove_jobs = [j for j in jobs if j["operation"] == "remove"]
+    apply_jobs = [j for j in jobs if j["operation"] == "apply"]
+    assert len(remove_jobs) == 2
+    assert len(apply_jobs) >= 2
+    h3c_remove = next(j for j in remove_jobs if j["device_id"] == dev_a["id"])
+    assert "GE1/0/1" in h3c_remove["rendered_config"]
+    assert "undo service-instance" in h3c_remove["rendered_config"]
+    assert "undo vsi" not in h3c_remove["rendered_config"]
+    h3c_apply = next(j for j in apply_jobs if j["device_id"] == dev_a["id"])
+    assert "GE1/0/2" in h3c_apply["rendered_config"]
 
 
 def test_device_baseline_initialize(client, auth_headers):

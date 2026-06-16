@@ -1,12 +1,19 @@
 {% import 'h3c/_macros.j2' as h3c %}
+{% set mode = endpoint.access_mode.value if endpoint.access_mode else 'dot1q' %}
 {% set svid = endpoint.vlan_id or circuit.vlan_id %}
 #
 # H3C Comware7 - remove EVPN VXLAN L2VPN  circuit {{ circuit.code }}
 #
+{% if partial %}
+interface {{ endpoint.interface_name }}
+ undo service-instance {{ svid or 1 }}
+#
+{% else %}
 interface {{ endpoint.interface_name }}
  undo service-instance {{ svid or 1 }}
 #
 {{ h3c.qos_policy_remove(circuit) }}
 undo vsi {{ circuit.vsi_name }}
 #
+{% endif %}
 return

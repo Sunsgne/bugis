@@ -12,6 +12,11 @@ undo nat address-group 2000
 undo acl advanced 2000
 undo ip vpn-instance {{ circuit.vrf_name }}
 {% else %}
+{% if partial %}
+interface {{ endpoint.interface_name }}
+ undo service-instance {{ svid }}
+#
+{% else %}
 interface {{ endpoint.interface_name }}
  undo service-instance {{ svid }}
 #
@@ -19,6 +24,7 @@ interface {{ endpoint.interface_name }}
 undo interface Vsi-interface{{ circuit.vni }}
 undo vsi {{ circuit.vsi_name }}
 undo ip vpn-instance {{ circuit.vrf_name }}
+{% endif %}
 {% endif %}
 #
 return

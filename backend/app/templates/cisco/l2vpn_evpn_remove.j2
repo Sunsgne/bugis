@@ -1,6 +1,15 @@
 ! Cisco IOS-XR - remove EVPN-MPLS L2  circuit={{ circuit.code }}
+{% if partial %}
+l2vpn
+ bridge group BG_{{ circuit.vni }}
+  bridge-domain BD_{{ circuit.vni }}
+   no interface {{ endpoint.interface_name }}
+!
+no interface {{ endpoint.interface_name }} l2transport
+{% else %}
 no l2vpn bridge group BG_{{ circuit.vni }}
 no evpn evi {{ circuit.vni }}
 no interface {{ endpoint.interface_name }} l2transport
 no policy-map CUST_{{ circuit.code }}_IN
 no policy-map CUST_{{ circuit.code }}_OUT
+{% endif %}

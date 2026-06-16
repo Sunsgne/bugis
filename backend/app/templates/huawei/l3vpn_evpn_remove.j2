@@ -4,6 +4,10 @@
 #
 # Huawei VRP - remove EVPN VXLAN L3VPN  circuit {{ circuit.code }}
 #
+{% if partial %}
+undo interface {{ hw.l2_ifname(endpoint, mode, svid) }}
+#
+{% else %}
 undo interface Vbdif{{ circuit.vni }}
 undo interface {{ hw.l2_ifname(endpoint, mode, svid) }}
 #
@@ -14,4 +18,5 @@ interface Nve1
 undo bridge-domain {{ circuit.vni }}
 undo ip vpn-instance {{ circuit.vrf_name }}
 #
+{% endif %}
 return
