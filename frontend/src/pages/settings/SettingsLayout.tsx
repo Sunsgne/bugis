@@ -51,7 +51,7 @@ export default function SettingsLayout() {
         集中管理品牌外观、平台运行参数、告警策略、SNMP/邮件、北向集成与用户权限。修改后即时生效。
       </Paragraph>
       <Layout className="settings-layout-inner" style={{ background: "transparent", minHeight: 520 }}>
-        <Sider width={200} theme="light" style={{ borderRight: "1px solid #f0f0f0", background: "#fafafa" }}>
+        <Sider width={200} theme="light" style={{ background: "#fafafa", boxShadow: "4px 0 16px rgba(15, 23, 42, 0.04)" }}>
           <Menu
             mode="inline"
             selectedKeys={[selected]}

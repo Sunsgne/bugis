@@ -45,7 +45,7 @@ export default function ManagementSettings() {
   }
 
   return (
-    <div>
+    <div className="settings-panel">
       <Space style={{ marginBottom: 16, width: "100%", justifyContent: "space-between" }}>
         <div>
           <Typography.Title level={5} style={{ margin: 0 }}>
@@ -71,7 +71,7 @@ export default function ManagementSettings() {
         }
       />
 
-      <Form form={form} layout="vertical" disabled={loading}>
+      <Form form={form} layout="vertical" className="app-form" disabled={loading}>
         <Row gutter={16}>
           <Col xs={12} md={6}>
             <Form.Item name="default_netconf_port" label="默认 NETCONF 端口">

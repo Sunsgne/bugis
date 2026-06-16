@@ -11,17 +11,17 @@ type Props = {
 
 export default function PageCard({ title, description, extra, children, className }: Props) {
   return (
-    <Card className={cn("w-full min-w-0 border-border/60 bg-card shadow-sm", className)}>
+    <Card className={cn("w-full min-w-0 border-0 bg-card shadow-sm", className)}>
       {(title || extra) && (
-        <CardHeader className="flex flex-col gap-4 space-y-0 pb-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0 space-y-1">
+        <CardHeader className="flex flex-col gap-4 space-y-0 px-6 pb-5 pt-6 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0 space-y-1.5">
             {title ? <CardTitle className="text-base">{title}</CardTitle> : null}
-            {description ? <CardDescription>{description}</CardDescription> : null}
+            {description ? <CardDescription className="text-[13px] leading-relaxed">{description}</CardDescription> : null}
           </div>
           {extra ? <div className="flex shrink-0 flex-wrap items-center gap-2">{extra}</div> : null}
         </CardHeader>
       )}
-      <CardContent className={title || extra ? undefined : "pt-6"}>{children}</CardContent>
+      <CardContent className={cn("px-6 pb-6", title || extra ? "pt-0" : "pt-6")}>{children}</CardContent>
     </Card>
   );
 }

@@ -31,7 +31,7 @@ export default function AlarmSettings() {
   }
 
   return (
-    <div>
+    <div className="settings-panel">
       <Space style={{ marginBottom: 16, width: "100%", justifyContent: "space-between" }}>
         <div>
           <Typography.Title level={5} style={{ margin: 0 }}>
@@ -43,7 +43,7 @@ export default function AlarmSettings() {
           保存
         </Button>
       </Space>
-      <Form form={form} layout="vertical" disabled={loading}>
+      <Form form={form} layout="vertical" className="app-form" disabled={loading}>
         <Row gutter={16}>
           <Col xs={12} md={8}>
             <Form.Item name="threshold_packet_loss_pct" label="丢包率阈值 (%)">

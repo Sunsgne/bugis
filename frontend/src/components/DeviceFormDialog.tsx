@@ -186,7 +186,7 @@ export default function DeviceFormDialog({
       {...formModalProps}
       width={760}
     >
-      <Typography.Paragraph type="secondary" style={{ marginTop: 0, marginBottom: 12 }}>
+      <Typography.Paragraph type="secondary" className="app-form-intro" style={{ marginTop: 0 }}>
         {isEdit
           ? "修改设备基础信息、南向凭证与 SNMP 配置。密码类字段留空则保持原值。"
           : "填写设备基础信息与南向凭证，SNMP 与登录密码相互独立。"}

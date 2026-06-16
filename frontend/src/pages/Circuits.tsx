@@ -14,7 +14,6 @@ import {
   Tooltip,
   App as AntApp,
   Popconfirm,
-  Descriptions,
   Drawer,
   Collapse,
   Timeline,
@@ -51,6 +50,7 @@ import { buildListQuery, dataTableProps, tablePagination } from "../utils/table"
 import { fetchAllPages } from "../utils/pagination";
 import PageCard from "../components/PageCard";
 import ListToolbar from "../components/ListToolbar";
+import CircuitExpandDetail from "../components/CircuitExpandDetail";
 import CircuitMonitorPanel from "../components/CircuitMonitorPanel";
 import CircuitEndpointsEditor from "../components/CircuitEndpointsEditor";
 
@@ -82,6 +82,16 @@ const STATUS_COLOR: Record<string, string> = {
   suspended: "volcano",
   decommissioned: "default",
   failed: "red",
+};
+const STATUS_LABEL: Record<string, string> = {
+  draft: "草稿",
+  pending: "待开通",
+  provisioning: "开通中",
+  active: "运行中",
+  degraded: "降级",
+  suspended: "暂停",
+  decommissioned: "已拆除",
+  failed: "失败",
 };
 
 interface TenantSummary {
@@ -701,7 +711,7 @@ export default function Circuits() {
         rowKey="id"
         loading={loading}
         dataSource={rows}
-        {...dataTableProps(1280, rows.length > 0)}
+        {...dataTableProps(selectedTenantId ? 1320 : 1220, rows.length > 0)}
         pagination={tablePagination(total, page, pageSize, (p, ps) => {
           setPage(p);
           setPageSize(ps);
@@ -720,63 +730,13 @@ export default function Circuits() {
                     key: "detail",
                     label: "参数详情",
                     children: (
-                      <Descriptions size="small" column={3} bordered>
-                        <Descriptions.Item label="VNI">{detail.vni}</Descriptions.Item>
-                        <Descriptions.Item label="VSI">{detail.vsi_name || "-"}</Descriptions.Item>
-                        <Descriptions.Item label="VLAN">{detail.vlan_id}</Descriptions.Item>
-                        <Descriptions.Item label="VRF">{detail.vrf_name}</Descriptions.Item>
-                        <Descriptions.Item label="RD">{detail.route_distinguisher}</Descriptions.Item>
-                        <Descriptions.Item label="RT">{detail.route_target}</Descriptions.Item>
-                        <Descriptions.Item label="MTU">{detail.mtu}</Descriptions.Item>
-                        {detail.service_type === "remote_ipt" && (
-                          <>
-                            <Descriptions.Item label="出口国家">{detail.egress_country}</Descriptions.Item>
-                            <Descriptions.Item label="出口站点">{siteName(detail.egress_site_id)}</Descriptions.Item>
-                            <Descriptions.Item label="公网 IP">{detail.ipt_public_ip}</Descriptions.Item>
-                            <Descriptions.Item label="NAT">
-                              {detail.ipt_nat_enabled ? "启用" : "关闭"}
-                            </Descriptions.Item>
-                          </>
-                        )}
-                        <Descriptions.Item label="端点" span={3}>
-                          <Space direction="vertical" size={8} style={{ width: "100%" }}>
-                            <Space wrap>
-                              {detail.endpoints.map((e) => (
-                                <Tag key={e.id}>
-                                  {e.label}: {deviceName(e.device_id)} / {e.interface_name}
-                                  {e.access_mode ? ` · ${e.access_mode}` : ""}
-                                  {e.vlan_id ? ` vlan ${e.vlan_id}` : ""}
-                                  {e.inner_vlan_id ? `/${e.inner_vlan_id}` : ""}
-                                </Tag>
-                              ))}
-                            </Space>
-                            {r.status !== "decommissioned" && (
-                              <Button
-                                size="small"
-                                type="link"
-                                icon={<EditOutlined />}
-                                style={{ padding: 0, height: "auto" }}
-                                onClick={() => openEditEndpoints(r, detail)}
-                              >
-                                修改端点并重新下发
-                              </Button>
-                            )}
-                          </Space>
-                        </Descriptions.Item>
-                        {(detail.path_mode === "explicit_sr" || (detail.path_hops && detail.path_hops.length > 0)) && (
-                          <Descriptions.Item label="SR 路径" span={3}>
-                            <Tag color="purple">{detail.path_mode || "auto"}</Tag>
-                            {(detail.path_hops || []).map((h) => (
-                              <Tag key={h.sequence}>#{h.sequence + 1} {h.device_name || h.device_id}</Tag>
-                            ))}
-                            {detail.segment_list && detail.segment_list.length > 0 && (
-                              <span style={{ marginLeft: 8, color: "#531dab" }}>
-                                SID: {detail.segment_list.join(" → ")}
-                              </span>
-                            )}
-                          </Descriptions.Item>
-                        )}
-                      </Descriptions>
+                      <CircuitExpandDetail
+                        detail={detail}
+                        deviceName={deviceName}
+                        siteName={siteName}
+                        canEditEndpoints={r.status !== "decommissioned"}
+                        onEditEndpoints={() => openEditEndpoints(r, detail)}
+                      />
                     ),
                   },
                   {
@@ -834,15 +794,21 @@ export default function Circuits() {
           {
             title: "状态",
             dataIndex: "status",
-            width: 90,
-            render: (s) => <Tag color={STATUS_COLOR[s]}>{s}</Tag>,
+            width: 100,
+            ellipsis: true,
+            render: (s) => (
+              <Tag color={STATUS_COLOR[s]}>{STATUS_LABEL[s] || s}</Tag>
+            ),
           },
           {
             title: "操作",
-            width: 300,
-            className: "table-actions",
+            key: "actions",
+            width: 320,
+            fixed: "right",
+            align: "right",
+            className: "table-actions-col",
             render: (_, r) => (
-              <Space wrap>
+              <Space size={4} wrap className="table-actions">
                 <Tooltip
                   title={
                     r.status === "active"
@@ -953,7 +919,7 @@ export default function Circuits() {
           >
             <InputNumber min={1} style={{ width: "100%" }} />
           </Form.Item>
-          <div style={{ color: "#888", fontSize: 12 }}>
+          <div className="form-hint-block">
             变更将创建 MODIFY 工单并重新下发各厂商 QoS / 限速配置。
           </div>
         </Form>
@@ -1177,7 +1143,7 @@ function CreateModal({
           endpoints: [{ label: "A" }, { label: "Z" }],
         }}
       >
-        <Typography.Text type="secondary" style={{ display: "block", marginBottom: 12 }}>
+        <Typography.Text type="secondary" className="app-form-intro">
           填写业务参数并配置 A/Z 接入端点；选择端口后可查看 S-VID 占用，避免 VLAN 冲突。
         </Typography.Text>
 
@@ -1329,14 +1295,10 @@ function CreateModal({
           }
         </Form.Item>
 
-        <Divider orientation="left" style={{ margin: "8px 0 16px" }}>
-          接入端点
-        </Divider>
+        <Divider plain>接入端点</Divider>
         <CircuitEndpointsEditor form={form} devices={devices} formLoading={formLoading} minEndpoints={1} />
 
-        <Divider orientation="left" style={{ margin: "16px 0" }}>
-          Underlay 路径
-        </Divider>
+        <Divider plain>Underlay 路径</Divider>
         <Form.Item noStyle shouldUpdate>
           {({ getFieldValue }) => {
             const eps = getFieldValue("endpoints") || [];
@@ -1352,13 +1314,7 @@ function CreateModal({
             );
             const epIds = new Set(epDevs.map((d) => d.id));
             return (
-              <div
-                style={{
-                  padding: 12,
-                  border: "1px dashed #d9d9d9",
-                  borderRadius: 8,
-                }}
-              >
+              <div className="form-section-box">
                 {hasVxlan && (
                   <Alert
                     type="info"

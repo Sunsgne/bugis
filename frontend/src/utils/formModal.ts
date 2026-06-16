@@ -14,7 +14,7 @@ export const formModalProps: Pick<
       maxHeight: "calc(85vh - 110px)",
       overflowY: "auto",
       overflowX: "hidden",
-      paddingTop: 12,
+      padding: "20px 24px 24px",
     },
   },
 };

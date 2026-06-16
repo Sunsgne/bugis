@@ -87,8 +87,8 @@ export default function DataTable<TData>({
     <div className={cn("w-full min-w-0 space-y-3", className)}>
       <div
         className={cn(
-          "w-full overflow-x-auto rounded-md border border-border/80 bg-background",
-          variant === "plain" && "rounded-md border-border/80 ring-0",
+          "w-full overflow-x-auto rounded-lg bg-background shadow-sm",
+          variant === "plain" && "rounded-lg ring-0",
         )}
       >
         <Table className={cn("w-full", tableLayout === "fixed" ? "table-fixed" : "table-auto")}>
@@ -125,7 +125,7 @@ export default function DataTable<TData>({
               rows.map((row) => (
                 <TableRow
                   key={row.id}
-                  className={variant === "plain" ? "border-border/40 hover:bg-muted/30" : undefined}
+                  className={variant === "plain" ? "hover:bg-muted/30" : undefined}
                 >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell

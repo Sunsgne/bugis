@@ -83,7 +83,7 @@ export default function SmtpSettings() {
   }));
 
   return (
-    <div>
+    <div className="settings-panel">
       <Space style={{ marginBottom: 16, width: "100%", justifyContent: "space-between" }}>
         <div>
           <Typography.Title level={5} style={{ margin: 0 }}>
@@ -106,7 +106,7 @@ export default function SmtpSettings() {
         description="涵盖 QQ / 163 / 企业邮、Gmail / Outlook、SendGrid / Mailgun / AWS SES 等，选择后自动填入 SMTP 主机、端口与加密方式，仅需填写账号与授权码。"
       />
 
-      <Form form={form} layout="vertical" disabled={loading}>
+      <Form form={form} layout="vertical" className="app-form" disabled={loading}>
         <Form.Item name="smtp_provider" label="邮件平台">
           <Select
             showSearch
