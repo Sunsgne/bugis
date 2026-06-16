@@ -28,7 +28,7 @@ export default function BaselineSettings() {
   }
 
   return (
-    <div>
+    <div className="settings-panel">
       <Space style={{ marginBottom: 16, width: "100%", justifyContent: "space-between" }}>
         <div>
           <Typography.Title level={5} style={{ margin: 0 }}>
@@ -46,7 +46,7 @@ export default function BaselineSettings() {
         style={{ marginBottom: 16 }}
         message="SNMP community 请在「SNMP 采集」页配置 baseline_community。"
       />
-      <Form form={form} layout="vertical" disabled={loading} style={{ maxWidth: 480 }}>
+      <Form form={form} layout="vertical" className="app-form" disabled={loading} style={{ maxWidth: 520 }}>
         <Form.Item name="baseline_ntp_server" label="NTP 服务器">
           <Input placeholder="10.0.0.1" />
         </Form.Item>

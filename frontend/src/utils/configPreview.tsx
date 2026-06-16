@@ -13,7 +13,7 @@ export const configPreviewModalProps: Pick<
     body: {
       maxHeight: "calc(82vh - 108px)",
       overflow: "auto",
-      paddingTop: 8,
+      padding: "16px 24px 24px",
     },
   },
 };
@@ -32,7 +32,7 @@ export const createCircuitModalProps: Pick<
       maxHeight: "calc(88vh - 110px)",
       overflowY: "auto",
       overflowX: "hidden",
-      paddingTop: 4,
+      padding: "16px 28px 28px",
     },
   },
 };

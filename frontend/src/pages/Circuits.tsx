@@ -901,7 +901,7 @@ export default function Circuits() {
           >
             <InputNumber min={1} style={{ width: "100%" }} />
           </Form.Item>
-          <div style={{ color: "#888", fontSize: 12 }}>
+          <div className="form-hint-block">
             变更将创建 MODIFY 工单并重新下发各厂商 QoS / 限速配置。
           </div>
         </Form>
@@ -1125,7 +1125,7 @@ function CreateModal({
           endpoints: [{ label: "A" }, { label: "Z" }],
         }}
       >
-        <Typography.Text type="secondary" style={{ display: "block", marginBottom: 12 }}>
+        <Typography.Text type="secondary" className="app-form-intro">
           填写业务参数并配置 A/Z 接入端点；选择端口后可查看 S-VID 占用，避免 VLAN 冲突。
         </Typography.Text>
 
@@ -1277,14 +1277,10 @@ function CreateModal({
           }
         </Form.Item>
 
-        <Divider orientation="left" style={{ margin: "8px 0 16px" }}>
-          接入端点
-        </Divider>
+        <Divider plain>接入端点</Divider>
         <CircuitEndpointsEditor form={form} devices={devices} formLoading={formLoading} minEndpoints={1} />
 
-        <Divider orientation="left" style={{ margin: "16px 0" }}>
-          Underlay 路径
-        </Divider>
+        <Divider plain>Underlay 路径</Divider>
         <Form.Item noStyle shouldUpdate>
           {({ getFieldValue }) => {
             const eps = getFieldValue("endpoints") || [];
@@ -1300,13 +1296,7 @@ function CreateModal({
             );
             const epIds = new Set(epDevs.map((d) => d.id));
             return (
-              <div
-                style={{
-                  padding: 12,
-                  border: "1px dashed #d9d9d9",
-                  borderRadius: 8,
-                }}
-              >
+              <div className="form-section-box">
                 {hasVxlan && (
                   <Alert
                     type="info"

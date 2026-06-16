@@ -38,7 +38,7 @@ export default function GeneralSettings() {
   }
 
   return (
-    <div>
+    <div className="settings-panel">
       <Space style={{ marginBottom: 16, width: "100%", justifyContent: "space-between" }}>
         <div>
           <Typography.Title level={5} style={{ margin: 0 }}>
@@ -74,7 +74,7 @@ export default function GeneralSettings() {
         }
       />
 
-      <Form form={form} layout="vertical" disabled={loading}>
+      <Form form={form} layout="vertical" className="app-form" disabled={loading}>
         <Row gutter={16}>
           <Col xs={24} md={8}>
             <Form.Item name="dry_run" label="Dry-run（模拟下发）" valuePropName="checked">

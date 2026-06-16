@@ -20,14 +20,27 @@ export default function AntdProvider({ children }: { children: ReactNode }) {
         components: {
           Card: {
             headerHeight: 48,
+            paddingLG: 20,
           },
           Table: {
             headerBg: "hsl(210, 40%, 98%)",
             borderColor: "transparent",
             headerSplitColor: "transparent",
+            cellPaddingBlock: 12,
+            cellPaddingInline: 16,
           },
           Modal: {
-            headerBg: "transparent",
+            titleFontSize: 16,
+          },
+          Form: {
+            itemMarginBottom: 20,
+            labelHeight: 22,
+            verticalLabelPadding: 4,
+            labelFontSize: 13,
+          },
+          Descriptions: {
+            labelBg: "hsl(210, 40%, 98%)",
+            padding: 12,
           },
           Menu: {
             itemBg: "transparent",

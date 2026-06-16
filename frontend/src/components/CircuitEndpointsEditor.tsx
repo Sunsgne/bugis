@@ -218,9 +218,9 @@ export default function CircuitEndpointsEditor({
 
   return (
     <>
-      <div style={{ marginBottom: 8, fontSize: 12, color: "#888" }}>
+      <div className="endpoint-legend">
         图例：
-        <Tag color="green" bordered={false} style={{ marginLeft: 8 }}>空闲</Tag>
+        <Tag color="green" bordered={false}>空闲</Tag>
         <Tag color="blue" bordered={false}>S:VID (平台)</Tag>
         <Tag color="orange" bordered={false}>S:VID (设备)</Tag>
         <Tag color="red" bordered={false}>S:VID (手工)</Tag>
@@ -261,7 +261,7 @@ export default function CircuitEndpointsEditor({
                             />
                           ) : null
                         }
-                        style={{ marginBottom: 12 }}
+                        style={{ marginBottom: 0 }}
                       >
                         <Row gutter={[16, 0]}>
                           <Col xs={24} sm={8} md={6} lg={5}>
@@ -297,7 +297,7 @@ export default function CircuitEndpointsEditor({
                           </Col>
                         </Row>
 
-                        <Form.Item label="物理端口" required style={{ marginBottom: 8 }}>
+                        <Form.Item label="物理端口" required style={{ marginBottom: 12 }}>
                           <div className="endpoint-port-row">
                             <Form.Item
                               name={[field.name, "interface_name"]}
@@ -342,7 +342,7 @@ export default function CircuitEndpointsEditor({
                           />
                         )}
 
-                        <Row gutter={[16, 0]} style={{ marginTop: 12 }}>
+                        <Row gutter={[16, 4]} style={{ marginTop: 16 }}>
                           <Col xs={24} sm={12} md={8}>
                             <Form.Item name={[field.name, "access_mode"]} label="封装模式" initialValue="dot1q">
                               <Select

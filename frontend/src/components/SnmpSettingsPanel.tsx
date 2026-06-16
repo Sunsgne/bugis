@@ -203,7 +203,7 @@ export default function SnmpSettingsPanel() {
         }
       />
 
-      <Form form={form} layout="vertical" disabled={loading || !!loadError} initialValues={{ version: "2c", enabled: true }}>
+      <Form form={form} layout="vertical" className="app-form" disabled={loading || !!loadError} initialValues={{ version: "2c", enabled: true }}>
         <Tabs
           items={[
             {
@@ -394,7 +394,7 @@ export default function SnmpSettingsPanel() {
       </Form>
 
       <Modal title="SNMP 连通性测试" open={testOpen} onCancel={() => setTestOpen(false)} onOk={runTest} okText="探测" width={560}>
-        <Form form={testForm} layout="vertical">
+        <Form form={testForm} layout="vertical" className="app-form">
           <Form.Item name="device_id" label="平台设备">
             <Select
               allowClear
