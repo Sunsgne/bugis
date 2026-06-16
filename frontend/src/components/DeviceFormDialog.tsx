@@ -399,6 +399,7 @@ export default function DeviceFormDialog({
                       <Form.Item
                         name="snmp_port"
                         label="UDP 端口"
+                        extra={vendor === "huawei" ? "华为 CE 常见 16161（非标准 161）" : undefined}
                         rules={[{ type: "number", min: 1, max: 65535 }]}
                       >
                         <InputNumber min={1} max={65535} style={{ width: "100%" }} />

@@ -460,8 +460,11 @@ def test_snmp_interface_discovery(client, auth_headers):
     assert r.status_code == 200
     ifaces = r.json()
     assert len(ifaces) > 0
-    # Huawei naming convention discovered (real SNMP or dry-run fallback)
-    assert any(i["name"].startswith("GE1/0/") for i in ifaces)
+    # CE6881-style naming (10GE/100GE) from real SNMP or dry-run fallback
+    assert any(
+        i["name"].startswith("10GE1/0/") or i["name"].startswith("100GE1/0/")
+        for i in ifaces
+    )
     assert all(
         i["discovered_via"] in ("snmp", "snmp-sim", "running-config", "link-sync")
         for i in ifaces

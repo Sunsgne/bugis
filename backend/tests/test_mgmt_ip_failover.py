@@ -59,7 +59,7 @@ def test_ensure_snmp_mgmt_ip_failover_huawei():
     )
     mock_cfg = type("Cfg", (), {"enabled": True, "port": 161})()
 
-    def fake_snmp(db, dev, host):
+    def fake_snmp(db, dev, host, *, port=None):
         if host == "10.1.1.1":
             return {"method": "snmp", "ok": False, "error": "timeout", "host": host}
         if host == "203.0.113.20":
@@ -112,32 +112,29 @@ def test_walk_with_mgmt_failover_uses_backup():
 
     def fake_walk_real(dev, cfg, community, *, port=None, host=None):
         walk_calls.append(host)
-        if host == "10.0.0.1":
-            raise RuntimeError("SNMP timeout")
         return [{
-            "name": "GE1/0/1",
+            "name": "10GE1/0/1",
             "description": None,
-            "speed_mbps": 1000,
+            "speed_mbps": 10000,
             "oper_status": "up",
             "ifindex": 1,
             "discovered_via": "snmp",
         }]
 
-    def fake_snmp(db, dev, host):
-        if host == "10.0.0.1":
-            return {"method": "snmp", "ok": False, "error": "timeout"}
-        return {"method": "snmp", "ok": True, "latency_ms": 2.0}
+    mock_cfg = type("Cfg", (), {"port": 161})()
 
-    with patch("app.services.device_management._snmp_probe", side_effect=fake_snmp):
+    with patch(
+        "app.services.device_management.resolve_snmp_endpoint",
+        return_value=("203.0.113.55", 161, {"ip": "203.0.113.55", "role": "backup", "label": "公网"}),
+    ):
         with patch("app.services.snmp._walk_real", side_effect=fake_walk_real):
-            results, used = snmp._walk_with_mgmt_failover(None, device, object(), "public")
+            results, used = snmp._walk_with_mgmt_failover(object(), device, mock_cfg, "public")
 
     assert used is not None
     assert used["ip"] == "203.0.113.55"
-    assert results[0]["name"] == "GE1/0/1"
+    assert results[0]["name"] == "10GE1/0/1"
     assert device.mgmt_ip_active == "203.0.113.55"
-    assert "10.0.0.1" in walk_calls
-    assert "203.0.113.55" in walk_calls
+    assert walk_calls == ["203.0.113.55"]
 
 
 def test_discover_interfaces_api_failover(client: TestClient, auth_headers: dict):
@@ -168,7 +165,7 @@ def test_discover_interfaces_api_failover(client: TestClient, auth_headers: dict
             "discovered_via": "snmp",
         }]
 
-    def fake_snmp(db, dev, host):
+    def fake_snmp(db, dev, host, *, port=None):
         if host == "10.0.0.1":
             return {"method": "snmp", "ok": False, "error": "timeout"}
         return {"method": "snmp", "ok": True}
@@ -187,3 +184,30 @@ def test_discover_interfaces_api_failover(client: TestClient, auth_headers: dict
     dev = client.get(f"/api/v1/devices/{dev_id}", headers=auth_headers).json()
     assert dev["mgmt_ip_active"] == "203.0.113.99"
     assert dev["mgmt_ip_active_role"] == "backup"
+
+
+def test_resolve_snmp_huawei_tries_port_16161():
+    device = Device(
+        name="hw-ce",
+        vendor=Vendor.HUAWEI,
+        mgmt_ip="10.88.91.1",
+        snmp_enabled=True,
+        snmp_port=161,
+    )
+    mock_cfg = type("Cfg", (), {"enabled": True, "port": 161})()
+    attempts: list[int] = []
+
+    def fake_snmp(db, dev, host, *, port=None):
+        attempts.append(port or 161)
+        if port == 16161:
+            return {"method": "snmp", "ok": True, "latency_ms": 3.0, "host": host, "port": port}
+        return {"method": "snmp", "ok": False, "error": "timeout", "host": host, "port": port}
+
+    with patch("app.services.snmp_settings.get_or_create", return_value=mock_cfg):
+        with patch("app.services.snmp_device.effective_snmp", return_value={"enabled": True, "port": 161}):
+            with patch("app.services.device_management._snmp_probe", side_effect=fake_snmp):
+                host, port, _cand = device_management.resolve_snmp_endpoint(object(), device)
+
+    assert host == "10.88.91.1"
+    assert port == 16161
+    assert 16161 in attempts

@@ -106,6 +106,8 @@ export default function DevicePortDrawer({
   const [discovering, setDiscovering] = useState(false);
   const [adoptBinding, setAdoptBinding] = useState<DevicePortBinding | null>(null);
 
+  const [discoverError, setDiscoverError] = useState<string | null>(null);
+
   async function loadBindings(deviceId: number, refresh = false) {
     setBindingsLoading(true);
     try {
@@ -135,6 +137,7 @@ export default function DevicePortDrawer({
     if (!device) {
       setIfaces([]);
       setBindings(null);
+      setDiscoverError(null);
       setIfaceSearch("");
       setIfaceStatus("all");
       setIfaceSvidOnly(false);
@@ -143,21 +146,23 @@ export default function DevicePortDrawer({
     }
 
     let cancelled = false;
+    void loadBindings(device.id, true);
     (async () => {
-      const [rows] = await Promise.all([
-        loadIfaces(device.id, true),
-        loadBindings(device.id, true),
-      ]);
-      if (cancelled || !rows) return;
+      const rows = await loadIfaces(device.id, false);
+      if (cancelled) return;
       if (refreshVersion === 0 && rows.length === 0) {
         setDiscovering(true);
+        setDiscoverError(null);
         try {
           const discovered = await onDiscover(device.id);
           if (!cancelled && Array.isArray(discovered)) {
-            setIfaces(discovered);
+            setIfaces(discovered.filter((iface) => !isHuaweiSubinterface(iface.name) || device.vendor !== "huawei"));
           }
-        } catch {
-          // discover errors are surfaced by parent handler
+        } catch (e: unknown) {
+          if (!cancelled) {
+            const err = e as { response?: { data?: { detail?: string } } };
+            setDiscoverError(err?.response?.data?.detail || "SNMP 发现失败");
+          }
         } finally {
           if (!cancelled) setDiscovering(false);
         }
@@ -223,10 +228,14 @@ export default function DevicePortDrawer({
               loading={discovering}
               onClick={async () => {
                 setDiscovering(true);
+                setDiscoverError(null);
                 try {
                   const data = await onDiscover(device.id);
                   if (Array.isArray(data)) setIfaces(data);
                   await loadBindings(device.id);
+                } catch (e: unknown) {
+                  const err = e as { response?: { data?: { detail?: string } } };
+                  setDiscoverError(err?.response?.data?.detail || "SNMP 发现失败");
                 } finally {
                   setDiscovering(false);
                 }
@@ -263,6 +272,25 @@ export default function DevicePortDrawer({
           <> 主 {device.mgmt_ip} / 备 {device.mgmt_ip_backup}，不可达时自动切换。</>
         ) : null}
       </Typography.Paragraph>
+
+      {discoverError ? (
+        <Alert
+          type="error"
+          showIcon
+          closable
+          onClose={() => setDiscoverError(null)}
+          message="SNMP 接口发现失败"
+          description={
+            <>
+              {discoverError}
+              {device?.vendor === "huawei" ? (
+                <> 华为设备请确认 SNMP 端口（常见 <strong>16161</strong>）、Community，以及管理网 IP 是否可达（SNMP 可能仅在 mgt VPN 实例上监听）。</>
+              ) : null}
+            </>
+          }
+          style={{ marginBottom: 12 }}
+        />
+      ) : null}
 
       {ifaces.some((i) => i.discovered_via === "snmp-sim") ? (
         <Alert

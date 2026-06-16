@@ -31,8 +31,7 @@ VENDOR_INTERFACES: dict[Vendor, list[tuple[str, int, int]]] = {
     Vendor.H3C: [("GigabitEthernet1/0/{i}", 24, 1000),
                  ("Ten-GigabitEthernet1/0/{i}", 4, 10000),
                  ("HundredGigE1/0/{i}", 2, 100000)],
-    Vendor.HUAWEI: [("GE1/0/{i}", 24, 1000), ("10GE1/0/{i}", 4, 10000),
-                    ("HundredGE1/0/{i}", 2, 100000)],
+    Vendor.HUAWEI: [("10GE1/0/{i}", 48, 10000), ("100GE1/0/{i}", 6, 100000)],
     Vendor.CISCO: [("GigabitEthernet0/0/0/{i}", 12, 1000),
                    ("TenGigE0/0/0/{i}", 4, 10000),
                    ("HundredGigE0/0/0/{i}", 2, 100000)],
@@ -242,45 +241,38 @@ def _walk_with_mgmt_failover(
     *,
     port: int | None = None,
 ) -> tuple[list[dict], dict[str, str] | None]:
-    """Try IF-MIB walk on each management IP (primary then backup)."""
+    """Resolve SNMP host/port (all mgmt IPs × ports), then walk IF-MIB once."""
     from app.services import device_management
 
-    candidates = device_management.mgmt_ip_candidates(device)
-    ordered: list[dict[str, str]] = []
-    if device.mgmt_ip_active:
-        active = next((c for c in candidates if c["ip"] == device.mgmt_ip_active), None)
-        if active:
-            ordered.append(active)
-    for cand in candidates:
-        if cand not in ordered:
-            ordered.append(cand)
-
-    errors: list[str] = []
-    for cand in ordered:
-        if db is not None:
-            snmp_probe = device_management._snmp_probe(db, device, cand["ip"])
-            if not snmp_probe.get("skipped") and not snmp_probe.get("ok"):
-                err = snmp_probe.get("error") or "SNMP 不可达"
-                errors.append(f"{cand['label']} {cand['ip']}: {err}")
-                continue
+    if db is not None:
         try:
-            results = _walk_real(device, cfg, community, port=port, host=cand["ip"])
-            if results:
-                device_management.persist_active_endpoint(
-                    device, cand["ip"], cand["role"], method="snmp"
-                )
-                return results, cand
-        except (RuntimeError, ImportError, ModuleNotFoundError, Exception) as exc:
-            msg = str(exc)
-            if "asyncore" in msg:
-                raise RuntimeError(
-                    "SNMP 库与 Python 3.12 不兼容，请升级 PySNMP（>=6.2）后重试"
-                ) from exc
-            errors.append(f"{cand['label']} {cand['ip']}: {msg}")
+            host, walk_port, cand = device_management.resolve_snmp_endpoint(db, device)
+        except device_management.MgmtUnreachableError as exc:
+            raise RuntimeError(str(exc)) from exc
+    else:
+        host = device.active_mgmt_ip
+        walk_port = port or cfg.port
+        cand = {"ip": host, "role": "primary", "label": "管理网"}
 
-    if errors:
-        raise RuntimeError("；".join(errors))
-    raise RuntimeError("未采集到接口数据，请检查主备管理 IP、SNMP Community 与 UDP 161 可达性")
+    try:
+        results = _walk_real(device, cfg, community, port=walk_port, host=host)
+        if results:
+            if db is not None:
+                device_management.persist_active_endpoint(
+                    device, host, cand["role"], method="snmp"
+                )
+            return results, cand
+    except (RuntimeError, ImportError, ModuleNotFoundError, Exception) as exc:
+        msg = str(exc)
+        if "asyncore" in msg:
+            raise RuntimeError(
+                "SNMP 库与 Python 3.12 不兼容，请升级 PySNMP（>=6.2）后重试"
+            ) from exc
+        raise RuntimeError(f"{cand.get('label', '管理')} {host}:{walk_port} {msg}") from exc
+
+    raise RuntimeError(
+        f"未采集到接口数据，请检查 {host}:{walk_port} 的 SNMP Community 与 IF-MIB 权限"
+    )
 
 
 def discover_interfaces(db: Session, device: Device) -> list[DeviceInterface]:

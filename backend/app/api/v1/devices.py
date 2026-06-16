@@ -334,6 +334,8 @@ def discover_interfaces(
     all_ifaces = db.execute(
         select(DeviceInterface).where(DeviceInterface.device_id == device.id)
     ).scalars().all()
+    if device.vendor == Vendor.HUAWEI:
+        all_ifaces = [r for r in all_ifaces if not port_inventory.is_huawei_subinterface(r.name)]
     return sorted(all_ifaces, key=lambda i: (i.ifindex or 0, i.name))
 
 

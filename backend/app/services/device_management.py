@@ -72,7 +72,13 @@ def _tcp_probe(host: str, port: int, timeout: float = 3.0) -> tuple[bool, float 
         return False, None, str(exc)
 
 
-def _snmp_probe(db: Session | None, device: Device, host: str) -> dict[str, Any]:
+def _snmp_probe(
+    db: Session | None,
+    device: Device,
+    host: str,
+    *,
+    port: int | None = None,
+) -> dict[str, Any]:
     if db is None:
         return {"method": "snmp", "ok": False, "skipped": True, "host": host}
     from app.services import snmp_device, snmp_settings as snmp_cfg
@@ -98,10 +104,11 @@ def _snmp_probe(db: Session | None, device: Device, host: str) -> dict[str, Any]
         if eff["version"] == "3" and eff["v3_context_name"]
         else ContextData()
     )
+    walk_port = port or eff["port"] or cfg.port
     started = time.perf_counter()
     raw = snmp_hlapi.get_oid(
         host,
-        eff["port"] or cfg.port,
+        walk_port,
         float(cfg.timeout_sec),
         int(cfg.retries),
         creds,
@@ -109,13 +116,73 @@ def _snmp_probe(db: Session | None, device: Device, host: str) -> dict[str, Any]
         SYS_UPTIME_OID,
     )
     if raw is None:
-        return {"method": "snmp", "ok": False, "error": "SNMP GET sysUpTime failed", "host": host}
+        return {
+            "method": "snmp",
+            "ok": False,
+            "error": "SNMP GET sysUpTime failed",
+            "host": host,
+            "port": walk_port,
+        }
     return {
         "method": "snmp",
         "ok": True,
         "latency_ms": round((time.perf_counter() - started) * 1000, 2),
         "host": host,
+        "port": walk_port,
     }
+
+
+def snmp_ports_to_try(device: Device, cfg, eff: dict) -> list[int]:
+    """Candidate UDP ports — Huawei CE often uses 16161 instead of 161."""
+    ports: list[int] = []
+    for p in (eff.get("port"), cfg.port):
+        if p and int(p) not in ports:
+            ports.append(int(p))
+    if device.vendor == Vendor.HUAWEI:
+        for p in (16161, 161):
+            if p not in ports:
+                ports.append(p)
+    elif 161 not in ports:
+        ports.append(161)
+    return ports
+
+
+def resolve_snmp_endpoint(
+    db: Session,
+    device: Device,
+    *,
+    persist: bool = True,
+) -> tuple[str, int, dict[str, str]]:
+    """Find (host, port) where SNMP sysUpTime answers — tries all mgmt IPs and ports."""
+    from app.services import snmp_device, snmp_settings as snmp_cfg
+
+    cfg = snmp_cfg.get_or_create(db)
+    eff = snmp_device.effective_snmp(device, cfg)
+    if not cfg.enabled or not eff["enabled"]:
+        raise MgmtUnreachableError("SNMP 采集未启用（平台或设备已关闭）")
+
+    ports = snmp_ports_to_try(device, cfg, eff)
+    errors: list[str] = []
+    for cand in mgmt_ip_candidates(device):
+        for port in ports:
+            probe = _snmp_probe(db, device, cand["ip"], port=port)
+            if probe.get("skipped"):
+                continue
+            if probe.get("ok"):
+                if persist:
+                    persist_active_endpoint(
+                        device,
+                        cand["ip"],
+                        cand["role"],
+                        method="snmp",
+                        latency_ms=probe.get("latency_ms"),
+                    )
+                return cand["ip"], port, cand
+            err = probe.get("error") or "SNMP 不可达"
+            errors.append(f"{cand['label']} {cand['ip']}:{port} {err}")
+
+    detail = "；".join(errors) if errors else "请检查 Community、端口（华为常见 16161）与网络可达性"
+    raise MgmtUnreachableError(f"SNMP 不可达（{detail}）")
 
 
 def _probe_host(db: Session, device: Device, host: str, role: str, label: str) -> dict[str, Any] | None:
@@ -218,28 +285,11 @@ def ensure_snmp_mgmt_ip(
     if not cfg.enabled or not eff["enabled"]:
         return device.active_mgmt_ip
 
-    candidates = mgmt_ip_candidates(device)
-    ordered: list[dict[str, str]] = []
-    if device.mgmt_ip_active:
-        active = next((c for c in candidates if c["ip"] == device.mgmt_ip_active), None)
-        if active:
-            ordered.append(active)
-    for cand in candidates:
-        if cand not in ordered:
-            ordered.append(cand)
-
-    for cand in ordered:
-        snmp_probe = _snmp_probe(db, device, cand["ip"])
-        if snmp_probe.get("ok"):
-            if persist:
-                persist_active_endpoint(
-                    device,
-                    cand["ip"],
-                    cand["role"],
-                    method="snmp",
-                    latency_ms=snmp_probe.get("latency_ms"),
-                )
-            return cand["ip"]
+    try:
+        host, _port, _cand = resolve_snmp_endpoint(db, device, persist=persist)
+        return host
+    except MgmtUnreachableError:
+        pass
 
     result = probe_reachability(db, device, persist=persist)
     if result.get("reachable") and result.get("mgmt_ip_active"):

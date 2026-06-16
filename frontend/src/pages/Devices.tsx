@@ -277,7 +277,7 @@ export default function Devices() {
       const svidCount = data.filter((i) => i.used_s_vids?.length).length;
       if (simCount === data.length) {
         message.warning(
-          "返回的是模拟数据（设备 SNMP 不可达或 Community 错误）。请检查管理 IP、UDP 161 与 Community 后重试",
+          "返回的是模拟数据（设备 SNMP 不可达或 Community/端口错误）。华为请确认 UDP 16161 与管理网 IP 可达后重试",
         );
       } else if (simCount > 0) {
         message.warning(`部分接口为模拟数据（${simCount}/${data.length}），请检查 SNMP 配置`);
