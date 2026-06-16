@@ -238,6 +238,9 @@ export function donutOption(
     },
   }));
 
+  /** Shared anchor — title and ring must use the same center (legend sits below). */
+  const donutCenter: [string, string] = ["50%", "42%"];
+
   return {
     animationDuration: 900,
     animationEasing: "elasticOut",
@@ -251,6 +254,8 @@ export function donutOption(
     },
     legend: {
       ...baseLegend(),
+      left: "center",
+      bottom: 4,
       orient: "horizontal" as const,
       formatter: (name: string) => {
         const item = data.find((d) => d.name === name);
@@ -261,9 +266,14 @@ export function donutOption(
       ? {
           text: String(total),
           subtext: centerLabel,
-          left: "center",
-          top: "38%",
+          left: donutCenter[0],
+          top: donutCenter[1],
           textAlign: "center",
+          textVerticalAlign: "middle",
+          itemGap: 6,
+          padding: 0,
+          backgroundColor: "transparent",
+          borderWidth: 0,
           textStyle: { fontSize: 28, fontWeight: 700, color: chartText.primary, fontFamily: chartFont },
           subtextStyle: { fontSize: 12, color: chartText.muted, fontFamily: chartFont },
         }
@@ -272,7 +282,7 @@ export function donutOption(
       {
         type: "pie",
         radius: ["52%", "74%"],
-        center: ["50%", "46%"],
+        center: donutCenter,
         padAngle: 2,
         avoidLabelOverlap: true,
         label: { show: false },

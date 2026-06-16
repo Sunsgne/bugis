@@ -100,6 +100,17 @@ body {
   width: 100%;
 }
 
+.chart-card > .ant-card-body {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.chart-card .echart-host {
+  flex: 1;
+  min-height: 0;
+}
+
 .monitor-charts {
   display: flex;
   flex-direction: column;
