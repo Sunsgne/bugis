@@ -17,6 +17,9 @@ interface {{ endpoint.interface_name }}
  undo dot1q termination vid {{ svid }}
 #
 undo interface Vbdif{{ circuit.vni }}
+undo interface {{ hw.l2_ifname(endpoint, mode, svid) }}
+#
+{{ hw.qos_policy_remove(circuit) }}
 undo bridge-domain {{ circuit.vni }}
 undo ip vpn-instance {{ circuit.vrf_name }}
 {% endif %}

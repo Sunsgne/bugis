@@ -329,7 +329,61 @@ def _merge_entries(existing: list[SvidEntry], new: SvidEntry) -> None:
     existing.append(new)
 
 
-def _parse_rate_limit_kbps(text: str) -> int | None:
+def _parse_h3c_qos_policy_map(config: str) -> dict[str, int]:
+    """Map H3C qos policy name -> CAR cir (kbps)."""
+    behavior_cir: dict[str, int] = {}
+    for m in re.finditer(
+        r"^traffic behavior\s+(\S+)\s*$(.+?)(?=^traffic behavior\s|^traffic classifier\s|^qos policy\s|\Z)",
+        config,
+        re.MULTILINE | re.DOTALL | re.IGNORECASE,
+    ):
+        car = re.search(r"car\s+cir\s+(\d+)", m.group(2), re.I)
+        if car:
+            behavior_cir[m.group(1)] = int(car.group(1))
+
+    policy_kbps: dict[str, int] = {}
+    for m in re.finditer(
+        r"^qos policy\s+(\S+)\s*$(.+?)(?=^qos policy\s|^traffic behavior\s|^traffic classifier\s|\Z)",
+        config,
+        re.MULTILINE | re.DOTALL | re.IGNORECASE,
+    ):
+        behavior_m = re.search(r"classifier\s+\S+\s+behavior\s+(\S+)", m.group(2), re.I)
+        if behavior_m and behavior_m.group(1) in behavior_cir:
+            policy_kbps[m.group(1)] = behavior_cir[behavior_m.group(1)]
+    return policy_kbps
+
+
+def _parse_huawei_traffic_policy_map(config: str) -> dict[str, int]:
+    """Map Huawei traffic policy name -> CAR cir (kbps)."""
+    behavior_cir: dict[str, int] = {}
+    for m in re.finditer(
+        r"^traffic behavior\s+(\S+)\s*$(.+?)(?=^traffic behavior\s|^traffic classifier\s|^traffic policy\s|\Z)",
+        config,
+        re.MULTILINE | re.DOTALL | re.IGNORECASE,
+    ):
+        car = re.search(r"car\s+cir\s+(\d+)", m.group(2), re.I)
+        if car:
+            behavior_cir[m.group(1)] = int(car.group(1))
+
+    policy_kbps: dict[str, int] = {}
+    for m in re.finditer(
+        r"^traffic policy\s+(\S+)\s*$(.+?)(?=^traffic policy\s|^traffic behavior\s|^traffic classifier\s|\Z)",
+        config,
+        re.MULTILINE | re.DOTALL | re.IGNORECASE,
+    ):
+        behavior_m = re.search(r"classifier\s+\S+\s+behavior\s+(\S+)", m.group(2), re.I)
+        if behavior_m and behavior_m.group(1) in behavior_cir:
+            policy_kbps[m.group(1)] = behavior_cir[behavior_m.group(1)]
+    return policy_kbps
+
+
+def _parse_rate_limit_kbps(text: str, *, policy_map: dict[str, int] | None = None) -> int | None:
+    apply_m = re.search(r"qos\s+apply\s+policy\s+(\S+)", text, re.I)
+    if apply_m and policy_map and apply_m.group(1) in policy_map:
+        return policy_map[apply_m.group(1)]
+    tp_m = re.search(r"traffic-policy\s+(\S+)", text, re.I)
+    if tp_m and policy_map and tp_m.group(1) in policy_map:
+        return policy_map[tp_m.group(1)]
     car = re.search(r"qos\s+car\s+inbound\s+any\s+cir\s+(\d+)", text, re.I)
     if car:
         return int(car.group(1))
@@ -349,6 +403,8 @@ def _parse_rate_limit_kbps(text: str) -> int | None:
 def _kbps_to_mbps(kbps: int | None) -> int | None:
     if kbps is None:
         return None
+    if kbps % 1024 == 0 and kbps >= 1024:
+        return kbps // 1024
     return max(1, kbps // 1000) if kbps >= 1000 else 1
 
 
@@ -475,7 +531,7 @@ def platform_usage(db: Session, device: Device) -> dict[str, PortUsage]:
     return by_iface
 
 
-def _parse_h3c_block(iface: str, block: str) -> list[SvidEntry]:
+def _parse_h3c_block(iface: str, block: str, policy_map: dict[str, int] | None = None) -> list[SvidEntry]:
     entries: list[SvidEntry] = []
     iface_desc_m = re.search(r"^\s*description\s+(.+)$", block, re.MULTILINE | re.IGNORECASE)
     iface_desc = iface_desc_m.group(1).strip() if iface_desc_m else None
@@ -488,7 +544,7 @@ def _parse_h3c_block(iface: str, block: str) -> list[SvidEntry]:
         si_body = m.group(1)
         desc_m = re.search(r"^\s*description\s+(.+)$", si_body, re.MULTILINE | re.IGNORECASE)
         vsi_m = re.search(r"xconnect\s+vsi\s+(\S+)", si_body, re.I)
-        rate_kbps = _parse_rate_limit_kbps(si_body)
+        rate_kbps = _parse_rate_limit_kbps(si_body, policy_map=policy_map)
         description = (desc_m.group(1).strip() if desc_m else None) or iface_desc
 
         if re.search(r"encapsulation\s+untagged", si_body, re.I):
@@ -536,10 +592,12 @@ def _parse_h3c_block(iface: str, block: str) -> list[SvidEntry]:
     return entries
 
 
-def _parse_huawei_block(iface: str, block: str) -> list[SvidEntry]:
+def _parse_huawei_block(iface: str, block: str, policy_map: dict[str, int] | None = None) -> list[SvidEntry]:
     entries: list[SvidEntry] = []
+    rate_kbps = _parse_rate_limit_kbps(block, policy_map=policy_map)
+    rate_mbps = _kbps_to_mbps(rate_kbps)
     if re.search(r"encapsulation\s+untag", block, re.I):
-        entries.append(SvidEntry(s_vid=None, access_mode="access", source="device"))
+        entries.append(SvidEntry(s_vid=None, access_mode="access", source="device", rate_limit_mbps=rate_mbps))
     for m in re.finditer(
         r"encapsulation\s+qinq\s+vid\s+(\d+)\s+ce-vid\s+(\d+)", block, re.I
     ):
@@ -549,11 +607,17 @@ def _parse_huawei_block(iface: str, block: str) -> list[SvidEntry]:
                 c_vid=int(m.group(2)),
                 access_mode="qinq",
                 source="device",
+                rate_limit_mbps=rate_mbps,
             )
         )
     for m in re.finditer(r"encapsulation\s+dot1q\s+vid\s+(\d+)", block, re.I):
         entries.append(
-            SvidEntry(s_vid=int(m.group(1)), access_mode="dot1q", source="device")
+            SvidEntry(
+                s_vid=int(m.group(1)),
+                access_mode="dot1q",
+                source="device",
+                rate_limit_mbps=rate_mbps,
+            )
         )
     return entries
 
@@ -610,24 +674,30 @@ def _parse_interface_blocks(config: str, vendor: Vendor) -> dict[str, list[SvidE
     if vendor == Vendor.JUNIPER:
         return _parse_juniper_config(config)
 
+    policy_map: dict[str, int] | None = None
+    if vendor == Vendor.H3C:
+        policy_map = _parse_h3c_qos_policy_map(config)
+    elif vendor == Vendor.HUAWEI:
+        policy_map = _parse_huawei_traffic_policy_map(config)
+
     by_iface: dict[str, list[SvidEntry]] = {}
     for m in re.finditer(
-        r"^interface\s+(\S+)\s*$(.+?)(?=^interface\s|\Z)",
+        r"^interface\s+(\S+)(?:\s+mode\s+\S+)?\s*$(.+?)(?=^interface\s|\Z)",
         config,
         re.MULTILINE | re.DOTALL,
     ):
         iface = _normalize_iface(m.group(1))
         block = m.group(2)
         if vendor == Vendor.H3C:
-            entries = _parse_h3c_block(iface, block)
+            entries = _parse_h3c_block(iface, block, policy_map)
         elif vendor == Vendor.HUAWEI:
-            entries = _parse_huawei_block(iface, block)
+            entries = _parse_huawei_block(iface, block, policy_map)
         elif vendor == Vendor.CISCO:
             entries = _parse_cisco_block(iface, block)
         else:
             entries = (
-                _parse_h3c_block(iface, block)
-                or _parse_huawei_block(iface, block)
+                _parse_h3c_block(iface, block, policy_map)
+                or _parse_huawei_block(iface, block, policy_map)
                 or _parse_cisco_block(iface, block)
             )
         if entries:

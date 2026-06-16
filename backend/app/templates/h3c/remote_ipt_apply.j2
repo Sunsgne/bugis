@@ -41,6 +41,7 @@ ip vpn-instance {{ circuit.vrf_name }}
   vpn-target {{ circuit.route_target }} export-extcommunity
 #
 l2vpn enable
+{{ h3c.qos_policy_objects(circuit) }}
 {{ h3c.vsi_evpn_header(circuit, l3=true) }}
 #
 interface Vsi-interface{{ circuit.vni }}

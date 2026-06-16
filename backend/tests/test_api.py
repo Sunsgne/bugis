@@ -322,7 +322,7 @@ def test_config_history_and_diff(client, auth_headers):
         headers=auth_headers,
     ).json()
     assert diff["changed"] is True
-    assert "500" in diff["diff"]  # new bandwidth appears in the diff
+    assert "car cir 512000" in diff["diff"]  # 500 Mbps -> 512000 kbps in QoS CAR
 
 
 def test_replace_circuit_endpoints(client, auth_headers):
@@ -728,8 +728,8 @@ def test_rate_limit_rendering(client, auth_headers):
         json={"name": "RL", "tenant_id": tenant["id"], "service_type": "l2vpn_evpn",
               "bandwidth_mbps": 200,
               "endpoints": [
-                  {"label": "A", "device_id": dev_h3c["id"], "interface_name": "GE1/0/1"},
-                  {"label": "Z", "device_id": huawei["id"], "interface_name": "GE1/0/1"},
+                  {"label": "A", "device_id": dev_h3c["id"], "interface_name": "GE1/0/7"},
+                  {"label": "Z", "device_id": huawei["id"], "interface_name": "GE1/0/7"},
               ]},
     ).json()
     wo = client.post(
@@ -738,18 +738,22 @@ def test_rate_limit_rendering(client, auth_headers):
     cfgs = {j["device_id"]: j["rendered_config"] for j in wo["config_jobs"]}
     h3c = cfgs[dev_h3c["id"]]
     hw = cfgs[huawei["id"]]
-    # H3C CAR in kbps (200 Mbps -> 200000 kbps), inside service-instance
-    assert "qos car inbound any cir 200000" in h3c
+    # H3C: classifier/behavior/policy globals + qos apply on AC (cir unit = kbps)
+    assert "traffic classifier tc-" in h3c
+    assert "car cir 204800 cbs 12800000" in h3c  # 200 Mbps * 1024 / * 64000
+    assert "qos policy qp-" in h3c
+    assert "qos apply policy qp-" in h3c
+    assert "qos car inbound" not in h3c
     si = h3c.index("service-instance")
-    car = h3c.index("qos car")
+    apply = h3c.index("qos apply policy")
     xconn = h3c.index("xconnect")
-    assert si < car < xconn
-    assert h3c.index("encapsulation") < car
-    # Huawei line-rate qos lr in kbps with direction keyword
-    assert "qos lr cir 200000 inbound" in hw
-    assert "qos lr cir 200000 outbound" in hw
-    # old bogus syntax gone
-    assert "traffic policy" not in hw
+    assert si < apply < xconn
+    assert h3c.index("encapsulation") < apply
+    # Huawei: traffic policy objects + traffic-policy on sub-interface
+    assert "traffic policy tp-" in hw
+    assert "traffic-policy tp-" in hw
+    assert "car cir 204800" in hw
+    assert "qos lr cir" not in hw
 
 
 def test_h3c_huawei_template_quality(client, auth_headers):
@@ -777,7 +781,7 @@ def test_h3c_huawei_template_quality(client, auth_headers):
     assert "gateway vsi-interface Vsi-interface" in h3c
     assert "distributed-gateway local" in h3c
     assert "statistics enable" in h3c
-    assert h3c.index("service-instance") < h3c.index("qos car") < h3c.index("xconnect")
+    assert h3c.index("service-instance") < h3c.index("qos apply policy") < h3c.index("xconnect")
 
     l2 = client.post(
         "/api/v1/circuits", headers=auth_headers,

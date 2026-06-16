@@ -12,6 +12,34 @@ vsi {{ circuit.vsi_name }}
   vpn-target {{ circuit.route_target }} export-extcommunity
 {%- endmacro %}
 
+{% macro qos_policy_name(circuit) -%}
+qp-{{ circuit.code }}
+{%- endmacro %}
+
+{% macro qos_policy_objects(circuit) -%}
+{% if circuit.bandwidth_mbps %}
+# QoS CAR via classifier/behavior/policy (Comware); cir unit = kbps
+traffic classifier tc-{{ circuit.code }} operator and
+ if-match any
+#
+traffic behavior tb-{{ circuit.code }}
+ car cir {{ circuit.bandwidth_mbps * 1024 }} cbs {{ circuit.bandwidth_mbps * 64000 }} ebs 0 green pass red discard yellow pass
+#
+qos policy {{ qos_policy_name(circuit) }}
+ classifier tc-{{ circuit.code }} behavior tb-{{ circuit.code }}
+#
+{% endif %}
+{%- endmacro %}
+
+{% macro qos_policy_remove(circuit) -%}
+{% if circuit.bandwidth_mbps %}
+undo qos policy {{ qos_policy_name(circuit) }}
+undo traffic behavior tb-{{ circuit.code }}
+undo traffic classifier tc-{{ circuit.code }}
+#
+{% endif %}
+{%- endmacro %}
+
 {% macro service_instance_ac(endpoint, circuit, mode, svid, cvid) -%}
  service-instance {{ svid or 1 }}
 {% if mode == 'access' %}
@@ -22,9 +50,9 @@ vsi {{ circuit.vsi_name }}
   encapsulation s-vid {{ svid }}
 {% endif %}
 {% if circuit.bandwidth_mbps %}
-  # rate-limit per service-instance (CAR), cir unit = kbps
-  qos car inbound any cir {{ circuit.bandwidth_mbps * 1000 }} cbs {{ circuit.bandwidth_mbps * 1000 * 25 }}
-  qos car outbound any cir {{ circuit.bandwidth_mbps * 1000 }} cbs {{ circuit.bandwidth_mbps * 1000 * 25 }}
+  # rate-limit: apply QoS policy on AC (not inline qos car)
+  qos apply policy {{ qos_policy_name(circuit) }} inbound
+  qos apply policy {{ qos_policy_name(circuit) }} outbound
 {% endif %}
   statistics enable
   xconnect vsi {{ circuit.vsi_name }}
