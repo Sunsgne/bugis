@@ -5,6 +5,40 @@ from app.models.enums import Vendor
 from app.services import port_inventory
 
 
+def test_parse_h3c_qos_apply_policy_rate_limit():
+    config = """
+interface Twenty-FiveGigE1/0/54
+ service-instance 2873
+  encapsulation s-vid 2873
+  statistics enable
+  xconnect vsi xfi-netone-hkg
+  qos apply policy 150M inbound
+  qos apply policy 150M outbound
+"""
+    parsed = port_inventory._parse_interface_blocks(config, Vendor.H3C)
+    entry = parsed["Twenty-FiveGigE1/0/54"][0]
+    assert entry.s_vid == 2873
+    assert entry.vsi_name == "xfi-netone-hkg"
+    assert entry.rate_limit_mbps == 150
+
+
+def test_parse_huawei_traffic_policy_rate_limit():
+    config = """
+interface 10GE1/0/5.4008 mode l2
+ description ruiyou-sha-tyo-4008
+ encapsulation dot1q vid 4008
+ bridge-domain 10087
+ traffic-policy 1000M inbound
+ traffic-policy 1000M outbound
+ statistics enable
+"""
+    parsed = port_inventory._parse_interface_blocks(config, Vendor.HUAWEI)
+    entry = parsed["10GE1/0/5.4008"][0]
+    assert entry.s_vid == 4008
+    assert entry.rate_limit_mbps == 1000
+    assert entry.description == "ruiyou-sha-tyo-4008"
+
+
 def test_parse_h3c_svid_details():
     config = """
 vsi cus-demo-001

@@ -274,6 +274,21 @@ def _merge_entries(existing: list[SvidEntry], new: SvidEntry) -> None:
     existing.append(new)
 
 
+def _policy_name_to_mbps(name: str) -> int | None:
+    """Parse policy names like 150M, 1000M, 1G into Mbps."""
+    token = name.strip().strip('"').strip("'")
+    match = re.match(r"^(\d+(?:\.\d+)?)\s*([GgMmKk])(?:bps)?$", token, re.I)
+    if not match:
+        return None
+    value = float(match.group(1))
+    unit = match.group(2).lower()
+    if unit == "g":
+        return int(round(value * 1000))
+    if unit == "k":
+        return max(1, int(round(value / 1000)))
+    return int(round(value))
+
+
 def _parse_rate_limit_kbps(text: str) -> int | None:
     car = re.search(r"qos\s+car\s+inbound\s+any\s+cir\s+(\d+)", text, re.I)
     if car:
@@ -281,14 +296,34 @@ def _parse_rate_limit_kbps(text: str) -> int | None:
     lr = re.search(r"qos\s+lr\s+cir\s+(\d+)", text, re.I)
     if lr:
         return int(lr.group(1))
-    bw = re.search(r"bw\((\d+)\s*([MmGg])bps\)", text, re.I)
-    if bw:
-        value = int(bw.group(1))
-        unit = bw.group(2).lower()
-        if unit == "g":
-            return value * 1_000_000
-        return value * 1_000
     return None
+
+
+def _parse_description_bandwidth_mbps(text: str) -> int | None:
+    bw = re.search(r"bw\((\d+(?:\.\d+)?)\s*([MmGg])bps\)", text, re.I)
+    if not bw:
+        return None
+    value = float(bw.group(1))
+    unit = bw.group(2).lower()
+    if unit == "g":
+        return int(round(value * 1000))
+    return int(round(value))
+
+
+def _parse_rate_limit_mbps(text: str) -> int | None:
+    """Extract port/service rate limit from H3C/Huawei running-config snippets."""
+    for match in re.finditer(
+        r"(?:qos\s+apply\s+policy|traffic-policy)\s+(\S+)",
+        text,
+        re.I,
+    ):
+        mbps = _policy_name_to_mbps(match.group(1))
+        if mbps is not None:
+            return mbps
+    kbps = _parse_rate_limit_kbps(text)
+    if kbps is not None:
+        return _kbps_to_mbps(kbps)
+    return _parse_description_bandwidth_mbps(text)
 
 
 def _kbps_to_mbps(kbps: int | None) -> int | None:
@@ -433,7 +468,7 @@ def _parse_h3c_block(iface: str, block: str) -> list[SvidEntry]:
         si_body = m.group(1)
         desc_m = re.search(r"^\s*description\s+(.+)$", si_body, re.MULTILINE | re.IGNORECASE)
         vsi_m = re.search(r"xconnect\s+vsi\s+(\S+)", si_body, re.I)
-        rate_kbps = _parse_rate_limit_kbps(si_body)
+        rate_mbps = _parse_rate_limit_mbps(si_body)
         description = (desc_m.group(1).strip() if desc_m else None) or iface_desc
 
         if re.search(r"encapsulation\s+untagged", si_body, re.I):
@@ -443,7 +478,7 @@ def _parse_h3c_block(iface: str, block: str) -> list[SvidEntry]:
                     access_mode="access",
                     source="device",
                     description=description,
-                    rate_limit_mbps=_kbps_to_mbps(rate_kbps),
+                    rate_limit_mbps=rate_mbps,
                     vsi_name=vsi_m.group(1) if vsi_m else None,
                 )
             )
@@ -460,7 +495,7 @@ def _parse_h3c_block(iface: str, block: str) -> list[SvidEntry]:
                     access_mode="qinq",
                     source="device",
                     description=description,
-                    rate_limit_mbps=_kbps_to_mbps(rate_kbps),
+                    rate_limit_mbps=rate_mbps,
                     vsi_name=vsi_m.group(1) if vsi_m else None,
                 )
             )
@@ -474,7 +509,7 @@ def _parse_h3c_block(iface: str, block: str) -> list[SvidEntry]:
                     access_mode="dot1q",
                     source="device",
                     description=description,
-                    rate_limit_mbps=_kbps_to_mbps(rate_kbps),
+                    rate_limit_mbps=rate_mbps,
                     vsi_name=vsi_m.group(1) if vsi_m else None,
                 )
             )
@@ -483,22 +518,33 @@ def _parse_h3c_block(iface: str, block: str) -> list[SvidEntry]:
 
 def _parse_huawei_block(iface: str, block: str) -> list[SvidEntry]:
     entries: list[SvidEntry] = []
+    desc_m = re.search(r"^\s*description\s+(.+)$", block, re.MULTILINE | re.IGNORECASE)
+    description = desc_m.group(1).strip() if desc_m else None
+    rate_mbps = _parse_rate_limit_mbps(block)
+
+    def _entry(**kwargs) -> SvidEntry:
+        return SvidEntry(
+            description=description,
+            rate_limit_mbps=rate_mbps,
+            source="device",
+            **kwargs,
+        )
+
     if re.search(r"encapsulation\s+untag", block, re.I):
-        entries.append(SvidEntry(s_vid=None, access_mode="access", source="device"))
+        entries.append(_entry(s_vid=None, access_mode="access"))
     for m in re.finditer(
         r"encapsulation\s+qinq\s+vid\s+(\d+)\s+ce-vid\s+(\d+)", block, re.I
     ):
         entries.append(
-            SvidEntry(
+            _entry(
                 s_vid=int(m.group(1)),
                 c_vid=int(m.group(2)),
                 access_mode="qinq",
-                source="device",
             )
         )
     for m in re.finditer(r"encapsulation\s+dot1q\s+vid\s+(\d+)", block, re.I):
         entries.append(
-            SvidEntry(s_vid=int(m.group(1)), access_mode="dot1q", source="device")
+            _entry(s_vid=int(m.group(1)), access_mode="dot1q")
         )
     return entries
 
@@ -557,7 +603,7 @@ def _parse_interface_blocks(config: str, vendor: Vendor) -> dict[str, list[SvidE
 
     by_iface: dict[str, list[SvidEntry]] = {}
     for m in re.finditer(
-        r"^interface\s+(\S+)\s*$(.+?)(?=^interface\s|\Z)",
+        r"^interface\s+(\S+)(?:[ \t]+[^\n]+)?$(.+?)(?=^interface\s|\Z)",
         config,
         re.MULTILINE | re.DOTALL,
     ):
