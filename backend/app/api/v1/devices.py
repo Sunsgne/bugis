@@ -18,6 +18,7 @@ from app.schemas.device import (
     DeviceInterfaceOut,
     DeviceListOut,
     DeviceOut,
+    DevicePortBindingsOut,
     DeviceUpdate,
 )
 from app.schemas.pagination import PaginatedResponse, paginate_query, paginated
@@ -204,6 +205,19 @@ def list_interfaces(
         select(DeviceInterface).where(DeviceInterface.device_id == device_id)
     ).scalars().all()
     return sorted(rows, key=lambda i: (i.ifindex or 0, i.name))
+
+
+@router.get("/{device_id}/port-bindings", response_model=DevicePortBindingsOut)
+def list_port_bindings(
+    device_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    """Customer/circuit bindings and device-only S-VID occupancy on this device."""
+    device = db.get(Device, device_id)
+    if not device:
+        raise HTTPException(status_code=404, detail="device not found")
+    return port_inventory.list_port_bindings(db, device)
 
 
 @router.get("/{device_id}/baseline")

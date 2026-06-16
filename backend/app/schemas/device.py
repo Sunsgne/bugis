@@ -37,6 +37,37 @@ class DeviceInterfaceOut(DeviceInterfaceBase, TimestampedSchema):
     device_id: int
 
 
+class DevicePortBindingOut(BaseModel):
+    interface_name: str
+    binding_type: str  # platform | device
+    tenant_id: int | None = None
+    tenant_name: str | None = None
+    tenant_code: str | None = None
+    circuit_id: int | None = None
+    circuit_code: str | None = None
+    circuit_name: str | None = None
+    circuit_status: str | None = None
+    endpoint_label: str | None = None
+    access_mode: str = "dot1q"
+    s_vid: int | None = None
+    c_vid: int | None = None
+    vni: int | None = None
+    bandwidth_mbps: int | None = None
+    source: str = "platform"
+    note: str | None = None
+
+
+class DevicePortBindingsOut(BaseModel):
+    device_id: int
+    device: str
+    total_bindings: int
+    platform_bindings: int
+    device_only_bindings: int
+    bound_interfaces: int
+    unbound_interfaces: list[str] = []
+    items: list[DevicePortBindingOut] = []
+
+
 class DeviceBase(BaseModel):
     name: str
     hostname: str | None = None

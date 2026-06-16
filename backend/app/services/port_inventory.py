@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from app.models.circuit import Circuit, CircuitEndpoint
 from app.models.device import Device, DeviceInterface
 from app.models.enums import AccessMode, CircuitStatus, Vendor
+from app.models.tenant import Tenant
 from app.services import config_mgmt
 
 # Circuits whose endpoints should reserve S-VID on a port.
@@ -497,6 +498,94 @@ def scan_device(db: Session, device: Device, *, include_legacy: bool = True) -> 
         "total_s_vids": sum(len(u.entries) for u in combined.values()),
         "conflicts": conflicts,
         "ports": port_summaries,
+    }
+
+
+def list_port_bindings(db: Session, device: Device) -> dict:
+    """List customer/circuit bindings and device-only S-VID occupancy per interface."""
+    rows = db.execute(
+        select(CircuitEndpoint, Circuit, Tenant)
+        .join(Circuit, Circuit.id == CircuitEndpoint.circuit_id)
+        .join(Tenant, Tenant.id == Circuit.tenant_id)
+        .where(CircuitEndpoint.device_id == device.id)
+        .order_by(CircuitEndpoint.interface_name, Circuit.code)
+    ).all()
+
+    items: list[dict] = []
+    platform_keys: set[tuple] = set()
+    for ep, circuit, tenant in rows:
+        mode = ep.access_mode.value if ep.access_mode else AccessMode.DOT1Q.value
+        svid = ep.vlan_id or circuit.vlan_id
+        platform_keys.add(
+            (_normalize_iface(ep.interface_name), mode, svid, ep.inner_vlan_id)
+        )
+        items.append({
+            "interface_name": _normalize_iface(ep.interface_name),
+            "binding_type": "platform",
+            "tenant_id": tenant.id,
+            "tenant_name": tenant.name,
+            "tenant_code": tenant.code,
+            "circuit_id": circuit.id,
+            "circuit_code": circuit.code,
+            "circuit_name": circuit.name,
+            "circuit_status": circuit.status.value,
+            "endpoint_label": ep.label,
+            "access_mode": mode,
+            "s_vid": svid,
+            "c_vid": ep.inner_vlan_id,
+            "vni": circuit.vni,
+            "bandwidth_mbps": circuit.bandwidth_mbps,
+            "source": "platform",
+            "note": None,
+        })
+
+    ifaces = db.execute(
+        select(DeviceInterface).where(DeviceInterface.device_id == device.id)
+    ).scalars().all()
+    snmp_names = {i.name for i in ifaces}
+    for iface in ifaces:
+        for raw in iface.used_s_vids or []:
+            if raw.get("source") == "platform":
+                continue
+            mode = raw.get("access_mode") or "dot1q"
+            svid = raw.get("s_vid")
+            cvid = raw.get("c_vid")
+            key = (_normalize_iface(iface.name), mode, svid, cvid)
+            if key in platform_keys:
+                continue
+            items.append({
+                "interface_name": _normalize_iface(iface.name),
+                "binding_type": "device",
+                "tenant_id": None,
+                "tenant_name": None,
+                "tenant_code": None,
+                "circuit_id": None,
+                "circuit_code": raw.get("circuit_code"),
+                "circuit_name": None,
+                "circuit_status": None,
+                "endpoint_label": None,
+                "access_mode": mode,
+                "s_vid": svid,
+                "c_vid": cvid,
+                "vni": None,
+                "bandwidth_mbps": None,
+                "source": raw.get("source") or "device",
+                "note": raw.get("note"),
+            })
+
+    items.sort(key=lambda row: (row["interface_name"], row["binding_type"], row["s_vid"] or 0))
+    bound_ifaces = {row["interface_name"] for row in items}
+    unbound_ifaces = sorted(snmp_names - bound_ifaces) if snmp_names else []
+
+    return {
+        "device_id": device.id,
+        "device": device.name,
+        "total_bindings": len(items),
+        "platform_bindings": sum(1 for row in items if row["binding_type"] == "platform"),
+        "device_only_bindings": sum(1 for row in items if row["binding_type"] == "device"),
+        "bound_interfaces": len(bound_ifaces),
+        "unbound_interfaces": unbound_ifaces,
+        "items": items,
     }
 
 

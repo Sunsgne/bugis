@@ -51,6 +51,37 @@ export interface SvidUsage {
   note?: string | null;
 }
 
+export interface DevicePortBinding {
+  interface_name: string;
+  binding_type: "platform" | "device";
+  tenant_id?: number | null;
+  tenant_name?: string | null;
+  tenant_code?: string | null;
+  circuit_id?: number | null;
+  circuit_code?: string | null;
+  circuit_name?: string | null;
+  circuit_status?: string | null;
+  endpoint_label?: string | null;
+  access_mode?: string;
+  s_vid?: number | null;
+  c_vid?: number | null;
+  vni?: number | null;
+  bandwidth_mbps?: number | null;
+  source?: string;
+  note?: string | null;
+}
+
+export interface DevicePortBindings {
+  device_id: number;
+  device: string;
+  total_bindings: number;
+  platform_bindings: number;
+  device_only_bindings: number;
+  bound_interfaces: number;
+  unbound_interfaces: string[];
+  items: DevicePortBinding[];
+}
+
 export interface DeviceInterface {
   id: number;
   device_id: number;

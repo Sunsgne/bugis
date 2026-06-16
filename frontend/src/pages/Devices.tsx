@@ -16,12 +16,10 @@ import {
   UploadOutlined,
 } from "@ant-design/icons";
 import {
-  Alert,
   App as AntApp,
   Button,
   Card,
   Col,
-  Drawer,
   Dropdown,
   Input,
   Modal,
@@ -44,7 +42,6 @@ import type {
   Paginated,
   Site,
   SnmpDefaults,
-  SvidUsage,
 } from "../api/types";
 import { ConfigPreviewPre } from "../utils/configPreview";
 import {
@@ -56,7 +53,7 @@ import { buildListQuery, dataTableProps, tablePagination } from "../utils/table"
 import { PageCard } from "@/components";
 import ListToolbar from "../components/ListToolbar";
 import DeviceFormDialog, { type DeviceFormValues } from "@/components/DeviceFormDialog";
-import SvidUsageCell from "@/components/SvidUsageCell";
+import DevicePortDrawer from "@/components/DevicePortDrawer";
 
 const VENDOR_SHORT: Record<string, string> = {
   h3c: "H3C",
@@ -140,9 +137,7 @@ export default function Devices() {
   const [mgmtDefaults, setMgmtDefaults] = useState<ManagementDefaults>(FALLBACK_MGMT);
   const [learnOnImport, setLearnOnImport] = useState(true);
   const [drawerDevice, setDrawerDevice] = useState<Device | null>(null);
-  const [ifaces, setIfaces] = useState<DeviceInterface[]>([]);
-  const [ifacesLoading, setIfacesLoading] = useState(false);
-  const [ifaceSvidOnly, setIfaceSvidOnly] = useState(false);
+  const [portDrawerRefresh, setPortDrawerRefresh] = useState(0);
   const [initOpen, setInitOpen] = useState(false);
   const [initDevice, setInitDevice] = useState<Device | null>(null);
   const [initBaseline, setInitBaseline] = useState("");
@@ -151,23 +146,12 @@ export default function Devices() {
 
   const siteName = useCallback((id?: number) => sites.find((s) => s.id === id)?.code || "-", [sites]);
 
-  async function loadIfaces(deviceId: number, refresh = false) {
-    setIfacesLoading(true);
-    try {
-      const { data } = await api.get<DeviceInterface[]>(`/devices/${deviceId}/interfaces`, {
-        params: refresh ? { scan: true } : undefined,
-      });
-      setIfaces(data);
-    } finally {
-      setIfacesLoading(false);
-    }
+  function openPorts(device: Device) {
+    setDrawerDevice(device);
   }
 
-  async function openPorts(device: Device) {
-    setDrawerDevice(device);
-    setIfaces([]);
-    setIfaceSvidOnly(false);
-    await loadIfaces(device.id, true);
+  function bumpPortDrawer() {
+    setPortDrawerRefresh((v) => v + 1);
   }
 
   async function load(p = page, ps = pageSize, q = search) {
@@ -303,11 +287,13 @@ export default function Devices() {
       if (svidCount === 0 && simCount < data.length) {
         message.info("S-VID 需从 running-config 解析，请执行「现网学习」后重新检测");
       }
-      setIfaces(data);
+      bumpPortDrawer();
+      return data;
     } catch (e: unknown) {
       hide();
       const err = e as { response?: { data?: { detail?: string } } };
       message.error(err?.response?.data?.detail || toastCopy.failed);
+      throw e;
     }
   }
 
@@ -325,9 +311,7 @@ export default function Devices() {
         if (svidTotal === 0) {
           message.info("未解析到 S-VID，请确认设备 running-config 含 service-instance / dot1q 配置");
         }
-        if (data.svid_scan?.ports_scanned || drawerDevice?.id === d.id) {
-          await loadIfaces(d.id, true);
-        }
+        bumpPortDrawer();
       } else {
         message.error(data.error || toastCopy.failed);
       }
@@ -386,34 +370,7 @@ export default function Devices() {
             `${data.device} 可达${data.method ? ` · ${data.method}` : ""} (${data.latency_ms}ms) · 已扫描 ${svidCount} 个 S-VID 占用`,
           );
         }
-        if (drawerDevice?.id === id && scan?.ports?.length) {
-          const ports = scan.ports as Array<{
-            interface: string;
-            s_vids: SvidUsage[];
-            allocated: boolean;
-          }>;
-          const byName = Object.fromEntries(ports.map((row) => [row.interface, row]));
-          setIfaces((existing) => {
-            const merged = existing.map((iface) => {
-              const hit = byName[iface.name];
-              if (!hit) return iface;
-              return { ...iface, used_s_vids: hit.s_vids, allocated: hit.allocated };
-            });
-            for (const row of ports) {
-              if (!merged.some((i) => i.name === row.interface)) {
-                merged.push({
-                  id: -1,
-                  device_id: id,
-                  name: row.interface,
-                  admin_up: true,
-                  allocated: row.allocated,
-                  used_s_vids: row.s_vids,
-                } as DeviceInterface);
-              }
-            }
-            return merged;
-          });
-        }
+        bumpPortDrawer();
       } else {
         const tried = (data.probes as Array<{ method?: string }> | undefined)
           ?.map((p) => p.method)
@@ -431,18 +388,6 @@ export default function Devices() {
       message.error(err?.response?.data?.detail || toastCopy.failed);
     }
   }
-
-  const ifaceHasSvid = ifaces.some((i) => (i.used_s_vids?.length ?? 0) > 0);
-
-  const ifaceRows = useMemo(
-    () => (ifaceSvidOnly ? ifaces.filter((i) => (i.used_s_vids?.length ?? 0) > 0) : ifaces),
-    [ifaces, ifaceSvidOnly],
-  );
-
-  const ifaceSvidTotal = useMemo(
-    () => ifaces.reduce((sum, i) => sum + (i.used_s_vids?.length ?? 0), 0),
-    [ifaces],
-  );
 
   const stats = useMemo(() => {
     const online = rows.filter((r) => r.status === "online").length;
@@ -703,143 +648,14 @@ export default function Devices() {
         ]}
       />
 
-      <Drawer
-        title={drawerDevice ? `端口清单 · ${drawerDevice.name}` : "端口清单"}
-        width="min(96vw, 1280px)"
-        open={!!drawerDevice}
+      <DevicePortDrawer
+        device={drawerDevice}
+        refreshVersion={portDrawerRefresh}
         onClose={() => setDrawerDevice(null)}
-        destroyOnClose
-        extra={
-          drawerDevice ? (
-            <Space wrap>
-              <Button size="small" icon={<RadarChartOutlined />} onClick={() => check(drawerDevice.id)}>
-                检测 S-VID
-              </Button>
-              <Button size="small" icon={<NodeIndexOutlined />} onClick={() => discover(drawerDevice.id)}>
-                SNMP 发现
-              </Button>
-              <Button size="small" icon={<BookOutlined />} onClick={() => learnConfig(drawerDevice)}>
-                现网学习
-              </Button>
-              <Button size="small" type="link" onClick={() => loadIfaces(drawerDevice.id, true)}>
-                刷新占用
-              </Button>
-            </Space>
-          ) : null
-        }
-      >
-        <Typography.Paragraph type="secondary" style={{ marginTop: 0 }}>
-          IF-MIB 端口与 S-VID 占用 · SNMP 发现接口，现网学习或检测刷新 VLAN 占用
-        </Typography.Paragraph>
-
-        {ifaces.some((i) => i.discovered_via === "snmp-sim") ? (
-          <Alert
-            type="warning"
-            showIcon
-            message="部分端口为模拟数据"
-            description="snmp-sim 表示未从设备读到真实 IF-MIB。请确认 SNMP Community 与 UDP 161 可达后重新发现。"
-            style={{ marginBottom: 12 }}
-          />
-        ) : null}
-
-        {!ifacesLoading && ifaces.length > 0 && !ifaceHasSvid ? (
-          <Alert
-            type="info"
-            showIcon
-            message="暂无 S-VID 占用数据"
-            description="S-VID 从 running-config（service-instance / dot1q 等）解析，SNMP 仅提供端口清单。请先执行「现网学习」拉取配置，再点「检测 S-VID」或「刷新占用」。"
-            style={{ marginBottom: 12 }}
-          />
-        ) : null}
-
-        {ifaceHasSvid ? (
-          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12, marginBottom: 12 }}>
-            <Typography.Text type="secondary">
-              全设备共 {ifaceSvidTotal.toLocaleString()} 个 S-VID 占用 · {ifaces.length.toLocaleString()} 个端口
-            </Typography.Text>
-            <Space size={6}>
-              <Typography.Text type="secondary">仅显示有占用</Typography.Text>
-              <Switch checked={ifaceSvidOnly} onChange={setIfaceSvidOnly} size="small" />
-            </Space>
-          </div>
-        ) : null}
-
-        <Table
-          rowKey={(r) => `${r.device_id}-${r.name}`}
-          size="small"
-          loading={ifacesLoading}
-          dataSource={ifaceRows}
-          locale={{ emptyText: ifaceSvidOnly ? "暂无 S-VID 占用端口" : "暂无端口数据 · 先执行 SNMP 发现" }}
-          pagination={{ pageSize: 20, showSizeChanger: true, pageSizeOptions: ["20", "50", "100"] }}
-          scroll={{ x: 880 }}
-          columns={[
-            {
-              title: "接口",
-              dataIndex: "name",
-              width: 160,
-              ellipsis: true,
-              render: (name: string) => (
-                <Tooltip title={name}>
-                  <Typography.Text code ellipsis style={{ maxWidth: 140 }}>
-                    {name}
-                  </Typography.Text>
-                </Tooltip>
-              ),
-            },
-            {
-              title: "描述",
-              dataIndex: "description",
-              width: 220,
-              ellipsis: true,
-              render: (d?: string) =>
-                d ? (
-                  <Tooltip title={d}>
-                    <Typography.Text type="secondary" ellipsis style={{ maxWidth: 200 }}>
-                      {d}
-                    </Typography.Text>
-                  </Tooltip>
-                ) : (
-                  "—"
-                ),
-            },
-            {
-              title: "速率",
-              dataIndex: "speed_mbps",
-              width: 72,
-              render: (s?: number) => {
-                if (!s) return "—";
-                return <Tag>{s >= 1000 ? `${s / 1000}G` : `${s}M`}</Tag>;
-              },
-            },
-            {
-              title: "状态",
-              dataIndex: "oper_status",
-              width: 72,
-              render: (s?: string) => (
-                <Tag color={s === "up" ? "green" : "default"}>{s || "—"}</Tag>
-              ),
-            },
-            {
-              title: "ifIndex",
-              dataIndex: "ifindex",
-              width: 72,
-              render: (v?: number) => (v != null ? v : "—"),
-            },
-            {
-              title: "来源",
-              dataIndex: "discovered_via",
-              width: 88,
-              render: (d?: string) => (d ? <Tag>{d}</Tag> : "—"),
-            },
-            {
-              title: "S-VID 占用",
-              dataIndex: "used_s_vids",
-              width: 140,
-              render: (list?: SvidUsage[]) => <SvidUsageCell list={list} />,
-            },
-          ]}
-        />
-      </Drawer>
+        onCheck={check}
+        onDiscover={discover}
+        onLearn={learnConfig}
+      />
 
       <DeviceFormDialog
         open={formOpen}
