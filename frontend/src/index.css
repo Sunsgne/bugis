@@ -802,7 +802,7 @@ body {
   width: 100%;
   min-height: calc(100vh - 7rem);
   display: grid;
-  grid-template-columns: minmax(300px, 26%) minmax(0, 1fr);
+  grid-template-columns: minmax(360px, 30%) minmax(0, 1fr);
   gap: 16px;
   align-items: stretch;
 }
@@ -846,6 +846,29 @@ body {
 .config-management-page .config-tabs .ant-tabs-content,
 .config-management-page .config-tabs .ant-tabs-tabpane {
   height: 100%;
+}
+
+.config-device-table .ant-table-cell {
+  vertical-align: middle;
+}
+
+.config-device-name,
+.config-note-cell {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
+.config-inline-tag {
+  margin: 0;
+  white-space: nowrap;
+}
+
+.config-history-table .ant-table-cell {
+  vertical-align: middle;
 }
 
 .config-pre {

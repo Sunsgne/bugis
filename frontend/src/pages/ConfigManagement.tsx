@@ -1,13 +1,36 @@
 import { useEffect, useState } from "react";
-import { Button, Card, Table, Tag, Tabs, App as AntApp, Empty, Descriptions, Typography } from "antd";
+import { Button, Card, Table, Tag, Tabs, App as AntApp, Empty, Descriptions, Typography, Tooltip } from "antd";
 import { CloudUploadOutlined, DiffOutlined, ReloadOutlined, BookOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { api } from "../api/client";
 import { configPreviewModalProps, ConfigPreviewPre } from "../utils/configPreview";
-import { dataTableProps } from "../utils/table";
 
 const VENDOR_COLOR: Record<string, string> = {
   h3c: "blue", huawei: "red", juniper: "green", arista: "orange", cisco: "purple", frr: "cyan",
+};
+
+const VENDOR_LABEL: Record<string, string> = {
+  h3c: "H3C",
+  huawei: "华为",
+  juniper: "Juniper",
+  arista: "Arista",
+  cisco: "Cisco",
+  frr: "FRR",
+};
+
+const SNAPSHOT_SOURCE_LABEL: Record<string, string> = {
+  push: "开通下发",
+  backup: "手动备份",
+  learn: "现网学习",
+};
+
+type ConfigDeviceRow = {
+  device_id: number;
+  name: string;
+  vendor: string;
+  latest_version?: number;
+  learned_version?: number;
+  service_count?: number;
 };
 
 function ColoredDiff({ text }: { text: string }) {
@@ -25,7 +48,7 @@ function ColoredDiff({ text }: { text: string }) {
 
 export default function ConfigManagement() {
   const { message, modal } = AntApp.useApp();
-  const [devices, setDevices] = useState<any[]>([]);
+  const [devices, setDevices] = useState<ConfigDeviceRow[]>([]);
   const [sel, setSel] = useState<number | null>(null);
   const [running, setRunning] = useState<string>("");
   const [snaps, setSnaps] = useState<any[]>([]);
@@ -119,27 +142,55 @@ export default function ConfigManagement() {
         title="设备配置"
         extra={<Button size="small" icon={<ReloadOutlined />} onClick={loadDevices} />}
       >
-        <Table
+        <Table<ConfigDeviceRow>
           rowKey="device_id"
           size="small"
+          className="config-device-table"
           pagination={false}
           dataSource={devices}
+          tableLayout="fixed"
           onRow={(r) => ({ onClick: () => select(r.device_id), style: { cursor: "pointer" } })}
           rowClassName={(r) => (r.device_id === sel ? "ant-table-row-selected" : "")}
-          {...dataTableProps()}
           columns={[
-            { title: "设备", dataIndex: "name", width: "28%", ellipsis: true },
-            { title: "厂商", dataIndex: "vendor", width: "16%", render: (v) => <Tag color={VENDOR_COLOR[v]}>{v}</Tag> },
-            { title: "版本", dataIndex: "latest_version", width: "16%", render: (v) => (v ? `v${v}` : "-") },
+            {
+              title: "设备",
+              dataIndex: "name",
+              width: 148,
+              ellipsis: { showTitle: false },
+              render: (name: string) => (
+                <Tooltip title={name}>
+                  <span className="config-device-name">{name}</span>
+                </Tooltip>
+              ),
+            },
+            {
+              title: "厂商",
+              dataIndex: "vendor",
+              width: 72,
+              align: "center",
+              render: (v: string) => (
+                <Tag color={VENDOR_COLOR[v]} className="config-inline-tag">
+                  {VENDOR_LABEL[v] || v}
+                </Tag>
+              ),
+            },
+            {
+              title: "版本",
+              dataIndex: "latest_version",
+              width: 56,
+              align: "center",
+              render: (v?: number) => (v ? `v${v}` : "—"),
+            },
             {
               title: "现网学习",
               dataIndex: "learned_version",
-              width: "40%",
-              render: (v, r) =>
+              render: (v?: number, r?: ConfigDeviceRow) =>
                 v ? (
-                  <Tag color="orange">v{v} · {r.service_count ?? 0} 业务</Tag>
+                  <Tag color="orange" className="config-inline-tag">
+                    v{v} · {r?.service_count ?? 0} 业务
+                  </Tag>
                 ) : (
-                  <Tag>未学习</Tag>
+                  <Tag className="config-inline-tag">未学习</Tag>
                 ),
             },
           ]}
@@ -201,19 +252,22 @@ export default function ConfigManagement() {
                         size="small"
                         rowKey="name"
                         pagination={false}
+                        className="config-service-table"
                         style={{ marginBottom: 12 }}
                         dataSource={learned.inventory.l2_services}
-                        {...dataTableProps()}
+                        tableLayout="fixed"
+                        scroll={{ x: 720 }}
                         columns={[
-                          { title: "业务", dataIndex: "name", width: "22%" },
-                          { title: "VNI", dataIndex: "vni", width: "12%" },
-                          { title: "RD", dataIndex: "rd", width: "18%" },
-                          { title: "RT", dataIndex: "rt", width: "18%" },
+                          { title: "业务", dataIndex: "name", width: 160, ellipsis: true },
+                          { title: "VNI", dataIndex: "vni", width: 88 },
+                          { title: "RD", dataIndex: "rd", width: 140, ellipsis: true },
+                          { title: "RT", dataIndex: "rt", width: 140, ellipsis: true },
                           {
                             title: "接口",
                             dataIndex: "interfaces",
-                            width: "30%",
-                            render: (v: string[]) => v?.join(", ") || "-",
+                            width: 180,
+                            ellipsis: true,
+                            render: (v: string[]) => v?.join(", ") || "—",
                           },
                         ]}
                       />
@@ -243,35 +297,62 @@ export default function ConfigManagement() {
                     <Table
                       size="small"
                       rowKey="id"
-                      pagination={false}
+                      className="config-history-table"
+                      tableLayout="fixed"
+                      scroll={{ y: "calc(100vh - 420px)" }}
+                      pagination={{
+                        defaultPageSize: 15,
+                        showSizeChanger: true,
+                        pageSizeOptions: ["10", "15", "20", "50"],
+                        showTotal: (total) => `共 ${total} 个版本`,
+                      }}
                       dataSource={snaps}
-                      {...dataTableProps()}
                       locale={{ emptyText: <Empty description="暂无快照，点击「备份现网配置」" /> }}
                       columns={[
-                        { title: "版本", dataIndex: "version", width: "10%", render: (v) => `v${v}` },
+                        { title: "版本", dataIndex: "version", width: 72, render: (v) => `v${v}` },
                         {
-                          title: "来源", dataIndex: "source", width: "14%",
-                          render: (s) => (
+                          title: "来源",
+                          dataIndex: "source",
+                          width: 96,
+                          render: (s: string) => (
                             <Tag
-                              color={
-                                s === "push" ? "green" : s === "learn" ? "orange" : "blue"
-                              }
+                              className="config-inline-tag"
+                              color={s === "push" ? "green" : s === "learn" ? "orange" : "blue"}
                             >
-                              {s === "push"
-                                ? "开通下发"
-                                : s === "backup"
-                                  ? "手动备份"
-                                  : s === "learn"
-                                    ? "现网学习"
-                                    : s}
+                              {SNAPSHOT_SOURCE_LABEL[s] || s}
                             </Tag>
                           ),
                         },
-                        { title: "行数", dataIndex: "lines", width: "10%" },
-                        { title: "操作人", dataIndex: "created_by", width: "14%", ellipsis: true },
-                        { title: "备注", dataIndex: "note", width: "22%", ellipsis: true },
-                        { title: "时间", dataIndex: "created_at", width: "18%", render: (t) => (t ? dayjs(t).format("MM-DD HH:mm:ss") : "-") },
-                        { title: "", width: "12%", render: (_, r) => <a onClick={() => viewSnap(r.id)}>查看</a> },
+                        { title: "行数", dataIndex: "lines", width: 72, align: "right" },
+                        {
+                          title: "操作人",
+                          dataIndex: "created_by",
+                          width: 88,
+                          ellipsis: true,
+                          render: (v?: string) => v || "—",
+                        },
+                        {
+                          title: "备注",
+                          dataIndex: "note",
+                          ellipsis: true,
+                          render: (v?: string) => (
+                            <Tooltip title={v}>
+                              <span className="config-note-cell">{v || "—"}</span>
+                            </Tooltip>
+                          ),
+                        },
+                        {
+                          title: "时间",
+                          dataIndex: "created_at",
+                          width: 112,
+                          render: (t) => (t ? dayjs(t).format("MM-DD HH:mm") : "—"),
+                        },
+                        {
+                          title: "",
+                          width: 56,
+                          fixed: "right",
+                          render: (_, r) => <a onClick={() => viewSnap(r.id)}>查看</a>,
+                        },
                       ]}
                     />
                   </>
