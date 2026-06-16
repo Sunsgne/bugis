@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.models.circuit import Circuit
 
-VNI_BASE = 10000
+VNI_BASE = 30000
 VNI_MAX = 16_777_215
 VLAN_BASE = 100
 VLAN_MAX = 4000
@@ -121,7 +121,7 @@ def _used_vlans(db: Session) -> set[int]:
 
 def allocate_vni(db: Session) -> int:
     used = _used_vnis(db)
-    candidate = VNI_BASE
+    candidate = settings.vni_base
     while candidate in used and candidate < VNI_MAX:
         candidate += 1
     return candidate
