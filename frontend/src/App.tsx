@@ -182,8 +182,8 @@ function Shell() {
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
 
   const sidebar = (
-    <aside className="flex h-full w-60 shrink-0 flex-col border-r border-white/10 bg-slate-950 text-slate-100">
-      <div className="flex h-14 items-center gap-2 border-b border-white/10 px-4">
+    <aside className="flex h-full w-60 shrink-0 flex-col bg-slate-950 text-slate-100 shadow-[4px_0_24px_rgba(0,0,0,0.12)]">
+      <div className="flex h-14 items-center gap-2 px-4">
         <BrandLogo brand={brand} variant="sidebar" height={24} />
         <span className="truncate text-sm font-semibold tracking-wide">{brand.product_name}</span>
       </div>
@@ -235,7 +235,7 @@ function Shell() {
       ) : null}
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-14 shrink-0 items-center justify-between border-b bg-card px-4 lg:px-6">
+        <header className="flex h-14 shrink-0 items-center justify-between bg-card px-4 shadow-[0_1px_0_rgba(15,23,42,0.04)] lg:px-6">
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setMobileOpen(true)}>
               <Menu className="h-5 w-5" />
