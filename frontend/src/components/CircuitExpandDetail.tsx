@@ -1,4 +1,5 @@
 import { Button, Card, Col, Descriptions, Row, Space, Tag, Typography } from "antd";
+import type { ReactNode } from "react";
 import { EditOutlined } from "@ant-design/icons";
 import type { Circuit, CircuitEndpoint } from "../api/types";
 import InterfaceNameCell from "./InterfaceNameCell";
@@ -25,6 +26,19 @@ function endpointTagColor(label: string): string {
   if (label === "A") return "blue";
   if (label === "Z") return "purple";
   return "default";
+}
+
+function EndpointFields({ children }: { children: ReactNode }) {
+  return <div className="endpoint-fields">{children}</div>;
+}
+
+function EndpointField({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="endpoint-field">
+      <span className="endpoint-field-label">{label}</span>
+      <span className="endpoint-field-value">{children}</span>
+    </div>
+  );
 }
 
 type Props = {
@@ -87,22 +101,18 @@ export default function CircuitExpandDetail({
                   </Tag>
                 }
               >
-                <Descriptions size="small" column={1} colon>
-                  <Descriptions.Item label="接入设备">{deviceName(ep.device_id)}</Descriptions.Item>
-                  <Descriptions.Item label="物理端口">
+                <EndpointFields>
+                  <EndpointField label="接入设备">{deviceName(ep.device_id)}</EndpointField>
+                  <EndpointField label="物理端口">
                     {ep.interface_name ? <InterfaceNameCell name={ep.interface_name} /> : "—"}
-                  </Descriptions.Item>
-                  <Descriptions.Item label="封装模式">
+                  </EndpointField>
+                  <EndpointField label="封装模式">
                     {ACCESS_LABEL[ep.access_mode || "dot1q"] || ep.access_mode || "—"}
-                  </Descriptions.Item>
-                  <Descriptions.Item label="VLAN">{endpointVlanLabel(ep)}</Descriptions.Item>
-                  {ep.gateway_ip ? (
-                    <Descriptions.Item label="网关">{ep.gateway_ip}</Descriptions.Item>
-                  ) : null}
-                  {ep.ip_address ? (
-                    <Descriptions.Item label="接口 IP">{ep.ip_address}</Descriptions.Item>
-                  ) : null}
-                </Descriptions>
+                  </EndpointField>
+                  <EndpointField label="VLAN">{endpointVlanLabel(ep)}</EndpointField>
+                  {ep.gateway_ip ? <EndpointField label="网关">{ep.gateway_ip}</EndpointField> : null}
+                  {ep.ip_address ? <EndpointField label="接口 IP">{ep.ip_address}</EndpointField> : null}
+                </EndpointFields>
               </Card>
             </Col>
           ))}
