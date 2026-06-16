@@ -102,6 +102,7 @@ export default function DevicePortDrawer({
   const [ifaceStatus, setIfaceStatus] = useState<"all" | "up" | "down" | "allocated">("all");
   const [activeTab, setActiveTab] = useState("ports");
   const [discovering, setDiscovering] = useState(false);
+  const [adoptBinding, setAdoptBinding] = useState<DevicePortBinding | null>(null);
 
   async function loadBindings(deviceId: number, refresh = false) {
     setBindingsLoading(true);
