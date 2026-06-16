@@ -17,6 +17,7 @@ from app.models.tenant import Tenant
 from app.models.user import User
 from app.models.workorder import WorkOrder
 from app.schemas.circuit import (
+    CircuitAdoptCreate,
     CircuitCreate,
     CircuitEndpointCreate,
     CircuitEndpointOut,
@@ -29,7 +30,7 @@ from app.schemas.circuit import (
 )
 from app.schemas.pagination import PaginatedResponse, paginate_query, paginated
 from app.schemas.path import PathPreviewRequest, PathPreviewResponse
-from app.services import allocation, path_service, port_inventory, probe, validation
+from app.services import allocation, circuit_adopt, path_service, port_inventory, probe, validation
 
 router = APIRouter()
 
@@ -198,6 +199,21 @@ def create_circuit(
         if not ok:
             raise HTTPException(status_code=409, detail=msg)
 
+    db.commit()
+    db.refresh(circuit)
+    return _to_circuit_out(db, circuit)
+
+
+@router.post("/adopt-from-inventory", response_model=CircuitOut, status_code=201)
+def adopt_circuit_from_inventory(
+    payload: CircuitAdoptCreate,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_operator),
+):
+    """Register an on-box S-VID binding as a managed circuit without pushing config."""
+    circuit = circuit_adopt.adopt_circuit_from_inventory(
+        db, payload, created_by=user.username
+    )
     db.commit()
     db.refresh(circuit)
     return _to_circuit_out(db, circuit)

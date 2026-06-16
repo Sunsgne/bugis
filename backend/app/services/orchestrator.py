@@ -219,6 +219,34 @@ def execute(db: Session, wo: WorkOrder, actor: str | None = None) -> WorkOrder:
 
     circuit = wo.circuit
 
+    if getattr(circuit, "adopted", False):
+        from app.services import port_inventory
+
+        wo.status = WorkOrderStatus.COMPLETED
+        if wo.type == WorkOrderType.DECOMMISSION:
+            circuit.status = CircuitStatus.DECOMMISSIONED
+            _log(
+                db,
+                wo,
+                "现网纳管业务拆除：仅更新平台记录，不向设备下发删除配置",
+                actor=actor,
+            )
+        else:
+            circuit.status = CircuitStatus.ACTIVE
+            _log(
+                db,
+                wo,
+                "现网纳管业务：跳过配置下发，不影响现网流量",
+                actor=actor,
+            )
+        for ep in circuit.endpoints:
+            if ep.device:
+                try:
+                    port_inventory.scan_device(db, ep.device)
+                except Exception:  # noqa: BLE001
+                    pass
+        return wo
+
     # Pre-flight compliance validation (skip for decommission).
     if wo.type != WorkOrderType.DECOMMISSION:
         issues = validation.validate_circuit(db, circuit)

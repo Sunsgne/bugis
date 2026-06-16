@@ -55,6 +55,8 @@ class PlatformSettingsBase(BaseModel):
 
     enable_metrics: bool = True
     auto_learn_on_import: bool = True
+    auto_learn_enabled: bool = True
+    auto_learn_interval_seconds: int = Field(default=60, ge=30, le=3600)
     access_token_expire_minutes: int = Field(default=1440, ge=5, le=60 * 24 * 30)
 
     notes: str | None = None
@@ -95,6 +97,8 @@ class PlatformSettingsUpdate(BaseModel):
 
     enable_metrics: bool | None = None
     auto_learn_on_import: bool | None = None
+    auto_learn_enabled: bool | None = None
+    auto_learn_interval_seconds: int | None = Field(default=None, ge=30, le=3600)
     access_token_expire_minutes: int | None = Field(default=None, ge=5, le=60 * 24 * 30)
 
     notes: str | None = None

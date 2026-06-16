@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ForeignKey, Integer, String
+from sqlalchemy import Boolean, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -66,6 +66,8 @@ class Circuit(Base, TimestampMixin):
     path_mode: Mapped[PathMode] = mapped_column(
         str_enum_column(PathMode), default=PathMode.AUTO
     )
+    # Imported from live device inventory — never push config on provision/decommission.
+    adopted: Mapped[bool] = mapped_column(Boolean, default=False)
 
     tenant: Mapped["Tenant"] = relationship(back_populates="circuits")
     endpoints: Mapped[list["CircuitEndpoint"]] = relationship(
