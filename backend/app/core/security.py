@@ -24,8 +24,26 @@ def create_access_token(subject: str | Any, expires_minutes: int | None = None) 
     expire = datetime.now(timezone.utc) + timedelta(
         minutes=expires_minutes or settings.access_token_expire_minutes
     )
-    to_encode = {"exp": expire, "sub": str(subject)}
+    to_encode = {"exp": expire, "sub": str(subject), "typ": "access"}
     return jwt.encode(to_encode, settings.secret_key, algorithm=settings.algorithm)
+
+
+def create_pre_auth_token(subject: str | Any, expires_minutes: int = 5) -> str:
+    expire = datetime.now(timezone.utc) + timedelta(minutes=expires_minutes)
+    to_encode = {"exp": expire, "sub": str(subject), "typ": "preauth"}
+    return jwt.encode(to_encode, settings.secret_key, algorithm=settings.algorithm)
+
+
+def decode_pre_auth_token(token: str) -> str | None:
+    try:
+        payload = jwt.decode(
+            token, settings.secret_key, algorithms=[settings.algorithm]
+        )
+        if payload.get("typ") != "preauth":
+            return None
+        return payload.get("sub")
+    except JWTError:
+        return None
 
 
 def decode_access_token(token: str) -> str | None:
@@ -33,6 +51,8 @@ def decode_access_token(token: str) -> str | None:
         payload = jwt.decode(
             token, settings.secret_key, algorithms=[settings.algorithm]
         )
+        if payload.get("typ") not in (None, "access"):
+            return None
         return payload.get("sub")
     except JWTError:
         return None

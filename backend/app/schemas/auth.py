@@ -1,20 +1,62 @@
 """Auth & user schemas."""
 from __future__ import annotations
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
-from app.models.enums import UserRole, UserScope
+from app.models.enums import MfaMethod, UserRole, UserScope
 from app.schemas.common import TimestampedSchema
 
 
 class Token(BaseModel):
-    access_token: str
+    access_token: str | None = None
     token_type: str = "bearer"
+    mfa_required: bool = False
+    mfa_token: str | None = None
+    mfa_methods: list[str] = Field(default_factory=list)
+    captcha_required: bool = False
 
 
-class LoginRequest(BaseModel):
+class LoginJsonRequest(BaseModel):
     username: str
     password: str
+    turnstile_token: str | None = None
+    mfa_token: str | None = None
+    mfa_code: str | None = None
+
+
+class MfaVerifyRequest(BaseModel):
+    mfa_token: str
+    code: str
+    method: str = "totp"
+
+
+class MfaSendEmailRequest(BaseModel):
+    mfa_token: str
+
+
+class MfaSetupTotpOut(BaseModel):
+    secret: str
+    provisioning_uri: str
+
+
+class MfaConfirmTotpRequest(BaseModel):
+    code: str
+
+
+class MfaDisableRequest(BaseModel):
+    password: str
+    code: str
+
+
+class LoginSecurityOut(BaseModel):
+    turnstile_enabled: bool = False
+    turnstile_site_key: str = ""
+    captcha_required_default: bool = False
+
+
+class StreamTicketOut(BaseModel):
+    ticket: str
+    expires_in: int
 
 
 class UserCreate(BaseModel):
@@ -56,6 +98,8 @@ class UserOut(TimestampedSchema):
     scope: UserScope = UserScope.PLATFORM
     tenant_id: int | None = None
     is_active: bool
+    mfa_enabled: bool = False
+    mfa_method: MfaMethod = MfaMethod.NONE
 
 
 class PasswordChangeRequest(BaseModel):

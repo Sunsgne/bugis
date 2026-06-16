@@ -1,4 +1,6 @@
 """ORM models package. Import all models so SQLAlchemy metadata is complete."""
+from app.models.auth_challenge import AuthChallenge  # noqa: F401
+from app.models.login_attempt import LoginAttempt  # noqa: F401
 from app.models.user import User  # noqa: F401
 from app.models.tenant import Tenant  # noqa: F401
 from app.models.site import Site  # noqa: F401
@@ -56,4 +58,6 @@ __all__ = [
     "PlatformSettings",
     "DeviceLearnRun",
     "CircuitProbeLog",
+    "AuthChallenge",
+    "LoginAttempt",
 ]

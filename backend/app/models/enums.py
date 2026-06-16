@@ -145,6 +145,12 @@ class UserScope(str, enum.Enum):
     TENANT = "tenant"
 
 
+class MfaMethod(str, enum.Enum):
+    NONE = "none"
+    TOTP = "totp"
+    EMAIL = "email"
+
+
 class AlarmSeverity(str, enum.Enum):
     CRITICAL = "critical"
     MAJOR = "major"

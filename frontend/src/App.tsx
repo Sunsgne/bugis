@@ -22,7 +22,7 @@ import {
 import { useMemo, useState, useEffect } from "react";
 import PortalApp from "./portal/PortalApp";
 import { isTenantAccount, useAuth } from "./auth";
-import { api, getToken } from "./api/client";
+import { api, getToken, fetchStreamTicket } from "./api/client";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Tenants from "./pages/Tenants";
@@ -49,6 +49,7 @@ import SnmpSettingsTab from "./pages/settings/SnmpSettingsTab";
 import ManagementSettings from "./pages/settings/ManagementSettings";
 import BrandSettings from "./pages/settings/BrandSettings";
 import IntegrationSettings from "./pages/settings/IntegrationSettings";
+import SecuritySettings from "./pages/settings/SecuritySettings";
 import { nav, action } from "./constants/uiCopy";
 import { useBrand } from "./context/BrandContext";
 import { BrandLogo } from "./components/BrandLogo";
@@ -125,9 +126,9 @@ function AlarmBell({ onClick }: { onClick: () => void }) {
   const [count, setCount] = useState(0);
 
   useEffect(() => {
-    const token = getToken();
     let es: EventSource | null = null;
     let poll: ReturnType<typeof setInterval> | null = null;
+    let cancelled = false;
 
     async function loadOnce() {
       try {
@@ -138,25 +139,39 @@ function AlarmBell({ onClick }: { onClick: () => void }) {
       }
     }
 
-    if (token && "EventSource" in window) {
-      es = new EventSource(`/api/v1/stream/events?token=${encodeURIComponent(token)}`);
-      es.addEventListener("snapshot", (e: MessageEvent) => {
-        try {
-          const d = JSON.parse(e.data);
-          setCount(d.active_alarms || 0);
-        } catch {
-          /* ignore */
-        }
-      });
-      es.onerror = () => {
+    async function connectSse() {
+      try {
+        const { fetchStreamTicket } = await import("./api/client");
+        const ticket = await fetchStreamTicket();
+        if (cancelled || !("EventSource" in window)) return;
+        es = new EventSource(`/api/v1/stream/events?ticket=${encodeURIComponent(ticket)}`);
+        es.addEventListener("snapshot", (e: MessageEvent) => {
+          try {
+            const d = JSON.parse(e.data);
+            setCount(d.active_alarms || 0);
+          } catch {
+            /* ignore */
+          }
+        });
+        es.onerror = () => {
+          es?.close();
+          es = null;
+          if (!poll) poll = setInterval(loadOnce, 8000);
+        };
+      } catch {
         if (!poll) poll = setInterval(loadOnce, 8000);
-      };
+      }
+    }
+
+    if (getToken()) {
+      connectSse();
     } else {
       loadOnce();
       poll = setInterval(loadOnce, 8000);
     }
 
     return () => {
+      cancelled = true;
       es?.close();
       if (poll) clearInterval(poll);
     };
@@ -298,6 +313,7 @@ function Shell() {
               <Route path="management" element={<ManagementSettings />} />
               <Route path="snmp" element={<SnmpSettingsTab />} />
               <Route path="integration" element={<IntegrationSettings />} />
+              <Route path="security" element={<SecuritySettings />} />
               <Route path="notifications" element={<Notifications embedded />} />
               <Route path="users" element={<UsersPage embedded />} />
               <Route path="audit" element={<Audit embedded />} />

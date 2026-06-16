@@ -9,6 +9,8 @@ export interface User {
   role: string;
   scope?: string;
   tenant_id?: number | null;
+  mfa_enabled?: boolean;
+  mfa_method?: string;
 }
 
 interface AuthCtx {
@@ -16,6 +18,7 @@ interface AuthCtx {
   ready: boolean;
   isTenantUser: boolean;
   loginWithToken: (token: string) => Promise<User | null>;
+  refreshUser: () => Promise<User | null>;
   logout: () => void;
 }
 
@@ -66,6 +69,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         ready,
         isTenantUser: isTenantAccount(user),
         loginWithToken,
+        refreshUser: fetchMe,
         logout,
       }}
     >

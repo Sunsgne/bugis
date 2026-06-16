@@ -45,6 +45,26 @@ def _reset_dry_run():
     settings.dry_run = True
 
 
+@pytest.fixture(autouse=True)
+def _unlock_admin():
+    """Reset admin lockout / MFA between tests (shared SQLite DB)."""
+    from app.models.enums import MfaMethod
+    from app.models.user import User
+
+    db = SessionLocal()
+    try:
+        for user in db.query(User).filter(User.username == "admin").all():
+            user.failed_login_attempts = 0
+            user.locked_until = None
+            user.mfa_enabled = False
+            user.mfa_method = MfaMethod.NONE
+            user.totp_secret_encrypted = None
+        db.commit()
+    finally:
+        db.close()
+    yield
+
+
 @pytest.fixture()
 def client():
     return TestClient(app)
@@ -57,5 +77,7 @@ def auth_headers(client):
         data={"username": "admin", "password": "admin123"},
     )
     assert resp.status_code == 200, resp.text
-    token = resp.json()["access_token"]
+    body = resp.json()
+    token = body.get("access_token")
+    assert token, body
     return {"Authorization": f"Bearer {token}"}

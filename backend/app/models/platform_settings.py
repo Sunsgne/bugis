@@ -55,6 +55,21 @@ class PlatformSettings(Base, TimestampMixin):
 
     access_token_expire_minutes: Mapped[int] = mapped_column(Integer, default=60 * 24)
 
+    # Login security / MFA policy
+    login_rate_limit_per_ip: Mapped[int] = mapped_column(Integer, default=30)
+    login_rate_limit_window_minutes: Mapped[int] = mapped_column(Integer, default=15)
+    login_lockout_after_failures: Mapped[int] = mapped_column(Integer, default=5)
+    login_lockout_minutes: Mapped[int] = mapped_column(Integer, default=15)
+    captcha_after_failures: Mapped[int] = mapped_column(Integer, default=3)
+    turnstile_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    turnstile_site_key: Mapped[str] = mapped_column(String(128), default="")
+    turnstile_secret_key: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    mfa_required_platform: Mapped[bool] = mapped_column(Boolean, default=False)
+    mfa_required_portal: Mapped[bool] = mapped_column(Boolean, default=False)
+    mfa_allow_totp: Mapped[bool] = mapped_column(Boolean, default=True)
+    mfa_allow_email: Mapped[bool] = mapped_column(Boolean, default=True)
+    expose_openapi: Mapped[bool] = mapped_column(Boolean, default=True)
+
     notes: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
     product_name: Mapped[str] = mapped_column(String(128), default="Bugis Network")

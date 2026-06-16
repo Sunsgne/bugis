@@ -59,6 +59,20 @@ class PlatformSettingsBase(BaseModel):
     auto_learn_interval_seconds: int = Field(default=60, ge=30, le=3600)
     access_token_expire_minutes: int = Field(default=1440, ge=5, le=60 * 24 * 30)
 
+    login_rate_limit_per_ip: int = Field(default=30, ge=5, le=500)
+    login_rate_limit_window_minutes: int = Field(default=15, ge=1, le=120)
+    login_lockout_after_failures: int = Field(default=5, ge=1, le=50)
+    login_lockout_minutes: int = Field(default=15, ge=1, le=1440)
+    captcha_after_failures: int = Field(default=3, ge=0, le=50)
+    turnstile_enabled: bool = False
+    turnstile_site_key: str = ""
+    turnstile_secret_key: str | None = None
+    mfa_required_platform: bool = False
+    mfa_required_portal: bool = False
+    mfa_allow_totp: bool = True
+    mfa_allow_email: bool = True
+    expose_openapi: bool = True
+
     notes: str | None = None
 
 
@@ -101,6 +115,20 @@ class PlatformSettingsUpdate(BaseModel):
     auto_learn_interval_seconds: int | None = Field(default=None, ge=30, le=3600)
     access_token_expire_minutes: int | None = Field(default=None, ge=5, le=60 * 24 * 30)
 
+    login_rate_limit_per_ip: int | None = Field(default=None, ge=5, le=500)
+    login_rate_limit_window_minutes: int | None = Field(default=None, ge=1, le=120)
+    login_lockout_after_failures: int | None = Field(default=None, ge=1, le=50)
+    login_lockout_minutes: int | None = Field(default=None, ge=1, le=1440)
+    captcha_after_failures: int | None = Field(default=None, ge=0, le=50)
+    turnstile_enabled: bool | None = None
+    turnstile_site_key: str | None = None
+    turnstile_secret_key: str | None = None
+    mfa_required_platform: bool | None = None
+    mfa_required_portal: bool | None = None
+    mfa_allow_totp: bool | None = None
+    mfa_allow_email: bool | None = None
+    expose_openapi: bool | None = None
+
     notes: str | None = None
 
 
@@ -125,6 +153,7 @@ class PlatformAnyUpdate(PlatformSettingsUpdate, BrandingUpdate):
 class PlatformSettingsOut(PlatformSettingsBase, BrandingOut, TimestampedSchema):
     id: int
     smtp_password_set: bool = False
+    turnstile_secret_key_set: bool = False
 
 
 class PlatformReadonlyInfo(BaseModel):

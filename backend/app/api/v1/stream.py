@@ -1,7 +1,7 @@
 """Server-Sent Events (SSE) stream for live dashboard & alarm updates.
 
-EventSource cannot set Authorization headers, so this endpoint accepts the
-JWT via a `token` query parameter and pushes periodic JSON snapshots.
+Clients obtain a short-lived ticket via authenticated POST /auth/stream/ticket
+and pass only the ticket in the EventSource URL (never the JWT).
 """
 from __future__ import annotations
 
@@ -14,13 +14,13 @@ from sqlalchemy import func, select
 from starlette.responses import StreamingResponse
 
 from app.core.database import SessionLocal
-from app.core.security import decode_access_token
 from app.models.alarm import Alarm
 from app.models.circuit import Circuit
 from app.models.device import Device
 from app.models.enums import AlarmStatus, CircuitStatus
 from app.models.tenant import Tenant
 from app.models.user import User
+from app.services import auth_security
 
 router = APIRouter()
 
@@ -49,24 +49,23 @@ def _snapshot() -> dict:
 
 @router.get("/events")
 def stream_events(
-    token: str = Query(...),
+    ticket: str = Query(...),
     interval: int = Query(5, ge=2, le=60),
 ):
-    username = decode_access_token(token)
-    if not username:
-        raise HTTPException(status_code=401, detail="invalid token")
     db = SessionLocal()
     try:
-        user = db.execute(
-            select(User).where(User.username == username)
-        ).scalar_one_or_none()
+        challenge = auth_security.validate_challenge(
+            db, purpose="sse", token=ticket
+        )
+        if not challenge or not challenge.user_id:
+            raise HTTPException(status_code=401, detail="invalid or expired ticket")
+        user = db.get(User, challenge.user_id)
         if not user or not user.is_active:
             raise HTTPException(status_code=401, detail="invalid user")
     finally:
         db.close()
 
     def event_gen() -> Iterator[str]:
-        # Stream for a bounded duration; the client (EventSource) auto-reconnects.
         max_iterations = max(1, int(600 / interval))
         for _ in range(max_iterations):
             payload = json.dumps(_snapshot())

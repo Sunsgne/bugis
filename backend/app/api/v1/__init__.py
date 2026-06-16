@@ -59,7 +59,7 @@ api_router.include_router(
     config_mgmt.router, prefix="/config", tags=["config-management"], dependencies=_platform
 )
 api_router.include_router(bulk.router, prefix="/bulk", tags=["bulk"], dependencies=_platform)
-api_router.include_router(stream.router, prefix="/stream", tags=["stream"], dependencies=_platform)
+api_router.include_router(stream.router, prefix="/stream", tags=["stream"])
 api_router.include_router(system.router, prefix="/system", tags=["system"])
 api_router.include_router(
     platform_settings.router, prefix="/system/settings", tags=["platform-settings"], dependencies=_platform

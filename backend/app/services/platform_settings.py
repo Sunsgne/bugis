@@ -89,6 +89,7 @@ def sync_to_runtime(row: PlatformSettings) -> None:
     settings.smtp_security = row.smtp_security or "starttls"
     settings.enable_metrics = row.enable_metrics
     settings.access_token_expire_minutes = row.access_token_expire_minutes
+    settings.expose_openapi = getattr(row, "expose_openapi", True)
 
     from app import scheduler
 
@@ -117,6 +118,8 @@ def to_out(row: PlatformSettings) -> PlatformSettingsOut:
         update={
             "smtp_password_set": bool(row.smtp_password),
             "smtp_password": None,
+            "turnstile_secret_key_set": bool(row.turnstile_secret_key),
+            "turnstile_secret_key": None,
         }
     )
 
@@ -125,6 +128,8 @@ def update_settings(db: Session, payload: PlatformSettingsUpdate) -> PlatformSet
     row = get_or_create(db)
     for key, value in payload.model_dump(exclude_unset=True).items():
         if key == "smtp_password" and value == "":
+            continue
+        if key == "turnstile_secret_key" and value == "":
             continue
         setattr(row, key, value)
     db.commit()

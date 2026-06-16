@@ -30,6 +30,19 @@ export interface PlatformSettings {
   smtp_password_set?: boolean;
   enable_metrics: boolean;
   access_token_expire_minutes: number;
+  login_rate_limit_per_ip?: number;
+  login_rate_limit_window_minutes?: number;
+  login_lockout_after_failures?: number;
+  login_lockout_minutes?: number;
+  captcha_after_failures?: number;
+  turnstile_enabled?: boolean;
+  turnstile_site_key?: string;
+  turnstile_secret_key_set?: boolean;
+  mfa_required_platform?: boolean;
+  mfa_required_portal?: boolean;
+  mfa_allow_totp?: boolean;
+  mfa_allow_email?: boolean;
+  expose_openapi?: boolean;
   notes?: string;
 }
 
@@ -70,6 +83,9 @@ export function usePlatformSettings() {
       const payload = { ...partial };
       if ("smtp_password" in payload && !payload.smtp_password) {
         delete payload.smtp_password;
+      }
+      if ("turnstile_secret_key" in payload && !payload.turnstile_secret_key) {
+        delete payload.turnstile_secret_key;
       }
       const { data } = await api.patch<PlatformSettings>("/system/settings/platform", payload);
       setPlatform(data);

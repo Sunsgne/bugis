@@ -80,10 +80,15 @@ app = FastAPI(
         "Juniper/Arista/Cisco SR-MPLS-EVPN) provisioning & operations."
     ),
     lifespan=lifespan,
+    docs_url="/docs" if settings.expose_openapi else None,
+    redoc_url="/redoc" if settings.expose_openapi else None,
+    openapi_url="/openapi.json" if settings.expose_openapi else None,
 )
 
 from app.middleware import AuditMiddleware  # noqa: E402
+from app.middleware_security import SecurityHeadersMiddleware  # noqa: E402
 
+app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(AuditMiddleware)
 app.add_middleware(
     CORSMiddleware,
@@ -98,7 +103,9 @@ app.include_router(api_router, prefix=settings.api_v1_prefix)
 
 @app.get("/", include_in_schema=False)
 def root():
-    return RedirectResponse(url="/docs")
+    if settings.expose_openapi:
+        return RedirectResponse(url="/docs")
+    return {"status": "ok", "api": settings.api_v1_prefix}
 
 
 @app.get("/health", tags=["system"])
