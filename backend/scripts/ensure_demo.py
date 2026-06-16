@@ -11,6 +11,7 @@ from app.core.database import SessionLocal, init_db
 from scripts.demo_data import (
     activate_draft_circuits,
     backfill_demo_circuits,
+    ensure_active_demo_circuit,
     sync_active_circuit_controlplane,
 )
 
@@ -32,12 +33,16 @@ def run() -> None:
         if activated:
             print(f"Activated {activated} draft circuits for demo monitoring.")
 
+        restored = ensure_active_demo_circuit(db)
+        if restored:
+            print(f"Restored {restored} active demo circuit(s).")
+
         synced = sync_active_circuit_controlplane(db)
         if synced:
             print(f"Synced EVPN control plane for {synced} active circuits.")
             return
 
-        if activated:
+        if activated or restored:
             return
 
         print("Demo state OK.")

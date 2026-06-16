@@ -212,6 +212,32 @@ def sync_active_circuit_controlplane(db: Session) -> int:
     return synced
 
 
+def ensure_active_demo_circuit(db: Session) -> int:
+    """Create one active demo L2 circuit when none exist (post-decommission demo)."""
+    if db.query(Circuit).filter(Circuit.status == CircuitStatus.ACTIVE).count() > 0:
+        return 0
+    by_name = _devices_by_name(db)
+    need = {"BJ-LEAF-01", "SH-LEAF-01"}
+    if not need.issubset(by_name):
+        return 0
+    tenants = ensure_demo_tenants(db)
+    c = _make_circuit(
+        db,
+        by_name,
+        name="银行北京-上海二层专线",
+        tenant=tenants["BANK01"],
+        service_type=ServiceType.L2VPN_EVPN,
+        eps=[("A", "BJ-LEAF-01", "GE1/0/1"), ("Z", "SH-LEAF-01", "GE1/0/1")],
+        bw=1000,
+        sla="99.95",
+        status=CircuitStatus.ACTIVE,
+    )
+    if c:
+        db.commit()
+        return 1
+    return 0
+
+
 def activate_draft_circuits(db: Session, limit: int = 2) -> int:
     active = db.query(Circuit).filter(Circuit.status == CircuitStatus.ACTIVE).count()
     if active > 0:
