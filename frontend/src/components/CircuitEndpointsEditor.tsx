@@ -18,6 +18,12 @@ import type { FormInstance } from "antd";
 import { MinusCircleOutlined, PlusOutlined, RadarChartOutlined, WarningOutlined } from "@ant-design/icons";
 import { api } from "../api/client";
 import type { Device, DeviceInterface, SvidUsage } from "../api/types";
+import {
+  formatInterfaceShort,
+  formatInterfaceTooltip,
+  formatOperStatus,
+  formatVlanLabel,
+} from "../utils/networkDisplay";
 
 const SVID_SOURCE: Record<string, { label: string; color: string }> = {
   platform: { label: "平台", color: "blue" },
@@ -31,10 +37,7 @@ function formatPortSpeed(mbps?: number) {
 }
 
 function svidUsageLabel(u: SvidUsage) {
-  if (u.access_mode === "access") return "untagged";
-  if (u.c_vid != null && u.s_vid != null) return `S:${u.s_vid} / C:${u.c_vid}`;
-  if (u.s_vid != null) return `S:${u.s_vid}`;
-  return "unknown";
+  return formatVlanLabel(u.access_mode, u.s_vid, u.c_vid);
 }
 
 function svidUsageTitle(u: SvidUsage) {
@@ -98,13 +101,16 @@ function SvidUsageTags({ list, emptyText }: { list?: SvidUsage[] | null; emptyTe
 function InterfaceOptionRow({ iface }: { iface: DeviceInterface }) {
   const speed = formatPortSpeed(iface.speed_mbps);
   const used = (iface.used_s_vids?.length || 0) > 0;
+  const short = formatInterfaceShort(iface.name);
   return (
     <div className="iface-option">
       <div className="iface-option-head">
-        <span className="iface-option-name">{iface.name}</span>
+        <Tooltip title={short === iface.name ? undefined : formatInterfaceTooltip(iface.name)}>
+          <span className="iface-option-name">{short}</span>
+        </Tooltip>
         {speed && <Tag bordered={false}>{speed}</Tag>}
         <Tag color={iface.oper_status === "up" ? "success" : "default"} bordered={false}>
-          {iface.oper_status || "unknown"}
+          {formatOperStatus(iface.oper_status)}
         </Tag>
         {!used && <Tag color="green" bordered={false}>空闲</Tag>}
       </div>
@@ -131,12 +137,17 @@ function PortDetailPanel({
   if (!iface) return null;
   const speed = formatPortSpeed(iface.speed_mbps);
   const conflict = vlanConflict(iface.used_s_vids, vlanId, accessMode, innerVlanId);
+  const short = formatInterfaceShort(iface.name);
   return (
     <div className="port-detail-panel">
       <div className="port-detail-title">
-        <span>{iface.name}</span>
+        <Tooltip title={short === iface.name ? undefined : formatInterfaceTooltip(iface.name)}>
+          <span>{short}</span>
+        </Tooltip>
         {speed && <Tag>{speed}</Tag>}
-        <Tag color={iface.oper_status === "up" ? "success" : "default"}>{iface.oper_status || "-"}</Tag>
+        <Tag color={iface.oper_status === "up" ? "success" : "default"}>
+          {formatOperStatus(iface.oper_status)}
+        </Tag>
       </div>
       <div className="port-detail-row">
         <span className="port-detail-label">S-VID 占用</span>

@@ -51,6 +51,7 @@ import { fetchAllPages } from "../utils/pagination";
 import PageCard from "../components/PageCard";
 import ListToolbar from "../components/ListToolbar";
 import CircuitExpandDetail from "../components/CircuitExpandDetail";
+import { formatOperStatus } from "../utils/networkDisplay";
 import CircuitMonitorPanel from "../components/CircuitMonitorPanel";
 import CircuitEndpointsEditor from "../components/CircuitEndpointsEditor";
 
@@ -559,7 +560,7 @@ export default function Circuits() {
                   title: "状态",
                   dataIndex: "status",
                   render: (s) => (
-                    <Tag color={s === "up" ? "green" : "red"}>{s}</Tag>
+                    <Tag color={s === "up" ? "green" : "red"}>{formatOperStatus(s)}</Tag>
                   ),
                 },
               ]}
@@ -794,8 +795,7 @@ export default function Circuits() {
           {
             title: "状态",
             dataIndex: "status",
-            width: 100,
-            ellipsis: true,
+            width: 88,
             render: (s) => (
               <Tag color={STATUS_COLOR[s]}>{STATUS_LABEL[s] || s}</Tag>
             ),
@@ -803,28 +803,30 @@ export default function Circuits() {
           {
             title: "操作",
             key: "actions",
-            width: 320,
+            width: 280,
             fixed: "right",
             align: "right",
             className: "table-actions-col",
             render: (_, r) => (
               <Space size={4} wrap className="table-actions">
-                <Tooltip
-                  title={
-                    r.status === "active"
-                      ? "重新下发配置 (re-apply)"
-                      : "一键开通 (下发配置)"
-                  }
-                >
-                  <Button
-                    size="small"
-                    type="primary"
-                    icon={<ThunderboltOutlined />}
-                    onClick={() => provision(r)}
+                {r.status !== "decommissioned" && (
+                  <Tooltip
+                    title={
+                      r.status === "active"
+                        ? "重新下发配置 (re-apply)"
+                        : "一键开通 (下发配置)"
+                    }
                   >
-                    {r.status === "active" ? "重新下发" : "开通"}
-                  </Button>
-                </Tooltip>
+                    <Button
+                      size="small"
+                      type="primary"
+                      icon={<ThunderboltOutlined />}
+                      onClick={() => provision(r)}
+                    >
+                      {r.status === "active" ? "重新下发" : "开通"}
+                    </Button>
+                  </Tooltip>
+                )}
                 {r.status === "active" && (
                   <Tooltip title="变更带宽">
                     <Button

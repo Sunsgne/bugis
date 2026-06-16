@@ -1,11 +1,12 @@
 import { Button, Card, Col, Descriptions, Row, Space, Tag, Typography } from "antd";
 import { EditOutlined } from "@ant-design/icons";
 import type { Circuit, CircuitEndpoint } from "../api/types";
+import InterfaceNameCell from "./InterfaceNameCell";
 
 const ACCESS_LABEL: Record<string, string> = {
-  access: "Access · 不带标签",
-  dot1q: "Dot1Q · 单标签",
-  qinq: "QinQ · 双标签",
+  access: "无标签接入",
+  dot1q: "单标签 Dot1Q",
+  qinq: "双标签 QinQ",
 };
 
 function endpointVlanLabel(ep: CircuitEndpoint): string {
@@ -88,7 +89,9 @@ export default function CircuitExpandDetail({
               >
                 <Descriptions size="small" column={1} colon>
                   <Descriptions.Item label="接入设备">{deviceName(ep.device_id)}</Descriptions.Item>
-                  <Descriptions.Item label="物理端口">{ep.interface_name || "—"}</Descriptions.Item>
+                  <Descriptions.Item label="物理端口">
+                    {ep.interface_name ? <InterfaceNameCell name={ep.interface_name} /> : "—"}
+                  </Descriptions.Item>
                   <Descriptions.Item label="封装模式">
                     {ACCESS_LABEL[ep.access_mode || "dot1q"] || ep.access_mode || "—"}
                   </Descriptions.Item>

@@ -29,6 +29,14 @@ import type {
   SvidUsage,
 } from "../api/types";
 import SvidUsageCell from "./SvidUsageCell";
+import InterfaceNameCell from "./InterfaceNameCell";
+import {
+  formatDiscoveredVia,
+  formatInterfaceShort,
+  formatInterfaceTooltip,
+  formatOperStatus,
+  formatVlanLabel,
+} from "../utils/networkDisplay";
 
 const BINDING_SOURCE: Record<string, { label: string; color: string }> = {
   platform: { label: "平台纳管", color: "blue" },
@@ -47,10 +55,7 @@ const CIRCUIT_STATUS_COLOR: Record<string, string> = {
 };
 
 function formatVlan(accessMode?: string, sVid?: number | null, cVid?: number | null) {
-  if (accessMode === "access") return "untagged";
-  if (cVid != null && sVid != null) return `S:${sVid} / C:${cVid}`;
-  if (sVid != null) return `S:${sVid}`;
-  return "—";
+  return formatVlanLabel(accessMode, sVid, cVid);
 }
 
 function formatBandwidth(mbps?: number | null) {
@@ -321,13 +326,9 @@ export default function DevicePortDrawer({
                     {
                       title: "接口",
                       dataIndex: "name",
-                      width: 220,
+                      width: 120,
                       fixed: "left",
-                      render: (name: string) => (
-                        <Typography.Text code copyable={{ text: name }}>
-                          {name}
-                        </Typography.Text>
-                      ),
+                      render: (name: string) => <InterfaceNameCell name={name} />,
                     },
                     {
                       title: "描述",
@@ -354,20 +355,20 @@ export default function DevicePortDrawer({
                       dataIndex: "oper_status",
                       width: 72,
                       render: (s?: string) => (
-                        <Tag color={s === "up" ? "green" : "default"}>{s || "—"}</Tag>
+                        <Tag color={s === "up" ? "green" : "default"}>{formatOperStatus(s)}</Tag>
                       ),
                     },
                     {
-                      title: "ifIndex",
+                      title: "索引",
                       dataIndex: "ifindex",
-                      width: 72,
+                      width: 64,
                       render: (v?: number) => (v != null ? v : "—"),
                     },
                     {
                       title: "来源",
                       dataIndex: "discovered_via",
-                      width: 88,
-                      render: (d?: string) => (d ? <Tag>{d}</Tag> : "—"),
+                      width: 96,
+                      render: (d?: string) => (d ? <Tag>{formatDiscoveredVia(d)}</Tag> : "—"),
                     },
                     {
                       title: "S-VID 占用",
@@ -436,12 +437,8 @@ export default function DevicePortDrawer({
                     {
                       title: "接口",
                       dataIndex: "interface_name",
-                      width: 200,
-                      render: (name: string) => (
-                        <Typography.Text code copyable={{ text: name }}>
-                          {name}
-                        </Typography.Text>
-                      ),
+                      width: 120,
+                      render: (name: string) => <InterfaceNameCell name={name} />,
                     },
                     {
                       title: "业务",
@@ -512,9 +509,17 @@ export default function DevicePortDrawer({
                     </Typography.Text>
                     <div style={{ marginTop: 8 }}>
                       <Space size={[4, 4]} wrap>
-                        {bindings.unbound_interfaces.slice(0, 40).map((name) => (
-                          <Tag key={name}>{name}</Tag>
-                        ))}
+                        {bindings.unbound_interfaces.slice(0, 40).map((name) => {
+                          const short = formatInterfaceShort(name);
+                          if (short === name) {
+                            return <Tag key={name}>{short}</Tag>;
+                          }
+                          return (
+                            <Tooltip key={name} title={formatInterfaceTooltip(name)}>
+                              <Tag>{short}</Tag>
+                            </Tooltip>
+                          );
+                        })}
                         {bindings.unbound_interfaces.length > 40 ? (
                           <Tag>+{bindings.unbound_interfaces.length - 40} 更多</Tag>
                         ) : null}

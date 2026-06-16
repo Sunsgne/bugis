@@ -1,6 +1,7 @@
 import { Button, Input, Popover, Space, Table, Tag, Typography } from "antd";
 import { useMemo, useState } from "react";
 import type { SvidUsage } from "@/api/types";
+import { formatVlanLabel } from "@/utils/networkDisplay";
 
 const SVID_SOURCE: Record<string, { label: string; color: string }> = {
   platform: { label: "平台", color: "blue" },
@@ -9,10 +10,7 @@ const SVID_SOURCE: Record<string, { label: string; color: string }> = {
 };
 
 export function svidUsageLabel(u: SvidUsage): string {
-  if (u.access_mode === "access") return "untagged";
-  if (u.c_vid != null && u.s_vid != null) return `S:${u.s_vid}/C:${u.c_vid}`;
-  if (u.s_vid != null) return `S:${u.s_vid}`;
-  return "unknown";
+  return formatVlanLabel(u.access_mode, u.s_vid, u.c_vid);
 }
 
 export function svidUsageTitle(u: SvidUsage): string {
