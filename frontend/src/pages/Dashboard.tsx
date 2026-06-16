@@ -97,22 +97,31 @@ export default function Dashboard() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div
+        className="dashboard-hero-banner"
         style={{
           background: "linear-gradient(120deg, #0b1f3a 0%, #1668dc 60%, #13c2c2 100%)",
-          borderRadius: 12, padding: "20px 28px", color: "#fff",
-          display: "flex", justifyContent: "space-between", alignItems: "center",
-          flexWrap: "wrap", gap: 16,
           boxShadow: "0 8px 24px rgba(11,31,58,0.25)",
         }}
       >
-        <div>
-          <div style={{ fontSize: 22, fontWeight: 700 }}>{brand.hero_title}</div>
-          <div style={{ opacity: 0.85, marginTop: 4 }}>{brand.hero_subtitle}</div>
-          <div style={{ marginTop: 10 }}>
-            <Badge status={sched?.running ? "processing" : "default"} />
-            <span style={{ opacity: 0.9 }}>
-              {sched?.running ? `巡检引擎运行中 · ${sched.ticks} 次 · 周期 ${sched.interval}s` : "巡检引擎待机"}
+        <div className="dashboard-hero-copy">
+          <div className="dashboard-hero-title">{brand.hero_title}</div>
+          <div className="dashboard-hero-subtitle">{brand.hero_subtitle}</div>
+          <div className="dashboard-hero-status">
+            <span className="dashboard-hero-status-pill">
+              <Badge status={sched?.running ? "processing" : "default"} />
+              <span>{sched?.running ? "巡检引擎运行中" : "巡检引擎待机"}</span>
             </span>
+            {sched?.running ? (
+              <>
+                <span className="dashboard-hero-status-metric">已执行 {sched.ticks ?? 0} 次</span>
+                <span className="dashboard-hero-status-metric">周期 {sched.interval ?? "—"}s</span>
+                {sched.last_learn_devices != null && sched.last_learn_devices > 0 ? (
+                  <span className="dashboard-hero-status-metric">
+                    自学习 {sched.last_learn_devices} 台
+                  </span>
+                ) : null}
+              </>
+            ) : null}
           </div>
         </div>
         <div style={{ display: "flex", gap: 28, flexWrap: "wrap" }}>

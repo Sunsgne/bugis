@@ -152,6 +152,83 @@ body {
   }
 }
 
+/* Dashboard hero banner */
+.dashboard-hero-banner {
+  border-radius: 12px;
+  padding: 24px 32px;
+  color: #fff;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 20px 28px;
+}
+
+.dashboard-hero-copy {
+  min-width: 0;
+  flex: 1 1 320px;
+}
+
+.dashboard-hero-title {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.dashboard-hero-subtitle {
+  opacity: 0.88;
+  margin-top: 8px;
+  font-size: 14px;
+  line-height: 1.5;
+  max-width: 42rem;
+}
+
+.dashboard-hero-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+  margin-top: 16px;
+}
+
+.dashboard-hero-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.22);
+  font-size: 13px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.dashboard-hero-status-pill .ant-badge-status-dot {
+  width: 8px;
+  height: 8px;
+}
+
+.dashboard-hero-status-metric {
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.12);
+  font-size: 13px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+@media (max-width: 576px) {
+  .dashboard-hero-banner {
+    padding: 20px 18px;
+  }
+
+  .dashboard-hero-status {
+    gap: 8px;
+  }
+}
+
 /* Traffic insights / monitoring */
 .monitoring-page {
   width: 100%;
