@@ -6,9 +6,11 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, require_admin
+from app.api.deps import get_current_user, is_tenant_user, require_admin
 from app.core.database import get_db
 from app.core.security import create_access_token, hash_password, verify_password
+from app.models.enums import TenantStatus, UserScope
+from app.models.tenant import Tenant
 from app.models.user import User
 from app.schemas.auth import PasswordChangeRequest, Token, UserCreate, UserOut
 
@@ -30,6 +32,14 @@ def login(
         )
     if not user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user")
+    if is_tenant_user(user):
+        if user.tenant_id is None:
+            raise HTTPException(status_code=403, detail="门户账号未绑定租户")
+        tenant = db.get(Tenant, user.tenant_id)
+        if not tenant:
+            raise HTTPException(status_code=403, detail="租户不存在")
+        if tenant.status != TenantStatus.ACTIVE:
+            raise HTTPException(status_code=403, detail="租户已暂停或终止")
     token = create_access_token(subject=user.username)
     return Token(access_token=token)
 
@@ -70,6 +80,7 @@ def create_user(
         full_name=payload.full_name,
         email=payload.email,
         role=payload.role,
+        scope=UserScope.PLATFORM,
         hashed_password=hash_password(payload.password),
     )
     db.add(user)

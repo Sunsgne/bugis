@@ -6,7 +6,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.bootstrap import ensure_platform_settings, ensure_snmp_settings, ensure_superuser
+from app.bootstrap import (
+    ensure_platform_settings,
+    ensure_snmp_settings,
+    ensure_superuser,
+    ensure_tenant_portal_demo_user,
+)
 from app.core.database import SessionLocal, init_db
 from scripts.demo_data import (
     activate_draft_circuits,
@@ -22,6 +27,9 @@ def run() -> None:
         ensure_superuser(db)
         ensure_snmp_settings(db)
         ensure_platform_settings(db)
+        portal = ensure_tenant_portal_demo_user(db)
+        if portal:
+            print(f"Portal demo user OK: {portal.username}")
 
         added = backfill_demo_circuits(db)
         if added:

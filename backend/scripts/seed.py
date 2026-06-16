@@ -13,6 +13,7 @@ from app.bootstrap import (  # noqa: E402
     ensure_platform_settings,
     ensure_snmp_settings,
     ensure_superuser,
+    ensure_tenant_portal_demo_user,
 )
 from app.core.database import SessionLocal, init_db  # noqa: E402
 from app.models.circuit import Circuit, CircuitEndpoint  # noqa: E402
@@ -216,6 +217,8 @@ def run() -> None:
         for d in devices:
             snmp.discover_interfaces(db, d)
         link_monitor.sync_all_link_capacity(db)
+
+        ensure_tenant_portal_demo_user(db)
 
         db.commit()
         print("Seed complete:")

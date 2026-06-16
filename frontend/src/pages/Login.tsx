@@ -48,8 +48,9 @@ export default function Login() {
     setLoading(true);
     try {
       const token = await login(username.trim(), password);
-      await loginWithToken(token);
+      const me = await loginWithToken(token);
       toast.success(toastCopy.loginOk);
+      window.location.href = me && (me.scope === "tenant" || me.tenant_id != null) ? "/portal" : "/";
     } catch {
       toast.error(toastCopy.loginFail);
     } finally {
@@ -229,6 +230,9 @@ export default function Login() {
                     </>
                   )}
                 </Button>
+                <p className="text-center text-xs text-slate-500">
+                  客户门户账号登录后将进入专线自助服务，仅可查看本租户专线与流量数据
+                </p>
               </form>
             </CardContent>
           </Card>

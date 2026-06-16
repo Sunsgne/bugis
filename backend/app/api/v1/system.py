@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app import __version__, scheduler
-from app.api.deps import get_current_user, require_operator
+from app.api.deps import get_current_user, require_operator, require_platform_user
 from app.core.config import settings
 from app.core.database import get_db
 from app.models.user import User
@@ -16,7 +16,7 @@ router = APIRouter()
 
 
 @router.get("/info")
-def system_info(_: User = Depends(get_current_user)):
+def system_info(_: User = Depends(require_platform_user)):
     return {
         "version": __version__,
         "app_env": settings.app_env,
@@ -40,7 +40,7 @@ def snmp_defaults(db: Session = Depends(get_db)):
 
 
 @router.get("/management-defaults")
-def southbound_defaults(_: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def southbound_defaults(_: User = Depends(require_platform_user), db: Session = Depends(get_db)):
     """Platform default NETCONF/SSH/SNMP parameters for device onboarding."""
     from app.services import device_management
 

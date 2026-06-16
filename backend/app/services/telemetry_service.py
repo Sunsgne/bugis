@@ -71,29 +71,24 @@ def list_circuit_samples(
     *,
     limit: int = 120,
     hours: int | None = None,
+    start_at: datetime | None = None,
+    end_at: datetime | None = None,
 ) -> list[TelemetrySample]:
     """Return samples oldest-first for charting."""
-    limit = max(1, min(limit, 2000))
-    stmt = (
-        select(TelemetrySample)
-        .where(TelemetrySample.circuit_id == circuit_id)
-        .order_by(TelemetrySample.id.desc())
-        .limit(limit)
-    )
-    if hours is not None:
-        since = datetime.now(timezone.utc) - timedelta(hours=max(1, min(hours, 24 * 30)))
-        stmt = (
-            select(TelemetrySample)
-            .where(
-                TelemetrySample.circuit_id == circuit_id,
-                TelemetrySample.created_at >= since,
-            )
-            .order_by(TelemetrySample.id.desc())
-            .limit(limit)
+    limit = max(1, min(limit, 5000))
+    stmt = select(TelemetrySample).where(TelemetrySample.circuit_id == circuit_id)
+    if start_at and end_at:
+        start = start_at.astimezone(timezone.utc) if start_at.tzinfo else start_at.replace(tzinfo=timezone.utc)
+        end = end_at.astimezone(timezone.utc) if end_at.tzinfo else end_at.replace(tzinfo=timezone.utc)
+        stmt = stmt.where(
+            TelemetrySample.created_at >= start,
+            TelemetrySample.created_at <= end,
         )
-    rows = list(db.execute(stmt).scalars().all())
-    rows.reverse()
-    return rows
+    elif hours is not None:
+        since = datetime.now(timezone.utc) - timedelta(hours=max(1, min(hours, 24 * 366)))
+        stmt = stmt.where(TelemetrySample.created_at >= since)
+    stmt = stmt.order_by(TelemetrySample.created_at.asc(), TelemetrySample.id.asc()).limit(limit)
+    return list(db.execute(stmt).scalars().all())
 
 
 def chart_p95(samples: list[TelemetrySample]) -> dict:

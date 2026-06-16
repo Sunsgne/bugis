@@ -5,12 +5,15 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, require_operator
+from app.api.deps import get_current_user, require_operator, require_platform_user
 from app.core.database import get_db
 from app.models.circuit import Circuit
 from app.models.enums import CircuitStatus
 from app.models.tenant import Tenant
+from app.core.security import hash_password
+from app.models.enums import UserRole, UserScope
 from app.models.user import User
+from app.schemas.auth import TenantUserCreate, UserOut
 from app.schemas.pagination import PaginatedResponse, paginate_query, paginated
 from app.schemas.tenant import (
     TenantCreate,
@@ -195,4 +198,63 @@ def delete_tenant(
     if not tenant:
         raise HTTPException(status_code=404, detail="tenant not found")
     db.delete(tenant)
+    db.commit()
+
+
+@router.get("/{tenant_id}/users", response_model=list[UserOut])
+def list_tenant_users(
+    tenant_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_platform_user),
+):
+    if not db.get(Tenant, tenant_id):
+        raise HTTPException(status_code=404, detail="tenant not found")
+    return db.execute(
+        select(User)
+        .where(User.tenant_id == tenant_id, User.scope == UserScope.TENANT)
+        .order_by(User.username)
+    ).scalars().all()
+
+
+@router.post("/{tenant_id}/users", response_model=UserOut, status_code=201)
+def create_tenant_user(
+    tenant_id: int,
+    payload: TenantUserCreate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
+    tenant = db.get(Tenant, tenant_id)
+    if not tenant:
+        raise HTTPException(status_code=404, detail="tenant not found")
+    exists = db.execute(
+        select(User).where(User.username == payload.username)
+    ).scalar_one_or_none()
+    if exists:
+        raise HTTPException(status_code=409, detail="username already exists")
+    user = User(
+        username=payload.username,
+        full_name=payload.full_name or tenant.name,
+        email=payload.email or tenant.contact_email,
+        role=payload.role,
+        scope=UserScope.TENANT,
+        tenant_id=tenant_id,
+        hashed_password=hash_password(payload.password),
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+@router.delete("/{tenant_id}/users/{user_id}", status_code=204)
+def delete_tenant_user(
+    tenant_id: int,
+    user_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
+    user = db.get(User, user_id)
+    if not user or user.tenant_id != tenant_id or user.scope != UserScope.TENANT:
+        raise HTTPException(status_code=404, detail="portal user not found")
+    db.delete(user)
     db.commit()
