@@ -83,6 +83,16 @@ const STATUS_COLOR: Record<string, string> = {
   decommissioned: "default",
   failed: "red",
 };
+const STATUS_LABEL: Record<string, string> = {
+  draft: "草稿",
+  pending: "待开通",
+  provisioning: "开通中",
+  active: "运行中",
+  degraded: "降级",
+  suspended: "暂停",
+  decommissioned: "已拆除",
+  failed: "失败",
+};
 
 interface TenantSummary {
   tenant_id: number;
@@ -633,7 +643,7 @@ export default function Circuits() {
         rowKey="id"
         loading={loading}
         dataSource={rows}
-        {...dataTableProps(1280, rows.length > 0)}
+        {...dataTableProps(selectedTenantId ? 1320 : 1220, rows.length > 0)}
         pagination={tablePagination(total, page, pageSize, (p, ps) => {
           setPage(p);
           setPageSize(ps);
@@ -766,15 +776,21 @@ export default function Circuits() {
           {
             title: "状态",
             dataIndex: "status",
-            width: 90,
-            render: (s) => <Tag color={STATUS_COLOR[s]}>{s}</Tag>,
+            width: 100,
+            ellipsis: true,
+            render: (s) => (
+              <Tag color={STATUS_COLOR[s]}>{STATUS_LABEL[s] || s}</Tag>
+            ),
           },
           {
             title: "操作",
-            width: 300,
-            className: "table-actions",
+            key: "actions",
+            width: 320,
+            fixed: "right",
+            align: "right",
+            className: "table-actions-col",
             render: (_, r) => (
-              <Space wrap>
+              <Space size={4} wrap className="table-actions">
                 <Tooltip
                   title={
                     r.status === "active"

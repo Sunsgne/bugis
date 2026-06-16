@@ -345,6 +345,33 @@ body {
   border-color: rgba(15, 23, 42, 0.12) !important;
 }
 
+/* Action columns: align controls to the right, avoid overlapping data columns */
+.data-table td.table-actions,
+.data-table th.table-actions,
+.data-table td.table-actions-col,
+.data-table th.table-actions-col {
+  text-align: right !important;
+}
+
+.data-table .table-actions-col .table-actions,
+.data-table .table-actions-col .ant-space,
+.data-table td.table-actions > .ant-space,
+.data-table td.table-actions > .table-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  width: 100%;
+  max-width: 100%;
+}
+
+.data-table .table-actions-col .ant-btn {
+  flex-shrink: 0;
+}
+
+.data-table .ant-table-cell-fix-right {
+  background: hsl(var(--card)) !important;
+}
+
 /* Alarms */
 .alarms-page {
   width: 100%;
