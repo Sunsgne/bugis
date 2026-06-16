@@ -132,3 +132,51 @@ def test_list_port_bindings_merges_device_usage():
         assert len(result["items"]) == 2
     finally:
         db.close()
+
+
+def test_scan_device_dedupes_alias_interface_rows():
+    from app.models.device import Device, DeviceInterface
+    from app.models.enums import Vendor
+
+    db = SessionLocal()
+    try:
+        device = Device(name="DEDUP-LEAF", vendor=Vendor.H3C, mgmt_ip="10.0.0.9")
+        db.add(device)
+        db.flush()
+        db.add_all([
+            DeviceInterface(
+                device_id=device.id,
+                name="Twenty-FiveGigE1/0/1",
+                ifindex=3,
+                discovered_via="snmp",
+                oper_status="up",
+            ),
+            DeviceInterface(
+                device_id=device.id,
+                name="GE1/0/1",
+                discovered_via="running-config",
+                used_s_vids=[{"s_vid": 101, "access_mode": "dot1q", "source": "platform"}],
+                allocated=True,
+            ),
+            DeviceInterface(
+                device_id=device.id,
+                name="GE1/0/1",
+                discovered_via="running-config",
+                used_s_vids=[{"s_vid": 2777, "access_mode": "dot1q", "source": "device"}],
+                allocated=True,
+            ),
+        ])
+        db.commit()
+
+        port_inventory.scan_device(db, device)
+        db.commit()
+
+        rows = db.query(DeviceInterface).filter(DeviceInterface.device_id == device.id).all()
+        names = sorted(row.name for row in rows)
+        assert names.count("GE1/0/1") == 0
+        assert "Twenty-FiveGigE1/0/1" in names
+        assert len(rows) == 1
+        svids = {entry["s_vid"] for entry in (rows[0].used_s_vids or [])}
+        assert 101 in svids or 2777 in svids
+    finally:
+        db.close()

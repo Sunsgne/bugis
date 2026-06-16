@@ -154,6 +154,85 @@ def _iface_aliases(name: str) -> set[str]:
     return aliases
 
 
+def _pick_canonical_snmp_name(names: list[str]) -> str:
+    """Pick one SNMP ifName when several aliases share the same port suffix."""
+
+    def _score(name: str) -> tuple[int, int, str]:
+        lower = name.lower()
+        if lower.startswith(("twenty-fivegige", "hundredgige", "tengigabitethernet")):
+            return (0, len(name), name)
+        if lower.startswith(("gigabitethernet", "ge", "25ge", "100ge", "10ge")):
+            return (1, len(name), name)
+        return (2, len(name), name)
+
+    return sorted(names, key=_score)[0]
+
+
+def _build_alias_map(snmp_names: set[str]) -> dict[str, str]:
+    """Map CLI/platform interface aliases onto canonical SNMP ifName values."""
+    suffix_to_snmp: dict[str, list[str]] = {}
+    for name in snmp_names:
+        suffix = _iface_port_suffix(name)
+        if suffix:
+            suffix_to_snmp.setdefault(suffix, []).append(name)
+
+    alias_to_canonical: dict[str, str] = {}
+    for suffix, names in suffix_to_snmp.items():
+        canonical = _pick_canonical_snmp_name(names)
+        for alias in _iface_aliases(canonical):
+            alias_to_canonical.setdefault(alias, canonical)
+    for name in snmp_names:
+        alias_to_canonical.setdefault(name, name)
+        for alias in _iface_aliases(name):
+            alias_to_canonical.setdefault(alias, name)
+    return alias_to_canonical
+
+
+def _build_iface_resolver(
+    interfaces: list[DeviceInterface],
+) -> tuple[set[str], dict[str, str]]:
+    """Build SNMP name set and alias map from persisted interface rows."""
+    snmp_rows = [
+        i for i in interfaces if i.discovered_via == "snmp" or i.ifindex is not None
+    ]
+    snmp_names = {i.name for i in snmp_rows} or {i.name for i in interfaces}
+    return snmp_names, _build_alias_map(snmp_names)
+
+
+def _resolve_iface_name(name: str, alias_to_canonical: dict[str, str]) -> str | None:
+    norm = _normalize_iface(name)
+    if norm in alias_to_canonical:
+        return alias_to_canonical[norm]
+    for alias in _iface_aliases(norm):
+        if alias in alias_to_canonical:
+            return alias_to_canonical[alias]
+    suffix = _iface_port_suffix(norm)
+    if suffix:
+        for alias in _iface_aliases(f"GE{suffix}"):
+            if alias in alias_to_canonical:
+                return alias_to_canonical[alias]
+    return None
+
+
+def _remap_usage_map(
+    usage_map: dict[str, PortUsage],
+    alias_to_canonical: dict[str, str],
+) -> dict[str, PortUsage]:
+    """Map usage keys (platform/config/description) onto canonical SNMP ifNames."""
+    if not usage_map or not alias_to_canonical:
+        return usage_map
+
+    remapped: dict[str, PortUsage] = {}
+    for iface, usage in usage_map.items():
+        target = _resolve_iface_name(iface, alias_to_canonical)
+        if target is None:
+            continue
+        bucket = remapped.setdefault(target, PortUsage(interface_name=target))
+        for entry in usage.entries:
+            _merge_entries(bucket.entries, entry)
+    return remapped
+
+
 def _remap_config_usage(
     config_usage: dict[str, PortUsage],
     snmp_names: set[str],
@@ -161,31 +240,7 @@ def _remap_config_usage(
     """Map running-config interface keys onto SNMP ifName values."""
     if not config_usage or not snmp_names:
         return config_usage
-
-    snmp_by_suffix: dict[str, list[str]] = {}
-    for name in snmp_names:
-        suffix = _iface_port_suffix(name)
-        if suffix:
-            snmp_by_suffix.setdefault(suffix, []).append(name)
-
-    remapped: dict[str, PortUsage] = {}
-    for cfg_iface, usage in config_usage.items():
-        target = cfg_iface if cfg_iface in snmp_names else None
-        if target is None:
-            for alias in _iface_aliases(cfg_iface):
-                if alias in snmp_names:
-                    target = alias
-                    break
-        if target is None:
-            suffix = _iface_port_suffix(cfg_iface)
-            if suffix and suffix in snmp_by_suffix:
-                target = sorted(snmp_by_suffix[suffix])[0]
-        if target is None:
-            continue
-        bucket = remapped.setdefault(target, PortUsage(interface_name=target))
-        for entry in usage.entries:
-            _merge_entries(bucket.entries, entry)
-    return remapped
+    return _remap_usage_map(config_usage, _build_alias_map(snmp_names))
 
 
 # ifAlias / description hints (operational tagging).
@@ -627,21 +682,116 @@ def merge_port_maps(*maps: dict[str, PortUsage]) -> dict[str, PortUsage]:
     return merged
 
 
+def _iface_row_rank(iface: DeviceInterface) -> tuple[int, int, str]:
+    if iface.discovered_via == "snmp":
+        return (0, iface.ifindex or 0, iface.name)
+    if iface.ifindex is not None:
+        return (1, iface.ifindex, iface.name)
+    if iface.discovered_via == "running-config":
+        return (2, 0, iface.name)
+    return (3, 0, iface.name)
+
+
+def _entries_from_json(rows: list | None) -> list[SvidEntry]:
+    entries: list[SvidEntry] = []
+    for raw in rows or []:
+        entry = SvidEntry(
+            s_vid=raw.get("s_vid"),
+            c_vid=raw.get("c_vid"),
+            access_mode=raw.get("access_mode", "dot1q"),
+            circuit_code=raw.get("circuit_code"),
+            source=raw.get("source", "device"),
+            note=raw.get("note"),
+            description=raw.get("description"),
+            rate_limit_mbps=raw.get("rate_limit_mbps"),
+            vni=raw.get("vni"),
+            vsi_name=raw.get("vsi_name"),
+            tenant_name=raw.get("tenant_name"),
+            tenant_code=raw.get("tenant_code"),
+            circuit_name=raw.get("circuit_name"),
+            bandwidth_mbps=raw.get("bandwidth_mbps"),
+        )
+        _merge_entries(entries, entry)
+    return entries
+
+
+def _dedupe_device_interfaces(
+    db: Session,
+    device: Device,
+    alias_to_canonical: dict[str, str],
+) -> dict[str, DeviceInterface]:
+    """Merge duplicate interface rows that refer to the same physical port."""
+    rows = db.execute(
+        select(DeviceInterface).where(DeviceInterface.device_id == device.id)
+    ).scalars().all()
+
+    groups: dict[str, list[DeviceInterface]] = {}
+    for row in rows:
+        canonical = _resolve_iface_name(row.name, alias_to_canonical) or row.name
+        groups.setdefault(canonical, []).append(row)
+
+    canonical_rows: dict[str, DeviceInterface] = {}
+    for canonical, group in groups.items():
+        group.sort(key=_iface_row_rank)
+        keeper = next((row for row in group if row.name == canonical), group[0])
+        merged_entries = _entries_from_json(keeper.used_s_vids)
+        for orphan in group:
+            if orphan is keeper:
+                continue
+            for entry in _entries_from_json(orphan.used_s_vids):
+                _merge_entries(merged_entries, entry)
+            if not keeper.description and orphan.description:
+                keeper.description = orphan.description
+            if keeper.speed_mbps is None and orphan.speed_mbps is not None:
+                keeper.speed_mbps = orphan.speed_mbps
+            if keeper.ifindex is None and orphan.ifindex is not None:
+                keeper.ifindex = orphan.ifindex
+            if keeper.oper_status is None and orphan.oper_status is not None:
+                keeper.oper_status = orphan.oper_status
+            if orphan.discovered_via == "snmp" and keeper.discovered_via != "snmp":
+                keeper.discovered_via = orphan.discovered_via
+            db.delete(orphan)
+        keeper.used_s_vids = [e.as_dict() for e in merged_entries]
+        keeper.allocated = bool(merged_entries)
+        canonical_rows[canonical] = keeper
+    return canonical_rows
+
+
+def _reconcile_endpoint_names(
+    db: Session,
+    device: Device,
+    alias_to_canonical: dict[str, str],
+) -> int:
+    """Rewrite circuit endpoint interface names to canonical SNMP ifNames."""
+    rows = db.execute(
+        select(CircuitEndpoint).where(CircuitEndpoint.device_id == device.id)
+    ).scalars().all()
+    updated = 0
+    for ep in rows:
+        canonical = _resolve_iface_name(ep.interface_name, alias_to_canonical)
+        if canonical and canonical != ep.interface_name:
+            ep.interface_name = canonical
+            updated += 1
+    return updated
+
+
 def scan_device(db: Session, device: Device, *, include_legacy: bool = False) -> dict:
     """Scan and persist S-VID inventory for a device. Returns summary for API."""
-    ifaces = {
-        i.name: i
-        for i in db.execute(
-            select(DeviceInterface).where(DeviceInterface.device_id == device.id)
-        ).scalars().all()
-    }
-    snmp_names = set(ifaces.keys())
+    iface_rows = db.execute(
+        select(DeviceInterface).where(DeviceInterface.device_id == device.id)
+    ).scalars().all()
+    snmp_names, alias_to_canonical = _build_iface_resolver(iface_rows)
+    ifaces = _dedupe_device_interfaces(db, device, alias_to_canonical)
+    endpoints_reconciled = _reconcile_endpoint_names(db, device, alias_to_canonical)
 
-    plat = platform_usage(db, device)
+    plat = _remap_usage_map(platform_usage(db, device), alias_to_canonical)
     dev_raw = device_config_usage(db, device)
     dev = _remap_config_usage(dev_raw, snmp_names) if snmp_names else dev_raw
-    desc = interface_description_usage(db, device)
-    legacy = legacy_simulated_usage(device) if include_legacy else {}
+    desc = _remap_usage_map(interface_description_usage(db, device), alias_to_canonical)
+    legacy = _remap_usage_map(
+        legacy_simulated_usage(device) if include_legacy else {},
+        alias_to_canonical,
+    )
     combined = merge_port_maps(plat, dev, desc, legacy)
 
     updated = 0
@@ -650,6 +800,8 @@ def scan_device(db: Session, device: Device, *, include_legacy: bool = False) ->
         serialized = [e.as_dict() for e in usage.entries]
         di = ifaces.get(iface_name)
         if di is None:
+            if snmp_names and _resolve_iface_name(iface_name, alias_to_canonical) is None:
+                continue
             di = DeviceInterface(device_id=device.id, name=iface_name, discovered_via="running-config")
             db.add(di)
             ifaces[iface_name] = di
@@ -675,6 +827,7 @@ def scan_device(db: Session, device: Device, *, include_legacy: bool = False) ->
         "device": device.name,
         "ports_scanned": len(combined),
         "ports_updated": updated,
+        "endpoints_reconciled": endpoints_reconciled,
         "total_s_vids": sum(len(u.entries) for u in combined.values()),
         "conflicts": conflicts,
         "ports": port_summaries,
@@ -757,13 +910,17 @@ def list_port_bindings(db: Session, device: Device) -> dict:
     ifaces = db.execute(
         select(DeviceInterface).where(DeviceInterface.device_id == device.id)
     ).scalars().all()
-    snmp_names = {i.name for i in ifaces}
+    snmp_names, alias_to_canonical = _build_iface_resolver(ifaces)
+
+    def _canonical_iface(name: str) -> str:
+        return _resolve_iface_name(name, alias_to_canonical) or _normalize_iface(name)
 
     for iface in ifaces:
+        canonical = _canonical_iface(iface.name)
         for raw in iface.used_s_vids or []:
             btype = "platform" if raw.get("source") == "platform" else "device"
             _append_row(
-                interface_name=iface.name,
+                interface_name=canonical,
                 raw=raw,
                 binding_type=btype,
             )
@@ -779,11 +936,11 @@ def list_port_bindings(db: Session, device: Device) -> dict:
     for ep, circuit, tenant in rows:
         mode = ep.access_mode.value if ep.access_mode else AccessMode.DOT1Q.value
         svid = ep.vlan_id or circuit.vlan_id
-        key = _binding_key(ep.interface_name, mode, svid, ep.inner_vlan_id)
+        key = _binding_key(_canonical_iface(ep.interface_name), mode, svid, ep.inner_vlan_id)
         if key in seen_keys:
             continue
         _append_row(
-            interface_name=ep.interface_name,
+            interface_name=_canonical_iface(ep.interface_name),
             raw={
                 "s_vid": svid,
                 "c_vid": ep.inner_vlan_id,
@@ -875,6 +1032,14 @@ def check_endpoint_available(
         return False, "设备不存在"
 
     iface = _normalize_iface(interface_name)
+    iface_rows = db.execute(
+        select(DeviceInterface).where(DeviceInterface.device_id == device_id)
+    ).scalars().all()
+    _, alias_to_canonical = _build_iface_resolver(iface_rows)
+    resolved = _resolve_iface_name(iface, alias_to_canonical)
+    if resolved:
+        iface = resolved
+
     rows = db.execute(
         select(CircuitEndpoint, Circuit)
         .join(Circuit, Circuit.id == CircuitEndpoint.circuit_id)

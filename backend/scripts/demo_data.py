@@ -7,7 +7,7 @@ from sqlalchemy.orm import joinedload
 
 from app.models.circuit import Circuit, CircuitEndpoint
 from app.models.controlplane import EvpnRoute
-from app.models.device import Device
+from app.models.device import Device, DeviceInterface
 from app.models.enums import CircuitStatus, LinkType, ServiceType, TenantType
 from app.models.link import Link
 from app.models.site import Site
@@ -17,6 +17,23 @@ from app.services import allocation
 
 def _devices_by_name(db: Session) -> dict[str, Device]:
     return {d.name: d for d in db.query(Device).all()}
+
+
+def _preferred_access_port(db: Session, device: Device) -> str:
+    """Pick a real SNMP interface for demo endpoints instead of a generic GE1/0/1."""
+    rows = (
+        db.query(DeviceInterface)
+        .filter(DeviceInterface.device_id == device.id)
+        .order_by(DeviceInterface.ifindex.asc().nullslast(), DeviceInterface.id.asc())
+        .all()
+    )
+    for row in rows:
+        if row.discovered_via == "snmp" and row.name:
+            return row.name
+    for row in rows:
+        if row.name:
+            return row.name
+    return "GE1/0/1"
 
 
 def ensure_demo_tenants(db: Session) -> dict[str, Tenant]:
@@ -225,7 +242,10 @@ def ensure_active_demo_circuit(db: Session) -> int:
     if tenant is None:
         return 0
     a, z = devices[0], devices[1]
-    eps = [("A", a.name, "GE1/0/1"), ("Z", z.name, "GE1/0/1")]
+    eps = [
+        ("A", a.name, _preferred_access_port(db, a)),
+        ("Z", z.name, _preferred_access_port(db, z)),
+    ]
     c = _make_circuit(
         db,
         by_name,

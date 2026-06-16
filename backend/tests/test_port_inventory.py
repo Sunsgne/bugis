@@ -90,6 +90,38 @@ interface GE1/0/25
     assert remapped["HundredGigE1/0/25"].entries[0].s_vid == 400
 
 
+def test_remap_platform_usage_to_snmp_name():
+    alias_map = port_inventory._build_alias_map({"Twenty-FiveGigE1/0/1", "Twenty-FiveGigE1/0/2"})
+    plat = {
+        "GE1/0/1": port_inventory.PortUsage(
+            interface_name="GE1/0/1",
+            entries=[
+                port_inventory.SvidEntry(
+                    s_vid=101,
+                    source="platform",
+                    circuit_code="CIR-DEMO",
+                )
+            ],
+        )
+    }
+    remapped = port_inventory._remap_usage_map(plat, alias_map)
+    assert "Twenty-FiveGigE1/0/1" in remapped
+    assert "GE1/0/1" not in remapped
+    assert remapped["Twenty-FiveGigE1/0/1"].entries[0].s_vid == 101
+
+
+def test_resolve_iface_name_aliases():
+    alias_map = port_inventory._build_alias_map({"Twenty-FiveGigE1/0/1"})
+    assert (
+        port_inventory._resolve_iface_name("GE1/0/1", alias_map)
+        == "Twenty-FiveGigE1/0/1"
+    )
+    assert (
+        port_inventory._resolve_iface_name("GigabitEthernet1/0/1", alias_map)
+        == "Twenty-FiveGigE1/0/1"
+    )
+
+
 def test_parse_description_svid():
     entries = port_inventory._parse_description_entries("cust-ac vlan=120 bw(1Gbps)")
     assert entries[0].s_vid == 120
