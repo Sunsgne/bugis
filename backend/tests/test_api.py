@@ -799,15 +799,16 @@ def test_rate_limit_rendering(client, auth_headers):
     si = h3c.index("service-instance")
     assert vsi < apply < si
     assert "encapsulation s-vid" in h3c[si:]
-    # Huawei: traffic policy objects + traffic-policy on bridge-domain
+    # Huawei: traffic policy objects + traffic-policy on L2 sub-interface (现网惯例)
     assert "traffic policy tp-" in hw
     assert "traffic-policy tp-" in hw
     assert "car cir 204800" in hw
     assert "qos lr cir" not in hw
     bd = hw.index("bridge-domain")
-    tp = hw.index("traffic-policy tp-")
     subif = hw.index("interface GE1/0/7")
-    assert bd < tp < subif
+    tp = hw.index("traffic-policy tp-")
+    assert bd < subif < tp
+    assert "traffic-policy tp-" not in hw[bd:subif]
 
 
 def test_h3c_huawei_template_quality(client, auth_headers):
@@ -858,9 +859,10 @@ def test_h3c_huawei_template_quality(client, auth_headers):
     assert "encapsulation untag" in hw_cfg
     assert "head-end peer-list protocol bgp" in hw_cfg
     bd = hw_cfg.index("bridge-domain")
-    tp = hw_cfg.index("traffic-policy tp-")
     subif = hw_cfg.index("interface GE1/0/8")
-    assert bd < tp < subif
+    tp = hw_cfg.index("traffic-policy tp-")
+    assert bd < subif < tp
+    assert "traffic-policy tp-" not in hw_cfg[bd:subif]
     assert " mtu " in hw_cfg.split("bridge-domain", 1)[1].split("interface", 1)[0]
 
 

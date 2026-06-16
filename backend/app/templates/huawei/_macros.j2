@@ -14,14 +14,14 @@ tp-{{ circuit.code }}
 {% macro qos_policy_objects(circuit) -%}
 {% if circuit.bandwidth_mbps %}
 # QoS CAR via classifier/behavior/traffic-policy (VRP); cir unit = kbps
-traffic classifier tc-{{ circuit.code }} operator or
+traffic classifier tc-{{ circuit.code }} type or
  if-match any
 #
 traffic behavior tb-{{ circuit.code }}
  car cir {{ circuit.bandwidth_mbps * 1024 }} cbs {{ circuit.bandwidth_mbps * 64000 }} green pass red discard yellow pass
 #
 traffic policy {{ qos_policy_name(circuit) }}
- classifier tc-{{ circuit.code }} behavior tb-{{ circuit.code }}
+ classifier tc-{{ circuit.code }} behavior tb-{{ circuit.code }} precedence 5
 #
 {% endif %}
 {%- endmacro %}
@@ -43,10 +43,6 @@ bridge-domain {{ circuit.vni }}
   route-distinguisher {{ circuit.route_distinguisher }}
   vpn-target {{ circuit.route_target }} export-extcommunity
   vpn-target {{ circuit.route_target }} import-extcommunity
-{% if circuit.bandwidth_mbps %}
- traffic-policy {{ qos_policy_name(circuit) }} inbound
- traffic-policy {{ qos_policy_name(circuit) }} outbound
-{% endif %}
 {%- endmacro %}
 
 {% macro l2_subif(endpoint, circuit, mode, svid, cvid) -%}
@@ -61,6 +57,11 @@ interface {{ l2_ifname(endpoint, mode, svid) }} mode l2
  rewrite pop single
 {% endif %}
  bridge-domain {{ circuit.vni }}
+{% if circuit.bandwidth_mbps %}
+ traffic-policy {{ qos_policy_name(circuit) }} inbound
+ traffic-policy {{ qos_policy_name(circuit) }} outbound
+ statistics enable
+{% endif %}
 {%- endmacro %}
 
 {% macro nve_vni(circuit) -%}
