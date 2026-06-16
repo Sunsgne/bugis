@@ -10,17 +10,21 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.models.user import User
 from app.schemas.platform_settings import BrandingOut
-from app.services import platform_settings as platform_cfg
+from app.services import platform_settings as platform_cfg, snmp_settings as snmp_cfg
 
 router = APIRouter()
 
 
 @router.get("/info")
-def system_info(_: User = Depends(get_current_user)):
+def system_info(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+    snmp = snmp_cfg.get_or_create(db)
     return {
         "version": __version__,
         "app_env": settings.app_env,
         "dry_run": settings.dry_run,
+        "telemetry_simulation": settings.telemetry_simulation,
+        "snmp_enabled": snmp.enabled,
+        "production_data_mode": not settings.dry_run and not settings.telemetry_simulation,
         "scheduler": scheduler.status(),
     }
 

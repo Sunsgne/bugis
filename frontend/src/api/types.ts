@@ -262,6 +262,8 @@ export interface CircuitHealth {
   peak_utilization_pct: number;
   bandwidth_mbps: number;
   samples: number;
+  qos_samples?: number;
+  data_sources?: string[];
   health_score: number;
   tunnel_down?: boolean;
 }

@@ -1,12 +1,6 @@
-"""Telemetry & SLA computation.
-
-Provides health scoring over collected samples and a simulator that generates
-realistic samples so the operations dashboards have data without a live
-SNMP/gNMI collector wired up.
-"""
+"""Telemetry & SLA computation from southbound-collected samples."""
 from __future__ import annotations
 
-import random
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
@@ -20,10 +14,28 @@ from app.services import availability_service, snmp_telemetry
 
 
 def record_sample(db: Session, **kwargs) -> TelemetrySample:
+    if not kwargs.get("source"):
+        kwargs["source"] = "manual"
     sample = TelemetrySample(**kwargs)
     db.add(sample)
     db.flush()
     return sample
+
+
+def _latest_probe_qos(db: Session, circuit_id: int, *, max_age_sec: int = 3600) -> TelemetrySample | None:
+    since = datetime.now(timezone.utc) - timedelta(seconds=max_age_sec)
+    row = db.execute(
+        select(TelemetrySample)
+        .where(
+            TelemetrySample.circuit_id == circuit_id,
+            TelemetrySample.source == "probe",
+        )
+        .order_by(TelemetrySample.id.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+    if row and row.created_at and row.created_at >= since:
+        return row
+    return None
 
 
 def collect_circuit_sample(
@@ -31,16 +43,18 @@ def collect_circuit_sample(
     circuit: Circuit,
     *,
     interval_sec: float = 30.0,
-) -> TelemetrySample:
-    """Collect one sample via SNMP (or simulation) including traffic and latency."""
+) -> TelemetrySample | None:
+    """Collect traffic via SNMP; QoS metrics only from recent on-demand/scheduled probes."""
     traffic = snmp_telemetry.poll_circuit_traffic(
         db, circuit, interval_sec=interval_sec
     )
-    loss = round(random.uniform(0, 0.4), 3) if traffic.tunnel_up else round(
-        random.uniform(50, 100), 3
-    )
-    latency = round(random.uniform(1.5, 18.0), 2) if traffic.tunnel_up else 0.0
-    jitter = round(random.uniform(0.1, 2.5), 2) if traffic.tunnel_up else 0.0
+    if traffic.source == "unavailable":
+        return None
+
+    probe = _latest_probe_qos(db, circuit.id)
+    latency = probe.latency_ms if probe else 0.0
+    jitter = probe.jitter_ms if probe else 0.0
+    loss = probe.packet_loss_pct if probe else 0.0
     state = "up" if traffic.tunnel_up else "down"
 
     sample = record_sample(
@@ -54,6 +68,7 @@ def collect_circuit_sample(
         packet_loss_pct=loss,
         errors=traffic.errors,
         tunnel_state=state,
+        source=traffic.source,
     )
     availability_service.process_tunnel_state(
         db,
@@ -108,30 +123,6 @@ def chart_p95(samples: list[TelemetrySample]) -> dict:
     }
 
 
-def simulate_circuit_sample(db: Session, circuit: Circuit) -> TelemetrySample:
-    """Generate one plausible telemetry sample for an active circuit."""
-    bw = max(circuit.bandwidth_mbps, 1)
-    util = random.uniform(5, 85)
-    tx = bw * util / 100.0
-    rx = tx * random.uniform(0.6, 1.1)
-    loss = round(random.uniform(0, 0.4), 3)
-    latency = round(random.uniform(1.5, 18.0), 2)
-    jitter = round(random.uniform(0.1, 2.5), 2)
-    state = "up" if circuit.status == CircuitStatus.ACTIVE else "down"
-    return record_sample(
-        db,
-        circuit_id=circuit.id,
-        rx_mbps=round(rx, 2),
-        tx_mbps=round(tx, 2),
-        utilization_pct=round(util, 2),
-        latency_ms=latency,
-        jitter_ms=jitter,
-        packet_loss_pct=loss,
-        errors=random.randint(0, 3),
-        tunnel_state=state,
-    )
-
-
 def _aggregate_overview_traffic(rows: list[TelemetrySample]) -> list[dict]:
     """Bucket samples by minute and circuit, then sum per-circuit averages."""
     per_circuit: dict[tuple[str, int], dict] = {}
@@ -145,8 +136,9 @@ def _aggregate_overview_traffic(rows: list[TelemetrySample]) -> list[dict]:
         )
         b["rx"] += s.rx_mbps
         b["tx"] += s.tx_mbps
-        b["lat"] += s.latency_ms
-        b["loss"] += s.packet_loss_pct
+        if s.source == "probe":
+            b["lat"] += s.latency_ms
+            b["loss"] += s.packet_loss_pct
         b["n"] += 1
 
     buckets: dict[str, dict] = {}
@@ -154,24 +146,26 @@ def _aggregate_overview_traffic(rows: list[TelemetrySample]) -> list[dict]:
         n = max(vals["n"], 1)
         b = buckets.setdefault(
             minute,
-            {"rx": 0.0, "tx": 0.0, "lat": 0.0, "loss": 0.0, "n": 0},
+            {"rx": 0.0, "tx": 0.0, "lat": 0.0, "loss": 0.0, "n": 0, "lat_n": 0},
         )
         b["rx"] += vals["rx"] / n
         b["tx"] += vals["tx"] / n
-        b["lat"] += vals["lat"]
-        b["loss"] += vals["loss"]
+        if vals["lat"] > 0:
+            b["lat"] += vals["lat"]
+            b["loss"] += vals["loss"]
+            b["lat_n"] += 1
         b["n"] += vals["n"]
 
     out = []
     for minute in sorted(buckets):
         b = buckets[minute]
-        n = max(b["n"], 1)
+        lat_n = max(b["lat_n"], 1)
         out.append({
             "t": minute[11:],
             "rx": round(b["rx"], 1),
             "tx": round(b["tx"], 1),
-            "latency": round(b["lat"] / n, 2),
-            "loss": round(b["loss"] / n, 3),
+            "latency": round(b["lat"] / lat_n, 2) if b["lat_n"] else None,
+            "loss": round(b["loss"] / lat_n, 3) if b["lat_n"] else None,
         })
     return out
 
@@ -182,11 +176,7 @@ def overview_traffic(
     sample_limit: int = 2000,
     hours: int = 24,
 ) -> list[dict]:
-    """Aggregate recent telemetry into a per-minute network-wide traffic trend.
-
-    Each circuit contributes its per-minute average; minutes are keyed by full
-    timestamp so samples from different days are never merged.
-    """
+    """Aggregate recent telemetry into a per-minute network-wide traffic trend."""
     since = datetime.now(timezone.utc) - timedelta(hours=max(1, min(hours, 24 * 7)))
     rows = db.execute(
         select(TelemetrySample)
@@ -207,11 +197,7 @@ def _percentile(values: list[float], pct: float) -> float:
 
 
 def billing_95th(db: Session, circuit: Circuit, period: str | None = None) -> dict:
-    """95th-percentile (月95) bandwidth billing for a circuit.
-
-    Buckets samples by month; for the selected month computes the 95th
-    percentile of inbound and outbound, billing the higher (ISP convention).
-    """
+    """95th-percentile (月95) bandwidth billing for a circuit."""
     samples = db.execute(
         select(TelemetrySample).where(TelemetrySample.circuit_id == circuit.id)
     ).scalars().all()
@@ -256,6 +242,9 @@ def compute_health(db: Session, circuit: Circuit, limit: int = 100) -> CircuitHe
     ).scalars().all()
 
     n = len(samples)
+    qos_samples = [s for s in samples if s.source == "probe"]
+    sources = sorted({s.source for s in samples if s.source})
+
     if n == 0:
         return CircuitHealth(
             circuit_id=circuit.id,
@@ -265,21 +254,26 @@ def compute_health(db: Session, circuit: Circuit, limit: int = 100) -> CircuitHe
             bandwidth_mbps=circuit.bandwidth_mbps,
             samples=0,
             health_score=100.0 if circuit.status == CircuitStatus.ACTIVE else 0.0,
+            data_sources=[],
         )
 
-    avg_lat = sum(s.latency_ms for s in samples) / n
-    avg_jit = sum(s.jitter_ms for s in samples) / n
-    avg_loss = sum(s.packet_loss_pct for s in samples) / n
     avg_util = sum(s.utilization_pct for s in samples) / n
     peak_util = max(s.utilization_pct for s in samples)
     latest = samples[0]
     tunnel_down = latest.tunnel_state == "down"
 
-    # Simple weighted health score (0-100).
+    avg_lat = avg_jit = avg_loss = 0.0
+    if qos_samples:
+        qn = len(qos_samples)
+        avg_lat = sum(s.latency_ms for s in qos_samples) / qn
+        avg_jit = sum(s.jitter_ms for s in qos_samples) / qn
+        avg_loss = sum(s.packet_loss_pct for s in qos_samples) / qn
+
     score = 100.0
-    score -= min(avg_loss * 40, 40)          # loss dominates
-    score -= min(max(avg_lat - 10, 0) * 1.5, 20)
-    score -= min(avg_jit * 3, 15)
+    if qos_samples:
+        score -= min(avg_loss * 40, 40)
+        score -= min(max(avg_lat - 10, 0) * 1.5, 20)
+        score -= min(avg_jit * 3, 15)
     score -= min(max(peak_util - 90, 0) * 1.0, 15)
     if circuit.status != CircuitStatus.ACTIVE:
         score = min(score, 50)
@@ -299,6 +293,8 @@ def compute_health(db: Session, circuit: Circuit, limit: int = 100) -> CircuitHe
         peak_utilization_pct=round(peak_util, 2),
         bandwidth_mbps=circuit.bandwidth_mbps,
         samples=n,
+        qos_samples=len(qos_samples),
+        data_sources=sources,
         health_score=score,
         tunnel_down=tunnel_down,
     )

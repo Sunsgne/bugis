@@ -158,7 +158,7 @@ export default function ConfigManagement() {
             items={[
               {
                 key: "running",
-                label: "运行配置 (Running)",
+                label: "平台期望配置 (Desired)",
                 children: <pre className="config-pre config-pre-fill">{running}</pre>,
               },
               {

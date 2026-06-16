@@ -627,7 +627,7 @@ def merge_port_maps(*maps: dict[str, PortUsage]) -> dict[str, PortUsage]:
     return merged
 
 
-def scan_device(db: Session, device: Device, *, include_legacy: bool = True) -> dict:
+def scan_device(db: Session, device: Device, *, include_legacy: bool = False) -> dict:
     """Scan and persist S-VID inventory for a device. Returns summary for API."""
     ifaces = {
         i.name: i

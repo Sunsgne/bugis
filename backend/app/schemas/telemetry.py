@@ -18,6 +18,7 @@ class TelemetrySampleIn(BaseModel):
     packet_loss_pct: float = 0.0
     errors: int = 0
     tunnel_state: str | None = None
+    source: str | None = None
 
 
 class TelemetrySampleOut(TelemetrySampleIn, TimestampedSchema):
@@ -38,3 +39,5 @@ class CircuitHealth(BaseModel):
     samples: int = 0
     health_score: float = 100.0
     tunnel_down: bool = False
+    qos_samples: int = 0
+    data_sources: list[str] = []

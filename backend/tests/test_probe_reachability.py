@@ -8,14 +8,19 @@ from app.models.enums import Vendor
 from app.services import device_management
 
 
-def test_probe_reachability_dry_run():
+def test_probe_reachability_dry_run_still_tcp():
+    """Dry-run no longer fakes reachability — always attempts real TCP/SNMP."""
     device = Device(name="t", vendor=Vendor.H3C, mgmt_ip="10.0.0.1")
     with patch("app.services.device_management.settings") as mock_settings:
         mock_settings.dry_run = True
-        with patch("app.services.device_management.random.random", return_value=0.5):
+        with patch(
+            "app.services.device_management._tcp_probe",
+            side_effect=[(True, 2.5, None)],
+        ):
             result = device_management.probe_reachability(None, device)
     assert result["reachable"] is True
-    assert result["method"] == "dry_run"
+    assert result["method"] == "tcp_ssh"
+    assert result["dry_run"] is True
 
 
 def test_probe_reachability_tcp_ssh():

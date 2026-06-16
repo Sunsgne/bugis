@@ -87,9 +87,13 @@ export default function Monitoring() {
     setParams({ circuit: String(id) });
   }
 
-  async function simulate() {
-    const { data } = await api.post("/telemetry/simulate");
-    message.success(`已采集 ${data.generated} 条 SNMP/模拟采样`);
+  async function collectNow() {
+    const { data } = await api.post("/telemetry/collect");
+    const msg =
+      data.collected > 0
+        ? `SNMP 采集 ${data.collected} 条${data.skipped ? `，${data.skipped} 条跳过` : ""}`
+        : data.message || "无 SNMP 数据（请检查 SNMP 与接口 ifIndex）";
+    message.info(msg);
     setRefreshKey((k) => k + 1);
   }
 
@@ -146,8 +150,8 @@ export default function Monitoring() {
             </div>
             <div className="monitoring-toolbar-actions">
               <Space wrap>
-                <Button icon={<ExperimentOutlined />} onClick={simulate} type="primary" ghost>
-                  立即采集
+                <Button icon={<ExperimentOutlined />} onClick={collectNow} type="primary" ghost>
+                  SNMP 采集
                 </Button>
                 <Button icon={<ReloadOutlined />} onClick={() => loadCircuits()}>
                   {action.refresh}
@@ -163,7 +167,7 @@ export default function Monitoring() {
           type="warning"
           showIcon
           message={`专线 ${current.code} 当前状态为「${STATUS_LABEL[current.status] || current.status}」`}
-          description="SNMP 流量与可用性数据在专线激活（active）后最为完整；草稿/失败状态仍可查看历史或模拟采样。"
+          description="SNMP 流量与可用性数据在专线激活（active）后通过 SNMP 与拨测采集；草稿/失败状态仅展示历史数据。"
         />
       )}
 

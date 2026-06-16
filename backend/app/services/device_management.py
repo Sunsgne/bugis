@@ -1,7 +1,6 @@
 """Southbound management interface resolution (NETCONF / SSH / SNMP)."""
 from __future__ import annotations
 
-import random
 import socket
 import time
 from typing import Any
@@ -88,15 +87,6 @@ def _snmp_probe(db: Session, device: Device) -> dict[str, Any]:
 
 def probe_reachability(db: Session, device: Device) -> dict[str, Any]:
     """Try SSH / NETCONF TCP and SNMP UDP; succeed if any path responds."""
-    if settings.dry_run:
-        reachable = random.random() > 0.1
-        return {
-            "reachable": reachable,
-            "latency_ms": round(random.uniform(0.5, 12.0), 2) if reachable else None,
-            "method": "dry_run" if reachable else None,
-            "probes": [],
-        }
-
     probes: list[dict[str, Any]] = []
     ports: list[tuple[str, int]] = []
     for label, port in (
@@ -118,6 +108,7 @@ def probe_reachability(db: Session, device: Device) -> dict[str, Any]:
                 "latency_ms": latency_ms,
                 "method": label,
                 "probes": probes,
+                "dry_run": settings.dry_run,
             }
 
     snmp_probe = _snmp_probe(db, device)
@@ -129,6 +120,7 @@ def probe_reachability(db: Session, device: Device) -> dict[str, Any]:
             "latency_ms": snmp_probe.get("latency_ms"),
             "method": "snmp",
             "probes": probes,
+            "dry_run": settings.dry_run,
         }
 
     return {
@@ -136,6 +128,7 @@ def probe_reachability(db: Session, device: Device) -> dict[str, Any]:
         "latency_ms": None,
         "method": None,
         "probes": probes,
+        "dry_run": settings.dry_run,
     }
 
 

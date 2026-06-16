@@ -1,7 +1,6 @@
 """Backbone link bandwidth: sync capacity from port descriptions and monitor load."""
 from __future__ import annotations
 
-import random
 from dataclasses import dataclass
 
 from sqlalchemy import select
@@ -11,7 +10,7 @@ from app.core.config import settings
 from app.models.device import Device, DeviceInterface
 from app.models.link import Link
 from app.services.bw_parser import format_bw_tag, parse_bw_mbps
-from app.services import telemetry_service
+from app.services import snmp_telemetry, telemetry_service
 
 
 def find_interface(
@@ -65,7 +64,9 @@ def sync_all_link_capacity(db: Session) -> dict:
 
 
 def enrich_interface_descriptions(db: Session, device: Device) -> int:
-    """In dry-run, stamp bw(...) on ports that match configured backbone links."""
+    """Stamp bw(...) on ports that match configured backbone links (dry-run lab only)."""
+    if not settings.dry_run:
+        return 0
     links = db.execute(
         select(Link).where(
             (Link.device_a_id == device.id) | (Link.device_z_id == device.id)
@@ -127,8 +128,9 @@ def compute_link_health(db: Session, link: Link, limit: int = 20) -> LinkHealth:
         if not ifname:
             continue
         for s in _recent_interface_samples(db, device_id, ifname, limit):
-            utils.append(s.utilization_pct)
-            traffic = max(traffic, s.rx_mbps + s.tx_mbps)
+            if s.source in ("snmp-link", "simulated"):
+                utils.append(s.utilization_pct)
+                traffic = max(traffic, s.rx_mbps + s.tx_mbps)
     cap = max(link.capacity_mbps, 1)
     if not utils:
         return LinkHealth(
@@ -153,12 +155,57 @@ def compute_link_health(db: Session, link: Link, limit: int = 20) -> LinkHealth:
     )
 
 
-def simulate_link_sample(db: Session, link: Link) -> None:
-    """Generate traffic samples on both link endpoints (dry-run / lab)."""
+def poll_link_sample(
+    db: Session,
+    link: Link,
+    *,
+    interval_sec: float = 30.0,
+) -> int:
+    """Poll SNMP counters on both link endpoints; returns number of samples written."""
+    if snmp_telemetry.simulation_allowed() and settings.dry_run:
+        return _simulate_link_sample(db, link)
+
+    written = 0
     cap = max(link.capacity_mbps, 1)
-    # Skew high occasionally so link utilization alarms are visible in demo.
+    for device_id, ifname in (
+        (link.device_a_id, link.interface_a),
+        (link.device_z_id, link.interface_z),
+    ):
+        if not ifname:
+            continue
+        device = db.get(Device, device_id)
+        iface = find_interface(db, device_id, ifname)
+        if not device or not iface:
+            continue
+        polled = snmp_telemetry.poll_iface_counters(db, device, iface, interval_sec)
+        if polled is None:
+            continue
+        rx, tx, errors, oper_up = polled
+        peak = max(rx, tx)
+        util = round(peak / cap * 100, 2)
+        telemetry_service.record_sample(
+            db,
+            device_id=device_id,
+            interface_name=ifname,
+            rx_mbps=rx,
+            tx_mbps=tx,
+            utilization_pct=util,
+            errors=errors,
+            tunnel_state="up" if oper_up else "down",
+            source="snmp-link",
+        )
+        written += 1
+    return written
+
+
+def _simulate_link_sample(db: Session, link: Link) -> int:
+    """Lab-only link traffic simulation."""
+    import random
+
+    cap = max(link.capacity_mbps, 1)
     util = random.uniform(15, 92)
     half = cap * util / 200.0
+    written = 0
     for device_id, ifname in (
         (link.device_a_id, link.interface_a),
         (link.device_z_id, link.interface_z),
@@ -172,18 +219,19 @@ def simulate_link_sample(db: Session, link: Link) -> None:
             rx_mbps=round(half * random.uniform(0.8, 1.2), 2),
             tx_mbps=round(half * random.uniform(0.8, 1.2), 2),
             utilization_pct=round(util, 2),
-            latency_ms=round(random.uniform(0.5, 3.0), 2),
-            jitter_ms=round(random.uniform(0.05, 0.5), 2),
-            packet_loss_pct=round(random.uniform(0, 0.05), 3),
             tunnel_state="up",
+            source="simulated",
         )
+        written += 1
+    return written
 
 
-def sample_all_links(db: Session) -> int:
+def sample_all_links(db: Session, *, interval_sec: float = 30.0) -> int:
     links = db.execute(select(Link)).scalars().all()
+    total = 0
     for link in links:
-        simulate_link_sample(db, link)
-    return len(links)
+        total += poll_link_sample(db, link, interval_sec=interval_sec)
+    return total
 
 
 def evaluate_all_links(db: Session) -> None:

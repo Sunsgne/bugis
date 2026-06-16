@@ -280,6 +280,7 @@ def _record_sample(db: Session, circuit: Circuit, *, reachable: bool, rtt: float
         packet_loss_pct=loss,
         utilization_pct=0.0,
         tunnel_state="up" if reachable else "down",
+        source="probe",
     )
     availability_service.process_tunnel_state(
         db,
@@ -291,12 +292,9 @@ def _record_sample(db: Session, circuit: Circuit, *, reachable: bool, rtt: float
 
 
 def probe_circuit(db: Session, circuit: Circuit) -> dict:
-    """Run path-aligned fabric + service-plane probe; simulated when dry_run."""
-    if settings.dry_run or circuit.status != CircuitStatus.ACTIVE:
+    """Run path-aligned fabric + service-plane probe."""
+    if settings.dry_run:
         result = simulate_probe(db, circuit)
-        if circuit.status != CircuitStatus.ACTIVE:
-            result["mode"] = "simulated"
-            result["probe_method"] = "simulated_inactive"
         _record_sample(
             db, circuit,
             reachable=result["reachable"],
@@ -305,6 +303,17 @@ def probe_circuit(db: Session, circuit: Circuit) -> dict:
             loss=result.get("packet_loss_pct") or 100.0,
         )
         return result
+
+    if circuit.status != CircuitStatus.ACTIVE:
+        return {
+            "circuit": circuit.code,
+            "mode": "unavailable",
+            "probe_method": None,
+            "reachable": False,
+            "error": f"专线状态为 {circuit.status.value}，仅 active 专线可实测",
+            "hop_count": 0,
+            "hops": [],
+        }
 
     path = resolve_underlay_path(db, circuit)
     devices = path["devices"]

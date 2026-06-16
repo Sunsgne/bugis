@@ -1,8 +1,7 @@
 """Background scheduler for autonomous operations.
 
-Periodically (a) generates telemetry samples for active circuits and
-(b) re-evaluates SLA/capacity alarms, so dashboards, the SSE stream and the
-alarm center stay live without manual triggering — closer to 7x24 operations.
+Periodically collects SNMP telemetry, rotates on-demand circuit probes for QoS
+metrics, and re-evaluates SLA/capacity alarms.
 """
 from __future__ import annotations
 
@@ -23,13 +22,32 @@ from app.controller import bgp_peering, ha
 logger = logging.getLogger("bugis.scheduler")
 
 _task: asyncio.Task | None = None
+_probe_cursor = 0
 _state: dict = {
     "running": False,
     "ticks": 0,
     "last_tick": None,
     "last_samples": 0,
+    "last_probes": 0,
     "interval": settings.scheduler_interval_seconds,
 }
+
+
+def _probe_one_circuit(db, circuits: list[Circuit]) -> bool:
+    """Rotate through active circuits and run a live path probe (QoS metrics)."""
+    global _probe_cursor
+    if settings.dry_run or not circuits:
+        return False
+    circuit = circuits[_probe_cursor % len(circuits)]
+    _probe_cursor += 1
+    try:
+        from app.services.circuit_probe.runner import probe_circuit
+
+        probe_circuit(db, circuit)
+        return True
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("scheduled probe failed for %s: %s", circuit.code, exc)
+        return False
 
 
 def _tick() -> int:
@@ -38,17 +56,22 @@ def _tick() -> int:
         circuits = db.execute(
             select(Circuit).where(Circuit.status == CircuitStatus.ACTIVE)
         ).scalars().all()
+        collected = 0
         for c in circuits:
-            telemetry_service.collect_circuit_sample(
+            if telemetry_service.collect_circuit_sample(
                 db, c, interval_sec=float(_state["interval"])
-            )
+            ):
+                collected += 1
+        probed = _probe_one_circuit(db, circuits)
         db.flush()
         for c in circuits:
             health = telemetry_service.compute_health(db, c)
             alarm_service.evaluate_circuit_health(db, c, health)
             alarm_service.evaluate_circuit_availability(db, c)
         link_monitor.sync_all_link_capacity(db)
-        link_monitor.sample_all_links(db)
+        link_samples = link_monitor.sample_all_links(
+            db, interval_sec=float(_state["interval"])
+        )
         links = db.execute(select(Link)).scalars().all()
         for link in links:
             lh = link_monitor.compute_link_health(db, link)
@@ -56,7 +79,8 @@ def _tick() -> int:
         bgp_peering.sync_sessions(db)
         ha.heartbeat(db)
         db.commit()
-        return len(circuits)
+        _state["last_probes"] = 1 if probed else 0
+        return collected
     finally:
         db.close()
 

@@ -1,11 +1,10 @@
 """SNMP counter polling for per-circuit traffic telemetry.
 
 Maps circuit endpoints to device interfaces and derives Mbps from IF-MIB
-HC octet counters. Falls back to simulation when dry-run or SNMP is off.
+HC octet counters. Returns unavailable (not fabricated) when SNMP cannot poll.
 """
 from __future__ import annotations
 
-import random
 import time
 from dataclasses import dataclass
 
@@ -32,6 +31,10 @@ class TrafficPollResult:
     errors: int
     tunnel_up: bool
     source: str
+
+
+def simulation_allowed() -> bool:
+    return bool(settings.telemetry_simulation)
 
 
 def _resolve_iface(
@@ -80,6 +83,16 @@ def _get_oid(
         return int(raw)
     except (TypeError, ValueError):
         return None
+
+
+def poll_iface_counters(
+    db: Session,
+    device: Device,
+    iface: DeviceInterface,
+    interval_sec: float,
+) -> tuple[float, float, int, bool] | None:
+    """Public wrapper for interface counter polling."""
+    return _poll_iface_counters(db, device, iface, interval_sec)
 
 
 def _poll_iface_counters(
@@ -131,7 +144,22 @@ def _poll_iface_counters(
     return rx, tx, 0, oper_up
 
 
+def _unavailable_traffic(circuit: Circuit) -> TrafficPollResult:
+    up = circuit.status == CircuitStatus.ACTIVE
+    return TrafficPollResult(
+        rx_mbps=0.0,
+        tx_mbps=0.0,
+        utilization_pct=0.0,
+        errors=0,
+        tunnel_up=up,
+        source="unavailable",
+    )
+
+
 def _simulate_traffic(circuit: Circuit) -> TrafficPollResult:
+    """Explicit lab-only simulation — requires BUGIS_TELEMETRY_SIMULATION=true."""
+    import random
+
     bw = max(circuit.bandwidth_mbps, 1)
     util = random.uniform(5, 85)
     tx = round(bw * util / 100.0, 2)
@@ -143,7 +171,7 @@ def _simulate_traffic(circuit: Circuit) -> TrafficPollResult:
         utilization_pct=round(util if up else 0.0, 2),
         errors=random.randint(0, 2) if up else random.randint(1, 5),
         tunnel_up=up,
-        source="snmp-sim",
+        source="simulated",
     )
 
 
@@ -154,12 +182,12 @@ def poll_circuit_traffic(
     interval_sec: float = 30.0,
 ) -> TrafficPollResult:
     """Poll SNMP counters on circuit endpoints and aggregate traffic."""
-    if settings.dry_run:
+    if simulation_allowed() and settings.dry_run:
         return _simulate_traffic(circuit)
 
     cfg = snmp_cfg.get_or_create(db)
     if not cfg.enabled:
-        return _simulate_traffic(circuit)
+        return _unavailable_traffic(circuit)
 
     total_rx = 0.0
     total_tx = 0.0
@@ -188,7 +216,9 @@ def poll_circuit_traffic(
             all_up = False
 
     if not any_poll:
-        return _simulate_traffic(circuit)
+        if simulation_allowed():
+            return _simulate_traffic(circuit)
+        return _unavailable_traffic(circuit)
 
     bw = max(circuit.bandwidth_mbps, 1)
     peak = max(total_rx, total_tx)

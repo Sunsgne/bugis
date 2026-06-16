@@ -31,3 +31,5 @@ class TelemetrySample(Base, TimestampMixin):
     errors: Mapped[int] = mapped_column(Integer, default=0)
     # Derived tunnel/BGP state, e.g. "up" / "down"
     tunnel_state: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    # snmp | snmp-link | probe | manual | unavailable | legacy
+    source: Mapped[str | None] = mapped_column(String(32), nullable=True, default="unknown")

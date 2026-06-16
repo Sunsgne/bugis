@@ -122,27 +122,48 @@ def circuit_health(
     return telemetry_service.compute_health(db, circuit)
 
 
-@router.post("/simulate", response_model=dict)
-def simulate(
+@router.post("/collect", response_model=dict)
+def collect_telemetry(
     db: Session = Depends(get_db),
     _: User = Depends(require_operator),
 ):
-    """Generate one telemetry sample for every active circuit."""
+    """Collect one SNMP telemetry sample for every active circuit."""
     circuits = db.execute(
         select(Circuit).where(Circuit.status == CircuitStatus.ACTIVE)
     ).scalars().all()
     count = 0
+    skipped = 0
     for c in circuits:
-        telemetry_service.collect_circuit_sample(db, c)
-        count += 1
+        sample = telemetry_service.collect_circuit_sample(db, c)
+        if sample:
+            count += 1
+        else:
+            skipped += 1
     db.flush()
-    # Re-evaluate SLA alarms against the fresh samples.
     for c in circuits:
         health = telemetry_service.compute_health(db, c)
         alarm_service.evaluate_circuit_health(db, c, health)
         alarm_service.evaluate_circuit_availability(db, c)
     db.commit()
-    return {"generated": count}
+    from app.services import snmp_settings as snmp_cfg
+
+    snmp = snmp_cfg.get_or_create(db)
+    return {
+        "collected": count,
+        "skipped": skipped,
+        "generated": count,
+        "snmp_enabled": snmp.enabled,
+        "message": "SNMP 采集完成" if count else "无 SNMP 采样（请检查 SNMP 配置与设备接口 ifIndex）",
+    }
+
+
+@router.post("/simulate", response_model=dict, deprecated=True)
+def simulate(
+    db: Session = Depends(get_db),
+    user: User = Depends(require_operator),
+):
+    """Deprecated alias for /telemetry/collect."""
+    return collect_telemetry(db, user)
 
 
 @router.get("/overview")

@@ -127,6 +127,9 @@ export default function CircuitMonitorPanel({ circuitId, compact = false, pollSe
             onChange={setHours}
           />
           {health?.tunnel_down && <Tag color="error">链路中断</Tag>}
+          {health && health.qos_samples === 0 && (
+            <Tag color="default">QoS 待拨测</Tag>
+          )}
         </Space>
         {!compact && billing?.billable_95_mbps != null && (
           <Text type="secondary">

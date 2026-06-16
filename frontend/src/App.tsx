@@ -52,6 +52,7 @@ import { nav, action } from "./constants/uiCopy";
 import { useBrand } from "./context/BrandContext";
 import { BrandLogo } from "./components/BrandLogo";
 import ChangePasswordDialog from "./components/ChangePasswordDialog";
+import OperationalBanner from "./components/OperationalBanner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -268,7 +269,9 @@ function Shell() {
           </div>
         </header>
 
-        <main className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-auto bg-slate-100/80 p-4 lg:p-6">
+        <main className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-auto bg-slate-100/80">
+          <OperationalBanner />
+          <div className="flex min-h-0 flex-1 flex-col p-4 lg:p-6">
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/tenants" element={<Tenants />} />
@@ -304,6 +307,7 @@ function Shell() {
             <Route path="/audit" element={<Navigate to="/settings/audit" replace />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
+          </div>
         </main>
       </div>
     </div>

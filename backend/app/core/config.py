@@ -40,6 +40,8 @@ class Settings(BaseSettings):
     # --- Provisioning ---
     # When True, configuration is rendered but NOT pushed to real devices.
     dry_run: bool = False
+    # Explicit opt-in for lab/demo telemetry simulation (never silent in production).
+    telemetry_simulation: bool = False
     # Auto-allocated VNI pool start (controller / orchestrator).
     vni_base: int = 30000
     netconf_timeout: int = 30

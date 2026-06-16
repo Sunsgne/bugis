@@ -361,13 +361,14 @@ export default function Devices() {
         const scan = data.svid_scan;
         const svidCount = scan?.total_s_vids ?? 0;
         const conflictCount = scan?.conflicts?.length ?? 0;
+        const dryTag = data.dry_run ? " · 配置 dry-run" : "";
         if (conflictCount > 0) {
           message.warning(
             `${data.device} 可达 · 发现 ${svidCount} 个 S-VID · ${conflictCount} 处冲突`,
           );
         } else {
           message.success(
-            `${data.device} 可达${data.method ? ` · ${data.method}` : ""} (${data.latency_ms}ms) · 已扫描 ${svidCount} 个 S-VID 占用`,
+            `${data.device} 可达${data.method ? ` · ${data.method}` : ""} (${data.latency_ms}ms) · 已扫描 ${svidCount} 个 S-VID 占用${dryTag}`,
           );
         }
         bumpPortDrawer();
