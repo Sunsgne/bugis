@@ -94,6 +94,7 @@ class CircuitEndpoint(Base, TimestampMixin):
     # Logical label such as "A" / "Z" / "spoke-1"
     label: Mapped[str] = mapped_column(String(32), default="A")
     interface_name: Mapped[str] = mapped_column(String(64))
+    interface_description: Mapped[str | None] = mapped_column(String(255), nullable=True)
     # Customer access (attachment circuit) encapsulation.
     access_mode: Mapped[AccessMode] = mapped_column(
         str_enum_column(AccessMode), default=AccessMode.DOT1Q
