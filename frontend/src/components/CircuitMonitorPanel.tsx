@@ -165,7 +165,7 @@ export default function CircuitMonitorPanel({ circuitId, compact = false, pollSe
       className={["circuit-monitor-panel", compact ? "circuit-monitor-panel--compact" : undefined]
         .filter(Boolean)
         .join(" ")}
-      style={{ display: "flex", flexDirection: "column", gap: compact ? 12 : 16, flex: compact ? undefined : 1, minHeight: 0 }}
+      style={{ display: "flex", flexDirection: "column", gap: compact ? 12 : 16 }}
     >
       <Space wrap style={{ justifyContent: "space-between", width: "100%" }}>
         <Space wrap>
@@ -263,6 +263,7 @@ export default function CircuitMonitorPanel({ circuitId, compact = false, pollSe
 
       {availability && (availability.interruption_count > 0 || availability.flash_count > 0) && (
         <Alert
+          className="circuit-monitor-flap-alert"
           type={availability.interruption_count > 0 ? "error" : "warning"}
           showIcon
           message={
