@@ -216,7 +216,9 @@ def poll_circuit_traffic(
             all_up = False
 
     if not any_poll:
-        if simulation_allowed():
+        # Simulation is a lab/demo affordance only: never fabricate traffic in
+        # production (dry_run=false), even if telemetry_simulation is left on.
+        if simulation_allowed() and settings.dry_run:
             return _simulate_traffic(circuit)
         return _unavailable_traffic(circuit)
 

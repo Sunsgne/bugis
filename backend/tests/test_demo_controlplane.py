@@ -24,11 +24,12 @@ def test_sync_active_circuit_controlplane_installs_routes(client, auth_headers):
             ],
         },
     ).json()
-    client.patch(
-        f"/api/v1/circuits/{circuit['id']}",
-        headers=auth_headers,
-        json={"status": "active"},
-    )
+    # Activate via the work-order provision flow (status is not directly
+    # editable through PATCH — lifecycle transitions go through orchestration).
+    provisioned = client.post(
+        f"/api/v1/work-orders/provision/{circuit['id']}", headers=auth_headers
+    ).json()
+    assert provisioned["circuit_status"] == "active"
 
     db = SessionLocal()
     try:

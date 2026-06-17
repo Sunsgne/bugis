@@ -11,7 +11,7 @@ from app.api.deps import get_current_user, require_operator
 from app.core.database import get_db
 from app.models.circuit import Circuit
 from app.models.device import Device
-from app.models.enums import CircuitStatus, DeviceStatus
+from app.models.enums import CircuitStatus, DeviceStatus, WorkOrderStatus
 from app.models.telemetry import TelemetrySample
 from app.models.tenant import Tenant
 from app.models.user import User
@@ -215,7 +215,11 @@ def dashboard(db: Session = Depends(get_db), _: User = Depends(get_current_user)
         )
     ) or 0
     open_work_orders = db.scalar(
-        select(func.count(WorkOrder.id))
+        select(func.count(WorkOrder.id)).where(
+            WorkOrder.status.notin_(
+                [WorkOrderStatus.COMPLETED, WorkOrderStatus.CANCELLED]
+            )
+        )
     ) or 0
 
     circuits_by_status: dict[str, int] = {}

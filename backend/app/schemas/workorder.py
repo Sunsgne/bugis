@@ -70,7 +70,7 @@ class ProvisionRequest(BaseModel):
 
 
 class ApprovalRequest(BaseModel):
-    approved_by: str
+    approved_by: str | None = None
     approve: bool = True
     notes: str | None = None
 

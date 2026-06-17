@@ -98,7 +98,10 @@ class CircuitUpdate(BaseModel):
     egress_site_id: int | None = None
     ipt_public_ip: str | None = None
     ipt_nat_enabled: int | None = None
-    status: CircuitStatus | None = None
+    # NOTE: status is intentionally NOT editable here — lifecycle transitions
+    # (draft → active → decommissioned) must go through work orders so the
+    # orchestrator runs pre-checks and pushes/withdraws config. Editing it
+    # directly would desync the platform from the live network.
     path_mode: PathMode | None = None
 
 

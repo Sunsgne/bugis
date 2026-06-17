@@ -2,15 +2,16 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, noload
 
 from app.api.deps import get_current_user, require_operator
 from app.core.config import settings
 from app.core.database import get_db
 from app.drivers import get_driver
+from app.models.circuit import Circuit, CircuitEndpoint
 from app.models.device import Device, DeviceInterface
-from app.models.enums import DeviceStatus, Vendor
+from app.models.enums import CircuitStatus, DeviceStatus, Vendor
 from app.models.user import User
 from app.schemas.device import (
     DeviceCreate,
@@ -130,6 +131,22 @@ def delete_device(
     device = db.get(Device, device_id)
     if not device:
         raise HTTPException(status_code=404, detail="device not found")
+    # Block deletion while live circuits still terminate on this device —
+    # removing it would orphan endpoints and leave half-provisioned circuits.
+    blocking = db.scalar(
+        select(func.count(Circuit.id.distinct()))
+        .select_from(CircuitEndpoint)
+        .join(Circuit, Circuit.id == CircuitEndpoint.circuit_id)
+        .where(
+            CircuitEndpoint.device_id == device_id,
+            Circuit.status != CircuitStatus.DECOMMISSIONED,
+        )
+    ) or 0
+    if blocking:
+        raise HTTPException(
+            status_code=409,
+            detail=f"该设备仍承载 {blocking} 条未退服专线，请先退服或迁移这些专线后再删除设备",
+        )
     db.delete(device)
     db.commit()
 

@@ -197,6 +197,17 @@ def delete_tenant(
     tenant = db.get(Tenant, tenant_id)
     if not tenant:
         raise HTTPException(status_code=404, detail="tenant not found")
+    active = db.scalar(
+        select(func.count(Circuit.id)).where(
+            Circuit.tenant_id == tenant_id,
+            Circuit.status != CircuitStatus.DECOMMISSIONED,
+        )
+    ) or 0
+    if active:
+        raise HTTPException(
+            status_code=409,
+            detail=f"该客户仍有 {active} 条未退服专线，请先退服这些专线后再删除客户",
+        )
     db.delete(tenant)
     db.commit()
 

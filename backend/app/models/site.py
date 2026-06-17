@@ -38,6 +38,9 @@ class Site(Base, TimestampMixin):
         ForeignKey("controllers.id", ondelete="SET NULL"), nullable=True
     )
 
+    # Devices keep their data when a site is removed; the FK is ON DELETE SET
+    # NULL. Deleting a site must NOT cascade-delete its devices (and, in turn,
+    # their circuits/links/config history), so no delete-orphan cascade here.
     devices: Mapped[list["Device"]] = relationship(
-        back_populates="site", cascade="all, delete-orphan"
+        back_populates="site", passive_deletes=True
     )

@@ -436,7 +436,7 @@ def update_circuit(
         setattr(circuit, k, v)
     db.commit()
     db.refresh(circuit)
-    return circuit
+    return _to_circuit_out(db, circuit)
 
 
 @router.delete("/{circuit_id}", status_code=204)
