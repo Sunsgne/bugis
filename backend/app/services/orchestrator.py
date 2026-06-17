@@ -12,6 +12,7 @@ vendor configuration via the appropriate southbound driver and applies it
 from __future__ import annotations
 
 import secrets
+from typing import Callable
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -40,6 +41,10 @@ from app.models.enums import (
 from app.models.site import Site
 from app.models.workorder import WorkOrder, WorkOrderEvent
 from app.services import controller_client, device_management, validation
+
+
+# A registered rollback returns True when the undo succeeded.
+RollbackFn = Callable[[], bool]
 
 
 def _log(db: Session, wo: WorkOrder, message: str, level: str = "info",
@@ -349,6 +354,9 @@ def execute(db: Session, wo: WorkOrder, actor: str | None = None) -> WorkOrder:
     _log(db, wo, f"Execution started: {operation} {service_type.value}", actor=actor)
 
     failed = False
+    # Registered undo actions for targets that were successfully programmed, so a
+    # partial failure can roll back already-applied config on the OTHER devices.
+    rollbacks: list[tuple[str, "RollbackFn"]] = []
     if wo.type == WorkOrderType.MODIFY and operation == "apply":
         previous_eps = _parse_previous_endpoints(wo)
         if previous_eps:
@@ -397,21 +405,22 @@ def execute(db: Session, wo: WorkOrder, actor: str | None = None) -> WorkOrder:
             # Built-in Bugis SDN controller: compute EVPN control plane, then
             # program the data plane on each endpoint device via vendor drivers.
             ok = _deliver_via_bugis(db, wo, circuit, controller, eps,
-                                    service_type, operation, actor)
+                                    service_type, operation, actor,
+                                    rollbacks=rollbacks)
         else:
             ok = _deliver_via_controller(db, wo, circuit, controller_id, eps,
-                                         operation, actor)
+                                         operation, actor, rollbacks=rollbacks)
         failed = failed or not ok
 
     for endpoint, device in direct_targets:
         ok = _render_and_push(db, wo, circuit, endpoint, device, service_type,
-                              operation, actor)
+                              operation, actor, rollbacks=rollbacks)
         failed = failed or not ok
 
     for gw in gateway_devices:
         ok = _render_and_push(
             db, wo, circuit, None, gw, ServiceType.DCI,
-            operation, actor, is_gateway=True,
+            operation, actor, is_gateway=True, rollbacks=rollbacks,
         )
         failed = failed or not ok
 
@@ -423,6 +432,7 @@ def execute(db: Session, wo: WorkOrder, actor: str | None = None) -> WorkOrder:
         ok = _render_and_push(
             db, wo, circuit, None, gw, ServiceType.REMOTE_IPT,
             operation, actor, is_gateway=True, is_egress=True,
+            rollbacks=rollbacks,
         )
         failed = failed or not ok
 
@@ -430,6 +440,7 @@ def execute(db: Session, wo: WorkOrder, actor: str | None = None) -> WorkOrder:
         wo.status = WorkOrderStatus.FAILED
         circuit.status = CircuitStatus.FAILED
         _log(db, wo, "Execution finished with errors", level="error", actor=actor)
+        _rollback_applied(db, wo, rollbacks, actor)
     else:
         wo.status = WorkOrderStatus.COMPLETED
         if wo.type == WorkOrderType.DECOMMISSION:
@@ -468,6 +479,8 @@ def _deliver_via_bugis(
     service_type: ServiceType,
     operation: str,
     actor: str | None,
+    *,
+    rollbacks: list[tuple[str, RollbackFn]] | None = None,
 ) -> bool:
     """Built-in Bugis SDN controller: control-plane + data-plane programming."""
     # 1) Control plane: compute/withdraw EVPN routes in the controller RIB.
@@ -497,6 +510,18 @@ def _deliver_via_bugis(
             f"{result.get('routes_installed', result.get('routes_withdrawn', 0))} 条 EVPN 路由",
             actor=actor,
         )
+        if operation == "apply" and rollbacks is not None:
+            _eps = list(endpoints)
+
+            def _undo_bugis() -> bool:
+                bugis_controller.withdraw_circuit(
+                    db, circuit, _eps, work_order_id=wo.id
+                )
+                _log(db, wo, f"[Bugis SDN] 已回滚控制面 VNI {circuit.vni}",
+                     actor=actor)
+                return True
+
+            rollbacks.append((f"Bugis SDN VNI {circuit.vni}", _undo_bugis))
     except Exception as exc:  # noqa: BLE001
         job.status = ConfigJobStatus.FAILED
         job.output = f"bugis controller error: {exc}"
@@ -508,7 +533,7 @@ def _deliver_via_bugis(
     for ep in endpoints:
         if ep.device:
             ok = _render_and_push(db, wo, circuit, ep, ep.device, service_type,
-                                  operation, actor) and ok
+                                  operation, actor, rollbacks=rollbacks) and ok
     return ok
 
 
@@ -520,6 +545,8 @@ def _deliver_via_controller(
     endpoints: list[CircuitEndpoint],
     operation: str,
     actor: str | None,
+    *,
+    rollbacks: list[tuple[str, RollbackFn]] | None = None,
 ) -> bool:
     controller = db.get(Controller, controller_id)
     if not controller:
@@ -546,10 +573,12 @@ def _deliver_via_controller(
         job.rendered_config = req.render()
         job.status = ConfigJobStatus.RENDERED
         inverse = "remove" if operation == "apply" else "apply"
+        inverse_req = None
         try:
-            job.rollback_config = controller_client.build_request(
+            inverse_req = controller_client.build_request(
                 controller, circuit, endpoints, devices, inverse
-            ).render()
+            )
+            job.rollback_config = inverse_req.render()
         except Exception:
             job.rollback_config = None
 
@@ -566,12 +595,108 @@ def _deliver_via_controller(
             f"{circuit.service_type.value} -> {job.status.value}",
             level="info" if result["success"] else "error", actor=actor,
         )
+        if (
+            result["success"]
+            and operation == "apply"
+            and rollbacks is not None
+            and inverse_req is not None
+        ):
+            _ctrl_name = controller.name
+            _ctrl_type = controller.type.value
+
+            def _undo_controller() -> bool:
+                res = controller_client.deliver(
+                    controller, inverse_req, dry_run=settings.dry_run
+                )
+                if res["success"]:
+                    _log(db, wo,
+                         f"[控制器] {_ctrl_type} {_ctrl_name}: 已回滚 {inverse} "
+                         f"{circuit.service_type.value}", actor=actor)
+                else:
+                    _log(db, wo,
+                         f"[控制器] {_ctrl_name} 回滚失败: {res.get('output')}",
+                         level="warning", actor=actor)
+                return res["success"]
+
+            rollbacks.append((f"控制器 {_ctrl_name}", _undo_controller))
         return result["success"]
     except Exception as exc:  # noqa: BLE001
         job.status = ConfigJobStatus.FAILED
         job.output = f"controller delivery error: {exc}"
         _log(db, wo, f"控制器下发错误: {exc}", level="error", actor=actor)
         return False
+
+
+def _rollback_applied(
+    db: Session,
+    wo: WorkOrder,
+    rollbacks: list[tuple[str, RollbackFn]],
+    actor: str | None,
+) -> None:
+    """Undo config that was already applied on healthy targets after a failure.
+
+    Runs registered undo actions in reverse order, isolating each so one bad
+    rollback does not abort the rest. The work order stays FAILED regardless.
+    """
+    if not rollbacks:
+        return
+    _log(
+        db, wo,
+        f"下发失败：开始回滚已成功下发的 {len(rollbacks)} 个目标的配置",
+        level="warning", actor=actor,
+    )
+    undone = 0
+    for name, undo in reversed(rollbacks):
+        try:
+            if undo():
+                undone += 1
+        except Exception as exc:  # noqa: BLE001
+            _log(db, wo, f"回滚 {name} 时发生异常: {exc}",
+                 level="warning", actor=actor)
+    _log(
+        db, wo,
+        f"回滚完成：{undone}/{len(rollbacks)} 个目标的已下发配置已撤销",
+        level="warning" if undone < len(rollbacks) else "info",
+        actor=actor,
+    )
+
+
+def _register_driver_rollback(
+    db: Session,
+    wo: WorkOrder,
+    circuit: Circuit,
+    device: Device,
+    service_type: ServiceType,
+    rollback_config: str,
+    actor: str | None,
+    is_gateway: bool,
+    rollbacks: list[tuple[str, RollbackFn]],
+) -> None:
+    """Queue an undo (the inverse 'remove' config) for a device just programmed."""
+    tag = "[GW] " if is_gateway else ""
+
+    def _undo() -> bool:
+        driver = get_driver(device.vendor)
+        result = driver.push(device, rollback_config, dry_run=settings.dry_run)
+        ctrl_dataplane.mark_applied(
+            db, circuit.id, device.id, "remove", result.output or "", result.success
+        )
+        if result.success:
+            _log(
+                db, wo,
+                f"{tag}已回滚 {device.vendor.value} {device.name}: remove "
+                f"{service_type.value}",
+                actor=actor,
+            )
+        else:
+            _log(
+                db, wo,
+                f"{tag}回滚 {device.name} 失败: {result.output}",
+                level="warning", actor=actor,
+            )
+        return result.success
+
+    rollbacks.append((device.name, _undo))
 
 
 def _render_and_push(
@@ -587,6 +712,7 @@ def _render_and_push(
     is_egress: bool = False,
     *,
     partial: bool = False,
+    rollbacks: list[tuple[str, RollbackFn]] | None = None,
 ) -> bool:
     driver = get_driver(device.vendor)
     site = device.site
@@ -651,6 +777,16 @@ def _render_and_push(
             level="info" if result.success else "error",
             actor=actor,
         )
+        if (
+            result.success
+            and operation == "apply"
+            and rollbacks is not None
+            and job.rollback_config
+        ):
+            _register_driver_rollback(
+                db, wo, circuit, device, service_type, job.rollback_config,
+                actor, is_gateway, rollbacks,
+            )
         return result.success
     except Exception as exc:  # noqa: BLE001
         job.status = ConfigJobStatus.FAILED

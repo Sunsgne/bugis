@@ -52,6 +52,82 @@ function OverlayMap({ topo }: { topo: any }) {
   );
 }
 
+function OverlayScanSummary({ overlay }: { overlay: any }) {
+  const items: any[] = Array.isArray(overlay?.items) ? overlay.items : [];
+  const platform = overlay?.platform_services ?? 0;
+  const networkOnly = overlay?.network_only_services ?? 0;
+  const scanned = overlay?.devices_scanned ?? 0;
+  const withInventory = overlay?.devices_with_inventory ?? 0;
+  const reserved = overlay?.reserved_vni_count ?? 0;
+
+  // Top occupied VNIs found on the live network (source != platform).
+  const topVnis = useMemo(() => {
+    const seen = new Map<number, { vni: number; device?: string; service?: string }>();
+    for (const it of items) {
+      if (it?.source === "platform") continue;
+      const vni = it?.vni;
+      if (vni == null || seen.has(vni)) continue;
+      seen.set(vni, { vni, device: it?.device, service: it?.service_name });
+    }
+    return Array.from(seen.values())
+      .sort((a, b) => a.vni - b.vni)
+      .slice(0, 8);
+  }, [items]);
+
+  return (
+    <div
+      style={{
+        background: "#fafafa",
+        border: "1px solid #f0f0f0",
+        borderRadius: 8,
+        padding: 16,
+        height: "100%",
+      }}
+    >
+      <Text strong>扫描摘要</Text>
+      <Row gutter={[8, 8]} style={{ marginTop: 12 }}>
+        <Col span={12}>
+          <Statistic title="平台纳管" value={platform} valueStyle={{ color: "#1677ff" }} />
+        </Col>
+        <Col span={12}>
+          <Statistic title="现网未纳管" value={networkOnly} valueStyle={{ color: "#fa8c16" }} />
+        </Col>
+        <Col span={12}>
+          <Statistic title="已扫描设备" value={`${withInventory}/${scanned}`} />
+        </Col>
+        <Col span={12}>
+          <Statistic title="保留 VNI" value={reserved} prefix={<CloudServerOutlined />} />
+        </Col>
+      </Row>
+
+      <div style={{ marginTop: 16 }}>
+        <Text type="secondary" style={{ fontSize: 12 }}>
+          现网占用 VNI（避让）
+        </Text>
+        <div style={{ marginTop: 8, minHeight: 32 }}>
+          {topVnis.length ? (
+            <Space wrap size={[6, 6]}>
+              {topVnis.map((v) => (
+                <Tag color="orange" key={v.vni} title={`${v.device ?? ""} ${v.service ?? ""}`.trim()}>
+                  {v.vni}
+                </Tag>
+              ))}
+            </Space>
+          ) : (
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              暂无现网占用记录
+            </Text>
+          )}
+        </div>
+      </div>
+
+      <Text type="secondary" style={{ fontSize: 12, display: "block", marginTop: 16 }}>
+        只读扫描 learned running-config，不会下发或修改设备配置；新建专线自动避开已占用 VNI/VSI。
+      </Text>
+    </div>
+  );
+}
+
 const RT_LABEL: Record<string, string> = {
   type3_imet: "Type-3 IMET",
   type2_mac_ip: "Type-2 MAC/IP",
@@ -236,50 +312,49 @@ export default function ControlPlane() {
           </Button>
         }
       >
-        <Space wrap style={{ marginBottom: 12 }}>
-          <Tag color="blue">平台纳管 {overlay?.platform_services ?? 0}</Tag>
-          <Tag color="orange">现网未纳管 {overlay?.network_only_services ?? 0}</Tag>
-          <Tag>已扫描设备 {overlay?.devices_with_inventory ?? 0}/{overlay?.devices_scanned ?? 0}</Tag>
-          <Text type="secondary" style={{ fontSize: 12 }}>
-            只读扫描 learned running-config，不会下发或修改设备配置；新建专线自动避开已占用 VNI/VSI
-          </Text>
-        </Space>
-        <Table
-          rowKey={(row: { device_id?: number; service_name?: string; vni?: number }) =>
-            `${row.device_id}-${row.service_name}-${row.vni ?? "u"}`
-          }
-          dataSource={(overlay?.items ?? []).slice(0, 100)}
-          pagination={{ pageSize: 20, showSizeChanger: true }}
-          size="small"
-          locale={{ emptyText: <Empty description="暂无现网 Overlay 数据 · 请对设备执行现网学习后扫描" /> }}
-          columns={[
-            { title: "设备", dataIndex: "device", width: 180, ellipsis: true },
-            { title: "VSI / 服务", dataIndex: "service_name", width: 180, ellipsis: true },
-            { title: "VNI", dataIndex: "vni", width: 80 },
-            { title: "RD", dataIndex: "rd", width: 140, ellipsis: true },
-            {
-              title: "来源",
-              dataIndex: "source",
-              width: 100,
-              render: (s: string) => (
-                <Tag color={s === "platform" ? "blue" : "orange"}>
-                  {s === "platform" ? "平台纳管" : "现网占用"}
-                </Tag>
-              ),
-            },
-            {
-              title: "专线",
-              dataIndex: "circuit_code",
-              width: 120,
-              render: (code?: string) => code || "—",
-            },
-            {
-              title: "接入接口",
-              dataIndex: "interfaces",
-              render: (ifs: string[] | undefined) => (ifs?.length ? ifs.join(", ") : "—"),
-            },
-          ]}
-        />
+        <Row gutter={[16, 16]}>
+          <Col xs={24} xl={16}>
+            <Table
+              rowKey={(row: { device_id?: number; service_name?: string; vni?: number }) =>
+                `${row.device_id}-${row.service_name}-${row.vni ?? "u"}`
+              }
+              dataSource={(overlay?.items ?? []).slice(0, 100)}
+              pagination={{ pageSize: 20, showSizeChanger: true }}
+              size="small"
+              scroll={{ x: "max-content" }}
+              locale={{ emptyText: <Empty description="暂无现网 Overlay 数据 · 请对设备执行现网学习后扫描" /> }}
+              columns={[
+                { title: "设备", dataIndex: "device", ellipsis: true },
+                { title: "VSI / 服务", dataIndex: "service_name", ellipsis: true },
+                { title: "VNI", dataIndex: "vni", width: 90 },
+                { title: "RD", dataIndex: "rd", ellipsis: true },
+                {
+                  title: "来源",
+                  dataIndex: "source",
+                  width: 110,
+                  render: (s: string) => (
+                    <Tag color={s === "platform" ? "blue" : "orange"}>
+                      {s === "platform" ? "平台纳管" : "现网占用"}
+                    </Tag>
+                  ),
+                },
+                {
+                  title: "专线",
+                  dataIndex: "circuit_code",
+                  render: (code?: string) => code || "—",
+                },
+                {
+                  title: "接入接口",
+                  dataIndex: "interfaces",
+                  render: (ifs: string[] | undefined) => (ifs?.length ? ifs.join(", ") : "—"),
+                },
+              ]}
+            />
+          </Col>
+          <Col xs={24} xl={8}>
+            <OverlayScanSummary overlay={overlay} />
+          </Col>
+        </Row>
       </Card>
 
       <Card title="控制器集群 · HA" size="small">
