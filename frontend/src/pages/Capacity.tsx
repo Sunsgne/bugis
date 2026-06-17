@@ -1,36 +1,21 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
+  Alert,
   App as AntApp,
   Button,
   Card,
-  Empty,
-  Popconfirm,
   Progress,
+  Space,
   Statistic,
-  Table,
-  Tag,
   Tooltip,
 } from "antd";
-import { DeleteOutlined, PlusOutlined, SyncOutlined } from "@ant-design/icons";
+import { PlusOutlined, SyncOutlined } from "@ant-design/icons";
 import { api } from "../api/client";
 import type { Device, LinkUsage, SiteCapacity } from "../api/types";
 import BackboneLinkModal from "../components/BackboneLinkModal";
-import InterfaceNameCell from "../components/InterfaceNameCell";
-import EChart from "../components/EChart";
-import { linkUtilBarOption, utilColor } from "../charts/options";
-import { dataTableProps } from "../utils/table";
+import BackboneLinkCards from "../components/BackboneLinkCards";
+import { utilColor } from "../charts/options";
 import { fetchAllPages } from "../utils/pagination";
-
-const LINK_TYPE_LABEL: Record<string, string> = {
-  dci: "跨站点 DCI",
-  intra_dc: "站内互联",
-  access: "接入",
-  uplink: "上联",
-};
-
-function fmtBw(mbps: number) {
-  return mbps >= 1000 ? `${Math.round(mbps / 1000)} Gbps` : `${mbps} Mbps`;
-}
 
 export default function Capacity() {
   const { message } = AntApp.useApp();
@@ -78,12 +63,6 @@ export default function Capacity() {
   const totalUsed = sites.reduce((a, s) => a + s.used_mbps, 0);
   const utilPct = totalCap ? Math.round((totalUsed / totalCap) * 1000) / 10 : 0;
 
-  const linkChart = useMemo(
-    () => links.map((l) => ({ name: l.name, util: l.utilization_pct })),
-    [links],
-  );
-  const linkOpt = useMemo(() => linkUtilBarOption(linkChart), [linkChart]);
-
   return (
     <div className="capacity-page">
       <div className="capacity-kpi-row">
@@ -125,10 +104,10 @@ export default function Capacity() {
       </Card>
 
       <Card
-        className="capacity-section-card"
+        className="capacity-section-card capacity-backbone-card"
         title="骨干链路 · 利用率"
         extra={
-          <Button.Group>
+          <Space wrap>
             <Button type="primary" icon={<PlusOutlined />} onClick={() => setLinkModalOpen(true)}>
               配置骨干链路
             </Button>
@@ -137,100 +116,16 @@ export default function Capacity() {
                 同步端口带宽
               </Button>
             </Tooltip>
-          </Button.Group>
+          </Space>
         }
       >
-        <div className="capacity-link-hint">
-          骨干链路请选用 VLAN 子接口（Vlan-interface / Vlanif）；端口描述标注 <Tag>bw(100Mbps)</Tag> 或 <Tag>bw(10Gbps)</Tag> 可自动写入合同带宽 · 利用率超 85% 触发告警
-        </div>
-        {linkChart.length > 0 && (
-          <div className="capacity-link-chart">
-            <EChart option={linkOpt} height={Math.max(240, linkChart.length * 36)} />
-          </div>
-        )}
-        <Table
-          rowKey="link_id"
-          className="capacity-link-table"
-          style={{ width: "100%" }}
-          dataSource={links}
-          pagination={false}
-          scroll={{ x: 1280 }}
-          locale={{ emptyText: <Empty description="暂无链路 · 点击「配置骨干链路」智能推荐或手动选配" /> }}
-          {...dataTableProps(undefined, false)}
-          columns={[
-            { title: "链路", dataIndex: "name", width: 140, ellipsis: true },
-            {
-              title: "类型",
-              dataIndex: "type",
-              width: 108,
-              render: (t) => <Tag>{LINK_TYPE_LABEL[t] || t}</Tag>,
-            },
-            {
-              title: "A 端设备",
-              dataIndex: "device_a",
-              width: 180,
-              ellipsis: { showTitle: false },
-              render: (v: string) => (
-                <Tooltip title={v}>
-                  <span className="capacity-device-name">{v}</span>
-                </Tooltip>
-              ),
-            },
-            {
-              title: "A 端口",
-              dataIndex: "interface_a",
-              width: 148,
-              render: (v?: string) => (v ? <InterfaceNameCell name={v} /> : "—"),
-            },
-            {
-              title: "Z 端设备",
-              dataIndex: "device_z",
-              width: 180,
-              ellipsis: { showTitle: false },
-              render: (v: string) => (
-                <Tooltip title={v}>
-                  <span className="capacity-device-name">{v}</span>
-                </Tooltip>
-              ),
-            },
-            {
-              title: "Z 端口",
-              dataIndex: "interface_z",
-              width: 148,
-              render: (v?: string) => (v ? <InterfaceNameCell name={v} /> : "—"),
-            },
-            {
-              title: "合同带宽",
-              dataIndex: "capacity_mbps",
-              width: 100,
-              render: (v) => fmtBw(v),
-            },
-            {
-              title: "实时流量",
-              dataIndex: "traffic_mbps",
-              width: 100,
-              render: (v) => (v != null ? fmtBw(v) : "—"),
-            },
-            {
-              title: "峰值利用率",
-              dataIndex: "utilization_pct",
-              width: 148,
-              render: (v) => (
-                <Progress percent={v} size="small" strokeColor={utilColor(v)} style={{ minWidth: 96, maxWidth: 132 }} />
-              ),
-            },
-            {
-              title: "",
-              width: 48,
-              fixed: "right",
-              render: (_, row) => (
-                <Popconfirm title="删除此骨干链路？" onConfirm={() => deleteLink(row.link_id)}>
-                  <Button size="small" type="text" danger icon={<DeleteOutlined />} />
-                </Popconfirm>
-              ),
-            },
-          ]}
+        <Alert
+          type="info"
+          showIcon
+          className="capacity-link-hint"
+          message="选用 Vlan-interface / Vlanif 子接口；端口描述标注 bw(100Mbps) 可自动写入合同带宽，利用率超 85% 触发告警"
         />
+        <BackboneLinkCards links={links} onDelete={deleteLink} />
       </Card>
 
       <BackboneLinkModal

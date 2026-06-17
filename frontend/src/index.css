@@ -1074,9 +1074,166 @@ body {
 }
 
 .capacity-link-hint {
-  color: #64748b;
-  font-size: 12px;
+  margin-bottom: 16px;
+}
+
+.capacity-backbone-card > .ant-card-body {
+  padding-top: 12px;
+}
+
+.backbone-link-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 14px;
+  width: 100%;
+}
+
+.backbone-link-card {
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 12px;
+  padding: 14px 16px;
+  background: linear-gradient(180deg, #fafbfc 0%, #fff 100%);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.backbone-link-card:hover {
+  border-color: rgba(22, 119, 255, 0.28);
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
+}
+
+.backbone-link-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
   margin-bottom: 12px;
+}
+
+.backbone-link-card-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.backbone-link-card-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.backbone-link-endpoints {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(241, 245, 249, 0.75);
+}
+
+.backbone-link-endpoint {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.backbone-link-endpoint-label {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: #1677ff;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 22px;
+  text-align: center;
+}
+
+.backbone-link-endpoint:last-of-type .backbone-link-endpoint-label {
+  background: #64748b;
+}
+
+.backbone-link-endpoint-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.backbone-link-host {
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.backbone-link-port-muted {
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.backbone-link-arrow {
+  color: #94a3b8;
+  font-size: 14px;
+}
+
+.backbone-link-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 520px) {
+  .backbone-link-metrics {
+    grid-template-columns: 1fr;
+  }
+}
+
+.backbone-link-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.backbone-link-metric-label {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.backbone-link-metric-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.backbone-link-metric-util {
+  grid-column: span 1;
+}
+
+.backbone-link-util-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.backbone-link-util-pct {
+  flex-shrink: 0;
+  min-width: 42px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.backbone-link-util-bar {
+  flex: 1;
+  margin: 0;
+  min-width: 0;
 }
 
 .capacity-link-chart {
