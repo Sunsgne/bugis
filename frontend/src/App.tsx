@@ -75,10 +75,7 @@ const MENU: NavGroup[] = [
   },
   {
     label: nav.groups.resources,
-    items: [
-      { key: "/tenants", label: nav.items.tenants, icon: <Users className="h-4 w-4" /> },
-      { key: "/sites", label: nav.items.sites, icon: <MapPin className="h-4 w-4" /> },
-    ],
+    items: [{ key: "/tenants", label: nav.items.tenants, icon: <Users className="h-4 w-4" /> }],
   },
   {
     label: nav.groups.circuits,
@@ -90,6 +87,7 @@ const MENU: NavGroup[] = [
   {
     label: nav.groups.network,
     items: [
+      { key: "/sites", label: nav.items.sites, icon: <MapPin className="h-4 w-4" /> },
       { key: "/devices", label: nav.items.devices, icon: <Server className="h-4 w-4" /> },
       { key: "/topology", label: nav.items.topology, icon: <Network className="h-4 w-4" /> },
       { key: "/controllers", label: nav.items.controllers, icon: <Cloud className="h-4 w-4" /> },
