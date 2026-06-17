@@ -10,6 +10,7 @@ listed in requirements.txt for production (dry_run=false) deployments.
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
@@ -19,6 +20,18 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from app.models.enums import OverlayTech, Vendor
 
 TEMPLATE_ROOT = os.path.join(os.path.dirname(__file__), "..", "templates")
+
+
+# H3C / Huawei destructive `undo` commands (undo vsi / undo bridge-domain /
+# undo traffic ...) issued during a circuit teardown raise an interactive
+# confirmation such as "Continue? [Y/N]:". netmiko's send_config_set does not
+# answer it, so the prompt swallows the remaining commands and the rest of the
+# teardown silently aborts — leaving dirty config (VSI / QoS policy / behavior)
+# on the box. We detect the prompt and auto-confirm.
+_CONFIRM_PROMPT = re.compile(
+    r"\[Y/N\]|\[Yes/No\]|\(y/n\)|continue\s*\?|确认|是否继续",
+    re.IGNORECASE,
+)
 
 
 def _xml_escape(text: str) -> str:
@@ -383,15 +396,43 @@ class BaseDriver:
             # what failed in production with very long Huawei hostnames. netmiko
             # still enters/exits config mode (system-view ... return) on its own,
             # so the sanitized commands must NOT include a trailing return/quit.
-            output = conn.send_config_set(
-                commands,
-                read_timeout=read_timeout,
-                cmd_verify=False,
-            )
+            output = self._send_config_commands(conn, commands, read_timeout)
             output += self._commit_if_needed(conn)
             return output
         finally:
             conn.disconnect()
+
+    def _send_config_commands(
+        self, conn: Any, commands: list[str], read_timeout: int
+    ) -> str:
+        """Push config, auto-confirming destructive H3C/Huawei undo prompts.
+
+        For H3C/Huawei teardowns we send commands one at a time (timing-based, so
+        very long hostnames never break prompt matching) and reply ``Y`` whenever
+        a command raises a "Continue? [Y/N]" confirmation. Without this, teardown
+        ``undo`` commands stall at the prompt and leave dirty config behind.
+
+        Apply pushes (no ``undo``) and other vendors keep the proven batched
+        ``send_config_set`` path, so this never regresses provisioning.
+        """
+        teardown = self.vendor in (Vendor.H3C, Vendor.HUAWEI) and any(
+            c.lstrip().lower().startswith("undo ") for c in commands
+        )
+        if not teardown:
+            return conn.send_config_set(
+                commands, read_timeout=read_timeout, cmd_verify=False
+            )
+        outputs: list[str] = []
+        conn.config_mode()
+        try:
+            for cmd in commands:
+                out = conn.send_command_timing(cmd, read_timeout=read_timeout)
+                if _CONFIRM_PROMPT.search(out or ""):
+                    out += conn.send_command_timing("Y", read_timeout=read_timeout)
+                outputs.append(out or "")
+        finally:
+            conn.exit_config_mode()
+        return "".join(outputs)
 
     def _commit_if_needed(self, conn: Any) -> str:  # pragma: no cover
         """Commit candidate config on two-stage platforms (Huawei VRP8 / CE).
