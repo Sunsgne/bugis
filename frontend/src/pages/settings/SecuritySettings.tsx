@@ -6,6 +6,7 @@ import {
   Form,
   Input,
   InputNumber,
+  QRCode,
   Row,
   Space,
   Switch,
@@ -218,37 +219,48 @@ export default function SecuritySettings() {
 
       {!user?.mfa_enabled ? (
         <Space direction="vertical" style={{ width: "100%" }} size="middle">
-          <Paragraph type="secondary">
-            使用 Google Authenticator、1Password 等 App 扫描下方密钥，或手动输入 Secret。
+          <Paragraph type="secondary" style={{ marginBottom: 0 }}>
+            用 Google Authenticator、Microsoft Authenticator、1Password 等验证器 App
+            扫描二维码（或手动输入密钥）添加账号，再输入 App 显示的 6 位验证码完成绑定。
           </Paragraph>
-          <Button icon={<KeyOutlined />} loading={mfaBusy} onClick={setupTotp}>
-            生成验证器密钥
-          </Button>
-          {totpSecret && (
-            <Alert
-              type="warning"
-              showIcon
-              message={`Secret: ${totpSecret}`}
-              description={
-                totpUri ? (
-                  <a href={totpUri} target="_blank" rel="noreferrer">
-                    打开 otpauth 链接
-                  </a>
-                ) : null
-              }
-            />
-          )}
-          <Space>
-            <Input
-              placeholder="6 位验证码"
-              value={confirmCode}
-              onChange={(e) => setConfirmCode(e.target.value)}
-              style={{ width: 160 }}
-            />
-            <Button type="primary" loading={mfaBusy} onClick={confirmTotp}>
-              确认启用
+          {!totpUri ? (
+            <Button type="primary" icon={<KeyOutlined />} loading={mfaBusy} onClick={setupTotp}>
+              生成验证器二维码
             </Button>
-          </Space>
+          ) : (
+            <>
+              <div className="mfa-setup-grid">
+                <div className="mfa-qr">
+                  <QRCode value={totpUri} size={176} errorLevel="M" />
+                </div>
+                <Space direction="vertical" size={10} style={{ minWidth: 220, flex: 1 }}>
+                  <Text strong>1. 扫描左侧二维码</Text>
+                  <Text type="secondary" style={{ marginBottom: 4 }}>
+                    无法扫描？在 App 中手动添加（类型选「基于时间 TOTP」），密钥：
+                  </Text>
+                  {totpSecret && (
+                    <Text code copyable={{ text: totpSecret }} style={{ fontSize: 14, wordBreak: "break-all" }}>
+                      {totpSecret}
+                    </Text>
+                  )}
+                  <Text strong style={{ marginTop: 8 }}>2. 输入 App 生成的 6 位验证码</Text>
+                  <Space.Compact style={{ width: "100%", maxWidth: 280 }}>
+                    <Input
+                      placeholder="6 位验证码"
+                      value={confirmCode}
+                      onChange={(e) => setConfirmCode(e.target.value)}
+                      maxLength={6}
+                      inputMode="numeric"
+                      onPressEnter={confirmTotp}
+                    />
+                    <Button type="primary" loading={mfaBusy} onClick={confirmTotp}>
+                      确认启用
+                    </Button>
+                  </Space.Compact>
+                </Space>
+              </div>
+            </>
+          )}
         </Space>
       ) : (
         <Space direction="vertical" style={{ width: "100%" }}>

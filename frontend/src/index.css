@@ -81,6 +81,22 @@ body {
   border-color: hsl(var(--border));
 }
 
+/* MFA / TOTP setup layout */
+.mfa-setup-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  align-items: flex-start;
+}
+.mfa-qr {
+  background: #fff;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid hsl(var(--border));
+  line-height: 0;
+  flex-shrink: 0;
+}
+
 /* Login page (dark) */
 .login-page {
   min-height: 100vh;
