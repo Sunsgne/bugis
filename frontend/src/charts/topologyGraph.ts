@@ -5,7 +5,7 @@ import type { Topology } from "../api/types";
 
 const EDGE_STYLE = {
   dci: { color: "#ef4444", width: 2.5, type: "dashed" as const },
-  intra_dc: { color: "#6366f1", width: 2, type: "solid" as const },
+  intra_dc: { color: "#ff6600", width: 2, type: "solid" as const },
   access: { color: "#10b981", width: 1.5, type: "solid" as const },
   uplink: { color: "#8b5cf6", width: 2, type: "solid" as const },
 } as const;
@@ -24,7 +24,7 @@ const EDGE_LABEL: Record<string, string> = {
   uplink: "上行",
 };
 
-const VNI_PALETTE = ["#6366f1", "#10b981", "#f59e0b", "#8b5cf6", "#06b6d4", "#ec4899"];
+const VNI_PALETTE = ["#ff6600", "#10b981", "#8b5cf6", "#06b6d4", "#ec4899", "#eab308"];
 
 export type OverlayTopo = {
   nodes: { id: number; name: string; vtep_ip: string; vnis: number[]; status: string }[];
@@ -51,7 +51,7 @@ export function physicalTopologyOption(topo: Topology): EChartsOption {
   const categories = siteColumns.map((s, i) => ({
     name: s.label,
     itemStyle: {
-      color: i === siteColumns.length - 1 && s.id === NO_SITE ? "#94a3b8" : "#6366f1",
+      color: i === siteColumns.length - 1 && s.id === NO_SITE ? "#94a3b8" : "#ff6600",
     },
   }));
 
@@ -97,7 +97,7 @@ export function physicalTopologyOption(topo: Topology): EChartsOption {
           `状态 ${online ? "在线" : n.status}`,
       },
       emphasis: {
-        itemStyle: { borderWidth: 3, shadowBlur: 16, shadowColor: "rgba(99, 102, 241, 0.35)" },
+        itemStyle: { borderWidth: 3, shadowBlur: 16, shadowColor: "rgba(255, 102, 0, 0.35)" },
       },
     };
   });

@@ -84,7 +84,7 @@ export default function Capacity() {
             title="已分配带宽"
             value={Math.round(totalUsed / 1000)}
             suffix="Gbps"
-            valueStyle={{ color: "#1677ff" }}
+            valueStyle={{ color: "#ff6600" }}
           />
         </Card>
         <Card className="capacity-kpi-card capacity-kpi-util">

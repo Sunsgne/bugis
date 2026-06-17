@@ -54,7 +54,7 @@ export function trafficWithP95Option(
     markLines.push({
       name: "计费 95",
       yAxis: p95.billable_95_mbps,
-      color: "#1677ff",
+      color: "#ff6600",
     });
   }
 
@@ -234,7 +234,7 @@ export function donutOption(
       borderColor: "#fff",
       borderWidth: 2,
       shadowBlur: 8,
-      shadowColor: "rgba(99, 102, 241, 0.15)",
+      shadowColor: "rgba(255, 102, 0, 0.15)",
     },
   }));
 
@@ -329,11 +329,11 @@ export function rosePieOption(data: Point[], colorMap: Record<string, string>): 
         },
         labelLine: { length: 8, length2: 12, lineStyle: { color: chartText.muted } },
         emphasis: {
-          itemStyle: { shadowBlur: 14, shadowColor: "rgba(99, 102, 241, 0.25)" },
+          itemStyle: { shadowBlur: 14, shadowColor: "rgba(255, 102, 0, 0.25)" },
         },
         data: data.map((d) => ({
           ...d,
-          itemStyle: { color: colorMap[d.name] ?? "#6366f1" },
+          itemStyle: { color: colorMap[d.name] ?? "#ff6600" },
         })),
       },
     ],
@@ -390,11 +390,11 @@ export function gradientBarOption(
             ),
             borderRadius: [8, 8, 0, 0],
             shadowBlur: 6,
-            shadowColor: "rgba(99, 102, 241, 0.12)",
+            shadowColor: "rgba(255, 102, 0, 0.12)",
           },
         })),
         emphasis: {
-          itemStyle: { shadowBlur: 14, shadowColor: "rgba(99, 102, 241, 0.28)" },
+          itemStyle: { shadowBlur: 14, shadowColor: "rgba(255, 102, 0, 0.28)" },
         },
       },
     ],

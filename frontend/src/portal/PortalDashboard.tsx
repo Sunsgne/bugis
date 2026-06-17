@@ -88,7 +88,7 @@ export default function PortalDashboard({ me }: { me: PortalMe | null }) {
               title="签约带宽"
               value={s?.active_bandwidth_mbps ?? 0}
               suffix="Mbps"
-              valueStyle={{ color: "#1677ff" }}
+              valueStyle={{ color: "#ff6600" }}
             />
           </Card>
         </Col>

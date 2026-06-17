@@ -39,7 +39,7 @@ function ColoredDiff({ text }: { text: string }) {
       {text.split("\n").map((line, i) => (
         <div key={i} style={{
           color: line.startsWith("+") ? "#52c41a" : line.startsWith("-") ? "#ff7875"
-            : line.startsWith("@@") ? "#1677ff" : undefined,
+            : line.startsWith("@@") ? "#ff8c1a" : undefined,
         }}>{line}</div>
       ))}
     </pre>

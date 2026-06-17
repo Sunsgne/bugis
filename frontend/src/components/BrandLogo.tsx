@@ -22,7 +22,7 @@ export function BrandLogo({ brand, variant = "sidebar", height = 28 }: BrandLogo
       />
     );
   }
-  const color = brand.accent_color || "#52c41a";
+  const color = brand.accent_color || "#ff6600";
   return (
     <span
       className="brand-dot"
@@ -30,7 +30,7 @@ export function BrandLogo({ brand, variant = "sidebar", height = 28 }: BrandLogo
         width: variant === "login" ? 12 : 8,
         height: variant === "login" ? 12 : 8,
         borderRadius: "50%",
-        background: `linear-gradient(135deg, ${color}, #13c2c2)`,
+        background: `linear-gradient(135deg, ${color}, #ff9a3d)`,
         boxShadow: `0 0 12px ${color}99`,
         flexShrink: 0,
         display: "inline-block",
