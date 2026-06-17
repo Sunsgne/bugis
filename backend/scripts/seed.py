@@ -215,7 +215,10 @@ def run() -> None:
         from app.services import link_monitor, snmp
 
         for d in devices:
-            snmp.discover_interfaces(db, d)
+            try:
+                snmp.discover_interfaces(db, d)
+            except Exception as exc:  # noqa: BLE001 — lab seed must not block stack boot
+                print(f"WARN: SNMP discovery skipped for {d.name}: {exc}")
         link_monitor.sync_all_link_capacity(db)
 
         ensure_tenant_portal_demo_user(db)
