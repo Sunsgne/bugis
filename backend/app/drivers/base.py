@@ -21,6 +21,15 @@ from app.models.enums import OverlayTech, Vendor
 TEMPLATE_ROOT = os.path.join(os.path.dirname(__file__), "..", "templates")
 
 
+def _xml_escape(text: str) -> str:
+    """Minimal XML text escaping for NETCONF CLI-RPC payloads."""
+    return (
+        text.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+    )
+
+
 @dataclass
 class DriverResult:
     """Outcome of a render or push operation."""
@@ -268,16 +277,39 @@ class BaseDriver:
         finally:
             conn.disconnect()
 
-    def _real_push(self, device: Any, config: str) -> str:  # pragma: no cover
-        """Real push hook. Subclasses may override per transport.
+    def _real_push(
+        self,
+        device: Any,
+        config: str,
+        *,
+        allow_transport_fallback: bool = True,
+    ) -> str:  # pragma: no cover
+        """Real push hook.
 
-        Default tries NETCONF via ncclient, falling back to CLI via netmiko.
+        Resolves the device's effective transport, then attempts each transport
+        in order (mirroring ``_real_fetch``). When NETCONF is selected but the
+        rendered payload is CLI text that a vendor cannot accept over NETCONF,
+        the push transparently falls back to CLI (netmiko), which is the common
+        case for H3C / Huawei (BGP EVPN VXLAN templates render VRP/Comware CLI).
         """
         from app.services.device_management import effective_transport
 
-        if effective_transport(device) == "netconf":
-            return self._push_netconf(device, config)
-        return self._push_cli(device, config)
+        primary = effective_transport(device)
+        tried: list[str] = []
+        last_exc: Exception | None = None
+        for candidate in self._fetch_transport_order(primary, allow_transport_fallback):
+            if candidate in tried:
+                continue
+            tried.append(candidate)
+            try:
+                if candidate == "netconf":
+                    return self._push_netconf(device, config)
+                return self._push_cli(device, config)
+            except Exception as exc:
+                last_exc = exc
+        if last_exc is not None:
+            raise last_exc
+        raise RuntimeError("no transport available for config push")
 
     def _push_netconf(self, device: Any, config: str) -> str:  # pragma: no cover
         try:
@@ -286,6 +318,19 @@ class BaseDriver:
             raise RuntimeError(
                 "ncclient not installed; install it or run in dry-run mode"
             ) from exc
+
+        cfg = (config or "").strip()
+        is_xml = cfg.startswith("<")
+        if not is_xml and self.vendor != Vendor.H3C:
+            # Templates render CLI text; only H3C Comware exposes a generic
+            # CLI-over-NETCONF RPC. For other vendors (e.g. Huawei VRP) there is
+            # no standard CLI passthrough, so signal the caller to fall back to
+            # the CLI transport instead of shipping an invalid edit-config.
+            raise RuntimeError(
+                "NETCONF expects an XML/YANG payload but the template rendered "
+                f"CLI text for vendor '{self.vendor.value}'; use CLI transport"
+            )
+
         with manager.connect(
             host=device.active_mgmt_ip,
             port=device.netconf_port,
@@ -294,8 +339,26 @@ class BaseDriver:
             hostkey_verify=False,
             timeout=self._netconf_timeout(),
         ) as m:
-            reply = m.edit_config(target="running", config=config)
-            return str(reply)
+            if is_xml:
+                reply = m.edit_config(target="running", config=config)
+                return str(reply)
+            # H3C Comware7 CLI-over-NETCONF RPC.
+            return self._push_netconf_cli_h3c(m, config)
+
+    def _push_netconf_cli_h3c(self, m: Any, config: str) -> str:  # pragma: no cover
+        """Apply CLI config on H3C Comware via the <CLI><Configuration> RPC."""
+        from ncclient.xml_ import to_ele  # type: ignore
+
+        from app.drivers.config_text import to_command_text
+
+        commands = to_command_text(self.vendor, config)
+        rpc = (
+            '<CLI xmlns="http://www.h3c.com/netconf/action:1.0">'
+            "<Configuration>" + _xml_escape(commands) + "</Configuration>"
+            "</CLI>"
+        )
+        reply = m.dispatch(to_ele(rpc))
+        return str(reply)
 
     def _push_cli(self, device: Any, config: str) -> str:  # pragma: no cover
         try:
@@ -304,9 +367,27 @@ class BaseDriver:
             raise RuntimeError(
                 "netmiko not installed; install it or run in dry-run mode"
             ) from exc
+
+        from app.drivers.config_text import to_command_list
+
+        commands = to_command_list(self.vendor, config)
+        if not commands:
+            return "[no-op] nothing to push after sanitizing rendered config"
+
+        read_timeout = self._cli_read_timeout()
         conn = ConnectHandler(**self._cli_params(device))
         try:
-            return conn.send_config_set(config.splitlines())
+            # Disable paging so multi-page output never stalls prompt detection.
+            self._prepare_cli_session(conn)
+            # cmd_verify=False avoids per-command prompt echo matching, which is
+            # what failed in production with very long Huawei hostnames. netmiko
+            # still enters/exits config mode (system-view ... return) on its own,
+            # so the sanitized commands must NOT include a trailing return/quit.
+            return conn.send_config_set(
+                commands,
+                read_timeout=read_timeout,
+                cmd_verify=False,
+            )
         finally:
             conn.disconnect()
 
