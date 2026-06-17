@@ -60,19 +60,20 @@ function OverlayScanSummary({ overlay }: { overlay: any }) {
   const withInventory = overlay?.devices_with_inventory ?? 0;
   const reserved = overlay?.reserved_vni_count ?? 0;
 
-  // Top occupied VNIs found on the live network (source != platform).
-  const topVnis = useMemo(() => {
-    const seen = new Map<number, { vni: number; device?: string; service?: string }>();
+  // Per-device service distribution — a summary the table (one row per service)
+  // does not show directly, so it complements rather than duplicates the table.
+  const deviceDist = useMemo(() => {
+    const counts = new Map<string, number>();
     for (const it of items) {
-      if (it?.source === "platform") continue;
-      const vni = it?.vni;
-      if (vni == null || seen.has(vni)) continue;
-      seen.set(vni, { vni, device: it?.device, service: it?.service_name });
+      const name = it?.device || "—";
+      counts.set(name, (counts.get(name) ?? 0) + 1);
     }
-    return Array.from(seen.values())
-      .sort((a, b) => a.vni - b.vni)
-      .slice(0, 8);
+    return Array.from(counts.entries())
+      .map(([device, count]) => ({ device, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 6);
   }, [items]);
+  const maxCount = deviceDist.length ? deviceDist[0].count : 0;
 
   return (
     <div
@@ -102,15 +103,37 @@ function OverlayScanSummary({ overlay }: { overlay: any }) {
 
       <div style={{ marginTop: 16 }}>
         <Text type="secondary" style={{ fontSize: 12 }}>
-          现网占用 VNI（避让）
+          按设备占用分布 Top
         </Text>
         <div style={{ marginTop: 8, minHeight: 32 }}>
-          {topVnis.length ? (
-            <Space wrap size={[6, 6]}>
-              {topVnis.map((v) => (
-                <Tag color="orange" key={v.vni} title={`${v.device ?? ""} ${v.service ?? ""}`.trim()}>
-                  {v.vni}
-                </Tag>
+          {deviceDist.length ? (
+            <Space direction="vertical" size={8} style={{ width: "100%" }}>
+              {deviceDist.map((d) => (
+                <div key={d.device}>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      fontSize: 12,
+                      marginBottom: 2,
+                    }}
+                  >
+                    <Text ellipsis style={{ maxWidth: 200 }} title={d.device}>
+                      {d.device}
+                    </Text>
+                    <Text type="secondary">{d.count}</Text>
+                  </div>
+                  <div style={{ background: "#f0f0f0", borderRadius: 3, height: 6 }}>
+                    <div
+                      style={{
+                        width: `${maxCount ? (d.count / maxCount) * 100 : 0}%`,
+                        background: "#1677ff",
+                        height: 6,
+                        borderRadius: 3,
+                      }}
+                    />
+                  </div>
+                </div>
               ))}
             </Space>
           ) : (
