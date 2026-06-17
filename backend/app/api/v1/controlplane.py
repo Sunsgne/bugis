@@ -139,5 +139,11 @@ def scan_overlay_inventory(
     db: Session = Depends(get_db),
     _: User = Depends(require_operator),
 ):
-    """Re-scan overlay identifiers from latest learned configs; no device push."""
-    return overlay_inventory.scan_fleet_overlay(db)
+    """Re-scan overlay identifiers from latest learned configs; no device push.
+
+    Also reconciles the controller overlay topology with the learned network so
+    stale VTEP/VNI edges (e.g. from a failed-then-deleted circuit) are removed.
+    """
+    result = overlay_inventory.scan_fleet_overlay(db)
+    db.commit()
+    return result

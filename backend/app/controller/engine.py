@@ -239,6 +239,25 @@ class BugisController:
             f"({len(count)} routes) for {circuit.code}",
         }
 
+    def purge_circuit(self, db: Session, circuit: Circuit) -> dict:
+        """Remove all controller overlay state for a circuit being deleted.
+
+        Deletes the circuit's EVPN routes and deregisters its VNI from each
+        endpoint device's VTEP so the overlay topology graph does not keep a
+        stale edge after a (failed) circuit is removed.
+        """
+        vni = circuit.vni or 0
+        routes = db.execute(
+            select(EvpnRoute).where(EvpnRoute.circuit_id == circuit.id)
+        ).scalars().all()
+        db.execute(delete(EvpnRoute).where(EvpnRoute.circuit_id == circuit.id))
+        for ep in circuit.endpoints:
+            if ep.device_id:
+                self._deregister_vni(db, ep.device_id, vni)
+        if routes or vni:
+            ha.bump_rib_version(db)
+        return {"vni": vni, "routes_removed": len(routes)}
+
     def _render_summary(
         self,
         circuit: Circuit,
