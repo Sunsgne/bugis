@@ -55,26 +55,38 @@ export default function ConfigManagement() {
   const [diff, setDiff] = useState<string>("");
   const [drift, setDrift] = useState<string>("");
   const [learned, setLearned] = useState<any>(null);
+  const [devicesLoading, setDevicesLoading] = useState(false);
 
   async function loadDevices() {
-    const { data } = await api.get("/config/devices");
-    setDevices(data);
-    if (!sel && data.length) select(data[0].device_id);
+    setDevicesLoading(true);
+    try {
+      const { data } = await api.get("/config/devices");
+      setDevices(data);
+      if (!sel && data.length) select(data[0].device_id);
+    } catch (e: any) {
+      message.error(e?.response?.data?.detail || "设备列表加载失败");
+    } finally {
+      setDevicesLoading(false);
+    }
   }
   useEffect(() => { loadDevices(); }, []);
 
   async function select(id: number) {
     setSel(id);
-    const [r, s, ls] = await Promise.all([
-      api.get(`/config/devices/${id}/running`),
-      api.get(`/config/devices/${id}/snapshots`),
-      api.get(`/devices/${id}/learned-state`).catch(() => ({ data: null })),
-    ]);
-    setRunning(r.data.content);
-    setSnaps(s.data);
-    setDiff("");
-    setDrift("");
-    setLearned(ls.data);
+    try {
+      const [r, s, ls] = await Promise.all([
+        api.get(`/config/devices/${id}/running`),
+        api.get(`/config/devices/${id}/snapshots`),
+        api.get(`/devices/${id}/learned-state`).catch(() => ({ data: null })),
+      ]);
+      setRunning(r.data.content);
+      setSnaps(s.data);
+      setDiff("");
+      setDrift("");
+      setLearned(ls.data);
+    } catch (e: any) {
+      message.error(e?.response?.data?.detail || "设备配置加载失败");
+    }
   }
 
   async function backup() {
@@ -147,6 +159,8 @@ export default function ConfigManagement() {
           size="small"
           className="config-device-table"
           pagination={false}
+          loading={devicesLoading}
+          locale={{ emptyText: "暂无纳管设备 · 先在「网络设备」中添加" }}
           dataSource={devices}
           tableLayout="fixed"
           onRow={(r) => ({ onClick: () => select(r.device_id), style: { cursor: "pointer" } })}

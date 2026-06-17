@@ -14,6 +14,7 @@ import {
   Button,
   message,
   Space,
+  Spin,
 } from "antd";
 import {
   ClusterOutlined,
@@ -90,6 +91,7 @@ export default function ControlPlane() {
   const [syncing, setSyncing] = useState(false);
   const [scanningOverlay, setScanningOverlay] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false);
 
   async function load() {
     try {
@@ -114,6 +116,8 @@ export default function ControlPlane() {
       setLoadError(null);
     } catch (e: any) {
       setLoadError(e?.response?.data?.detail || e?.message || "加载控制器数据失败");
+    } finally {
+      setLoaded(true);
     }
   }
 
@@ -148,6 +152,14 @@ export default function ControlPlane() {
   }, [vni]);
 
   const allVnis = Array.from(new Set(vteps.flatMap((v) => v.vnis ?? []))).sort((a, b) => a - b);
+
+  if (!loaded && !loadError) {
+    return (
+      <div style={{ display: "flex", justifyContent: "center", padding: "80px 0" }}>
+        <Spin />
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>

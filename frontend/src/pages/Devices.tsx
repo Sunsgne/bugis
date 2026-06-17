@@ -623,8 +623,8 @@ export default function Devices() {
             width: "18%",
             className: "table-actions",
             render: (_: unknown, r: Device) => (
-              <Space size={4} wrap={false} className="table-actions">
-                <Button size="small" type="primary" icon={<ApiOutlined />} onClick={() => openPorts(r)}>
+                <Space size={4} className="table-actions">
+                  <Button size="small" type="primary" icon={<ApiOutlined />} onClick={() => openPorts(r)}>
                   端口
                 </Button>
                 <Tooltip title="编辑设备信息">
@@ -634,13 +634,6 @@ export default function Devices() {
                   trigger={["click"]}
                   menu={{
                     items: [
-                      {
-                        key: "edit",
-                        icon: <EditOutlined />,
-                        label: "编辑设备",
-                        onClick: () => openEditModal(r),
-                      },
-                      { type: "divider" },
                       {
                         key: "learn",
                         icon: <BookOutlined />,

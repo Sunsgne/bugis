@@ -83,6 +83,13 @@ export default function Sites() {
         loading={loading}
         dataSource={rows}
         {...dataTableProps()}
+        locale={{ emptyText: "暂无站点 · 点击右上角新建" }}
+        pagination={{
+          pageSize: 12,
+          hideOnSinglePage: true,
+          showSizeChanger: false,
+          showTotal: (t) => `共 ${t} 个站点`,
+        }}
         columns={[
           { title: "编码", dataIndex: "code", width: "10%", ellipsis: true },
           { title: "名称", dataIndex: "name", width: "14%", ellipsis: true },

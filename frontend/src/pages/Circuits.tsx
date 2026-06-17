@@ -26,6 +26,7 @@ import {
   Divider,
   Typography,
   Tabs,
+  Dropdown,
 } from "antd";
 import {
   PlusOutlined,
@@ -40,6 +41,7 @@ import {
   DeleteOutlined,
   SearchOutlined,
   ApartmentOutlined,
+  MoreOutlined,
 } from "@ant-design/icons";
 import { api } from "../api/client";
 import type { Circuit, Device, Paginated, ProvisionResult, Site, Tenant } from "../api/types";
@@ -770,7 +772,7 @@ export default function Circuits() {
         rowKey="id"
         loading={loading}
         dataSource={rows}
-        {...dataTableProps(selectedTenantId ? 1320 : 1220, rows.length > 0)}
+        {...dataTableProps(selectedTenantId ? 1180 : 1080, rows.length > 0)}
         pagination={tablePagination(total, page, pageSize, (p, ps) => {
           setPage(p);
           setPageSize(ps);
@@ -861,95 +863,96 @@ export default function Circuits() {
           {
             title: "操作",
             key: "actions",
-            width: 280,
+            width: 184,
             fixed: "right",
             align: "right",
             className: "table-actions-col",
-            render: (_, r) => (
-              <Space size={4} wrap className="table-actions">
-                {r.status !== "decommissioned" && (
-                  <Tooltip
-                    title={
-                      r.status === "active"
-                        ? "重新下发配置 (re-apply)"
-                        : "一键开通 (下发配置)"
-                    }
-                  >
-                  <Button
-                    size="small"
-                    type="primary"
-                    icon={<ThunderboltOutlined />}
-                    loading={provisioningId === r.id}
-                    onClick={() => provision(r)}
-                  >
-                      {r.status === "active" ? "重新下发" : "开通"}
-                    </Button>
-                  </Tooltip>
-                )}
-                {r.status === "active" && (
-                  <Tooltip title="变更带宽">
-                    <Button
-                      size="small"
-                      icon={<EditOutlined />}
-                      onClick={() => {
-                        setModifyTarget(r);
-                        modifyForm.setFieldsValue({ bandwidth_mbps: r.bandwidth_mbps });
-                      }}
-                    />
-                  </Tooltip>
-                )}
-                {r.status !== "decommissioned" && (
-                  <Tooltip title="修改接入端点 (设备/端口/VLAN)">
-                    <Button
-                      size="small"
-                      icon={<ApartmentOutlined />}
-                      onClick={async () => {
-                        const detail = await loadCircuitDetail(r.id);
-                        openEditEndpoints(r, detail);
-                      }}
-                    />
-                  </Tooltip>
-                )}
-                <Tooltip title="预览各厂商配置">
-                  <Button size="small" icon={<EyeOutlined />} onClick={() => preview(r)} />
-                </Tooltip>
-                {r.status === "active" && (
-                  <Tooltip title="流量 / 95 / 时延 / 中断监控">
-                    <Button
-                      size="small"
-                      icon={<LineChartOutlined />}
-                      onClick={() => navigate(`/monitoring?circuit=${r.id}`)}
-                    />
-                  </Tooltip>
-                )}
-                {r.status === "active" && (
-                  <Tooltip title="端到端拨测">
-                    <Button
-                      size="small"
-                      icon={<RadarChartOutlined />}
-                      onClick={() => probe(r)}
-                    />
-                  </Tooltip>
-                )}
-                <Tooltip title="配置历史与版本对比">
-                  <Button size="small" icon={<HistoryOutlined />} onClick={() => openHistory(r)} />
-                </Tooltip>
-                {r.status !== "decommissioned" && r.status !== "draft" && (
-                  <Popconfirm title="确认拆除该专线?" onConfirm={() => decommission(r)}>
-                    <Button size="small" danger icon={<MinusCircleOutlined />} />
-                  </Popconfirm>
-                )}
-                {DELETABLE.has(r.status) && (
-                  <Popconfirm
-                    title="确认永久删除该专线记录?"
-                    description="仅删除系统记录，设备配置应已通过拆除工单清除"
-                    onConfirm={() => removeCircuit(r)}
-                  >
-                    <Button size="small" danger icon={<DeleteOutlined />} />
-                  </Popconfirm>
-                )}
-              </Space>
-            ),
+            render: (_, r) => {
+              // Primary action stays inline; everything else collapses into a
+              // "更多" dropdown to keep the column compact and consistent.
+              const moreItems = [
+                r.status === "active" && {
+                  key: "modify",
+                  icon: <EditOutlined />,
+                  label: "变更带宽",
+                  onClick: () => {
+                    setModifyTarget(r);
+                    modifyForm.setFieldsValue({ bandwidth_mbps: r.bandwidth_mbps });
+                  },
+                },
+                r.status !== "decommissioned" && {
+                  key: "endpoints",
+                  icon: <ApartmentOutlined />,
+                  label: "修改接入端点",
+                  onClick: async () => {
+                    const detail = await loadCircuitDetail(r.id);
+                    openEditEndpoints(r, detail);
+                  },
+                },
+                { key: "preview", icon: <EyeOutlined />, label: "预览各厂商配置", onClick: () => preview(r) },
+                r.status === "active" && {
+                  key: "monitor",
+                  icon: <LineChartOutlined />,
+                  label: "流量 / 95 / 监控",
+                  onClick: () => navigate(`/monitoring?circuit=${r.id}`),
+                },
+                r.status === "active" && {
+                  key: "probe",
+                  icon: <RadarChartOutlined />,
+                  label: "端到端拨测",
+                  onClick: () => probe(r),
+                },
+                { key: "history", icon: <HistoryOutlined />, label: "配置历史与对比", onClick: () => openHistory(r) },
+                (r.status !== "decommissioned" && r.status !== "draft") && {
+                  key: "decommission",
+                  icon: <MinusCircleOutlined />,
+                  danger: true,
+                  label: "拆除专线",
+                  onClick: () =>
+                    modal.confirm({
+                      title: "确认拆除该专线?",
+                      okType: "danger",
+                      onOk: () => decommission(r),
+                    }),
+                },
+                DELETABLE.has(r.status) && {
+                  key: "delete",
+                  icon: <DeleteOutlined />,
+                  danger: true,
+                  label: "永久删除记录",
+                  onClick: () =>
+                    modal.confirm({
+                      title: "确认永久删除该专线记录?",
+                      content: "仅删除系统记录，设备配置应已通过拆除工单清除",
+                      okType: "danger",
+                      onOk: () => removeCircuit(r),
+                    }),
+                },
+              ].filter(Boolean) as { key: string }[];
+
+              return (
+                <Space size={4} className="table-actions">
+                  {r.status !== "decommissioned" && (
+                    <Tooltip title={r.status === "active" ? "重新下发配置 (re-apply)" : "一键开通 (下发配置)"}>
+                      <Button
+                        size="small"
+                        type="primary"
+                        icon={<ThunderboltOutlined />}
+                        loading={provisioningId === r.id}
+                        onClick={() => provision(r)}
+                      >
+                        {r.status === "active" ? "重新下发" : "开通"}
+                      </Button>
+                    </Tooltip>
+                  )}
+                  {moreItems.length > 0 && (
+                    <Dropdown menu={{ items: moreItems }} trigger={["click"]}>
+                      <Button size="small" icon={<MoreOutlined />}>更多</Button>
+                    </Dropdown>
+                  )}
+                </Space>
+              );
+            },
           },
         ]}
       />

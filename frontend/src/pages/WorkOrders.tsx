@@ -85,6 +85,13 @@ export default function WorkOrders() {
         loading={loading}
         dataSource={rows}
         {...dataTableProps()}
+        locale={{ emptyText: empty.default }}
+        pagination={{
+          pageSize: 15,
+          hideOnSinglePage: true,
+          showSizeChanger: false,
+          showTotal: (t) => `共 ${t} 张工单`,
+        }}
         onRow={(r) => ({ onClick: () => openDetail(r.id), style: { cursor: "pointer" } })}
         columns={[
           { title: "工单号", dataIndex: "code", width: "12%", ellipsis: true },
