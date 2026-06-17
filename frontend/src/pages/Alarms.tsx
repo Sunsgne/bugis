@@ -7,6 +7,7 @@ import type { Alarm } from "../api/types";
 import PageCard from "../components/PageCard";
 import { dataTableProps } from "../utils/table";
 import { action, empty, page } from "../constants/uiCopy";
+import { ALARM_STATUS, statusMeta } from "../constants/statusLabels";
 
 const SEV_COLOR: Record<string, string> = {
   critical: "red",
@@ -14,11 +15,6 @@ const SEV_COLOR: Record<string, string> = {
   minor: "orange",
   warning: "gold",
   info: "blue",
-};
-const STATUS_COLOR: Record<string, string> = {
-  active: "red",
-  acknowledged: "orange",
-  cleared: "green",
 };
 
 export default function Alarms() {
@@ -115,7 +111,10 @@ export default function Alarms() {
               title: "状态",
               dataIndex: "status",
               width: "8%",
-              render: (s) => <Tag color={STATUS_COLOR[s]}>{s}</Tag>,
+              render: (s) => {
+                const m = statusMeta(ALARM_STATUS, s);
+                return <Tag color={m.color}>{m.label}</Tag>;
+              },
             },
             {
               title: "操作",

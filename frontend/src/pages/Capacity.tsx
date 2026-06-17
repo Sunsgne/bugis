@@ -26,14 +26,18 @@ export default function Capacity() {
   const [linkModalOpen, setLinkModalOpen] = useState(false);
 
   async function load() {
-    const [s, l, d] = await Promise.all([
-      api.get<SiteCapacity[]>("/capacity/sites"),
-      api.get<LinkUsage[]>("/capacity/links/usage"),
-      fetchAllPages<Device>("/devices"),
-    ]);
-    setSites(s.data);
-    setLinks(l.data);
-    setDevices(d);
+    try {
+      const [s, l, d] = await Promise.all([
+        api.get<SiteCapacity[]>("/capacity/sites"),
+        api.get<LinkUsage[]>("/capacity/links/usage"),
+        fetchAllPages<Device>("/devices"),
+      ]);
+      setSites(s.data);
+      setLinks(l.data);
+      setDevices(d);
+    } catch {
+      message.error("容量数据加载失败，请稍后重试");
+    }
   }
 
   async function syncBandwidth() {
@@ -42,15 +46,21 @@ export default function Capacity() {
       await api.post("/capacity/links/sync-bandwidth");
       await load();
       message.success("已从端口描述同步合同带宽");
+    } catch {
+      message.error("同步合同带宽失败");
     } finally {
       setSyncing(false);
     }
   }
 
   async function deleteLink(linkId: number) {
-    await api.delete(`/capacity/links/${linkId}`);
-    message.success("骨干链路已删除");
-    await load();
+    try {
+      await api.delete(`/capacity/links/${linkId}`);
+      message.success("骨干链路已删除");
+      await load();
+    } catch {
+      message.error("删除骨干链路失败");
+    }
   }
 
   useEffect(() => {

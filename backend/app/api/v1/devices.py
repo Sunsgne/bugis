@@ -68,6 +68,25 @@ def list_devices(
     return paginated(rows, total=total, page=page, page_size=page_size)
 
 
+@router.get("/summary")
+def device_summary(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+    """Fleet-wide status counts (not page-limited) for dashboard KPIs."""
+    counts = dict(
+        db.execute(
+            select(Device.status, func.count(Device.id)).group_by(Device.status)
+        ).all()
+    )
+    total = int(sum(counts.values()))
+    online = int(counts.get(DeviceStatus.ONLINE, 0))
+    offline = int(counts.get(DeviceStatus.OFFLINE, 0))
+    return {
+        "total": total,
+        "online": online,
+        "offline": offline,
+        "other": total - online - offline,
+    }
+
+
 @router.post("", response_model=DeviceListOut, status_code=201)
 def create_device(
     payload: DeviceCreate,

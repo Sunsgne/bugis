@@ -11,19 +11,7 @@ import PageCard from "../components/PageCard";
 import { dataTableProps } from "../utils/table";
 import { formModalProps } from "../utils/formModal";
 import { action, empty, page, toast } from "../constants/uiCopy";
-
-const STATUS_COLOR: Record<string, string> = {
-  draft: "default",
-  submitted: "gold",
-  approved: "blue",
-  rejected: "red",
-  scheduled: "cyan",
-  running: "processing",
-  completed: "green",
-  failed: "red",
-  rolled_back: "orange",
-  cancelled: "default",
-};
+import { WORK_ORDER_STATUS, statusMeta } from "../constants/statusLabels";
 const TYPE_LABEL: Record<string, string> = {
   provision: "开通",
   modify: "变更",
@@ -111,7 +99,10 @@ export default function WorkOrders() {
             title: "状态",
             dataIndex: "status",
             width: "10%",
-            render: (s) => <Tag color={STATUS_COLOR[s]}>{s}</Tag>,
+            render: (s) => {
+              const m = statusMeta(WORK_ORDER_STATUS, s);
+              return <Tag color={m.color}>{m.label}</Tag>;
+            },
           },
           { title: "申请人", dataIndex: "requested_by", width: "10%", ellipsis: true, render: (v) => v || "—" },
           { title: "审批人", dataIndex: "approved_by", width: "10%", ellipsis: true, render: (v) => v || "—" },
@@ -179,7 +170,9 @@ export default function WorkOrders() {
         {current && (
           <>
             <div style={{ marginBottom: 16 }}>
-              <Tag color={STATUS_COLOR[current.status]}>{current.status}</Tag>
+              <Tag color={statusMeta(WORK_ORDER_STATUS, current.status).color}>
+                {statusMeta(WORK_ORDER_STATUS, current.status).label}
+              </Tag>
               <Tag>{TYPE_LABEL[current.type]}</Tag>
             </div>
 

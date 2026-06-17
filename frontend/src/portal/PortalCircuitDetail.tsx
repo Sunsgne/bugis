@@ -1,14 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { Breadcrumb, Card, Descriptions, Spin, Tag, Typography } from "antd";
+import { Breadcrumb, Card, Descriptions, Empty, Spin, Tag, Typography } from "antd";
 import { api } from "../api/client";
 import PortalCircuitMonitorPanel from "../components/PortalCircuitMonitorPanel";
-
-const STATUS: Record<string, { label: string; color: string }> = {
-  active: { label: "运行中", color: "green" },
-  degraded: { label: "降级", color: "orange" },
-  provisioning: { label: "开通中", color: "processing" },
-};
+import { CIRCUIT_STATUS, SERVICE_TYPE, statusMeta } from "../constants/statusLabels";
 
 interface Detail {
   id: number;
@@ -33,23 +28,52 @@ interface Detail {
 export default function PortalCircuitDetail() {
   const { id } = useParams();
   const circuitId = Number(id);
+  const validId = Number.isFinite(circuitId) && circuitId > 0;
   const [detail, setDetail] = useState<Detail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
-    if (!circuitId) return;
+    if (!validId) {
+      setLoading(false);
+      setError(true);
+      return;
+    }
+    let cancelled = false;
     setLoading(true);
+    setError(false);
     api
       .get<Detail>(`/portal/circuits/${circuitId}`)
-      .then((r) => setDetail(r.data))
-      .finally(() => setLoading(false));
-  }, [circuitId]);
+      .then((r) => {
+        if (!cancelled) setDetail(r.data);
+      })
+      .catch(() => {
+        if (!cancelled) setError(true);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [circuitId, validId]);
 
-  if (loading || !detail) {
+  if (loading) {
     return <Spin style={{ display: "block", margin: "80px auto" }} />;
   }
 
-  const st = STATUS[detail.status] || { label: detail.status, color: "default" };
+  if (error || !detail) {
+    return (
+      <Empty
+        style={{ marginTop: 80 }}
+        description={error ? "未找到该专线或无访问权限" : "暂无数据"}
+      >
+        <Link to="/portal/circuits">返回我的专线</Link>
+      </Empty>
+    );
+  }
+
+  const st = statusMeta(CIRCUIT_STATUS, detail.status);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -72,7 +96,9 @@ export default function PortalCircuitDetail() {
           <Descriptions.Item label="SLA">{detail.sla_target || "—"}</Descriptions.Item>
           <Descriptions.Item label="VNI">{detail.vni ?? "—"}</Descriptions.Item>
           <Descriptions.Item label="VSI">{detail.vsi_name || "—"}</Descriptions.Item>
-          <Descriptions.Item label="业务类型">{detail.service_type}</Descriptions.Item>
+          <Descriptions.Item label="业务类型">
+            {SERVICE_TYPE[detail.service_type] || detail.service_type}
+          </Descriptions.Item>
           {detail.description ? (
             <Descriptions.Item label="描述" span={3}>
               {detail.description}

@@ -20,17 +20,13 @@ import ListToolbar from "../components/ListToolbar";
 import PageCard from "../components/PageCard";
 import { dataTableProps, PAGE_SIZE_OPTIONS, pageRangeLabel, tablePagination } from "../utils/table";
 import { formModalProps } from "../utils/formModal";
+import { TENANT_STATUS, statusMeta } from "../constants/statusLabels";
 
 const TYPE_LABEL: Record<string, string> = {
   enterprise: "企业专线",
   hybrid_cloud: "混合云接入",
   public_cloud: "公有云接入",
   internal: "内部业务",
-};
-const STATUS_COLOR: Record<string, string> = {
-  active: "green",
-  suspended: "orange",
-  terminated: "red",
 };
 
 export default function Tenants() {
@@ -66,7 +62,7 @@ export default function Tenants() {
     const values = await form.validateFields();
     try {
       await api.post("/tenants", values);
-      message.success("租户已创建");
+      message.success("客户已创建");
       setOpen(false);
       form.resetFields();
       load(1);
@@ -77,9 +73,13 @@ export default function Tenants() {
   }
 
   async function remove(id: number) {
-    await api.delete(`/tenants/${id}`);
-    message.success("已删除");
-    load();
+    try {
+      await api.delete(`/tenants/${id}`);
+      message.success("已删除");
+      load();
+    } catch (e: any) {
+      message.error(e?.response?.data?.detail || "删除失败");
+    }
   }
 
   return (
@@ -148,7 +148,10 @@ export default function Tenants() {
             title: "状态",
             dataIndex: "status",
             width: "8%",
-            render: (s) => <Tag color={STATUS_COLOR[s]}>{s}</Tag>,
+            render: (s) => {
+              const m = statusMeta(TENANT_STATUS, s);
+              return <Tag color={m.color}>{m.label}</Tag>;
+            },
           },
           {
             title: "专线数",

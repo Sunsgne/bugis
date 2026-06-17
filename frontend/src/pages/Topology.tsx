@@ -9,10 +9,16 @@ import { empty, page } from "../constants/uiCopy";
 
 export default function Topology() {
   const [topo, setTopo] = useState<Topo | null>(null);
+  const [error, setError] = useState(false);
 
   async function load() {
-    const { data } = await api.get<Topo>("/capacity/topology");
-    setTopo(data);
+    try {
+      const { data } = await api.get<Topo>("/capacity/topology");
+      setTopo(data);
+      setError(false);
+    } catch {
+      setError(true);
+    }
   }
 
   useEffect(() => {
@@ -20,6 +26,14 @@ export default function Topology() {
     const t = setInterval(load, 15000);
     return () => clearInterval(t);
   }, []);
+
+  if (error && !topo) {
+    return (
+      <div className="py-16 text-center text-sm text-muted-foreground">
+        拓扑数据加载失败，将自动重试…
+      </div>
+    );
+  }
 
   if (!topo) {
     return <div className="py-16 text-center text-sm text-muted-foreground">{empty.data}</div>;

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, Navigate, Route, Routes, useNavigate, useLocation } from "react-router-dom";
-import { Badge, Button, Dropdown, Layout, Menu, Space, Typography } from "antd";
+import { Button, Dropdown, Layout, Menu, Space, Tag, Typography } from "antd";
 import {
   Cable,
   Gauge,
@@ -66,7 +66,7 @@ export default function PortalApp() {
             {me?.tenant_name || "加载中…"}
           </div>
           {me?.tenant_code ? (
-            <Badge count={me.tenant_code} style={{ backgroundColor: "#1677ff", marginTop: 6 }} />
+            <Tag color="blue" style={{ marginTop: 6 }}>{me.tenant_code}</Tag>
           ) : null}
         </div>
         <Menu

@@ -125,6 +125,7 @@ export default function Devices() {
   const { message, modal } = AntApp.useApp();
   const [rows, setRows] = useState<Device[]>([]);
   const [total, setTotal] = useState(0);
+  const [summary, setSummary] = useState({ total: 0, online: 0, offline: 0 });
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
   const [search, setSearch] = useState("");
@@ -157,13 +158,17 @@ export default function Devices() {
   async function load(p = page, ps = pageSize, q = search) {
     setLoading(true);
     try {
-      const [d, s] = await Promise.all([
+      const [d, s, sum] = await Promise.all([
         api.get<Paginated<Device>>(`/devices${buildListQuery({ page: p, page_size: ps, q: q || undefined })}`),
         api.get<Site[]>("/sites"),
+        api.get<{ total: number; online: number; offline: number }>("/devices/summary"),
       ]);
       setRows(d.data.items);
       setTotal(d.data.total);
       setSites(s.data);
+      setSummary(sum.data);
+    } catch {
+      message.error(toastCopy.failed);
     } finally {
       setLoading(false);
     }
@@ -398,11 +403,10 @@ export default function Devices() {
     }
   }
 
-  const stats = useMemo(() => {
-    const online = rows.filter((r) => r.status === "online").length;
-    const offline = rows.filter((r) => r.status === "offline").length;
-    return { online, offline };
-  }, [rows]);
+  const stats = useMemo(
+    () => ({ online: summary.online, offline: summary.offline }),
+    [summary],
+  );
 
   function runSearch() {
     setPage(1);
