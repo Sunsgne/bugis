@@ -34,7 +34,7 @@ services:
       - "8080:80"
 
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v3.12.0
     volumes:
       - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./deploy/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
@@ -42,7 +42,7 @@ services:
       - backend
 
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:13.0.2
     environment:
       GF_SECURITY_ADMIN_PASSWORD: admin
       GF_USERS_DEFAULT_THEME: light

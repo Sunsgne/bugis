@@ -4,20 +4,24 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+import bcrypt
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 
 from app.core.config import settings
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+    try:
+        return bcrypt.checkpw(
+            plain_password.encode(),
+            hashed_password.encode(),
+        )
+    except ValueError:
+        return False
 
 
 def create_access_token(subject: str | Any, expires_minutes: int | None = None) -> str:
@@ -29,7 +33,9 @@ def create_access_token(subject: str | Any, expires_minutes: int | None = None) 
 
 
 def create_pre_auth_token(subject: str | Any, expires_minutes: int = 5) -> str:
-    expire = datetime.now(timezone.utc) + timedelta(minutes=expires_minutes)
+    expire = datetime.now(timezone.utc) + timedelta(
+        minutes=expires_minutes
+    )
     to_encode = {"exp": expire, "sub": str(subject), "typ": "preauth"}
     return jwt.encode(to_encode, settings.secret_key, algorithm=settings.algorithm)
 
