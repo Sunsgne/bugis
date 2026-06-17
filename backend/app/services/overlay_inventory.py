@@ -6,16 +6,30 @@ Scanning is read-only and never pushes configuration to devices.
 """
 from __future__ import annotations
 
+from collections import defaultdict
 from dataclasses import dataclass, field
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.circuit import Circuit
-from app.models.controlplane import VtepPeer
+from app.models.circuit import Circuit, CircuitEndpoint
+from app.models.controlplane import EvpnRoute, VtepPeer
 from app.models.device import Device
 from app.models.device_learn_run import DeviceLearnRun
+from app.models.enums import CircuitStatus
 from app.services import config_learn_parse, config_mgmt
+
+# Circuit states whose VNI should still appear in the controller overlay topology
+# even if a fresh provision has not been re-learned from the device yet. A FAILED
+# (or deleted) circuit is intentionally excluded, so a rolled-back / removed
+# service is pruned from the graph by a network-learning scan.
+_TOPOLOGY_RETAIN_STATES = {
+    CircuitStatus.PENDING,
+    CircuitStatus.PROVISIONING,
+    CircuitStatus.ACTIVE,
+    CircuitStatus.DEGRADED,
+    CircuitStatus.SUSPENDED,
+}
 
 
 @dataclass
@@ -236,8 +250,104 @@ def fleet_overlay_inventory(db: Session) -> dict:
 
 
 def scan_fleet_overlay(db: Session) -> dict:
-    """Read-only fleet scan from latest learned configs (no device push)."""
-    return fleet_overlay_inventory(db)
+    """Fleet scan from latest learned configs (no device push).
+
+    In addition to inventorying VNI/VSI usage, this reconciles the built-in
+    controller's overlay topology against reality: stale VTEP/VNI memberships
+    left behind by a failed-then-deleted circuit are pruned so the topology
+    graph reflects the actual network learned from device running-config.
+    """
+    result = fleet_overlay_inventory(db)
+    result.update(reconcile_controller_topology(db))
+    return result
+
+
+def _learned_vnis_by_device(db: Session) -> dict[int, set[int]]:
+    """VNIs actually present on each device per the latest learned running-config."""
+    out: dict[int, set[int]] = {}
+    for device in db.execute(select(Device)).scalars().all():
+        inventory = _latest_learn_inventory(db, device.id)
+        vset: set[int] = set()
+        if inventory:
+            for raw in inventory.get("l2_services") or []:
+                vni = raw.get("vni")
+                if vni is None:
+                    continue
+                try:
+                    vset.add(int(vni))
+                except (TypeError, ValueError):
+                    continue
+        out[device.id] = vset
+    return out
+
+
+def _retained_circuit_vnis_by_device(db: Session) -> dict[int, set[int]]:
+    """VNIs of still-managed circuits per endpoint device (not failed/decommissioned)."""
+    out: dict[int, set[int]] = defaultdict(set)
+    rows = db.execute(
+        select(CircuitEndpoint.device_id, Circuit.vni, Circuit.status)
+        .join(Circuit, Circuit.id == CircuitEndpoint.circuit_id)
+        .where(Circuit.vni.is_not(None))
+    ).all()
+    for device_id, vni, status in rows:
+        if device_id and vni is not None and status in _TOPOLOGY_RETAIN_STATES:
+            out[device_id].add(int(vni))
+    return out
+
+
+def reconcile_controller_topology(db: Session) -> dict:
+    """Prune controller overlay state that no longer exists on the network.
+
+    A VTEP keeps a VNI only if it is either (a) present in the device's learned
+    running-config, or (b) backed by a still-managed platform circuit on that
+    device. Everything else (e.g. a circuit that failed to provision and was
+    deleted) is removed, which clears the corresponding edges from the topology
+    graph. Orphan EVPN routes pointing at deleted circuits are also cleaned.
+    """
+    learned = _learned_vnis_by_device(db)
+    retained = _retained_circuit_vnis_by_device(db)
+
+    pruned_detail: list[dict] = []
+    for peer in db.execute(select(VtepPeer)).scalars().all():
+        current = {
+            int(v) for v in (peer.vnis or "").split(",") if v.strip().isdigit()
+        }
+        if not current:
+            continue
+        keep = learned.get(peer.device_id, set()) | retained.get(peer.device_id, set())
+        stale = current - keep
+        if stale:
+            remaining = sorted(current - stale)
+            peer.vnis = ",".join(str(v) for v in remaining)
+            pruned_detail.append({
+                "device_id": peer.device_id,
+                "device": peer.name,
+                "removed_vnis": sorted(stale),
+            })
+
+    # Drop EVPN routes whose circuit was deleted (defensive; FK is CASCADE).
+    existing_circuit_ids = {cid for (cid,) in db.execute(select(Circuit.id)).all()}
+    orphan_routes = 0
+    for route in db.execute(
+        select(EvpnRoute).where(EvpnRoute.circuit_id.is_not(None))
+    ).scalars().all():
+        if route.circuit_id not in existing_circuit_ids:
+            db.delete(route)
+            orphan_routes += 1
+
+    stale_vni_removed = sum(len(p["removed_vnis"]) for p in pruned_detail)
+    if pruned_detail or orphan_routes:
+        from app.controller import ha
+
+        ha.bump_rib_version(db)
+
+    return {
+        "topology_reconciled": True,
+        "peers_pruned": len(pruned_detail),
+        "stale_vni_removed": stale_vni_removed,
+        "orphan_routes_removed": orphan_routes,
+        "pruned_detail": pruned_detail,
+    }
 
 
 def _smart_allocation_enabled() -> bool:

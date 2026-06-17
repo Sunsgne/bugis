@@ -213,9 +213,13 @@ export default function ControlPlane() {
     try {
       const { data } = await api.post("/controller/overlay-inventory/scan");
       setOverlay(data);
+      const cleaned = data.stale_vni_removed ?? 0;
       message.success(
-        `现网扫描完成 · ${data.network_only_services ?? 0} 个未纳管服务 · 保留 ${data.reserved_vni_count ?? 0} 个 VNI`,
+        `现网扫描完成 · ${data.network_only_services ?? 0} 个未纳管服务 · 保留 ${data.reserved_vni_count ?? 0} 个 VNI` +
+          (cleaned > 0 ? ` · 已清理 ${cleaned} 条陈旧拓扑` : ""),
       );
+      // Refresh topology / VTEPs so the graph reflects the reconciled state.
+      load();
     } finally {
       setScanningOverlay(false);
     }
