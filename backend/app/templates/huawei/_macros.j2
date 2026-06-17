@@ -1,4 +1,8 @@
 {# Huawei VRP / CE EVPN VXLAN shared fragments #}
+{% macro cust_label(circuit) -%}
+{% if circuit.tenant %}{{ circuit.tenant.name }}{% else %}CUST{{ circuit.tenant_id }}{% endif %}:{{ circuit.code }}
+{%- endmacro %}
+
 {% macro l2_ifname(endpoint, mode, svid) -%}
 {%- if mode == 'access' -%}
 {{ endpoint.interface_name }}
@@ -47,7 +51,7 @@ bridge-domain {{ circuit.vni }}
 
 {% macro l2_subif(endpoint, circuit, mode, svid, cvid) -%}
 interface {{ l2_ifname(endpoint, mode, svid) }} mode l2
- description CUST_{{ circuit.tenant_id }}_{{ circuit.code }}
+ description {{ cust_label(circuit) }}
 {% if mode == 'access' %}
  encapsulation untag
 {% elif mode == 'qinq' %}

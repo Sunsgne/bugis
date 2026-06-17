@@ -12,7 +12,7 @@
 {% macro l2_ac(endpoint, circuit, mode, svid, cvid) -%}
 set interfaces {{ endpoint.interface_name }} flexible-vlan-tagging
 set interfaces {{ endpoint.interface_name }} encapsulation flexible-ethernet-services
-set interfaces {{ endpoint.interface_name }} description CUST_{{ circuit.tenant_id }}_{{ circuit.code }}
+set interfaces {{ endpoint.interface_name }} description "{% if circuit.tenant %}{{ circuit.tenant.name }}{% else %}CUST{{ circuit.tenant_id }}{% endif %}:{{ circuit.code }}"
 set interfaces {{ endpoint.interface_name }} mtu {{ circuit.mtu }}
 {% if mode == 'access' %}
 set interfaces {{ endpoint.interface_name }} unit 0 encapsulation ethernet-bridge

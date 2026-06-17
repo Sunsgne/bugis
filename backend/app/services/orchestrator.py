@@ -642,7 +642,7 @@ def _rollback_applied(
         return
     _log(
         db, wo,
-        f"下发失败：开始回滚已成功下发的 {len(rollbacks)} 个目标的配置",
+        f"下发失败：开始回滚/清理已尝试下发的 {len(rollbacks)} 个目标的配置",
         level="warning", actor=actor,
     )
     undone = 0
@@ -655,7 +655,7 @@ def _rollback_applied(
                  level="warning", actor=actor)
     _log(
         db, wo,
-        f"回滚完成：{undone}/{len(rollbacks)} 个目标的已下发配置已撤销",
+        f"回滚完成：{undone}/{len(rollbacks)} 个目标的配置已撤销/清理",
         level="warning" if undone < len(rollbacks) else "info",
         actor=actor,
     )
@@ -671,9 +671,17 @@ def _register_driver_rollback(
     actor: str | None,
     is_gateway: bool,
     rollbacks: list[tuple[str, RollbackFn]],
+    *,
+    partial_failure: bool = False,
 ) -> None:
-    """Queue an undo (the inverse 'remove' config) for a device just programmed."""
+    """Queue an undo (the inverse 'remove' config) for an attempted device.
+
+    ``partial_failure`` marks devices whose apply itself failed: we still push
+    the remove as best-effort cleanup of any half-applied config (VSI /
+    bridge-domain / QoS) so no dirty config is left behind.
+    """
     tag = "[GW] " if is_gateway else ""
+    verb = "清理残留" if partial_failure else "回滚"
 
     def _undo() -> bool:
         driver = get_driver(device.vendor)
@@ -684,14 +692,14 @@ def _register_driver_rollback(
         if result.success:
             _log(
                 db, wo,
-                f"{tag}已回滚 {device.vendor.value} {device.name}: remove "
+                f"{tag}已{verb} {device.vendor.value} {device.name}: remove "
                 f"{service_type.value}",
                 actor=actor,
             )
         else:
             _log(
                 db, wo,
-                f"{tag}回滚 {device.name} 失败: {result.output}",
+                f"{tag}{verb} {device.name} 失败: {result.output}",
                 level="warning", actor=actor,
             )
         return result.success
@@ -777,15 +785,18 @@ def _render_and_push(
             level="info" if result.success else "error",
             actor=actor,
         )
+        # Register cleanup for ANY apply attempt (success OR failure): a failed
+        # push may have partially applied (e.g. bridge-domain/VSI created before
+        # the erroring command), so on overall rollback we must scrub every
+        # attempted device to avoid leaving dirty config behind.
         if (
-            result.success
-            and operation == "apply"
+            operation == "apply"
             and rollbacks is not None
             and job.rollback_config
         ):
             _register_driver_rollback(
                 db, wo, circuit, device, service_type, job.rollback_config,
-                actor, is_gateway, rollbacks,
+                actor, is_gateway, rollbacks, partial_failure=not result.success,
             )
         return result.success
     except Exception as exc:  # noqa: BLE001
