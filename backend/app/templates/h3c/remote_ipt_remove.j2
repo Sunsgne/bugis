@@ -19,6 +19,7 @@ interface {{ endpoint.interface_name }}
 {% else %}
 interface {{ endpoint.interface_name }}
  undo service-instance {{ svid }}
+ quit
 #
 {{ h3c.qos_policy_remove(circuit) }}
 undo interface Vsi-interface{{ circuit.vni }}

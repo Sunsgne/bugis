@@ -83,6 +83,17 @@ def test_h3c_strips_banner_and_return_keeps_commands():
     assert "return" not in [c.strip().lower() for c in cmds]
 
 
+def test_hash_vendor_keeps_quit_but_drops_return():
+    # 'return' (jump to user view) is dropped; 'quit' (pop one view) is kept so
+    # teardown templates can return to system-view before system-scoped undo.
+    cfg = "interface GE1/0/5\n undo service-instance 1\n quit\nundo vsi v1\nreturn\n"
+    cmds = to_command_list(Vendor.H3C, cfg)
+    assert "quit" in [c.strip().lower() for c in cmds]
+    assert "return" not in [c.strip().lower() for c in cmds]
+    # quit must come before the system-view undo that follows the interface block
+    assert cmds.index(" quit") < cmds.index("undo vsi v1")
+
+
 def test_frr_strips_bang_comments_keeps_config_terminal():
     cmds = to_command_list(Vendor.FRR, FRR_DISPLAY)
     assert "configure terminal" in cmds
