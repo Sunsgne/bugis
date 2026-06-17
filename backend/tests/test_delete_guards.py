@@ -81,3 +81,20 @@ def test_patch_circuit_response_includes_path_fields(client, auth_headers):
     # _to_circuit_out always populates these (consistent with GET/POST).
     assert "segment_list" in body
     assert "path_hops" in body
+
+
+def test_circuit_preview_does_not_create_work_order(client, auth_headers):
+    _site, tenant, dev_a, dev_z = _bootstrap_topology(client, auth_headers)
+    circuit = _circuit(client, auth_headers, tenant, dev_a, dev_z)
+    before = client.get("/api/v1/work-orders", headers=auth_headers).json()
+    before_n = before["total"] if isinstance(before, dict) else len(before)
+
+    r = client.get(f"/api/v1/circuits/{circuit['id']}/preview", headers=auth_headers)
+    assert r.status_code == 200
+    body = r.json()
+    assert body["operation"] == "apply"
+    assert len(body["previews"]) == 2  # one render per endpoint
+
+    after = client.get("/api/v1/work-orders", headers=auth_headers).json()
+    after_n = after["total"] if isinstance(after, dict) else len(after)
+    assert after_n == before_n  # preview must not persist a work order
