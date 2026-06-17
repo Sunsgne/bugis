@@ -17,7 +17,7 @@ from app.models.link import Link
 from app.models.site import Site
 from app.services.bw_parser import parse_bw_mbps
 from app.services.link_monitor import capacity_from_interface
-from app.services.port_inventory import is_huawei_subinterface
+from app.services.port_inventory import is_huawei_subinterface, is_vlan_interface_name
 
 _UPSTREAM_HINTS = re.compile(
     r"uplink|backbone|dci|trunk|core|peer|ix|transit|互联|上联|骨干|border|spine",
@@ -29,10 +29,6 @@ _CUSTOMER_HINTS = re.compile(
 )
 _SYSTEM_IFACE = re.compile(
     r"loop(?:back)?|null0|inloop|console|register|meth\d|management|mgmt",
-    re.IGNORECASE,
-)
-_VLAN_IFACE = re.compile(
-    r"^(?:Vlan-interface|Vlanif|VlanIF|Vlan)\d+$",
     re.IGNORECASE,
 )
 _BRIDGE_AGG = re.compile(r"^Bridge-Aggregation\d+$", re.IGNORECASE)
@@ -61,7 +57,7 @@ class ScoredInterface:
 
 
 def is_vlan_interface(name: str) -> bool:
-    return bool(_VLAN_IFACE.match(name.strip()))
+    return is_vlan_interface_name(name)
 
 
 def is_bridge_aggregation(name: str) -> bool:
@@ -157,7 +153,7 @@ def _prefer_vlan_on_device(rows: list[DeviceInterface]) -> bool:
     return any(is_vlan_interface(row.name) for row in rows)
 
 
-def rank_interfaces(db: Session, device_id: int, *, limit: int = 12) -> list[ScoredInterface]:
+def rank_interfaces(db: Session, device_id: int, *, limit: int = 48) -> list[ScoredInterface]:
     rows = _device_interfaces(db, device_id)
     prefer_vlan = _prefer_vlan_on_device(rows)
     scored = [_score_interface(row, prefer_vlan=prefer_vlan) for row in rows]
@@ -165,7 +161,8 @@ def rank_interfaces(db: Session, device_id: int, *, limit: int = 12) -> list[Sco
     if prefer_vlan:
         vlan_rows = [row for row in scored if row.kind == "vlan"]
         if vlan_rows:
-            scored = vlan_rows
+            vlan_rows.sort(key=lambda row: (-row.score, -row.speed_mbps, row.name))
+            return vlan_rows[:limit]
     scored.sort(key=lambda row: (-row.score, -row.speed_mbps, row.name))
     return scored[:limit]
 

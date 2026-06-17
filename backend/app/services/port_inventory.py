@@ -142,6 +142,50 @@ _SKIP_IFACE_RE = re.compile(
     r"^(loopback|vlanif|null|meth|inloopback|register-tunnel|vbdif)",
     re.IGNORECASE,
 )
+_VLAN_IFACE_RE = re.compile(
+    r"^(?:Vlan-interface|Vlanif|VlanIF|Vlan)\d+$",
+    re.IGNORECASE,
+)
+_VLAN_IFACE_LINE = re.compile(
+    r"^interface\s+(Vlan-interface\d+|Vlanif\d+|VlanIF\d+|Vlan\d+)\s*$",
+    re.IGNORECASE,
+)
+
+
+def is_vlan_interface_name(name: str) -> bool:
+    """True for backbone L3 VLAN interfaces (H3C Vlan-interface, Huawei Vlanif)."""
+    return bool(_VLAN_IFACE_RE.match(_normalize_iface(name)))
+
+
+def list_vlan_interfaces_from_config(config: str, vendor: Vendor) -> list[dict]:
+    """Extract L3 VLAN interfaces from running-config for backbone link planning."""
+    del vendor  # naming is shared across H3C / Huawei
+    results: list[dict] = []
+    lines = config.splitlines()
+    idx = 0
+    while idx < len(lines):
+        match = _VLAN_IFACE_LINE.match(lines[idx].strip())
+        if not match:
+            idx += 1
+            continue
+        name = _normalize_iface(match.group(1))
+        description: str | None = None
+        idx += 1
+        while idx < len(lines):
+            stripped = lines[idx].strip()
+            if not stripped or stripped == "#":
+                idx += 1
+                break
+            if _VLAN_IFACE_LINE.match(stripped) or re.match(
+                r"^interface\s+\S+", stripped, re.IGNORECASE
+            ):
+                break
+            desc_match = re.match(r"^description\s+(.+)$", stripped, re.IGNORECASE)
+            if desc_match:
+                description = desc_match.group(1).strip()
+            idx += 1
+        results.append({"name": name, "description": description})
+    return results
 
 
 def list_physical_interfaces_from_config(config: str, vendor: Vendor) -> list[str]:
@@ -156,7 +200,7 @@ def list_physical_interfaces_from_config(config: str, vendor: Vendor) -> list[st
         if vendor == Vendor.HUAWEI and is_huawei_subinterface(raw):
             names.add(huawei_physical_port(raw))
             continue
-        if _SKIP_IFACE_RE.match(raw):
+        if is_vlan_interface_name(raw) or _SKIP_IFACE_RE.match(raw):
             continue
         if vendor == Vendor.HUAWEI and not re.search(r"\d+/\d+", raw):
             continue

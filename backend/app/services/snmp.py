@@ -276,7 +276,7 @@ def _walk_with_mgmt_failover(
 
 
 def discover_interfaces_from_config(db: Session, device: Device) -> list[dict]:
-    """Fallback: parse physical ports from learned or live running-config."""
+    """Fallback: parse physical and VLAN L3 ports from learned or live running-config."""
     from app.services import config_fetch, config_mgmt, port_inventory
 
     learned = config_mgmt.latest_learned(db, device.id)
@@ -287,9 +287,10 @@ def discover_interfaces_from_config(db: Session, device: Device) -> list[dict]:
             config = content
     if not config.strip():
         return []
-    names = port_inventory.list_physical_interfaces_from_config(config, device.vendor)
-    return [
-        {
+
+    by_name: dict[str, dict] = {}
+    for name in port_inventory.list_physical_interfaces_from_config(config, device.vendor):
+        by_name[name] = {
             "name": name,
             "description": None,
             "speed_mbps": None,
@@ -297,8 +298,52 @@ def discover_interfaces_from_config(db: Session, device: Device) -> list[dict]:
             "ifindex": None,
             "discovered_via": "running-config",
         }
-        for name in names
-    ]
+    for vlan in port_inventory.list_vlan_interfaces_from_config(config, device.vendor):
+        by_name[vlan["name"]] = {
+            "name": vlan["name"],
+            "description": vlan.get("description"),
+            "speed_mbps": None,
+            "oper_status": "up",
+            "ifindex": None,
+            "discovered_via": "running-config",
+        }
+    return list(by_name.values())
+
+
+def _merge_vlan_interfaces_from_config(
+    db: Session, device: Device, discovered: list[dict]
+) -> list[dict]:
+    """SNMP may omit logical Vlanif/Vlan-interface; supplement from running-config."""
+    from app.services import config_fetch, config_mgmt, port_inventory
+
+    learned = config_mgmt.latest_learned(db, device.id)
+    config = (learned.content if learned else "") or ""
+    if not config.strip() and not settings.dry_run:
+        ok, content, _err = config_fetch.fetch_running_config(device, db=db)
+        if ok and content.strip():
+            config = content
+    if not config.strip():
+        return discovered
+
+    known = {d["name"] for d in discovered}
+    merged = list(discovered)
+    for vlan in port_inventory.list_vlan_interfaces_from_config(config, device.vendor):
+        if vlan["name"] in known:
+            for row in merged:
+                if row["name"] == vlan["name"]:
+                    if vlan.get("description") and not row.get("description"):
+                        row["description"] = vlan["description"]
+                    break
+            continue
+        merged.append({
+            "name": vlan["name"],
+            "description": vlan.get("description"),
+            "speed_mbps": None,
+            "oper_status": "up",
+            "ifindex": None,
+            "discovered_via": "running-config",
+        })
+    return merged
 
 
 def _try_config_interface_fallback(db: Session, device: Device) -> list[dict]:
@@ -345,6 +390,8 @@ def discover_interfaces(db: Session, device: Device) -> list[DeviceInterface]:
                 discovered = _try_config_interface_fallback(db, device)
                 if not discovered:
                     raise RuntimeError(msg) from exc
+
+    discovered = _merge_vlan_interfaces_from_config(db, device, discovered)
 
     if device.vendor == Vendor.HUAWEI:
         discovered = [d for d in discovered if not is_huawei_subinterface(d["name"])]

@@ -209,6 +209,27 @@ interface Vlanif201
     assert "Vlanif201" not in names
 
 
+def test_list_vlan_interfaces_from_config():
+    config = """
+interface Vlanif4010
+ description DCI peer bw(10000M)
+ ip address 10.10.10.1 255.255.255.252
+#
+interface Vlan-interface4001
+ description H3C DCI
+ ip address 10.20.20.1 255.255.255.252
+#
+interface 10GE1/0/3
+ description uplink
+"""
+    vlans = port_inventory.list_vlan_interfaces_from_config(config, Vendor.HUAWEI)
+    by_name = {row["name"]: row for row in vlans}
+    assert "Vlanif4010" in by_name
+    assert by_name["Vlanif4010"]["description"] == "DCI peer bw(10000M)"
+    assert "Vlan-interface4001" in by_name
+    assert by_name["Vlan-interface4001"]["description"] == "H3C DCI"
+
+
 def test_rollup_huawei_subif_usage_to_physical_port():
     config = """
 interface 10GE1/0/2.1050 mode l2

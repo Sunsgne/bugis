@@ -15,7 +15,7 @@ import { BulbOutlined, PlusOutlined } from "@ant-design/icons";
 import { api } from "../api/client";
 import type { Device, LinkPlan, UplinkCandidate } from "../api/types";
 import InterfaceNameCell from "./InterfaceNameCell";
-import { formatInterfaceShort } from "../utils/networkDisplay";
+import { formatInterfaceShort, isVlanInterface } from "../utils/networkDisplay";
 
 const LINK_TYPE_LABEL: Record<string, string> = {
   dci: "跨站点 DCI",
@@ -176,6 +176,9 @@ export default function BackboneLinkModal({ open, devices, onClose, onCreated }:
     }
   }
 
+  const vlanHintA = candidatesA.length > 0 && !candidatesA.some((c) => isVlanInterface(c.name));
+  const vlanHintZ = candidatesZ.length > 0 && !candidatesZ.some((c) => isVlanInterface(c.name));
+
   return (
     <Drawer
       title="配置骨干链路"
@@ -310,7 +313,7 @@ export default function BackboneLinkModal({ open, devices, onClose, onCreated }:
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-          <Form.Item name="interface_a" label="A 端端口">
+          <Form.Item name="interface_a" label="A 端端口" extra={vlanHintA ? "未发现 Vlanif / Vlan-interface，请在设备页执行 SNMP 发现或现网学习后刷新" : undefined}>
             <Select
               showSearch
               placeholder="优先 VLAN 子接口"
@@ -331,7 +334,7 @@ export default function BackboneLinkModal({ open, devices, onClose, onCreated }:
               }}
             />
           </Form.Item>
-          <Form.Item name="interface_z" label="Z 端端口">
+          <Form.Item name="interface_z" label="Z 端端口" extra={vlanHintZ ? "未发现 Vlanif / Vlan-interface，请在设备页执行 SNMP 发现或现网学习后刷新" : undefined}>
             <Select
               showSearch
               placeholder="优先 VLAN 子接口"

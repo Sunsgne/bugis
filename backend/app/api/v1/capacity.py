@@ -117,7 +117,7 @@ def list_uplink_candidates(
             "score": row.score,
             "reason": row.reason,
         }
-        for row in link_planner.rank_interfaces(db, device_id)
+        for row in link_planner.rank_interfaces(db, device_id, limit=48)
     ]
 
 
