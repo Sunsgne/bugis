@@ -16,11 +16,11 @@ Behaviour:
 
 Examples:
   # Local / SQLite
-  cd backend && python -m scripts.create_admin xiaoqiang 'njupt@NJ-5353'
+  cd backend && python -m scripts.create_admin <username> '<password>'
 
   # Production (Docker Compose)
   docker compose -f docker-compose.prod.yml exec backend \
-      python -m scripts.create_admin xiaoqiang 'njupt@NJ-5353'
+      python -m scripts.create_admin <username> '<password>'
 """
 from __future__ import annotations
 
