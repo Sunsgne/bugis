@@ -48,13 +48,6 @@ undo traffic classifier tc-{{ circuit.code }}
 {% endif %}
 {%- endmacro %}
 
-{% macro service_instance_qos_remove(circuit) -%}
-{% if circuit.bandwidth_mbps %}
- undo qos apply policy {{ qos_policy_name(circuit) }} inbound
- undo qos apply policy {{ qos_policy_name(circuit) }} outbound
-{% endif %}
-{%- endmacro %}
-
 {% macro service_instance_ac(endpoint, circuit, mode, svid, cvid) -%}
  service-instance {{ svid or 1 }}
 {% if mode == 'access' %}

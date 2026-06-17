@@ -5,13 +5,11 @@
 #
 {% if partial %}
 interface {{ endpoint.interface_name }}
-{{ h3c.service_instance_qos_remove(circuit) }}
  undo service-instance {{ circuit.vlan_id or endpoint.vlan_id }}
 #
 {% else %}
 undo interface Vsi-interface{{ circuit.vni }}
 interface {{ endpoint.interface_name }}
-{{ h3c.service_instance_qos_remove(circuit) }}
  undo service-instance {{ circuit.vlan_id or endpoint.vlan_id }}
 #
 {{ h3c.qos_policy_remove(circuit) }}
