@@ -29,7 +29,10 @@ services:
     environment:
       BUGIS_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-bugis}:${POSTGRES_PASSWORD:-bugis-demo-change-me}@db:5432/${POSTGRES_DB:-bugis}
       BUGIS_SECRET_KEY: ${BUGIS_SECRET_KEY:-demo-change-me-use-long-random-string}
+      BUGIS_APP_ENV: production
+      BUGIS_DEBUG: "false"
       BUGIS_DRY_RUN: "false"
+      BUGIS_TELEMETRY_SIMULATION: "false"
       BUGIS_SCHEDULER_INTERVAL_SECONDS: "20"
       BUGIS_EXPOSE_OPENAPI: "false"
     depends_on:

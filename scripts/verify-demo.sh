@@ -39,7 +39,9 @@ import json, urllib.request
 req = urllib.request.Request("$BASE/api/v1/system/info", headers={"Authorization": "Bearer $TOKEN"})
 info = json.load(urllib.request.urlopen(req))
 assert info.get("dry_run") is False, info
+assert info.get("telemetry_simulation") is False, info
 assert info.get("production_data_mode") is True, info
+assert info.get("app_env") == "production", info
 print("  production_data_mode OK")
 PY
 
