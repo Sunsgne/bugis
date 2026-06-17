@@ -239,11 +239,11 @@ export default function Login() {
 
         <section className="flex w-full flex-1 justify-center lg:justify-end">
           <Card className="w-full max-w-md border-slate-800/80 bg-slate-900/80 shadow-2xl shadow-black/40 backdrop-blur-sm">
-            <CardHeader className="space-y-4 pb-2">
+            <CardHeader className="space-y-2 pb-6">
               <CardTitle className="text-xl text-slate-100">
                 {mfaToken ? "双因素验证" : brand.login_title || brand.product_name}
               </CardTitle>
-              <CardDescription className="text-slate-400">
+              <CardDescription className="leading-relaxed text-slate-400">
                 {mfaToken
                   ? "请输入验证器或邮件中的 6 位验证码"
                   : brand.login_subtitle || brand.tagline || `登录以进入 ${brand.product_name}`}
