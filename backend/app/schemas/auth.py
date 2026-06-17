@@ -74,6 +74,21 @@ class UserCreate(BaseModel):
         return v
 
 
+class UserUpdate(BaseModel):
+    full_name: str | None = None
+    email: str | None = None
+    role: UserRole | None = None
+    is_active: bool | None = None
+    password: str | None = None
+
+    @field_validator("role")
+    @classmethod
+    def platform_role_only(cls, v: UserRole | None) -> UserRole | None:
+        if v in (UserRole.TENANT_ADMIN, UserRole.TENANT_VIEWER):
+            raise ValueError("use tenant user API for portal accounts")
+        return v
+
+
 class TenantUserCreate(BaseModel):
     username: str
     password: str

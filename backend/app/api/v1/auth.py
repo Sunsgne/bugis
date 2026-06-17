@@ -5,14 +5,14 @@ import secrets
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, is_tenant_user, require_admin
 from app.core.database import get_db
 from app.core.security import create_access_token, hash_password, verify_password
 from app.models.auth_challenge import AuthChallenge
-from app.models.enums import MfaMethod, TenantStatus, UserScope
+from app.models.enums import MfaMethod, TenantStatus, UserRole, UserScope
 from app.models.tenant import Tenant
 from app.models.user import User
 from app.schemas.auth import (
@@ -28,6 +28,7 @@ from app.schemas.auth import (
     Token,
     UserCreate,
     UserOut,
+    UserUpdate,
 )
 from app.services import auth_security, email as email_svc, platform_settings as platform_cfg
 
@@ -370,3 +371,79 @@ def create_user(
 @router.get("/users", response_model=list[UserOut])
 def list_users(db: Session = Depends(get_db), _: User = Depends(require_admin)):
     return db.execute(select(User)).scalars().all()
+
+
+def _active_platform_admin_count(db: Session) -> int:
+    return db.execute(
+        select(func.count())
+        .select_from(User)
+        .where(
+            User.role == UserRole.ADMIN,
+            User.scope == UserScope.PLATFORM,
+            User.is_active.is_(True),
+        )
+    ).scalar_one()
+
+
+def _get_platform_user(db: Session, user_id: int) -> User:
+    user = db.get(User, user_id)
+    if not user or is_tenant_user(user):
+        raise HTTPException(status_code=404, detail="user not found")
+    return user
+
+
+@router.patch("/users/{user_id}", response_model=UserOut)
+def update_user(
+    user_id: int,
+    payload: UserUpdate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    user = _get_platform_user(db, user_id)
+    data = payload.model_dump(exclude_unset=True)
+
+    # Guard against locking everyone out: the last active platform admin
+    # cannot be demoted or deactivated.
+    becomes_admin = data.get("role", user.role) == UserRole.ADMIN
+    stays_active = data.get("is_active", user.is_active)
+    losing_admin_rights = (
+        user.role == UserRole.ADMIN
+        and user.is_active
+        and not (becomes_admin and stays_active)
+    )
+    if losing_admin_rights and _active_platform_admin_count(db) <= 1:
+        raise HTTPException(status_code=400, detail="至少保留一个启用的管理员账号")
+
+    password = data.pop("password", None)
+    if password:
+        if len(password) < 8:
+            raise HTTPException(status_code=400, detail="新密码至少 8 位")
+        user.hashed_password = hash_password(password)
+
+    for field in ("full_name", "email", "role", "is_active"):
+        if field in data:
+            setattr(user, field, data[field])
+
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+@router.delete("/users/{user_id}", status_code=204)
+def delete_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    user = _get_platform_user(db, user_id)
+    if user.id == admin.id:
+        raise HTTPException(status_code=400, detail="不能删除当前登录账号")
+    if (
+        user.role == UserRole.ADMIN
+        and user.is_active
+        and _active_platform_admin_count(db) <= 1
+    ):
+        raise HTTPException(status_code=400, detail="至少保留一个启用的管理员账号")
+    db.delete(user)
+    db.commit()
