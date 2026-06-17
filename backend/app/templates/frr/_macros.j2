@@ -5,13 +5,13 @@ bridge br{{ circuit.vni }}
 !
 {% if mode == 'access' %}
 interface {{ endpoint.interface_name }}
- description CUST_{{ circuit.tenant_id }}_{{ circuit.code }}
+ description {% if circuit.tenant %}{{ circuit.tenant.name }}{% else %}CUST{{ circuit.tenant_id }}{% endif %}:{{ circuit.code }}
  bridge-group br{{ circuit.vni }}
  bridge-group br{{ circuit.vni }} untagged
 !
 {% elif mode == 'qinq' %}
 interface {{ endpoint.interface_name }}.{{ svid }}
- description CUST_{{ circuit.tenant_id }}_{{ circuit.code }} qinq {{ svid }}
+ description {% if circuit.tenant %}{{ circuit.tenant.name }}{% else %}CUST{{ circuit.tenant_id }}{% endif %}:{{ circuit.code }} qinq {{ svid }}
  encapsulation dot1q {{ svid }} second-dot1q {{ endpoint.inner_vlan_id }}
 !
 bridge br{{ circuit.vni }}
@@ -22,7 +22,7 @@ bridge br{{ circuit.vni }}
 !
 {% else %}
 interface {{ endpoint.interface_name }}.{{ svid }}
- description CUST_{{ circuit.tenant_id }}_{{ circuit.code }} dot1q {{ svid }}
+ description {% if circuit.tenant %}{{ circuit.tenant.name }}{% else %}CUST{{ circuit.tenant_id }}{% endif %}:{{ circuit.code }} dot1q {{ svid }}
  encapsulation dot1q {{ svid }}
 !
 bridge br{{ circuit.vni }}

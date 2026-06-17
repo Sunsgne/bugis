@@ -88,7 +88,9 @@ def test_partial_failure_rolls_back_healthy_device(client, auth_headers, monkeyp
     a_pushes = [c for c in calls if c[0] == dev_a["id"]]
     z_pushes = [c for c in calls if c[0] == dev_z["id"]]
     assert len(a_pushes) == 2, calls
-    assert len(z_pushes) == 1, calls  # failed device is NOT rolled back
+    # Failed device is ALSO scrubbed (best-effort cleanup of half-applied config):
+    # apply attempt + remove cleanup.
+    assert len(z_pushes) == 2, calls
     # The 2nd push to dev_a is the inverse (remove/undo) config.
     assert "undo" in a_pushes[1][1].lower()
 
@@ -99,6 +101,8 @@ def test_partial_failure_rolls_back_healthy_device(client, auth_headers, monkeyp
     messages = " | ".join(e["message"] for e in wo["events"])
     assert "回滚" in messages
     assert "已回滚" in messages
+    # The failed device's residual config was cleaned up too.
+    assert "清理残留" in messages
 
 
 def test_full_success_does_not_roll_back(client, auth_headers, monkeypatch):

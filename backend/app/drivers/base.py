@@ -383,18 +383,45 @@ class BaseDriver:
             # what failed in production with very long Huawei hostnames. netmiko
             # still enters/exits config mode (system-view ... return) on its own,
             # so the sanitized commands must NOT include a trailing return/quit.
-            return conn.send_config_set(
+            output = conn.send_config_set(
                 commands,
                 read_timeout=read_timeout,
                 cmd_verify=False,
             )
+            output += self._commit_if_needed(conn)
+            return output
         finally:
             conn.disconnect()
+
+    def _commit_if_needed(self, conn: Any) -> str:  # pragma: no cover
+        """Commit candidate config on two-stage platforms (Huawei VRP8 / CE).
+
+        Without an explicit commit, VRP8 keeps the changes in the candidate
+        datastore and they are discarded on disconnect, leaving the device with
+        none of the intended apply/remove — exactly the "dirty config left
+        behind" symptom. No-op (best effort) on single-stage platforms.
+        """
+        if self.vendor != Vendor.HUAWEI:
+            return ""
+        commit = getattr(conn, "commit", None)
+        if not callable(commit):
+            return ""
+        try:
+            return "\n" + (commit() or "")
+        except Exception:  # noqa: BLE001 - legacy VRP5 has no candidate to commit
+            return ""
 
 
 NETMIKO_DEVICE_TYPES = {
     Vendor.H3C: "hp_comware",
-    Vendor.HUAWEI: "huawei",
+    # The platform's Huawei templates are CloudEngine / VRP8 "Datacom" (EVPN
+    # VXLAN: bridge-domain, interface ... mode l2, Nve). VRP8 uses a two-stage
+    # (candidate + commit) config model whose prompt becomes "[*host]"/"[~host]"
+    # while uncommitted. The plain "huawei" netmiko driver does not understand
+    # that prompt (causing "Pattern not detected") nor does it commit, so config
+    # is silently discarded. "huawei_vrpv8" handles both. Operators can override
+    # per-device (device.netmiko_device_type="huawei") for legacy VRP5 boxes.
+    Vendor.HUAWEI: "huawei_vrpv8",
     Vendor.JUNIPER: "juniper_junos",
     Vendor.ARISTA: "arista_eos",
     Vendor.CISCO: "cisco_xr",

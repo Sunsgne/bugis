@@ -36,6 +36,7 @@ class FakeConn:
         self.send_config_kwargs = None
         self.paging_cmds: list[str] = []
         self.disconnected = False
+        self.committed = False
         FakeConn.instances.append(self)
 
     def send_command(self, cmd, **kwargs):
@@ -46,6 +47,10 @@ class FakeConn:
         self.sent_commands = list(commands)
         self.send_config_kwargs = kwargs
         return "OK: applied %d command(s)" % len(self.sent_commands)
+
+    def commit(self, **kwargs):
+        self.committed = True
+        return "commit complete"
 
     def disconnect(self):
         self.disconnected = True
@@ -95,6 +100,9 @@ def test_push_cli_sanitizes_and_sets_cmd_verify(fake_netmiko):
 
     conn = fake_netmiko.instances[-1]
     assert conn.disconnected is True
+    # Huawei CE/datacom uses the two-stage VRP8 driver and must commit.
+    assert conn.params.get("device_type") == "huawei_vrpv8"
+    assert conn.committed is True
     # Paging disabled for Huawei.
     assert any("screen-length" in c for c in conn.paging_cmds)
     # cmd_verify must be disabled (the production fix).
@@ -106,6 +114,15 @@ def test_push_cli_sanitizes_and_sets_cmd_verify(fake_netmiko):
     assert "bridge-domain 30002" in conn.sent_commands
     assert " encapsulation dot1q vid 1234" in conn.sent_commands
     assert "OK:" in out
+
+
+def test_push_cli_h3c_does_not_commit(fake_netmiko):
+    driver = get_driver(Vendor.H3C)
+    device = FakeDevice(Vendor.H3C, transport=ManagementTransport.SSH)
+    driver._push_cli(device, H3C_CFG)
+    conn = fake_netmiko.instances[-1]
+    assert conn.params.get("device_type") == "hp_comware"
+    assert conn.committed is False  # Comware is single-stage; no commit
 
 
 def test_push_cli_noop_when_nothing_to_push(fake_netmiko):

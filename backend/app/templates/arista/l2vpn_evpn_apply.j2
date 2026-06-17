@@ -11,7 +11,7 @@ vlan {{ svid }}
 !
 {{ eos.qos_policies(circuit, svid) }}
 interface {{ endpoint.interface_name }}
-   description CUST_{{ circuit.tenant_id }}_{{ circuit.code }}
+   description {% if circuit.tenant %}{{ circuit.tenant.name }}{% else %}CUST{{ circuit.tenant_id }}{% endif %}:{{ circuit.code }}
    mtu {{ circuit.mtu }}
 {{ eos.l2_switchport(mode, svid, cvid) }}
 {% if circuit.bandwidth_mbps %}

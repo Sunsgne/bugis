@@ -18,7 +18,7 @@ interface Vlan{{ svid }}
    mtu {{ circuit.mtu }}
 !
 interface {{ endpoint.interface_name }}
-   description CUST_{{ circuit.tenant_id }}_{{ circuit.code }}
+   description {% if circuit.tenant %}{{ circuit.tenant.name }}{% else %}CUST{{ circuit.tenant_id }}{% endif %}:{{ circuit.code }}
    mtu {{ circuit.mtu }}
 {{ eos.l2_switchport(mode, svid, cvid) }}
 !
