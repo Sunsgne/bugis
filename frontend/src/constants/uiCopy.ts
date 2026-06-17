@@ -12,8 +12,8 @@ export const brand = {
 
 export const nav = {
   groups: {
-    overview: "驾驶舱",
-    resources: "客户",
+    overview: "业务总揽",
+    resources: "客户管理",
     circuits: "专线业务",
     network: "网络与控制面",
     ops: "可观测性",
