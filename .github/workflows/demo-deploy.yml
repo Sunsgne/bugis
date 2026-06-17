@@ -36,8 +36,8 @@ jobs:
           BUGIS_SECRET_KEY: ${{ secrets.BUGIS_SECRET_KEY }}
           GRAFANA_ADMIN_PASSWORD: ${{ secrets.GRAFANA_ADMIN_PASSWORD }}
         run: |
-          export DEMO_SSH_HOST="${DEMO_SSH_HOST:-203.117.117.196}"
-          export DEMO_SSH_PORT="${DEMO_SSH_PORT:-2333}"
+          export DEMO_SSH_HOST="${DEMO_SSH_HOST:?set DEMO_SSH_HOST repo secret}"
+          export DEMO_SSH_PORT="${DEMO_SSH_PORT:-22}"
           export DEMO_SSH_USER="${DEMO_SSH_USER:-root}"
           export DEMO_REMOTE_DIR="${DEMO_REMOTE_DIR:-/root/bugis}"
           chmod +x scripts/deploy-demo.sh

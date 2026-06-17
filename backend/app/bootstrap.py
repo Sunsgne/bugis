@@ -71,10 +71,19 @@ def ensure_tenant_portal_demo_user(
     db: Session,
     *,
     tenant_code: str = "BANK01",
-    username: str = "bank_portal",
-    password: str = "Portal@Demo2026",
+    username: str | None = None,
+    password: str | None = None,
 ) -> User | None:
-    """Ensure a demo tenant portal account exists (idempotent)."""
+    """Ensure a demo tenant portal account exists (idempotent).
+
+    Credentials are sourced from BUGIS_PORTAL_USER / BUGIS_PORTAL_PASS so no
+    secrets are hardcoded in the repository. Demo seeding only runs when
+    BUGIS_RUN_DEMO is enabled.
+    """
+    import os
+
+    username = username or os.environ.get("BUGIS_PORTAL_USER", "bank_portal")
+    password = password or os.environ.get("BUGIS_PORTAL_PASS", "change-me-portal-password")
     tenant = db.execute(
         select(Tenant).where(Tenant.code == tenant_code)
     ).scalar_one_or_none()

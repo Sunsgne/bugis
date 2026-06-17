@@ -2,9 +2,9 @@
 # Post-deploy smoke checks for Bugis demo (local or remote URL).
 set -euo pipefail
 
-BASE="${1:-http://203.117.117.196:3300}"
+BASE="${1:?usage: verify-demo.sh <base-url>}"
 USER="${BUGIS_DEMO_USER:-admin}"
-PASS="${BUGIS_DEMO_PASS:-admin123}"
+PASS="${BUGIS_DEMO_PASS:?set BUGIS_DEMO_PASS}"
 
 echo "==> Health $BASE/health"
 curl -fsS "$BASE/health" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d.get('status')=='ok', d; assert d.get('dry_run') is False, 'demo must run with dry_run=false'"

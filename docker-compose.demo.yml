@@ -35,6 +35,8 @@ services:
       BUGIS_TELEMETRY_SIMULATION: "false"
       BUGIS_SCHEDULER_INTERVAL_SECONDS: "20"
       BUGIS_EXPOSE_OPENAPI: "false"
+      BUGIS_PORTAL_USER: ${BUGIS_PORTAL_USER:-bank_portal}
+      BUGIS_PORTAL_PASS: ${BUGIS_PORTAL_PASS:-change-me-portal-password}
     depends_on:
       db:
         condition: service_healthy
