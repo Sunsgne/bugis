@@ -790,17 +790,19 @@ def test_rate_limit_rendering(client, auth_headers):
     cfgs = {j["device_id"]: j["rendered_config"] for j in wo["config_jobs"]}
     h3c = cfgs[dev_h3c["id"]]
     hw = cfgs[huawei["id"]]
-    # H3C: classifier/behavior/policy globals + qos apply on VSI
+    # H3C: classifier/behavior/policy globals + qos apply on service-instance (not VSI)
     assert "traffic classifier tc-" in h3c
     assert "car cir 204800 cbs 12800000" in h3c  # 200 Mbps * 1024 / * 64000
     assert "qos policy qp-" in h3c
     assert "qos apply policy qp-" in h3c
     assert "qos car inbound" not in h3c
+    assert "(cid=" in h3c
+    assert "(tenant=" not in h3c
     assert "mtu 9000" in h3c or "mtu 1500" in h3c
     vsi = h3c.index("vsi ")
     apply = h3c.index("qos apply policy")
     si = h3c.index("service-instance")
-    assert vsi < apply < si
+    assert vsi < si < apply
     assert "encapsulation s-vid" in h3c[si:]
     # Huawei: traffic policy objects + traffic-policy on L2 sub-interface (现网惯例)
     assert "traffic policy tp-" in hw
@@ -842,7 +844,8 @@ def test_h3c_huawei_template_quality(client, auth_headers):
     vsi = h3c.index("vsi ")
     apply = h3c.index("qos apply policy")
     si = h3c.index("service-instance")
-    assert vsi < apply < si
+    assert vsi < si < apply
+    assert "(cid=" in h3c
 
     l2 = client.post(
         "/api/v1/circuits", headers=auth_headers,

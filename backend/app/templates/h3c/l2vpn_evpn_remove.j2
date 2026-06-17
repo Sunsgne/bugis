@@ -6,10 +6,12 @@
 #
 {% if partial %}
 interface {{ endpoint.interface_name }}
+{{ h3c.service_instance_qos_remove(circuit) }}
  undo service-instance {{ svid or 1 }}
 #
 {% else %}
 interface {{ endpoint.interface_name }}
+{{ h3c.service_instance_qos_remove(circuit) }}
  undo service-instance {{ svid or 1 }}
 #
 {{ h3c.qos_policy_remove(circuit) }}

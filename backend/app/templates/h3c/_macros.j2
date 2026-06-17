@@ -1,7 +1,7 @@
 {# H3C Comware7 EVPN VXLAN shared fragments #}
 {% macro vsi_evpn_header(circuit, l3=false) -%}
 vsi {{ circuit.vsi_name }}
- description {{ circuit.name }} (tenant={{ circuit.tenant_id }})
+ description {% if circuit.tenant %}{{ circuit.tenant.name }}{% else %}{{ circuit.name }}{% endif %} (cid={{ circuit.code }})
  mtu {{ circuit.mtu }}
 {% if l3 %}
  gateway vsi-interface Vsi-interface{{ circuit.vni }}
@@ -11,10 +11,6 @@ vsi {{ circuit.vsi_name }}
   route-distinguisher {{ circuit.route_distinguisher }}
   vpn-target {{ circuit.route_target }} import-extcommunity
   vpn-target {{ circuit.route_target }} export-extcommunity
-{% if circuit.bandwidth_mbps %}
- qos apply policy {{ qos_policy_name(circuit) }} inbound
- qos apply policy {{ qos_policy_name(circuit) }} outbound
-{% endif %}
 {%- endmacro %}
 
 {% macro qos_policy_name(circuit) -%}
@@ -45,6 +41,20 @@ undo traffic classifier tc-{{ circuit.code }}
 {% endif %}
 {%- endmacro %}
 
+{% macro service_instance_qos_apply(circuit) -%}
+{% if circuit.bandwidth_mbps %}
+  qos apply policy {{ qos_policy_name(circuit) }} inbound
+  qos apply policy {{ qos_policy_name(circuit) }} outbound
+{% endif %}
+{%- endmacro %}
+
+{% macro service_instance_qos_remove(circuit) -%}
+{% if circuit.bandwidth_mbps %}
+ undo qos apply policy {{ qos_policy_name(circuit) }} inbound
+ undo qos apply policy {{ qos_policy_name(circuit) }} outbound
+{% endif %}
+{%- endmacro %}
+
 {% macro service_instance_ac(endpoint, circuit, mode, svid, cvid) -%}
  service-instance {{ svid or 1 }}
 {% if mode == 'access' %}
@@ -56,4 +66,5 @@ undo traffic classifier tc-{{ circuit.code }}
 {% endif %}
   statistics enable
   xconnect vsi {{ circuit.vsi_name }}
+{{ service_instance_qos_apply(circuit) }}
 {%- endmacro %}
