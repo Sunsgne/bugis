@@ -46,13 +46,18 @@ print("  production_data_mode OK")
 PY
 
 echo "==> Active circuits + probe"
-python3 - <<PY
-import json, urllib.request
+DEMO_CLEAN="${BUGIS_DEMO_CLEAN:-false}" python3 - <<PY
+import json, os, urllib.request
+clean = os.environ.get("DEMO_CLEAN") == "true"
 req = urllib.request.Request("$BASE/api/v1/circuits?page=1&page_size=50", headers={"Authorization": "Bearer $TOKEN"})
 data = json.load(urllib.request.urlopen(req))
 active = [c for c in data["items"] if c.get("status") == "active"]
 print(f"  circuits total={data['total']} active={len(active)}")
-assert data["total"] > 0, "expected seeded circuits"
+if clean:
+    assert data["total"] == 0, f"clean demo must have no circuits, got {data['total']}"
+    print("  clean demo OK (no temporary data)")
+else:
+    assert data["total"] > 0, "expected seeded circuits"
 if active:
     cid = active[0]["id"]
     probe_req = urllib.request.Request(

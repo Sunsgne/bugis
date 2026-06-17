@@ -38,6 +38,16 @@ BUGIS_DRY_RUN="${BUGIS_DRY_RUN:-false}"
 GRAFANA_ADMIN_PASSWORD="${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD}"
 BUGIS_DEMO_USER="${BUGIS_DEMO_USER:-admin}"
 BUGIS_DEMO_PASS="${BUGIS_DEMO_PASS:?set BUGIS_DEMO_PASS}"
+# Clean mode: wipe DB volume and skip all demo/seed fixtures, leaving only the
+# admin account, built-in controller and platform/SNMP settings.
+BUGIS_DEMO_CLEAN="${BUGIS_DEMO_CLEAN:-false}"
+if [[ "$BUGIS_DEMO_CLEAN" == "true" ]]; then
+  RUN_SEED=false
+  RUN_DEMO=false
+else
+  RUN_SEED="${BUGIS_RUN_SEED:-true}"
+  RUN_DEMO="${BUGIS_RUN_DEMO:-true}"
+fi
 
 SSH_OPTS=(-o StrictHostKeyChecking=accept-new -p "$PORT")
 SCP_OPTS=(-o StrictHostKeyChecking=accept-new -P "$PORT")
@@ -73,6 +83,8 @@ BUGIS_TELEMETRY_SIMULATION=false
 GRAFANA_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
 BUGIS_PORTAL_USER=${BUGIS_PORTAL_USER:-bank_portal}
 BUGIS_PORTAL_PASS=${BUGIS_PORTAL_PASS:?set BUGIS_PORTAL_PASS}
+BUGIS_RUN_SEED=${RUN_SEED}
+BUGIS_RUN_DEMO=${RUN_DEMO}
 EOF
 }
 
@@ -97,6 +109,16 @@ run_scp "$ARCHIVE" "$USER@$HOST:$REMOTE_DIR/bugis-demo-src.tar.gz"
 run_scp "$STACK_ENV" "$USER@$HOST:$REMOTE_DIR/.env"
 rm -f "$STACK_ENV"
 
+if [[ "$BUGIS_DEMO_CLEAN" == "true" ]]; then
+  echo "==> CLEAN MODE: wiping demo database volume and skipping demo/seed fixtures"
+  CLEAN_VOLUME_CMD="docker compose -f docker-compose.demo.yml --env-file .env down -v || true && \
+    docker volume rm bugis_pgdata 2>/dev/null || docker volume rm \$(docker volume ls -q | grep _pgdata | head -1) 2>/dev/null || true && "
+  ENSURE_DEMO_CMD=""
+else
+  CLEAN_VOLUME_CMD=""
+  ENSURE_DEMO_CMD="docker compose -f docker-compose.demo.yml --env-file .env exec -T backend python -m scripts.ensure_demo && "
+fi
+
 echo "==> Building and restarting demo containers (PostgreSQL + observability)"
 run_ssh "cd '$REMOTE_DIR' && \
   cp .env /tmp/bugis-demo.env 2>/dev/null || true && \
@@ -104,6 +126,7 @@ run_ssh "cd '$REMOTE_DIR' && \
   tar -xzf bugis-demo-src.tar.gz && \
   cp /tmp/bugis-demo.env .env && \
   rm -f bugis-demo-src.tar.gz && \
+  ${CLEAN_VOLUME_CMD}\
   PG_MAJOR=17 && \
   if [[ \"\$(cat .postgres_major_version 2>/dev/null || echo 16)\" != \"\$PG_MAJOR\" ]]; then \
     echo '==> PostgreSQL major upgrade detected — recreating demo pgdata volume' && \
@@ -113,7 +136,7 @@ run_ssh "cd '$REMOTE_DIR' && \
   fi && \
   docker compose -f docker-compose.demo.yml --env-file .env build && \
   docker compose -f docker-compose.demo.yml --env-file .env up -d && \
-  docker compose -f docker-compose.demo.yml --env-file .env exec -T backend python -m scripts.ensure_demo && \
+  ${ENSURE_DEMO_CMD}\
   docker compose -f docker-compose.demo.yml --env-file .env exec -T backend \
     python -m scripts.reset_admin_password '${BUGIS_DEMO_USER}' '${BUGIS_DEMO_PASS}'"
 
