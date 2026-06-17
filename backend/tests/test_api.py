@@ -869,7 +869,9 @@ def test_h3c_huawei_template_quality(client, auth_headers):
     tp = hw_cfg.index("traffic-policy tp-")
     assert bd < subif < tp
     assert "traffic-policy tp-" not in hw_cfg[bd:subif]
-    assert " mtu " in hw_cfg.split("bridge-domain", 1)[1].split("interface", 1)[0]
+    # VRP8 bridge-domain view has no 'mtu' command (it is rejected on real CE
+    # gear), so the rendered BD section must not emit one.
+    assert " mtu " not in hw_cfg.split("bridge-domain", 1)[1].split("interface", 1)[0]
 
 
 def test_srmpls_vendor_template_quality(client, auth_headers):

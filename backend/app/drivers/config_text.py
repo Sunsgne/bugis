@@ -36,9 +36,16 @@ from app.models.enums import Vendor
 # section separator in display output; a line like "# text" is a banner comment.
 _HASH_SEPARATOR = re.compile(r"^\s*#\s*$")
 _HASH_COMMENT = re.compile(r"^\s*#\s+\S")
-# Top-level navigation that netmiko's exit_config_mode handles for us; sending it
-# mid-paste exits system-view and breaks prompt detection.
-_HASH_VENDOR_EXIT = re.compile(r"^\s*(return|quit)\s*$", re.IGNORECASE)
+# ``return`` jumps all the way out to user view; netmiko's exit_config_mode
+# handles leaving config mode for us, and sending it mid-paste would break
+# prompt detection, so it is always dropped.
+#
+# ``quit`` only pops ONE view level (e.g. interface-view -> system-view). It is
+# required mid-config when a teardown removes interface-scoped config and then
+# has to issue system-view ``undo`` commands (undo vsi / undo qos policy /
+# undo bridge-domain). Without it the CLI stays in interface view and those
+# commands silently fail, leaving dirty config behind, so ``quit`` is kept.
+_HASH_VENDOR_EXIT = re.compile(r"^\s*return\s*$", re.IGNORECASE)
 
 # Cisco / Arista / FRR comment marker.
 _BANG_COMMENT = re.compile(r"^\s*!")
@@ -47,7 +54,11 @@ _JUNOS_COMMENT = re.compile(r"^\s*#{1,2}(\s|$)")
 
 
 def _clean_hash_vendor(config: str) -> list[str]:
-    """H3C / Huawei: drop banners, bare ``#`` separators and trailing return/quit."""
+    """H3C / Huawei: drop banners, bare ``#`` separators and ``return``.
+
+    ``quit`` is intentionally preserved so teardown templates can pop back to
+    system-view before issuing system-scoped ``undo`` commands.
+    """
     commands: list[str] = []
     for raw in config.splitlines():
         line = raw.rstrip()

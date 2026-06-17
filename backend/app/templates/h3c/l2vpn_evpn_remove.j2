@@ -11,6 +11,7 @@ interface {{ endpoint.interface_name }}
 {% else %}
 interface {{ endpoint.interface_name }}
  undo service-instance {{ svid or 1 }}
+ quit
 #
 {{ h3c.qos_policy_remove(circuit) }}
 undo vsi {{ circuit.vsi_name }}

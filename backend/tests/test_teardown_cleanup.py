@@ -51,6 +51,25 @@ def test_h3c_remove_scrubs_qos_and_vsi(service):
     assert any(c.startswith("undo traffic behavior") for c in cmds), cmds
     assert any(c.startswith("undo traffic classifier") for c in cmds), cmds
     assert any(c.startswith("undo vsi") for c in cmds), cmds
+    # The system-scoped undo commands must be issued AFTER a quit returns to
+    # system-view (the interface block leaves us in interface view otherwise).
+    stripped = [c.strip() for c in cmds]
+    assert "quit" in stripped, cmds
+    assert stripped.index("quit") < next(
+        i for i, c in enumerate(stripped) if c.startswith("undo vsi")
+    ), cmds
+
+
+@pytest.mark.parametrize("service", ["l2vpn_evpn", "l3vpn_evpn"])
+def test_huawei_remove_quit_before_bridge_domain(service):
+    cfg = get_driver(Vendor.HUAWEI).render(service, "remove", _ctx())
+    stripped = [c.strip() for c in to_command_list(Vendor.HUAWEI, cfg)]
+    # interface Nve1 ... undo vni ... quit ... undo bridge-domain
+    assert "quit" in stripped, stripped
+    nve = stripped.index("interface Nve1")
+    bd = next(i for i, c in enumerate(stripped) if c.startswith("undo bridge-domain"))
+    quit_idx = next(i for i in range(nve, bd) if stripped[i] == "quit")
+    assert nve < quit_idx < bd, stripped
 
 
 @pytest.mark.parametrize("service", ["l2vpn_evpn", "l3vpn_evpn"])

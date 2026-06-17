@@ -11,6 +11,7 @@ interface {{ endpoint.interface_name }}
 undo interface Vsi-interface{{ circuit.vni }}
 interface {{ endpoint.interface_name }}
  undo service-instance {{ circuit.vlan_id or endpoint.vlan_id }}
+ quit
 #
 {{ h3c.qos_policy_remove(circuit) }}
 undo vsi {{ circuit.vsi_name }}
