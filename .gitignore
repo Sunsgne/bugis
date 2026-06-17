@@ -20,6 +20,9 @@ frontend/.vite/
 deploy/_remote*.py
 deploy/remote.py
 deploy/demo.env
+deploy/prod.env
+deploy/prod/credentials.txt
+deploy/prod/certs/
 deploy/ha/inventory.env
 
 # Editor / OS

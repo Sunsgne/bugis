@@ -1,0 +1,83 @@
+# Single-node production stack.
+# Only frontend :443 is published; backend / DB / Prometheus / Grafana are internal-only.
+#
+# TLS: mount self-signed certs at deploy/prod/certs (see scripts/deploy-prod.sh).
+# Secrets: deploy/prod.env (gitignored).
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-bugis}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-bugis}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-bugis} -d ${POSTGRES_DB:-bugis}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  backend:
+    build: ./backend
+    environment:
+      BUGIS_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-bugis}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-bugis}
+      BUGIS_SECRET_KEY: ${BUGIS_SECRET_KEY:?set BUGIS_SECRET_KEY}
+      BUGIS_APP_ENV: production
+      BUGIS_DEBUG: "false"
+      BUGIS_DRY_RUN: "false"
+      BUGIS_TELEMETRY_SIMULATION: "false"
+      BUGIS_SCHEDULER_INTERVAL_SECONDS: "20"
+      BUGIS_EXPOSE_OPENAPI: "false"
+      BUGIS_RUN_SEED: ${BUGIS_RUN_SEED:-true}
+      BUGIS_RUN_DEMO: "false"
+      BUGIS_PORTAL_USER: ${BUGIS_PORTAL_USER:-portal}
+      BUGIS_PORTAL_PASS: ${BUGIS_PORTAL_PASS:?set BUGIS_PORTAL_PASS}
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 90s
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    depends_on:
+      backend:
+        condition: service_healthy
+    volumes:
+      - ./deploy/prod/nginx.prod.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./deploy/prod/certs:/etc/nginx/ssl:ro
+    ports:
+      - "443:443"
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v3.12.0
+    volumes:
+      - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./deploy/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:13.0.2
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD}
+      GF_USERS_DEFAULT_THEME: light
+    volumes:
+      - ./deploy/grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+volumes:
+  pgdata:
