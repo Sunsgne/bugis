@@ -82,6 +82,16 @@ export default function Monitoring() {
     loadCircuits();
   }, []);
 
+  // Keep selection in sync with the URL when it changes via back/forward or
+  // cross-page links (e.g. a "查看流量" link landing here with ?circuit=).
+  const circuitParam = params.get("circuit");
+  useEffect(() => {
+    const fromUrl = Number(circuitParam);
+    if (fromUrl && circuits.some((c) => c.id === fromUrl)) {
+      setSelected(fromUrl);
+    }
+  }, [circuitParam, circuits]);
+
   function selectCircuit(id: number) {
     setSelected(id);
     setParams({ circuit: String(id) });

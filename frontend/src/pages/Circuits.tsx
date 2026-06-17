@@ -615,22 +615,36 @@ export default function Circuits() {
   }
 
   async function openHistory(c: Circuit) {
-    setHistoryCircuit(c);
-    setDiffText({});
-    const { data } = await api.get(`/circuits/${c.id}/config-history`);
-    setHistory(data);
+    try {
+      const { data } = await api.get(`/circuits/${c.id}/config-history`);
+      setHistoryCircuit(c);
+      setDiffText({});
+      setHistory(data);
+    } catch (e: any) {
+      message.error(e?.response?.data?.detail || "加载配置历史失败");
+    }
   }
 
   async function loadDiff(circuitId: number, deviceId: number) {
-    const { data } = await api.get(
-      `/circuits/${circuitId}/config-diff?device_id=${deviceId}`
-    );
-    setDiffText((prev) => ({ ...prev, [deviceId]: data.diff }));
+    try {
+      const { data } = await api.get(
+        `/circuits/${circuitId}/config-diff?device_id=${deviceId}`
+      );
+      setDiffText((prev) => ({ ...prev, [deviceId]: data.diff }));
+    } catch (e: any) {
+      message.error(e?.response?.data?.detail || "加载配置差异失败");
+    }
   }
 
   async function preview(c: Circuit) {
-    const wo = await api.post(`/work-orders`, { circuit_id: c.id, type: "provision" });
-    const { data } = await api.get(`/work-orders/${wo.data.id}/preview`);
+    let data: { previews: any[] };
+    try {
+      // Non-persisting render — does NOT create a work order.
+      ({ data } = await api.get(`/circuits/${c.id}/preview`));
+    } catch (e: any) {
+      message.error(e?.response?.data?.detail || "配置预览失败");
+      return;
+    }
     modal.info({
       title: `配置预览 · ${c.code} (${c.name})`,
       ...configPreviewModalProps,
@@ -658,17 +672,21 @@ export default function Circuits() {
           <Button
             icon={<DownloadOutlined />}
             onClick={async () => {
-              const url = selectedTenantId
-                ? `/bulk/circuits/export?tenant_id=${selectedTenantId}`
-                : "/bulk/circuits/export";
-              const { data } = await api.get(url, { responseType: "text" });
-              const blob = new Blob([data], { type: "text/csv" });
-              const dl = URL.createObjectURL(blob);
-              const a = document.createElement("a");
-              a.href = dl;
-              a.download = selectedTenantId ? `circuits-tenant-${selectedTenantId}.csv` : "circuits.csv";
-              a.click();
-              URL.revokeObjectURL(dl);
+              try {
+                const url = selectedTenantId
+                  ? `/bulk/circuits/export?tenant_id=${selectedTenantId}`
+                  : "/bulk/circuits/export";
+                const { data } = await api.get(url, { responseType: "text" });
+                const blob = new Blob([data], { type: "text/csv" });
+                const dl = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = dl;
+                a.download = selectedTenantId ? `circuits-tenant-${selectedTenantId}.csv` : "circuits.csv";
+                a.click();
+                URL.revokeObjectURL(dl);
+              } catch (e: any) {
+                message.error(e?.response?.data?.detail || "导出失败");
+              }
             }}
           >
             导出 CSV
@@ -1348,7 +1366,16 @@ function CreateModal({
         </Form.Item>
 
         <Divider plain>接入端点</Divider>
-        <CircuitEndpointsEditor form={form} devices={devices} formLoading={formLoading} minEndpoints={1} />
+        <Form.Item noStyle shouldUpdate={(p, c) => p.service_type !== c.service_type}>
+          {({ getFieldValue }) => (
+            <CircuitEndpointsEditor
+              form={form}
+              devices={devices}
+              formLoading={formLoading}
+              minEndpoints={getFieldValue("service_type") === "remote_ipt" ? 1 : 2}
+            />
+          )}
+        </Form.Item>
 
         <Divider plain>Underlay 路径</Divider>
         <Form.Item noStyle shouldUpdate>

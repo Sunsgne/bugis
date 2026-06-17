@@ -56,9 +56,14 @@ export default function TenantPortalUsersModal({ tenantId, tenantName, open, onC
   }
 
   async function onDelete(userId: number) {
-    await api.delete(`/tenants/${tenantId}/users/${userId}`);
-    message.success("已删除");
-    load();
+    try {
+      await api.delete(`/tenants/${tenantId}/users/${userId}`);
+      message.success("已删除");
+      load();
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { detail?: string } } };
+      message.error(err?.response?.data?.detail || "删除失败");
+    }
   }
 
   return (

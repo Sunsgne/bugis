@@ -439,6 +439,45 @@ def update_circuit(
     return _to_circuit_out(db, circuit)
 
 
+@router.get("/{circuit_id}/preview")
+def preview_circuit_config(
+    circuit_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    """Render (dry-run) the provisioning config WITHOUT creating a work order.
+
+    Repeated previews must not pollute the work-order list, so this renders
+    in-memory only.
+    """
+    from app.drivers import get_driver
+
+    circuit = db.get(Circuit, circuit_id)
+    if not circuit:
+        raise HTTPException(status_code=404, detail="circuit not found")
+    previews = []
+    for ep in circuit.endpoints:
+        device = ep.device
+        if not device:
+            continue
+        driver = get_driver(device.vendor)
+        context = {
+            "circuit": circuit,
+            "endpoint": ep,
+            "device": device,
+            "site": device.site,
+        }
+        previews.append(
+            {
+                "device": device.name,
+                "vendor": device.vendor.value,
+                "transport": driver.transport,
+                "config": driver.render(circuit.service_type.value, "apply", context),
+            }
+        )
+    return {"operation": "apply", "previews": previews}
+
+
 @router.delete("/{circuit_id}", status_code=204)
 def delete_circuit(
     circuit_id: int,

@@ -15,6 +15,7 @@ import {
 import { SaveOutlined } from "@ant-design/icons";
 import { useEffect } from "react";
 import { usePlatformSettings } from "../../hooks/usePlatformSettings";
+import { useAuth } from "../../auth";
 
 const { Text } = Typography;
 
@@ -22,6 +23,8 @@ export default function GeneralSettings() {
   const { message } = AntApp.useApp();
   const [form] = Form.useForm();
   const { platform, readonly, loading, saving, save } = usePlatformSettings();
+  const { user } = useAuth();
+  const canEdit = user?.role === "admin" || user?.role === "operator";
 
   useEffect(() => {
     if (platform) form.setFieldsValue(platform);
@@ -46,10 +49,19 @@ export default function GeneralSettings() {
           </Typography.Title>
           <Text type="secondary">下发模式、调度器、控制器与认证相关参数</Text>
         </div>
-        <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={onSave}>
+        <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={onSave} disabled={!canEdit}>
           保存
         </Button>
       </Space>
+
+      {!canEdit && (
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message="只读：当前账号无修改平台运行参数的权限"
+        />
+      )}
 
       {readonly && (
         <Descriptions bordered size="small" column={2} style={{ marginBottom: 16 }}>
@@ -74,7 +86,7 @@ export default function GeneralSettings() {
         }
       />
 
-      <Form form={form} layout="vertical" className="app-form" disabled={loading}>
+      <Form form={form} layout="vertical" className="app-form" disabled={!canEdit || loading}>
         <Row gutter={16}>
           <Col xs={24} md={8}>
             <Form.Item name="dry_run" label="Dry-run（模拟下发）" valuePropName="checked">
