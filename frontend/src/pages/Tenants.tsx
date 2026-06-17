@@ -21,6 +21,7 @@ import PageCard from "../components/PageCard";
 import { dataTableProps, PAGE_SIZE_OPTIONS, pageRangeLabel, tablePagination } from "../utils/table";
 import { formModalProps } from "../utils/formModal";
 import { TENANT_STATUS, statusMeta } from "../constants/statusLabels";
+import { page as pageCopy } from "../constants/uiCopy";
 
 const TYPE_LABEL: Record<string, string> = {
   enterprise: "企业专线",
@@ -84,7 +85,7 @@ export default function Tenants() {
 
   return (
     <PageCard
-      title="客户服务"
+      title={pageCopy.tenants}
       extra={
         <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>
           新建客户

@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes, useNavigate, useLocation, Link } from "react-router-dom";
+import { Navigate, Route, Routes, useNavigate, useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
   Users,
@@ -110,6 +110,13 @@ const MENU: NavGroup[] = [
 ];
 
 const ROUTE_KEYS = MENU.flatMap((g) => g.items.map((i) => i.key));
+
+const PAGE_TITLE: Record<string, string> = MENU.reduce((acc, g) => {
+  g.items.forEach((i) => {
+    acc[i.key] = i.label;
+  });
+  return acc;
+}, {} as Record<string, string>);
 
 function selectedMenuKey(pathname: string): string {
   if (pathname.startsWith("/settings")) return "/settings";
@@ -254,7 +261,9 @@ function Shell() {
             <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setMobileOpen(true)}>
               <Menu className="h-5 w-5" />
             </Button>
-            <h1 className="text-base font-semibold text-foreground">{brand.header_title}</h1>
+            <h1 className="text-base font-semibold text-foreground">
+              {PAGE_TITLE[selected] || brand.header_title}
+            </h1>
           </div>
           <div className="flex items-center gap-2">
             <AlarmBell onClick={() => navTo("/alarms")} />
@@ -270,7 +279,7 @@ function Shell() {
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onClick={() => setChangePasswordOpen(true)}>
                   <KeyRound className="mr-2 h-4 w-4" />
-                  修改密码
+                  {action.changePassword}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={logout}>
                   <LogOut className="mr-2 h-4 w-4" />

@@ -45,7 +45,7 @@ export default function SettingsLayout() {
       title={
         <span>
           <SettingOutlined style={{ marginRight: 8 }} />
-          系统设置
+          平台设置
         </span>
       }
     >

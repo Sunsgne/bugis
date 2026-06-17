@@ -12,7 +12,7 @@ export const brand = {
 
 export const nav = {
   groups: {
-    overview: "业务总揽",
+    overview: "业务总览",
     resources: "客户管理",
     circuits: "专线业务",
     network: "网络与控制面",
@@ -55,6 +55,8 @@ export const action = {
   cancel: "取消",
   viewAll: "全域视图",
   learnNow: "立即学习",
+  ack: "确认告警",
+  changePassword: "修改密码",
 } as const;
 
 export const empty = {
@@ -80,6 +82,7 @@ export const toast = {
 
 /** Reusable page titles */
 export const page = {
+  dashboard: "运营驾驶舱",
   tenants: "客户",
   sites: "Fabric 站点",
   devices: "网络设备",

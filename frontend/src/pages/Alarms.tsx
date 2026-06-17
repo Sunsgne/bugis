@@ -125,7 +125,7 @@ export default function Alarms() {
                   <Space size={4}>
                     {r.status === "active" && (
                       <Button type="link" size="small" onClick={() => ack(r.id)}>
-                        {action.confirm}
+                        {action.ack}
                       </Button>
                     )}
                     <Button type="link" size="small" onClick={() => clear(r.id)}>

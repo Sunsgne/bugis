@@ -532,10 +532,12 @@ export default function Circuits() {
             </div>
             <div style={{ marginBottom: 12 }}>
               {data.rtt_ms != null && <Tag>端到端 RTT {data.rtt_ms} ms</Tag>}
-              <Tag>抖动 {data.jitter_ms} ms</Tag>
-              <Tag color={data.packet_loss_pct > 1 ? "red" : undefined}>
-                丢包 {data.packet_loss_pct}%
-              </Tag>
+              {data.jitter_ms != null && <Tag>抖动 {data.jitter_ms} ms</Tag>}
+              {data.packet_loss_pct != null && (
+                <Tag color={data.packet_loss_pct > 1 ? "red" : undefined}>
+                  丢包 {data.packet_loss_pct}%
+                </Tag>
+              )}
             </div>
             {data.path_reason && (
               <div style={{ marginBottom: 12, color: "var(--text-secondary, #666)", fontSize: 12 }}>
@@ -798,7 +800,7 @@ export default function Circuits() {
           { title: "编码", dataIndex: "code", width: 120, ellipsis: true },
           { title: "名称", dataIndex: "name", width: 160, ellipsis: true },
           ...(!selectedTenantId
-            ? [{ title: "租户", width: 100, ellipsis: true, render: (_: unknown, r: Circuit) => tenantName(r.tenant_id) }]
+            ? [{ title: "客户", width: 100, ellipsis: true, render: (_: unknown, r: Circuit) => tenantName(r.tenant_id) }]
             : []),
           {
             title: "业务类型",
@@ -1204,7 +1206,7 @@ function CreateModal({
             </Form.Item>
           </Col>
           <Col span={8}>
-            <Form.Item name="tenant_id" label="租户" rules={[{ required: true }]}>
+            <Form.Item name="tenant_id" label="客户" rules={[{ required: true }]}>
               <TenantSearchSelect
                 loading={tenantSearch.loading || formLoading}
                 options={tenantSearch.options}
