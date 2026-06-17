@@ -22,7 +22,7 @@ traffic classifier tc-{{ circuit.code }} type or
  if-match any
 #
 traffic behavior tb-{{ circuit.code }}
- car cir {{ circuit.bandwidth_mbps * 1024 }} cbs {{ circuit.bandwidth_mbps * 64000 }} green pass red discard yellow pass
+ car cir {{ circuit.bandwidth_mbps * 1024 }} cbs {{ circuit.bandwidth_mbps * 64000 }} green pass yellow pass red discard
 #
 traffic policy {{ qos_policy_name(circuit) }}
  classifier tc-{{ circuit.code }} behavior tb-{{ circuit.code }} precedence 5
@@ -40,8 +40,9 @@ undo traffic classifier tc-{{ circuit.code }}
 {%- endmacro %}
 
 {% macro bridge_domain_evpn(circuit) -%}
+# NB: VRP8 bridge-domain view has no 'mtu' command; service MTU ({{ circuit.mtu }})
+# is governed by the underlay/physical interface MTU, configured outside this scope.
 bridge-domain {{ circuit.vni }}
- mtu {{ circuit.mtu }}
  vxlan vni {{ circuit.vni }}
  evpn
   route-distinguisher {{ circuit.route_distinguisher }}
@@ -58,7 +59,6 @@ interface {{ l2_ifname(endpoint, mode, svid) }} mode l2
  encapsulation qinq vid {{ svid }} ce-vid {{ cvid }}
 {% else %}
  encapsulation dot1q vid {{ svid }}
- rewrite pop single
 {% endif %}
  bridge-domain {{ circuit.vni }}
 {% if circuit.bandwidth_mbps %}
