@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Deploy production-grade Bugis demo stack (docker-compose.demo.yml).
 #
-# Stack: PostgreSQL 16 + backend + frontend + Prometheus + Grafana
+# Stack: PostgreSQL 17 + backend + frontend + Prometheus + Grafana
 #   UI: http://<host>:3300/  (only frontend is published to the host)
 #
 # Required (pick one auth method):

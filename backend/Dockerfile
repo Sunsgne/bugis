@@ -1,4 +1,4 @@
-FROM python:3.12-slim
+FROM python:3.13-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
@@ -21,4 +21,3 @@ HEALTHCHECK --interval=30s --timeout=5s --retries=5 \
     CMD curl -fsS http://localhost:8000/health || exit 1
 
 CMD ["scripts/docker-entrypoint.sh"]
-

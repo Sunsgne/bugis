@@ -31,7 +31,7 @@
 |------|------|----------|------|
 | 负载均衡 LB | 1 | 2 vCPU / 4 GB / 40 GB | nginx 反向代理 |
 | 应用 App | 2 | 4 vCPU / 16 GB / 100 GB SSD | Docker：backend + frontend |
-| 数据库 DB | 1 | 4 vCPU / 16 GB / 200 GB SSD | PostgreSQL 16 |
+| 数据库 DB | 1 | 4 vCPU / 16 GB / 200 GB SSD | PostgreSQL 17 |
 
 **合计：4 台**
 

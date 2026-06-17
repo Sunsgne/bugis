@@ -1,5 +1,5 @@
 # Production-grade demo stack (aligned with docker-compose.yml):
-#   PostgreSQL 16 + backend + frontend + Prometheus + Grafana
+#   PostgreSQL 17 + backend + frontend + Prometheus + Grafana
 #
 # Security: only frontend is published to the host (default :3300).
 # Backend / DB / Prometheus / Grafana are reachable on the internal Docker network only.
@@ -10,7 +10,7 @@
 
 services:
   db:
-    image: postgres:16-alpine
+    image: postgres:17-alpine
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-bugis}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-bugis-demo-change-me}

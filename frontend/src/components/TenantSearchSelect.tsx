@@ -27,7 +27,7 @@ export function useTenantSearch(initialTenantId?: number | null) {
   const [options, setOptions] = useState<TenantOption[]>([]);
   const [loading, setLoading] = useState(false);
   const [total, setTotal] = useState(0);
-  const timer = useRef<ReturnType<typeof setTimeout>>();
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const fetchTenants = useCallback(async (q = "") => {
     setLoading(true);

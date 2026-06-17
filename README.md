@@ -155,7 +155,9 @@ cd backend && python -m pytest -q
 
 公开 Demo：`http://203.117.117.196:3300/`（账号 `admin` / `admin123`）
 
-Demo 栈与生产 Compose 对齐，使用 **PostgreSQL 16**（非 SQLite），并附带 **Prometheus / Grafana**（仅 Docker 内网，不对外映射端口）：
+Demo 栈与生产 Compose 对齐，使用 **PostgreSQL 17**（非 SQLite），并附带 **Prometheus / Grafana**（仅 Docker 内网，不对外映射端口）：
+
+运行环境：**Node.js 24.16.0**、**Python 3.13**。
 
 | 服务 | 地址 |
 |------|------|
