@@ -214,10 +214,11 @@ STACK_ENV="$(mktemp)"
 write_stack_env "$STACK_ENV"
 
 echo "==> Uploading to $USER@$HOST:$REMOTE_DIR"
-run_ssh "mkdir -p '$REMOTE_DIR'"
+run_ssh "mkdir -p '$REMOTE_DIR/deploy/prod/certs'"
 run_scp "$ARCHIVE" "$USER@$HOST:$REMOTE_DIR/bugis-prod-src.tar.gz"
 run_scp "$STACK_ENV" "$USER@$HOST:$REMOTE_DIR/.env"
-run_scp -r "$CERT_DIR" "$USER@$HOST:$REMOTE_DIR/deploy/prod/"
+run_scp "$CERT_DIR/cert.pem" "$USER@$HOST:$REMOTE_DIR/deploy/prod/certs/cert.pem"
+run_scp "$CERT_DIR/key.pem" "$USER@$HOST:$REMOTE_DIR/deploy/prod/certs/key.pem"
 rm -f "$STACK_ENV"
 
 echo "==> Building and starting production containers"
@@ -228,6 +229,7 @@ run_ssh "cd '$REMOTE_DIR' && \
   cp /tmp/bugis-prod.env .env && \
   rm -f bugis-prod-src.tar.gz && \
   mkdir -p deploy/prod/certs && \
+  test -f deploy/prod/certs/cert.pem && test -f deploy/prod/certs/key.pem && \
   docker compose -f docker-compose.prod.yml --env-file .env build && \
   docker compose -f docker-compose.prod.yml --env-file .env up -d && \
   docker compose -f docker-compose.prod.yml --env-file .env exec -T backend \
