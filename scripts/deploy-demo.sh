@@ -99,6 +99,13 @@ run_ssh "cd '$REMOTE_DIR' && \
   tar -xzf bugis-demo-src.tar.gz && \
   cp /tmp/bugis-demo.env .env && \
   rm -f bugis-demo-src.tar.gz && \
+  PG_MAJOR=17 && \
+  if [[ \"\$(cat .postgres_major_version 2>/dev/null || echo 16)\" != \"\$PG_MAJOR\" ]]; then \
+    echo '==> PostgreSQL major upgrade detected — recreating demo pgdata volume' && \
+    docker compose -f docker-compose.demo.yml --env-file .env down || true && \
+    docker volume rm bugis_pgdata 2>/dev/null || docker volume rm \$(docker volume ls -q | grep _pgdata | head -1) 2>/dev/null || true && \
+    echo \"\$PG_MAJOR\" > .postgres_major_version; \
+  fi && \
   docker compose -f docker-compose.demo.yml --env-file .env build && \
   docker compose -f docker-compose.demo.yml --env-file .env up -d && \
   docker compose -f docker-compose.demo.yml --env-file .env exec -T backend python -m scripts.ensure_demo && \
