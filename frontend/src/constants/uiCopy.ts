@@ -13,15 +13,15 @@ export const brand = {
 export const nav = {
   groups: {
     overview: "驾驶舱",
-    resources: "资源与租户",
-    circuits: "专线全生命周期",
+    resources: "基础资源",
+    circuits: "专线业务",
     network: "网络与控制面",
     ops: "可观测性",
     system: "平台治理",
   },
   items: {
     dashboard: "运营驾驶舱",
-    tenants: "客户租户",
+    tenants: "客户",
     sites: "Fabric 站点",
     devices: "网络设备",
     circuits: "专线编排",
@@ -80,7 +80,7 @@ export const toast = {
 
 /** Reusable page titles */
 export const page = {
-  tenants: "客户租户",
+  tenants: "客户",
   sites: "Fabric 站点",
   devices: "网络设备",
   circuits: "专线编排",

@@ -140,7 +140,7 @@ export default function Dashboard() {
       </div>
 
       <Row gutter={[16, 16]}>
-        <Col xs={12} md={4}>{kpi(<TeamOutlined />, "客户租户", data.tenants)}</Col>
+        <Col xs={12} md={4}>{kpi(<TeamOutlined />, "客户", data.tenants)}</Col>
         <Col xs={12} md={4}>{kpi(<ClusterOutlined />, "设备 · 在线/总量", data.devices_online, `/ ${data.devices}`)}</Col>
         <Col xs={12} md={4}>{kpi(<ApiOutlined />, "在网专线 · 活跃/总量", data.circuits_active, `/ ${data.circuits}`, "#52c41a")}</Col>
         <Col xs={12} md={4}>{kpi(<ThunderboltOutlined />, "在网带宽 (Mbps)", data.total_active_bandwidth_mbps, undefined, "#1677ff")}</Col>

@@ -78,7 +78,6 @@ const MENU: NavGroup[] = [
     items: [
       { key: "/tenants", label: nav.items.tenants, icon: <Users className="h-4 w-4" /> },
       { key: "/sites", label: nav.items.sites, icon: <MapPin className="h-4 w-4" /> },
-      { key: "/devices", label: nav.items.devices, icon: <Server className="h-4 w-4" /> },
     ],
   },
   {
@@ -91,18 +90,19 @@ const MENU: NavGroup[] = [
   {
     label: nav.groups.network,
     items: [
+      { key: "/devices", label: nav.items.devices, icon: <Server className="h-4 w-4" /> },
+      { key: "/topology", label: nav.items.topology, icon: <Network className="h-4 w-4" /> },
       { key: "/controllers", label: nav.items.controllers, icon: <Cloud className="h-4 w-4" /> },
       { key: "/control-plane", label: nav.items.controlPlane, icon: <Share2 className="h-4 w-4" /> },
       { key: "/config", label: nav.items.config, icon: <FileText className="h-4 w-4" /> },
-      { key: "/topology", label: nav.items.topology, icon: <Network className="h-4 w-4" /> },
     ],
   },
   {
     label: nav.groups.ops,
     items: [
-      { key: "/capacity", label: nav.items.capacity, icon: <Gauge className="h-4 w-4" /> },
       { key: "/monitoring", label: nav.items.monitoring, icon: <LineChart className="h-4 w-4" /> },
       { key: "/alarms", label: nav.items.alarms, icon: <Bell className="h-4 w-4" /> },
+      { key: "/capacity", label: nav.items.capacity, icon: <Gauge className="h-4 w-4" /> },
     ],
   },
   {
