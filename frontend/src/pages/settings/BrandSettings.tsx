@@ -88,8 +88,8 @@ export default function BrandSettings() {
       hero_subtitle: "多厂商异构 · VXLAN / SR-MPLS EVPN · 自研 SDN · 跨域 DCI",
       logo_url: null,
       logo_mark_url: null,
-      accent_color: "#52c41a",
-      login_background: "linear-gradient(135deg, #0b1f3a 0%, #1677ff 100%)",
+      accent_color: "#ff6600",
+      login_background: "linear-gradient(135deg, #2b1402 0%, #ff6600 100%)",
     });
   }
 
@@ -172,9 +172,9 @@ export default function BrandSettings() {
             <Form.Item
               name="login_background"
               label="登录页背景"
-              extra="CSS background 值，如 linear-gradient(...) 或 #0b1f3a"
+              extra="CSS background 值，如 linear-gradient(...) 或 #2b1402"
             >
-              <Input placeholder="linear-gradient(135deg, #0b1f3a 0%, #1677ff 100%)" />
+              <Input placeholder="linear-gradient(135deg, #2b1402 0%, #ff6600 100%)" />
             </Form.Item>
 
             <Divider />

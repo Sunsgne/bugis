@@ -20,7 +20,7 @@ const LANE_HEADER = 52;
 
 const EDGE_STYLE: Record<string, { color: string; strokeDasharray?: string }> = {
   dci: { color: "#ef4444", strokeDasharray: "6 4" },
-  intra_dc: { color: "#6366f1" },
+  intra_dc: { color: "#ff6600" },
   access: { color: "#10b981" },
   uplink: { color: "#8b5cf6" },
 };
@@ -103,8 +103,8 @@ function buildLayout(topo: Topology, size: { w: number; h: number }): { nodes: N
       style: {
         width: laneW,
         height: laneH,
-        backgroundColor: "rgba(99, 102, 241, 0.05)",
-        border: "1px solid rgba(99, 102, 241, 0.14)",
+        backgroundColor: "rgba(255, 102, 0, 0.05)",
+        border: "1px solid rgba(255, 102, 0, 0.16)",
         borderRadius: 14,
       },
     });

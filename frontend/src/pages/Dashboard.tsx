@@ -99,8 +99,8 @@ export default function Dashboard() {
       <div
         className="dashboard-hero-banner"
         style={{
-          background: "linear-gradient(120deg, #0b1f3a 0%, #1668dc 60%, #13c2c2 100%)",
-          boxShadow: "0 8px 24px rgba(11,31,58,0.25)",
+          background: "linear-gradient(120deg, #2a1303 0%, #d24e00 55%, #ff7a1a 100%)",
+          boxShadow: "0 8px 24px rgba(210,78,0,0.28)",
         }}
       >
         <div className="dashboard-hero-copy">
@@ -143,7 +143,7 @@ export default function Dashboard() {
         <Col xs={12} md={4}>{kpi(<TeamOutlined />, "客户", data.tenants)}</Col>
         <Col xs={12} md={4}>{kpi(<ClusterOutlined />, "设备 · 在线/总量", data.devices_online, `/ ${data.devices}`)}</Col>
         <Col xs={12} md={4}>{kpi(<ApiOutlined />, "在网专线 · 活跃/总量", data.circuits_active, `/ ${data.circuits}`, "#52c41a")}</Col>
-        <Col xs={12} md={4}>{kpi(<ThunderboltOutlined />, "在网带宽 (Mbps)", data.total_active_bandwidth_mbps, undefined, "#1677ff")}</Col>
+        <Col xs={12} md={4}>{kpi(<ThunderboltOutlined />, "在网带宽 (Mbps)", data.total_active_bandwidth_mbps, undefined, "#ff6600")}</Col>
         <Col xs={12} md={4}>{kpi(<NodeIndexOutlined />, "EVPN 路由条目", sdn?.route_count ?? 0, undefined, "#722ed1")}</Col>
         <Col xs={12} md={4}>{kpi(<AlertOutlined />, "活跃告警", alarms?.active || 0, undefined, (alarms?.active || 0) > 0 ? "#cf1322" : "#52c41a")}</Col>
       </Row>

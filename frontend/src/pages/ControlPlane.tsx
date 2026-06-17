@@ -88,7 +88,7 @@ function OverlayScanSummary({ overlay }: { overlay: any }) {
       <Text strong>扫描摘要</Text>
       <Row gutter={[8, 8]} style={{ marginTop: 12 }}>
         <Col span={12}>
-          <Statistic title="平台纳管" value={platform} valueStyle={{ color: "#1677ff" }} />
+          <Statistic title="平台纳管" value={platform} valueStyle={{ color: "#ff6600" }} />
         </Col>
         <Col span={12}>
           <Statistic title="现网未纳管" value={networkOnly} valueStyle={{ color: "#fa8c16" }} />
@@ -127,7 +127,7 @@ function OverlayScanSummary({ overlay }: { overlay: any }) {
                     <div
                       style={{
                         width: `${maxCount ? (d.count / maxCount) * 100 : 0}%`,
-                        background: "#1677ff",
+                        background: "#ff6600",
                         height: 6,
                         borderRadius: 3,
                       }}

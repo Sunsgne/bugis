@@ -200,8 +200,8 @@ export default function Login() {
       }
     >
       <div className="pointer-events-none absolute inset-0" aria-hidden>
-        <div className="absolute -left-32 top-1/4 h-96 w-96 rounded-full bg-sky-500/10 blur-3xl" />
-        <div className="absolute -right-24 bottom-1/4 h-80 w-80 rounded-full bg-indigo-500/10 blur-3xl" />
+        <div className="absolute -left-32 top-1/4 h-96 w-96 rounded-full bg-orange-500/15 blur-3xl" />
+        <div className="absolute -right-24 bottom-1/4 h-80 w-80 rounded-full bg-amber-500/10 blur-3xl" />
       </div>
 
       <div className="relative z-10 mx-auto flex w-full max-w-6xl flex-col items-stretch gap-10 lg:flex-row lg:items-center lg:gap-16">
@@ -228,7 +228,7 @@ export default function Login() {
           <ul className="flex flex-col gap-3">
             {FEATURES.map(({ icon: Icon, label }) => (
               <li key={label} className="flex items-center gap-3 text-sm text-slate-300">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-700/60 bg-slate-800/50 text-sky-400">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-orange-500/30 bg-orange-500/10 text-orange-400">
                   <Icon className="h-4 w-4" />
                 </span>
                 {label}
@@ -280,7 +280,7 @@ export default function Login() {
                       发送邮件验证码
                     </Button>
                   )}
-                  <Button type="submit" disabled={loading} className="h-11 w-full bg-sky-600 hover:bg-sky-500">
+                  <Button type="submit" disabled={loading} className="h-11 w-full bg-orange-600 hover:bg-orange-500">
                     {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "验证并登录"}
                   </Button>
                   <Button
@@ -342,7 +342,7 @@ export default function Login() {
                   <Button
                     type="submit"
                     disabled={loading}
-                    className={cn("h-11 w-full bg-sky-600 text-white hover:bg-sky-500")}
+                    className={cn("h-11 w-full bg-orange-600 text-white hover:bg-orange-500")}
                     style={brand.accent_color ? { backgroundColor: brand.accent_color } : undefined}
                   >
                     {loading ? (

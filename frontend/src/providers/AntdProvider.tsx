@@ -9,10 +9,12 @@ export default function AntdProvider({ children }: { children: ReactNode }) {
       locale={zhCN}
       theme={{
         token: {
-          colorPrimary: "hsl(221, 83%, 53%)",
+          colorPrimary: "#ff6600",
+          colorInfo: "#ff6600",
+          colorLink: "#ff6600",
           borderRadius: 8,
-          colorBorder: "rgba(15, 23, 42, 0.06)",
-          colorSplit: "rgba(15, 23, 42, 0.05)",
+          colorBorder: "rgba(63, 34, 15, 0.08)",
+          colorSplit: "rgba(63, 34, 15, 0.06)",
           lineWidth: 1,
           fontFamily:
             '-apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
@@ -23,7 +25,7 @@ export default function AntdProvider({ children }: { children: ReactNode }) {
             paddingLG: 20,
           },
           Table: {
-            headerBg: "hsl(210, 40%, 98%)",
+            headerBg: "hsl(28, 60%, 97%)",
             borderColor: "transparent",
             headerSplitColor: "transparent",
             cellPaddingBlock: 12,
@@ -39,7 +41,7 @@ export default function AntdProvider({ children }: { children: ReactNode }) {
             labelFontSize: 13,
           },
           Descriptions: {
-            labelBg: "hsl(210, 40%, 98%)",
+            labelBg: "hsl(28, 60%, 97%)",
             padding: 12,
           },
           Menu: {

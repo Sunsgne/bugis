@@ -215,7 +215,7 @@ export default function PortalCircuitMonitorPanel({
             title="窗口 95 计费"
             value={traffic?.p95?.billable_95_mbps ?? 0}
             suffix="Mbps"
-            valueStyle={{ color: "#1677ff" }}
+            valueStyle={{ color: "#ff6600" }}
           />
         </Card>
       </div>

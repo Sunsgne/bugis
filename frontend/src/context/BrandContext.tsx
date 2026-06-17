@@ -24,8 +24,8 @@ const FALLBACK: BrandConfig = {
   login_subtitle: defaultBrand.loginSubtitle,
   hero_title: defaultBrand.heroTitle,
   hero_subtitle: defaultBrand.heroSubtitle,
-  accent_color: "#52c41a",
-  login_background: "linear-gradient(135deg, #0b1f3a 0%, #1677ff 100%)",
+  accent_color: "#ff6600",
+  login_background: "linear-gradient(135deg, #2b1402 0%, #ff6600 100%)",
 };
 
 function applyDocumentBrand(b: BrandConfig) {
