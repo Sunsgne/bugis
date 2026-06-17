@@ -807,7 +807,11 @@ def test_rate_limit_rendering(client, auth_headers):
     # Huawei: traffic policy objects + traffic-policy on L2 sub-interface (现网惯例)
     assert "traffic policy tp-" in hw
     assert "traffic-policy tp-" in hw
-    assert "car cir 204800" in hw
+    # VRP8/CE rejects the green/yellow/red color actions on 'car'; the default
+    # (green & yellow pass, red discard) is applied automatically, so the
+    # rendered car line must carry only cir + cbs.
+    hw_car = next(l.strip() for l in hw.splitlines() if l.strip().startswith("car cir"))
+    assert hw_car == "car cir 204800 cbs 12800000", hw_car
     assert "qos lr cir" not in hw
     bd = hw.index("bridge-domain")
     subif = hw.index("interface GE1/0/7")
@@ -869,8 +873,8 @@ def test_h3c_huawei_template_quality(client, auth_headers):
     tp = hw_cfg.index("traffic-policy tp-")
     assert bd < subif < tp
     assert "traffic-policy tp-" not in hw_cfg[bd:subif]
-    # VRP8 bridge-domain view has no 'mtu' command (it is rejected on real CE
-    # gear), so the rendered BD section must not emit one.
+    # VRP8 bridge-domain view has no 'mtu' command (rejected on real CE gear),
+    # so the rendered BD section must not emit one.
     assert " mtu " not in hw_cfg.split("bridge-domain", 1)[1].split("interface", 1)[0]
 
 
