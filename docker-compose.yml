@@ -1,3 +1,5 @@
+# Local / dev stack. Only frontend is published to the host; all other services
+# communicate on the internal Docker network.
 services:
   db:
     image: postgres:16-alpine
@@ -19,11 +21,10 @@ services:
       BUGIS_DATABASE_URL: postgresql+psycopg://bugis:bugis@db:5432/bugis
       BUGIS_SECRET_KEY: please-change-this-secret-in-production
       BUGIS_DRY_RUN: "false"
+      BUGIS_EXPOSE_OPENAPI: "false"
     depends_on:
       db:
         condition: service_healthy
-    ports:
-      - "8000:8000"
 
   frontend:
     build: ./frontend
@@ -37,8 +38,6 @@ services:
     volumes:
       - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./deploy/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
-    ports:
-      - "9090:9090"
     depends_on:
       - backend
 
@@ -49,8 +48,6 @@ services:
       GF_USERS_DEFAULT_THEME: light
     volumes:
       - ./deploy/grafana/provisioning:/etc/grafana/provisioning:ro
-    ports:
-      - "3000:3000"
     depends_on:
       - prometheus
 

@@ -1,9 +1,9 @@
 # Production-grade demo stack (aligned with docker-compose.yml):
 #   PostgreSQL 16 + backend + frontend + Prometheus + Grafana
 #
-# Primary UI:   http://<host>:3300/
-# Prometheus:   http://<host>:3309/
-# Grafana:      http://<host>:3303/  (admin / $GRAFANA_ADMIN_PASSWORD)
+# Security: only frontend is published to the host (default :3300).
+# Backend / DB / Prometheus / Grafana are reachable on the internal Docker network only.
+#   UI: http://<host>:3300/
 #
 # Provide secrets via .env (see deploy/demo.env.example). Local smoke test:
 #   cp deploy/demo.env.example deploy/demo.env && docker compose -f docker-compose.demo.yml --env-file deploy/demo.env up --build
@@ -31,6 +31,7 @@ services:
       BUGIS_SECRET_KEY: ${BUGIS_SECRET_KEY:-demo-change-me-use-long-random-string}
       BUGIS_DRY_RUN: "false"
       BUGIS_SCHEDULER_INTERVAL_SECONDS: "20"
+      BUGIS_EXPOSE_OPENAPI: "false"
     depends_on:
       db:
         condition: service_healthy
@@ -56,8 +57,6 @@ services:
     volumes:
       - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./deploy/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
-    ports:
-      - "3309:9090"
     depends_on:
       backend:
         condition: service_healthy
@@ -70,8 +69,6 @@ services:
       GF_USERS_DEFAULT_THEME: light
     volumes:
       - ./deploy/grafana/provisioning:/etc/grafana/provisioning:ro
-    ports:
-      - "3303:3000"
     depends_on:
       - prometheus
     restart: unless-stopped

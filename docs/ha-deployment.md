@@ -64,14 +64,19 @@
 | 网络 | 节点间内网互通；App→设备 NETCONF/SSH/SNMP 需可达 |
 | OS | Ubuntu 22.04/24.04 LTS 或 RHEL 8+，内核 5.x |
 
-## 端口清单
+## 端口与安全暴露
 
-| 节点 | 端口 | 用途 |
-|------|------|------|
-| LB | 80, 443 | 对外 Web |
-| App | 3300 | 内网/ LB 回源（frontend） |
-| DB | 5432 | PostgreSQL（仅内网） |
-| Obs | 9090, 3000 | Prometheus / Grafana（建议内网） |
+默认原则：**仅前端（或 LB）对外**；后端 API、数据库、可观测组件不直接对公网映射端口。
+
+| 节点 | 对外端口 | 内网端口 | 说明 |
+|------|----------|----------|------|
+| LB | 80, 443 | — | 唯一公网入口，反代到 App frontend |
+| App | — | 3300 | frontend，供 LB 回源 |
+| App | — | 8000 | backend `/metrics`，绑定 `HA_APP_METRICS_BIND`（默认 127.0.0.1；多节点设为私网 IP 并由防火墙限制） |
+| DB | — | 5432 | PostgreSQL，绑定 `HA_DB_BIND`（默认 127.0.0.1；App 跨机访问时设为私网 IP + 防火墙） |
+| Obs | — | 127.0.0.1:9090 / :3000 | Prometheus / Grafana 仅本机回环，通过 SSH 隧道访问 |
+
+API 经前端 Nginx 反代 `/api/`；`/docs`、`/metrics` 默认不对外暴露。
 
 ## 部署前准备
 

@@ -1,5 +1,8 @@
 # Bugis HA — observability (optional dedicated node or colocate on LB).
 #
+# Security: Prometheus and Grafana are NOT published to the host. Access via SSH
+# tunnel, e.g. ssh -L 9090:127.0.0.1:9090 obs-host then open http://localhost:9090
+#
 # Usage:
 #   docker compose -f docker-compose.ha-obs.yml --env-file deploy/ha/obs.env up -d
 
@@ -10,7 +13,7 @@ services:
       - ./deploy/ha/prometheus/prometheus.ha.yml:/etc/prometheus/prometheus.yml:ro
       - ./deploy/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
     ports:
-      - "${HA_PROMETHEUS_PORT:-9090}:9090"
+      - "127.0.0.1:${HA_PROMETHEUS_PORT:-9090}:9090"
     restart: unless-stopped
 
   grafana:
@@ -21,7 +24,7 @@ services:
     volumes:
       - ./deploy/grafana/provisioning:/etc/grafana/provisioning:ro
     ports:
-      - "${HA_GRAFANA_PORT:-3000}:3000"
+      - "127.0.0.1:${HA_GRAFANA_PORT:-3000}:3000"
     depends_on:
       - prometheus
     restart: unless-stopped

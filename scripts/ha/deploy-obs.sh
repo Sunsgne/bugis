@@ -17,7 +17,7 @@ TARGETS=""
 for h in "${APP_HOSTS[@]}"; do
   h="$(echo "$h" | xargs)"
   [[ -z "$h" ]] && continue
-  TARGETS="${TARGETS}          - ${h}:${HA_APP_HTTP_PORT:-3300}"$'\n'
+  TARGETS="${TARGETS}          - ${h}:${HA_APP_METRICS_PORT:-8000}"$'\n'
 done
 
 PROM="${ROOT}/deploy/ha/prometheus/prometheus.ha.yml"
@@ -42,4 +42,4 @@ ha_ssh "$HOST" "cd '$REMOTE' && tar -xzf bugis-ha-src.tar.gz && \
   docker compose -f docker-compose.ha-obs.yml --env-file obs.env up -d && \
   rm -f bugis-ha-src.tar.gz"
 
-echo "Observability on ${HOST} (Prometheus ${HA_PROMETHEUS_PORT:-9090}, Grafana ${HA_GRAFANA_PORT:-3000})"
+echo "Observability on ${HOST} (localhost only — SSH tunnel: -L 9090:127.0.0.1:9090 -L 3000:127.0.0.1:3000)"

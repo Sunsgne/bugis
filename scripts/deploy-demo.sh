@@ -2,9 +2,7 @@
 # Deploy production-grade Bugis demo stack (docker-compose.demo.yml).
 #
 # Stack: PostgreSQL 16 + backend + frontend + Prometheus + Grafana
-#   UI:         http://<host>:3300/
-#   Prometheus: http://<host>:3309/
-#   Grafana:    http://<host>:3303/
+#   UI: http://<host>:3300/  (only frontend is published to the host)
 #
 # Required (pick one auth method):
 #   DEMO_SSH_PASSWORD=...     uses sshpass
@@ -115,11 +113,7 @@ for i in $(seq 1 20); do
     if [[ -n "$TOKEN" ]]; then
       CODE=$(curl -sS -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $TOKEN" \
         "http://${HOST}:3300/api/v1/circuits")
-      if [[ "$CODE" == "200" ]]; then
-        PROM_OK=""
-        if curl -fsS "http://${HOST}:3309/-/ready" >/dev/null 2>&1; then
-          PROM_OK=" Prometheus OK;"
-        fi
+        if [[ "$CODE" == "200" ]]; then
         if [[ -x "$ROOT/scripts/verify-demo.sh" ]]; then
           echo "==> Running post-deploy smoke tests"
           BUGIS_DEMO_USER="${BUGIS_DEMO_USER}" BUGIS_DEMO_PASS="${BUGIS_DEMO_PASS}" \
@@ -127,7 +121,7 @@ for i in $(seq 1 20); do
             echo "WARN: smoke tests failed (stack may still be starting)"
           }
         fi
-        echo "Demo is up: http://${HOST}:3300/ (circuits API OK;${PROM_OK} Grafana http://${HOST}:3303/)"
+        echo "Demo is up: http://${HOST}:3300/ (circuits API OK)"
         exit 0
       fi
       echo "WARN: health OK but /circuits returned $CODE (attempt $i)"

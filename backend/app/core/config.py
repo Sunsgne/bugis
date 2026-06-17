@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     secret_key: str = "change-me-in-production-please-use-a-long-random-string"
     access_token_expire_minutes: int = 60 * 24
     algorithm: str = "HS256"
-    expose_openapi: bool = True
+    expose_openapi: bool = False
 
     # --- Device baseline (initialization) defaults ---
     baseline_ntp_server: str = "10.0.0.1"

@@ -1,6 +1,9 @@
 # Bugis HA — PostgreSQL primary (single writer).
 # For production DB HA use managed RDS / Patroni; this is the self-hosted primary.
 #
+# Security: PostgreSQL binds to HA_DB_BIND (default 127.0.0.1). For multi-node HA,
+# set HA_DB_BIND to the host private IP or 0.0.0.0 and restrict 5432 via firewall.
+#
 # Usage:
 #   docker compose -f docker-compose.ha-db.yml --env-file deploy/ha/db.env up -d
 
@@ -14,7 +17,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     ports:
-      - "${HA_DB_PORT:-5432}:5432"
+      - "${HA_DB_BIND:-127.0.0.1}:${HA_DB_PORT:-5432}:5432"
     command:
       - postgres
       - -c

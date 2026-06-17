@@ -20,6 +20,8 @@ echo "=== 数据库（PostgreSQL 主库）==="
 read -rp "DB 主库 IP: " HA_DB_HOST
 read -rp "DB 端口 [5432]: " HA_DB_PORT
 HA_DB_PORT="${HA_DB_PORT:-5432}"
+read -rp "DB 绑定地址（内网 IP 或 0.0.0.0 + 防火墙）[0.0.0.0]: " HA_DB_BIND
+HA_DB_BIND="${HA_DB_BIND:-0.0.0.0}"
 read -rp "PostgreSQL 用户 [bugis]: " POSTGRES_USER
 POSTGRES_USER="${POSTGRES_USER:-bugis}"
 read -rsp "PostgreSQL 密码: " POSTGRES_PASSWORD
@@ -33,6 +35,8 @@ echo "=== 应用节点（至少 2 台）==="
 read -rp "App 节点 IP，逗号分隔（第一台为调度主节点）: " HA_APP_HOSTS
 read -rp "每台 App 对外 HTTP 端口 [3300]: " HA_APP_HTTP_PORT
 HA_APP_HTTP_PORT="${HA_APP_HTTP_PORT:-3300}"
+read -rp "Backend /metrics 绑定（内网 IP 或 0.0.0.0 + 防火墙）[0.0.0.0]: " HA_APP_METRICS_BIND
+HA_APP_METRICS_BIND="${HA_APP_METRICS_BIND:-0.0.0.0}"
 
 echo ""
 echo "=== 负载均衡 ==="
@@ -72,6 +76,7 @@ HA_PUBLIC_URL=${HA_PUBLIC_URL}
 
 HA_DB_HOST=${HA_DB_HOST}
 HA_DB_PORT=${HA_DB_PORT}
+HA_DB_BIND=${HA_DB_BIND}
 POSTGRES_USER=${POSTGRES_USER}
 POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
 POSTGRES_DB=${POSTGRES_DB}
@@ -79,6 +84,8 @@ HA_DB_STANDBY_HOST=${HA_DB_STANDBY_HOST}
 
 HA_APP_HOSTS=${HA_APP_HOSTS}
 HA_APP_HTTP_PORT=${HA_APP_HTTP_PORT}
+HA_APP_METRICS_BIND=${HA_APP_METRICS_BIND}
+HA_APP_METRICS_PORT=8000
 
 HA_LB_HOSTS=${HA_LB_HOSTS}
 HA_LB_HTTP_PORT=${HA_LB_HTTP_PORT}

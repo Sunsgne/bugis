@@ -1,6 +1,9 @@
 # Bugis HA — application node (run on each App server).
 # Connects to external PostgreSQL via BUGIS_DATABASE_URL.
 #
+# Security: only frontend is published to the host. Backend metrics bind to
+# HA_APP_METRICS_BIND (default 127.0.0.1) for internal Prometheus scrape.
+#
 # Node 1 (leader): BUGIS_SCHEDULER_ENABLED=true  BUGIS_RUN_MIGRATIONS=true
 # Node 2+ (follower): BUGIS_SCHEDULER_ENABLED=false BUGIS_RUN_MIGRATIONS=false
 #
@@ -22,6 +25,8 @@ services:
       BUGIS_RUN_SEED: ${BUGIS_RUN_SEED:-false}
       BUGIS_RUN_DEMO: ${BUGIS_RUN_DEMO:-false}
       BUGIS_EXPOSE_OPENAPI: ${BUGIS_EXPOSE_OPENAPI:-false}
+    ports:
+      - "${HA_APP_METRICS_BIND:-127.0.0.1}:8000:8000"
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
       interval: 30s

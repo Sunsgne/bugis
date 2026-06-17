@@ -84,15 +84,14 @@ npm run dev                     # 门户: http://localhost:5173 (代理到后端
 
 ```bash
 docker compose up --build
-# 门户:        http://localhost:8080
-# 后端 API:    http://localhost:8000/docs
-# Prometheus:  http://localhost:9090
-# Grafana:     http://localhost:3000 (admin/admin)
+# 门户（唯一对外端口）: http://localhost:8080
+# API 经前端反代:        http://localhost:8080/api/v1/...
+# Prometheus / Grafana 仅在 Docker 内网，不映射宿主机端口
 ```
 
 默认登录：`admin` / `admin123`
 
-**可观测性开箱即用**：Prometheus 自动抓取后端 `/metrics` 并加载告警规则（`deploy/prometheus/alerts.yml`）；Grafana 自动装载数据源与「Bugis · DCI/EVPN 运营总览」仪表盘（`deploy/grafana/provisioning/`）。指标包含 `bugis_circuits_by_status`、`bugis_devices_by_vendor`、`bugis_alarms_by_severity` 等带标签时序。
+**可观测性**：Prometheus 在容器网络内抓取 `backend:8000/metrics`；Grafana 通过内网访问 Prometheus。如需本地查看，可 SSH 隧道或临时 `docker compose exec` 进入容器。告警规则见 `deploy/prometheus/alerts.yml`；Grafana 仪表盘见 `deploy/grafana/provisioning/`。
 
 ## 🔌 主要 API / Key endpoints
 
@@ -156,13 +155,13 @@ cd backend && python -m pytest -q
 
 公开 Demo：`http://203.117.117.196:3300/`（账号 `admin` / `admin123`）
 
-Demo 栈与生产 Compose 对齐，使用 **PostgreSQL 16**（非 SQLite），并附带 **Prometheus / Grafana** 可观测性组件：
+Demo 栈与生产 Compose 对齐，使用 **PostgreSQL 16**（非 SQLite），并附带 **Prometheus / Grafana**（仅 Docker 内网，不对外映射端口）：
 
 | 服务 | 地址 |
 |------|------|
-| 门户 | `http://<host>:3300/` |
-| Prometheus | `http://<host>:3309/` |
-| Grafana | `http://<host>:3303/`（默认 `admin` / 见 `GRAFANA_ADMIN_PASSWORD`） |
+| 门户（唯一对外） | `http://<host>:3300/` |
+
+Prometheus / Grafana / 后端 API / 数据库均不直接暴露宿主机端口；API 经前端 Nginx 反代 `/api/`。
 
 每次合并到 `main` 后，可通过 GitHub Actions 自动同步 Demo（需在仓库 Secrets 配置）：
 
