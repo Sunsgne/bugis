@@ -1,8 +1,6 @@
 """Bugis SDN controller control-plane API (VTEPs, EVPN RIB, topology)."""
 from __future__ import annotations
 
-from collections import defaultdict
-
 from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -78,23 +76,7 @@ def list_routes(
 
 @router.get("/topology")
 def overlay_topology(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
-    peers = db.execute(select(VtepPeer)).scalars().all()
-    nodes = [
-        {"id": p.device_id, "name": p.name, "vtep_ip": p.vtep_ip,
-         "vnis": [int(v) for v in p.vnis.split(",") if v], "status": p.status.value}
-        for p in peers
-    ]
-    vni_members: dict[int, list[int]] = defaultdict(list)
-    for p in peers:
-        for v in p.vnis.split(","):
-            if v:
-                vni_members[int(v)].append(p.device_id)
-    edges = []
-    for vni, members in vni_members.items():
-        for i in range(len(members)):
-            for j in range(i + 1, len(members)):
-                edges.append({"vni": vni, "source": members[i], "target": members[j]})
-    return {"nodes": nodes, "edges": edges, "vnis": sorted(vni_members.keys())}
+    return overlay_inventory.build_overlay_topology(db)
 
 
 @router.get("/bgp/sessions")

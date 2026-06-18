@@ -16,7 +16,7 @@ from app.models.circuit import Circuit, CircuitEndpoint
 from app.models.controlplane import EvpnRoute, VtepPeer
 from app.models.device import Device
 from app.models.device_learn_run import DeviceLearnRun
-from app.models.enums import CircuitStatus
+from app.models.enums import CircuitStatus, DeviceStatus, OverlayTech, VtepStatus
 from app.services import config_learn_parse, config_mgmt
 
 # Circuit states whose VNI should still appear in the controller overlay topology
@@ -327,6 +327,134 @@ def _retained_circuit_vnis_by_device(db: Session) -> dict[int, set[int]]:
     return out
 
 
+def _overlay_devices(db: Session) -> list[Device]:
+    return list(
+        db.execute(
+            select(Device)
+            .where(
+                Device.overlay_tech.in_(
+                    (OverlayTech.VXLAN_EVPN, OverlayTech.SRMPLS_EVPN)
+                )
+            )
+            .order_by(Device.id)
+        ).scalars().all()
+    )
+
+
+def _device_vni_sets(
+    db: Session,
+    *,
+    peers: dict[int, VtepPeer] | None = None,
+    learned: dict[int, set[int]] | None = None,
+    retained: dict[int, set[int]] | None = None,
+) -> dict[int, set[int]]:
+    """Merged VNI membership per device: controller VTEP + learned + platform."""
+    if peers is None:
+        peers = {
+            p.device_id: p
+            for p in db.execute(select(VtepPeer)).scalars().all()
+        }
+    if learned is None:
+        learned = _learned_vnis_by_device(db)
+    if retained is None:
+        retained = _retained_circuit_vnis_by_device(db)
+
+    out: dict[int, set[int]] = {}
+    for device in _overlay_devices(db):
+        vnis: set[int] = set()
+        peer = peers.get(device.id)
+        if peer:
+            vnis |= {
+                int(v) for v in (peer.vnis or "").split(",") if v.strip().isdigit()
+            }
+        vnis |= learned.get(device.id, set())
+        vnis |= retained.get(device.id, set())
+        out[device.id] = vnis
+    return out
+
+
+def build_overlay_topology(db: Session) -> dict:
+    """VXLAN / SR-MPLS overlay graph: all overlay-capable devices as nodes."""
+    peers = {
+        p.device_id: p
+        for p in db.execute(select(VtepPeer)).scalars().all()
+    }
+    device_vnis = _device_vni_sets(db, peers=peers)
+
+    nodes: list[dict] = []
+    for device in _overlay_devices(db):
+        peer = peers.get(device.id)
+        vtep_ip = (
+            (peer.vtep_ip if peer else None)
+            or device.loopback_ip
+            or device.mgmt_ip
+            or ""
+        )
+        if peer:
+            status = peer.status.value
+        elif device.status == DeviceStatus.ONLINE:
+            status = "up"
+        else:
+            status = device.status.value
+        nodes.append({
+            "id": device.id,
+            "name": device.name,
+            "vtep_ip": vtep_ip,
+            "vnis": sorted(device_vnis.get(device.id, set())),
+            "status": status,
+        })
+
+    vni_members: dict[int, list[int]] = defaultdict(list)
+    for device_id, vnis in device_vnis.items():
+        for vni in vnis:
+            vni_members[vni].append(device_id)
+
+    edges: list[dict] = []
+    for vni, members in vni_members.items():
+        for i in range(len(members)):
+            for j in range(i + 1, len(members)):
+                edges.append({"vni": vni, "source": members[i], "target": members[j]})
+
+    return {
+        "nodes": nodes,
+        "edges": edges,
+        "vnis": sorted(vni_members.keys()),
+    }
+
+
+def _ensure_overlay_vtep_peers(db: Session) -> int:
+    """Register VTEP stubs for overlay devices missing from the controller."""
+    existing = {
+        p.device_id
+        for p in db.execute(select(VtepPeer)).scalars().all()
+    }
+    created = 0
+    for device in _overlay_devices(db):
+        if device.id in existing:
+            continue
+        vtep_ip = device.loopback_ip or device.mgmt_ip
+        if not vtep_ip:
+            continue
+        db.add(
+            VtepPeer(
+                device_id=device.id,
+                name=device.name,
+                vtep_ip=vtep_ip,
+                asn=device.bgp_asn,
+                status=(
+                    VtepStatus.UP
+                    if device.status == DeviceStatus.ONLINE
+                    else VtepStatus.DOWN
+                ),
+                vnis="",
+            )
+        )
+        created += 1
+    if created:
+        db.flush()
+    return created
+
+
 def reconcile_controller_topology(db: Session) -> dict:
     """Prune controller overlay state that no longer exists on the network.
 
@@ -336,6 +464,7 @@ def reconcile_controller_topology(db: Session) -> dict:
     deleted) is removed, which clears the corresponding edges from the topology
     graph. Orphan EVPN routes pointing at deleted circuits are also cleaned.
     """
+    peers_created = _ensure_overlay_vtep_peers(db)
     learned = _learned_vnis_by_device(db)
     retained = _retained_circuit_vnis_by_device(db)
 
@@ -375,6 +504,7 @@ def reconcile_controller_topology(db: Session) -> dict:
 
     return {
         "topology_reconciled": True,
+        "peers_created": peers_created,
         "peers_pruned": len(pruned_detail),
         "stale_vni_removed": stale_vni_removed,
         "orphan_routes_removed": orphan_routes,
