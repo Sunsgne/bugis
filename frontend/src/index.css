@@ -943,22 +943,61 @@ body {
   width: 100%;
   min-height: calc(100vh - 7rem);
   display: grid;
-  grid-template-columns: minmax(360px, 30%) minmax(0, 1fr);
+  grid-template-columns: minmax(320px, 30%) minmax(0, 1fr);
+  grid-template-areas:
+    "alert alert"
+    "devices detail";
   gap: 16px;
-  align-items: stretch;
+  align-items: start;
+}
+
+.config-management-alert {
+  grid-area: alert;
+}
+
+.config-management-devices {
+  grid-area: devices;
+  position: sticky;
+  top: 0.5rem;
+  max-height: calc(100vh - 8rem);
+  overflow: auto;
+}
+
+.config-management-detail {
+  grid-area: detail;
+  min-height: calc(100vh - 11rem);
 }
 
 @media (max-width: 991px) {
   .config-management-page {
     grid-template-columns: 1fr;
+    grid-template-areas:
+      "alert"
+      "devices"
+      "detail";
+    min-height: auto;
+  }
+
+  .config-management-devices {
+    position: static;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .config-management-detail {
     min-height: auto;
   }
 }
 
 .config-management-page .config-panel-card {
-  height: 100%;
+  height: auto;
   display: flex;
   flex-direction: column;
+}
+
+.config-management-page .config-management-detail.config-panel-card {
+  height: 100%;
+  min-height: calc(100vh - 11rem);
 }
 
 .config-management-page .config-panel-card > .ant-card-body {

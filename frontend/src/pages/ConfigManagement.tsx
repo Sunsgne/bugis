@@ -166,9 +166,10 @@ export default function ConfigManagement() {
   return (
     <div className="config-management-page">
       <Alert
+        className="config-management-alert"
         type="info"
         showIcon
-        style={{ marginBottom: 16 }}
+        style={{ marginBottom: 0 }}
         message={
           platform?.auto_learn_enabled !== false
             ? `定时自动拉取已开启（间隔 ${platform?.auto_learn_interval_seconds ?? 60} 秒）`
@@ -190,7 +191,7 @@ export default function ConfigManagement() {
         }
       />
       <Card
-        className="config-panel-card"
+        className="config-panel-card config-management-devices"
         title="设备配置"
         extra={<Button size="small" icon={<ReloadOutlined />} onClick={loadDevices} />}
       >
@@ -252,7 +253,7 @@ export default function ConfigManagement() {
       </Card>
 
       <Card
-        className="config-panel-card"
+        className="config-panel-card config-management-detail"
         title="配置管理"
         extra={
           <Button.Group>
