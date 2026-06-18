@@ -284,7 +284,7 @@ def test_link_patch_endpoints_and_alarm_threshold(client, auth_headers):
     updated = client.patch(
         f"/api/v1/capacity/links/{link_id}",
         headers=auth_headers,
-        json={"alarm_utilization_pct": 72.5, "capacity_mbps": 20000},
+        json={"alarm_utilization_pct": 72.5, "capacity_mbps": 20000, "supplier": "中国电信"},
     )
     assert updated.status_code == 200
     body = updated.json()
@@ -292,9 +292,14 @@ def test_link_patch_endpoints_and_alarm_threshold(client, auth_headers):
     assert body["effective_alarm_utilization_pct"] == 72.5
     assert body["alarm_thresholds_customized"] is True
     assert body["capacity_mbps"] == 20000
+    assert body["supplier"] == "中国电信"
 
     usage = client.get("/api/v1/capacity/links/usage", headers=auth_headers).json()
     row = next(u for u in usage if u["link_id"] == link_id)
     assert row["device_a_id"] == dev_a["id"]
     assert row["device_z_id"] == dev_z["id"]
     assert row["effective_alarm_utilization_pct"] == 72.5
+    assert row["supplier"] == "中国电信"
+    assert row["site_a_code"] == f"DCA2{n}"
+    assert row["site_z_code"] == f"DCZ2{n}"
+    assert "peak_at" in row

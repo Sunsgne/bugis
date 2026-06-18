@@ -101,20 +101,30 @@ def link_capacity(db: Session) -> list[dict]:
 
     plat = platform_settings.get_or_create(db)
     links = db.execute(select(Link)).scalars().all()
+    site_by_id = {s.id: s for s in db.execute(select(Site)).scalars().all()}
     result = []
     for l in links:
         da = db.get(Device, l.device_a_id)
         dz = db.get(Device, l.device_z_id)
+        site_a = site_by_id.get(da.site_id) if da and da.site_id else None
+        site_z = site_by_id.get(dz.site_id) if dz and dz.site_id else None
         health = link_monitor.compute_link_health(db, l)
         alarm = link_alarm_settings.thresholds_out(l, plat)
         result.append({
             "link_id": l.id,
             "name": l.name,
             "type": l.type.value,
+            "supplier": l.supplier,
             "device_a_id": l.device_a_id,
             "device_z_id": l.device_z_id,
             "device_a": da.name if da else l.device_a_id,
             "device_z": dz.name if dz else l.device_z_id,
+            "site_a_id": site_a.id if site_a else None,
+            "site_z_id": site_z.id if site_z else None,
+            "site_a": site_a.name if site_a else None,
+            "site_z": site_z.name if site_z else None,
+            "site_a_code": site_a.code if site_a else None,
+            "site_z_code": site_z.code if site_z else None,
             "interface_a": l.interface_a,
             "interface_z": l.interface_z,
             "interface_a_description": link_planner._interface_description(
@@ -130,6 +140,10 @@ def link_capacity(db: Session) -> list[dict]:
             "traffic_mbps": health.traffic_mbps,
             "peak_utilization_pct": health.peak_utilization_pct,
             "avg_utilization_pct": health.avg_utilization_pct,
+            "peak_rx_mbps": health.peak_rx_mbps,
+            "peak_tx_mbps": health.peak_tx_mbps,
+            "peak_traffic_mbps": health.peak_traffic_mbps,
+            "peak_at": health.peak_at,
             "utilization_pct": health.peak_utilization_pct,
             "samples": health.samples,
         })

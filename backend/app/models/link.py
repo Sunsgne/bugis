@@ -27,4 +27,5 @@ class Link(Base, TimestampMixin):
     # Bandwidth administratively reserved for circuits riding this link.
     reserved_mbps: Mapped[int] = mapped_column(Integer, default=0)
     description: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    supplier: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     alarm_utilization_pct: Mapped[float | None] = mapped_column(Float, nullable=True)

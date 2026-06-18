@@ -405,10 +405,17 @@ export interface LinkUsage {
   link_id: number;
   name: string;
   type: string;
+  supplier?: string | null;
   device_a_id: number;
   device_z_id: number;
   device_a: string;
   device_z: string;
+  site_a_id?: number | null;
+  site_z_id?: number | null;
+  site_a?: string | null;
+  site_z?: string | null;
+  site_a_code?: string | null;
+  site_z_code?: string | null;
   interface_a?: string;
   interface_z?: string;
   interface_a_description?: string | null;
@@ -421,6 +428,10 @@ export interface LinkUsage {
   traffic_mbps?: number;
   peak_utilization_pct?: number;
   avg_utilization_pct?: number;
+  peak_rx_mbps?: number;
+  peak_tx_mbps?: number;
+  peak_traffic_mbps?: number;
+  peak_at?: string | null;
   utilization_pct: number;
   samples?: number;
 }
