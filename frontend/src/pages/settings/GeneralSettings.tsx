@@ -14,6 +14,7 @@ import {
 } from "antd";
 import { SaveOutlined } from "@ant-design/icons";
 import { useEffect } from "react";
+import { Link } from "react-router-dom";
 import { usePlatformSettings } from "../../hooks/usePlatformSettings";
 import { useAuth } from "../../auth";
 
@@ -86,6 +87,20 @@ export default function GeneralSettings() {
         }
       />
 
+      <Alert
+        type="info"
+        showIcon
+        style={{ marginBottom: 16 }}
+        message="现网配置自动拉取"
+        description={
+          <>
+            定时拉取 running-config、导入后学习、变更快照等请在
+            <Link to="/settings/config-learn"> 配置管理 </Link>
+            页配置。
+          </>
+        }
+      />
+
       <Form form={form} layout="vertical" className="app-form" disabled={!canEdit || loading}>
         <Row gutter={16}>
           <Col xs={24} md={8}>
@@ -100,46 +115,6 @@ export default function GeneralSettings() {
           </Col>
           <Col xs={24} md={8}>
             <Form.Item name="scheduler_enabled" label="后台调度器" valuePropName="checked">
-              <Switch checkedChildren="开" unCheckedChildren="关" />
-            </Form.Item>
-          </Col>
-          <Col xs={24} md={8}>
-            <Form.Item
-              name="auto_learn_on_import"
-              label="导入设备后自动现网学习"
-              valuePropName="checked"
-              tooltip="CSV 导入或新增设备时自动拉取 running-config 并解析业务/VLAN"
-            >
-              <Switch checkedChildren="开" unCheckedChildren="关" />
-            </Form.Item>
-          </Col>
-          <Col xs={24} md={8}>
-            <Form.Item
-              name="auto_learn_enabled"
-              label="定时现网自学习"
-              valuePropName="checked"
-              tooltip="后台调度器按间隔自动拉取所有在线设备的 running-config，发现线下新增 S-VID 占用"
-            >
-              <Switch checkedChildren="开" unCheckedChildren="关" />
-            </Form.Item>
-          </Col>
-          <Col xs={24} md={8}>
-            <Form.Item
-              name="protect_live_config"
-              label="现网配置保护"
-              valuePropName="checked"
-              tooltip="下发前用缓存的现网学习快照刷新接口 S-VID 占用（不增加交换机负担），让冲突预检基于最新现网状态；缺少学习基线的设备会给出告警提示。配置下发统一采用增量合并(merge)，不会整体覆盖现网。"
-            >
-              <Switch checkedChildren="开" unCheckedChildren="关" />
-            </Form.Item>
-          </Col>
-          <Col xs={24} md={8}>
-            <Form.Item
-              name="snapshot_before_change"
-              label="变更前自动快照"
-              valuePropName="checked"
-              tooltip="每次开通/拆除前自动拉取各目标设备的现网 running-config 并存为快照(source=pre_change)，用于变更对比与应急还原。尽力而为，拉取失败不阻断变更。"
-            >
               <Switch checkedChildren="开" unCheckedChildren="关" />
             </Form.Item>
           </Col>
@@ -169,15 +144,6 @@ export default function GeneralSettings() {
           <Col xs={12} md={6}>
             <Form.Item name="scheduler_interval_seconds" label="调度间隔 (秒)">
               <InputNumber min={10} max={3600} style={{ width: "100%" }} />
-            </Form.Item>
-          </Col>
-          <Col xs={12} md={6}>
-            <Form.Item
-              name="auto_learn_interval_seconds"
-              label="自学习间隔 (秒)"
-              tooltip="建议 60 秒，与调度器独立计时"
-            >
-              <InputNumber min={30} max={3600} style={{ width: "100%" }} />
             </Form.Item>
           </Col>
           <Col xs={12} md={6}>

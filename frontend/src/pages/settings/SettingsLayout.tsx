@@ -14,6 +14,7 @@ import {
   RadarChartOutlined,
   BgColorsOutlined,
   CloudUploadOutlined,
+  FileTextOutlined,
 } from "@ant-design/icons";
 
 const { Sider, Content } = Layout;
@@ -22,6 +23,7 @@ const { Paragraph } = Typography;
 const NAV = [
   { key: "/settings/brand", icon: <BgColorsOutlined />, label: "品牌外观" },
   { key: "/settings/general", icon: <ThunderboltOutlined />, label: "平台运行" },
+  { key: "/settings/config-learn", icon: <FileTextOutlined />, label: "配置管理" },
   { key: "/settings/alarms", icon: <AlertOutlined />, label: "告警阈值" },
   { key: "/settings/baseline", icon: <CloudServerOutlined />, label: "设备基线" },
   { key: "/settings/smtp", icon: <MailOutlined />, label: "邮件 SMTP" },
