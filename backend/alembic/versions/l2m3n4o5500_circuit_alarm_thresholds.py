@@ -4,7 +4,7 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision = "l2m3n4o5500_circuit_alarm_thresholds"
+revision = "l2m3n4o5500_circuit_alarm"
 down_revision = "k1l2m3n4400_encrypt_cred_columns"
 branch_labels = None
 depends_on = None
