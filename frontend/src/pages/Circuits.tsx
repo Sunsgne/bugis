@@ -157,6 +157,7 @@ export default function Circuits() {
   const [provisioningId, setProvisioningId] = useState<number | null>(null);
   const [provisionType, setProvisionType] = useState<string>("provision");
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [decommissionTarget, setDecommissionTarget] = useState<Circuit | null>(null);
 
   async function loadCircuits(p = page, ps = pageSize, q = search) {
     setLoading(true);
@@ -944,12 +945,7 @@ export default function Circuits() {
                   icon: <MinusCircleOutlined />,
                   danger: true,
                   label: "拆除专线",
-                  onClick: () =>
-                    modal.confirm({
-                      title: "确认拆除该专线?",
-                      okType: "danger",
-                      onOk: () => decommission(r),
-                    }),
+                  onClick: () => setDecommissionTarget(r),
                 },
                 DELETABLE.has(r.status) && {
                   key: "delete",
@@ -982,9 +978,28 @@ export default function Circuits() {
                     </Tooltip>
                   )}
                   {moreItems.length > 0 && (
-                    <Dropdown menu={{ items: moreItems }} trigger={["click"]}>
-                      <Button size="small" icon={<MoreOutlined />}>更多</Button>
-                    </Dropdown>
+                    <Popconfirm
+                      title="确认拆除该专线?"
+                      placement="topRight"
+                      okText="确定"
+                      cancelText="取消"
+                      okType="danger"
+                      open={decommissionTarget?.id === r.id}
+                      onOpenChange={(nextOpen) => {
+                        if (!nextOpen && decommissionTarget?.id === r.id) {
+                          setDecommissionTarget(null);
+                        }
+                      }}
+                      onConfirm={() => {
+                        const target = decommissionTarget;
+                        setDecommissionTarget(null);
+                        if (target) return decommission(target);
+                      }}
+                    >
+                      <Dropdown menu={{ items: moreItems }} trigger={["click"]}>
+                        <Button size="small" icon={<MoreOutlined />}>更多</Button>
+                      </Dropdown>
+                    </Popconfirm>
                   )}
                 </Space>
               );
