@@ -15,7 +15,7 @@ import {
   Typography,
 } from "antd";
 import { DeleteOutlined, EditOutlined, PlusOutlined } from "@ant-design/icons";
-import dayjs from "dayjs";
+import { useUserDatetime } from "@/utils/datetime";
 import { api } from "../api/client";
 import { useAuth } from "../auth";
 import { action, page, toast } from "../constants/uiCopy";
@@ -42,6 +42,7 @@ const ROLE_COLOR: Record<string, string> = {
 
 export default function Users({ embedded }: { embedded?: boolean }) {
   const { tc } = useTc();
+  const { formatDateTime } = useUserDatetime();
   const { user } = useAuth();
   const { message } = AntApp.useApp();
   const [rows, setRows] = useState<UserRow[]>([]);
@@ -170,7 +171,7 @@ export default function Users({ embedded }: { embedded?: boolean }) {
             title: tc('创建时间'),
             dataIndex: "created_at",
             width: "16%",
-            render: (t) => (t ? dayjs(t).format("YYYY-MM-DD HH:mm") : "—"),
+            render: (t) => formatDateTime(t),
           },
           {
             title: tc('操作'),

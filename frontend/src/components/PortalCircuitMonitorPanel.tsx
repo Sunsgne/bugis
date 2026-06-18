@@ -12,7 +12,8 @@ import {
   Tag,
   Typography,
 } from "antd";
-import dayjs, { type Dayjs } from "dayjs";
+import { useUserDatetime } from "@/utils/datetime";
+import type { Dayjs } from "dayjs";
 import { api } from "../api/client";
 import type { CircuitAvailability, CircuitHealth, TrafficBilling, TrafficSummary } from "../api/types";
 import {
@@ -21,7 +22,6 @@ import {
   HOUR_OPTIONS,
   sampleLimitForWindow,
   spanHoursFor,
-  timeLabel,
   windowLabelFor,
   type RangeMode,
 } from "../utils/monitorRange";
@@ -47,6 +47,7 @@ export default function PortalCircuitMonitorPanel({
   latencyProbeEnabled = true,
 }: Props) {
   const { tc } = useTc();
+  const { timezone, timeLabel, formatFull, userNow } = useUserDatetime();
   const [rangeMode, setRangeMode] = useState<RangeMode>("preset");
   const [hours, setHours] = useState(compact ? 6 : 24);
   const [customRange, setCustomRange] = useState<[Dayjs, Dayjs] | null>(null);
@@ -63,8 +64,8 @@ export default function PortalCircuitMonitorPanel({
     [rangeMode, hours, customRange],
   );
   const windowLabel = useMemo(
-    () => windowLabelFor(rangeMode, hours, customRange),
-    [rangeMode, hours, customRange],
+    () => windowLabelFor(rangeMode, hours, customRange, undefined, timezone),
+    [rangeMode, hours, customRange, timezone],
   );
 
   const loadMetrics = useCallback(async () => {
@@ -72,7 +73,7 @@ export default function PortalCircuitMonitorPanel({
     if (rangeMode === "custom" && !customRange) return;
     setLoading(true);
     try {
-      const rangeParams = buildRangeParams(rangeMode, hours, customRange);
+      const rangeParams = buildRangeParams(rangeMode, hours, customRange, timezone);
       const limit = sampleLimitForWindow(rangeMode, hours, customRange);
       const [h, t, a] = await Promise.all([
         api.get<CircuitHealth>(`${base}/health`, { params: { ...rangeParams, limit } }),
@@ -126,7 +127,7 @@ export default function PortalCircuitMonitorPanel({
         jitter: s.jitter_ms,
         loss: s.packet_loss_pct,
       })),
-    [traffic, spanHours],
+    [traffic, spanHours, timeLabel],
   );
 
   const trafficOpt = useMemo(
@@ -134,7 +135,7 @@ export default function PortalCircuitMonitorPanel({
     [chartData, traffic?.p95],
   );
   const latencyOpt = useMemo(() => latencyJitterOption(chartData, "t"), [chartData]);
-  const chartKey = chartRangeKey(circuitId, rangeMode, hours, customRange, chartData.length);
+  const chartKey = chartRangeKey(circuitId, rangeMode, hours, customRange, chartData.length, timezone);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -161,7 +162,7 @@ export default function PortalCircuitMonitorPanel({
                 format="YYYY-MM-DD HH:mm"
                 value={customRange}
                 onChange={(vals) => setCustomRange(vals as [Dayjs, Dayjs] | null)}
-                disabledDate={(current) => !!current && current > dayjs().endOf("day")}
+                disabledDate={(current) => !!current && current > userNow().endOf("day")}
               />
               <Button size="small" type="primary" loading={loading} onClick={loadMetrics}>{tc('查询')}</Button>
             </>
@@ -252,7 +253,7 @@ export default function PortalCircuitMonitorPanel({
               {
                 title: tc('开始'),
                 dataIndex: "started_at",
-                render: (v: string) => dayjs(v).format("MM-DD HH:mm:ss"),
+                render: (v: string) => formatFull(v),
               },
               {
                 title: tc('时长'),

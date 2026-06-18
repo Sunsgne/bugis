@@ -18,6 +18,7 @@ import { api } from "../../api/client";
 import { usePlatformSettings } from "../../hooks/usePlatformSettings";
 import { useAuth } from "../../auth";
 import { useTc } from "@/i18n/useTc";
+import { useUserDatetime } from "@/utils/datetime";
 
 const { Text } = Typography;
 
@@ -32,6 +33,7 @@ type SchedulerStatus = {
 
 export default function ConfigLearnSettings() {
   const { tc } = useTc();
+  const { formatLong } = useUserDatetime();
   const { message } = AntApp.useApp();
   const [form] = Form.useForm();
   const { platform, loading, saving, save } = usePlatformSettings();
@@ -117,7 +119,7 @@ export default function ConfigLearnSettings() {
             {scheduler.enabled ? (scheduler.running ? "运行中" : "已启用") : "已关闭"}
           </Descriptions.Item>
           <Descriptions.Item label={tc('最近拉取')}>
-            {scheduler.last_learn ? scheduler.last_learn.replace("T", " ").slice(0, 19) : "—"}
+            {formatLong(scheduler.last_learn)}
           </Descriptions.Item>
           <Descriptions.Item label={tc('最近设备数')}>
             {scheduler.last_learn_devices ?? "—"}

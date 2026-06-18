@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Button, Empty, Segmented, Space, Table, Tag, App as AntApp } from "antd";
 import { ReloadOutlined, ThunderboltOutlined } from "@ant-design/icons";
-import dayjs from "dayjs";
 import { api } from "../api/client";
 import type { Alarm } from "../api/types";
 import PageCard from "../components/PageCard";
@@ -9,9 +8,11 @@ import { dataTableProps } from "../utils/table";
 import { action, empty, page } from "../constants/uiCopy";
 import { ALARM_KIND, ALARM_SEVERITY, ALARM_STATUS, statusMeta } from "../constants/statusLabels";
 import { useTc } from "@/i18n/useTc";
+import { useUserDatetime } from "@/utils/datetime";
 
 export default function Alarms() {
   const { tc } = useTc();
+  const { formatFull } = useUserDatetime();
   const { message } = AntApp.useApp();
   const [rows, setRows] = useState<Alarm[]>([]);
   const [loading, setLoading] = useState(false);
@@ -106,7 +107,7 @@ export default function Alarms() {
               title: tc('时间'),
               dataIndex: "created_at",
               width: "14%",
-              render: (t) => (t ? dayjs(t).format("MM-DD HH:mm:ss") : "—"),
+              render: (t) => formatFull(t),
             },
             {
               title: tc('状态'),

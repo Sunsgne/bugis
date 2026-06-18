@@ -1,7 +1,7 @@
 import type { TFunction } from "i18next";
 import type { Dayjs } from "dayjs";
 import dayjs from "dayjs";
-import { formatUserTimeLabel } from "./datetime";
+import { formatCustomRangeLabel, formatUserTimeLabel, getActiveTimezone } from "./datetime";
 
 export type RangeMode = "preset" | "custom";
 
@@ -24,10 +24,19 @@ export const HOUR_OPTIONS = [
   { value: 720, label: "近 30 天" },
 ];
 
-export function buildRangeParams(mode: RangeMode, hours: number, customRange: [Dayjs, Dayjs] | null) {
+export function buildRangeParams(
+  mode: RangeMode,
+  hours: number,
+  customRange: [Dayjs, Dayjs] | null,
+  tz?: string,
+) {
   if (mode === "custom" && customRange) {
     const [start, end] = customRange;
-    return { start_at: start.toISOString(), end_at: end.toISOString() };
+    const zone = tz ?? getActiveTimezone();
+    return {
+      start_at: dayjs.tz(start.format("YYYY-MM-DD HH:mm:ss"), zone).toISOString(),
+      end_at: dayjs.tz(end.format("YYYY-MM-DD HH:mm:ss"), zone).toISOString(),
+    };
   }
   return { hours };
 }
@@ -37,7 +46,6 @@ export function sampleLimitForWindow(mode: RangeMode, hours: number, customRange
     mode === "custom" && customRange
       ? Math.max(1, Math.ceil(customRange[1].diff(customRange[0], "hour", true)))
       : hours;
-  // Scheduler ~30s/tick → ~120 samples/hour; include probe rows with headroom.
   const estimated = Math.ceil(spanHours * 120 * 1.15);
   return Math.min(Math.max(estimated, 60), 5000);
 }
@@ -54,16 +62,17 @@ export function windowLabelFor(
   hours: number,
   customRange: [Dayjs, Dayjs] | null,
   t?: TFunction,
+  tz?: string,
 ) {
   if (mode === "custom" && customRange) {
-    return `${customRange[0].format("MM-DD HH:mm")} ~ ${customRange[1].format("MM-DD HH:mm")}`;
+    return formatCustomRangeLabel(customRange[0], customRange[1], tz);
   }
   const options = t ? getHourOptions(t) : HOUR_OPTIONS;
   return options.find((o) => o.value === hours)?.label || (t ? t("monitor.lastNh", { hours }) : `近 ${hours}h`);
 }
 
-export function timeLabel(iso: string | undefined, spanHours: number) {
-  return formatUserTimeLabel(iso, spanHours);
+export function timeLabel(iso: string | undefined, spanHours: number, tz?: string) {
+  return formatUserTimeLabel(iso, spanHours, tz);
 }
 
 export function chartRangeKey(
@@ -72,10 +81,11 @@ export function chartRangeKey(
   hours: number,
   customRange: [Dayjs, Dayjs] | null,
   sampleCount: number,
+  tz?: string,
 ) {
   const customKey =
     mode === "custom" && customRange
       ? `${customRange[0].valueOf()}-${customRange[1].valueOf()}`
       : "preset";
-  return `${circuitId}-${mode}-${hours}-${customKey}-${sampleCount}`;
+  return `${circuitId}-${mode}-${hours}-${customKey}-${sampleCount}-${tz || "utc"}`;
 }

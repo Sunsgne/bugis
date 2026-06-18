@@ -59,6 +59,7 @@ import CircuitMonitorPanel from "../components/CircuitMonitorPanel";
 import CircuitEndpointsEditor from "../components/CircuitEndpointsEditor";
 import ProvisionFeedbackModal from "../components/ProvisionFeedbackModal";
 import ProvisionProgressDock from "../components/ProvisionProgressDock";
+import { useUserDatetime } from "@/utils/datetime";
 
 const SERVICE_LABEL: Record<string, string> = {
   l2vpn_evpn: "EVPN L2VPN",
@@ -124,6 +125,7 @@ const DELETABLE = new Set(["decommissioned", "draft", "failed"]);
 
 export default function Circuits() {
   const { message, modal } = AntApp.useApp();
+  const { formatLong } = useUserDatetime();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const tenantFilter = searchParams.get("tenant");
@@ -1285,7 +1287,7 @@ export default function Circuits() {
                             <Tag color="geekblue">{v.operation}</Tag>
                             <Tag>{v.status}</Tag>
                             <span style={{ color: "#888", fontSize: 12 }}>
-                              {v.created_at?.replace("T", " ").slice(0, 19)}
+                              {formatLong(v.created_at)}
                             </span>
                             <pre className="config-pre" style={{ maxHeight: 180 }}>
                               {v.rendered_config}

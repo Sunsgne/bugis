@@ -303,8 +303,10 @@ def _aggregate_overview_traffic(rows: list[TelemetrySample]) -> list[dict]:
     for minute in sorted(buckets):
         b = buckets[minute]
         lat_n = max(b["lat_n"], 1)
+        bucket_dt = datetime.strptime(minute, "%Y-%m-%d %H:%M").replace(tzinfo=timezone.utc)
         out.append({
             "t": minute[11:],
+            "bucket": bucket_dt.isoformat(),
             "rx": round(b["rx"], 1),
             "tx": round(b["tx"], 1),
             "latency": round(b["lat"] / lat_n, 2) if b["lat_n"] else None,

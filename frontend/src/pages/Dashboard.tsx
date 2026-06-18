@@ -10,7 +10,6 @@ import {
   NodeIndexOutlined,
   SafetyCertificateOutlined,
 } from "@ant-design/icons";
-import dayjs from "dayjs";
 import { api } from "../api/client";
 import type { Dashboard as DashboardData } from "../api/types";
 import EChart from "../components/EChart";
@@ -27,6 +26,7 @@ import {
 import { empty } from "../constants/uiCopy";
 import { useBrand } from "../context/BrandContext";
 import { useTc } from "@/i18n/useTc";
+import { useUserDatetime } from "@/utils/datetime";
 
 const WO_STATUS: Record<string, string> = {
   completed: "green", failed: "red", running: "processing",
@@ -35,6 +35,7 @@ const WO_STATUS: Record<string, string> = {
 
 export default function Dashboard() {
   const { tc } = useTc();
+  const { timezone, formatShort, mapTrafficLabels } = useUserDatetime();
   const { brand } = useBrand();
   const [data, setData] = useState<DashboardData | null>(null);
   const [traffic, setTraffic] = useState<any[]>([]);
@@ -79,7 +80,10 @@ export default function Dashboard() {
     [alarms],
   );
 
-  const trafficOpt = useMemo(() => trafficAreaOption(traffic, "t"), [traffic]);
+  const trafficOpt = useMemo(
+    () => trafficAreaOption(mapTrafficLabels(traffic, 3), "t"),
+    [traffic, timezone, mapTrafficLabels],
+  );
   const alarmOpt = useMemo(() => donutOption(sevData, severityColors, "告警"), [sevData]);
   const vendorOpt = useMemo(() => rosePieOption(vendorData, vendorColors), [vendorData]);
   const statusOpt = useMemo(() => gradientBarOption(statusData, statusColors), [statusData]);
@@ -259,7 +263,7 @@ export default function Dashboard() {
                 { title: "工单", dataIndex: "code", width: 110 },
                 { title: "类型", dataIndex: "type", render: (t) => <Tag>{t}</Tag> },
                 { title: "状态", dataIndex: "status", render: (s) => <Tag color={WO_STATUS[s]}>{s}</Tag> },
-                { title: "时间", dataIndex: "created_at", render: (t) => (t ? dayjs(t).format("MM-DD HH:mm") : "-") },
+                { title: "时间", dataIndex: "created_at", render: (t) => (t ? formatShort(t) : "-") },
               ]}
             />
           </Card>

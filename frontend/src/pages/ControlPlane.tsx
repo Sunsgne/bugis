@@ -27,6 +27,7 @@ import { api } from "../api/client";
 import OverlayTopologyPanel from "../components/OverlayTopologyPanel";
 import { empty, page } from "../constants/uiCopy";
 import { useTc } from "@/i18n/useTc";
+import { useUserDatetime } from "@/utils/datetime";
 
 const { Text } = Typography;
 
@@ -152,6 +153,7 @@ const DP_COLOR: Record<string, string> = {
 
 export default function ControlPlane() {
   const { tc } = useTc();
+  const { formatLong } = useUserDatetime();
   const [status, setStatus] = useState<any>(null);
   const [vteps, setVteps] = useState<any[]>([]);
   const [routes, setRoutes] = useState<any[]>([]);
@@ -378,7 +380,11 @@ export default function ControlPlane() {
               dataIndex: "is_local",
               render: (v) => (v ? <Tag color="green">{tc('是')}</Tag> : "-"),
             },
-            { title: "最近心跳", dataIndex: "last_heartbeat" },
+            {
+              title: "最近心跳",
+              dataIndex: "last_heartbeat",
+              render: (v?: string) => formatLong(v),
+            },
           ]}
         />
       </Card>
@@ -423,7 +429,11 @@ export default function ControlPlane() {
               dataIndex: "state",
               render: (s) => <Tag color={DP_COLOR[s] || "default"}>{s}</Tag>,
             },
-            { title: "时间", dataIndex: "created_at" },
+            {
+              title: "时间",
+              dataIndex: "created_at",
+              render: (v?: string) => formatLong(v),
+            },
           ]}
         />
       </Card>

@@ -14,7 +14,7 @@ import {
   Typography,
 } from "antd";
 import { PlusOutlined, SendOutlined } from "@ant-design/icons";
-import dayjs from "dayjs";
+import { useUserDatetime } from "@/utils/datetime";
 import { api } from "../api/client";
 import { action, page, toast } from "../constants/uiCopy";
 import PageCard from "../components/PageCard";
@@ -68,6 +68,7 @@ const SEV_COLOR: Record<string, string> = {
 
 export default function Notifications({ embedded }: { embedded?: boolean }) {
   const { tc } = useTc();
+  const { formatFull } = useUserDatetime();
   const { message } = AntApp.useApp();
   const [rows, setRows] = useState<Channel[]>([]);
   const [loading, setLoading] = useState(false);
@@ -151,7 +152,7 @@ export default function Notifications({ embedded }: { embedded?: boolean }) {
             title: tc('最近发送'),
             dataIndex: "last_dispatch_at",
             width: "14%",
-            render: (t) => (t ? dayjs(t).format("MM-DD HH:mm:ss") : "—"),
+            render: (t) => formatFull(t),
           },
           {
             title: tc('操作'),

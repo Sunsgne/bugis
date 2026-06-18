@@ -18,16 +18,10 @@ import { formModalProps } from "../utils/formModal";
 import { action, empty, page, toast } from "../constants/uiCopy";
 import { WORK_ORDER_STATUS, statusMeta } from "../constants/statusLabels";
 import { useTc } from "@/i18n/useTc";
+import { formatUserLong, useUserDatetime, userDayjs } from "@/utils/datetime";
 
 const { RangePicker } = DatePicker;
 
-const RANGE_PRESETS: { label: string; value: [Dayjs, Dayjs] }[] = [
-  { label: "今天", value: [dayjs().startOf("day"), dayjs().endOf("day")] },
-  { label: "近 7 天", value: [dayjs().subtract(6, "day").startOf("day"), dayjs().endOf("day")] },
-  { label: "近 30 天", value: [dayjs().subtract(29, "day").startOf("day"), dayjs().endOf("day")] },
-  { label: "本月", value: [dayjs().startOf("month"), dayjs().endOf("month")] },
-  { label: "本年", value: [dayjs().startOf("year"), dayjs().endOf("year")] },
-];
 const TYPE_LABEL: Record<string, string> = {
   provision: "开通",
   modify: "变更",
@@ -42,15 +36,10 @@ const LEVEL_COLOR: Record<string, string> = {
 
 const TERMINAL = ["completed", "failed", "cancelled", "rolled_back"];
 
-function fmtTs(ts?: string | null) {
-  if (!ts) return "—";
-  const d = new Date(ts);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleString("zh-CN", { hour12: false });
-}
-
 export default function WorkOrders() {
   const { tc } = useTc();
+  const { timezone, datePresets, formatLong } = useUserDatetime();
+  const rangePresets = useMemo(() => datePresets(), [datePresets, timezone]);
   const { message } = AntApp.useApp();
   const [rows, setRows] = useState<WorkOrder[]>([]);
   const [loading, setLoading] = useState(false);
@@ -73,7 +62,7 @@ export default function WorkOrders() {
       if (typeFilter && r.type !== typeFilter) return false;
       if (from && to) {
         if (!r.created_at) return false;
-        const ts = dayjs(r.created_at);
+        const ts = userDayjs(r.created_at, timezone);
         if (ts.isBefore(from) || ts.isAfter(to)) return false;
       }
       if (kw) {
@@ -180,7 +169,7 @@ export default function WorkOrders() {
           <RangePicker
             value={range as never}
             onChange={(v) => setRange((v as [Dayjs, Dayjs] | null) ?? null)}
-            presets={RANGE_PRESETS}
+            presets={rangePresets}
             allowClear
             placeholder={["开始日期", "结束日期"]}
           />
@@ -343,7 +332,7 @@ export default function WorkOrders() {
                       {j.device_name || `设备 #${j.device_id}`} · {j.operation} ·{" "}
                       <Tag color={j.status.includes("fail") ? "red" : "green"}>{j.status}</Tag>
                       <Tag>{j.transport}</Tag>
-                      <Tag color="default">{fmtTs(j.created_at)}</Tag>
+                      <Tag color="default">{formatLong(j.created_at)}</Tag>
                     </span>
                   ),
                   children: (

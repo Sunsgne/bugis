@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Input, Table, Tag, Typography } from "antd";
 import { ReloadOutlined } from "@ant-design/icons";
-import dayjs from "dayjs";
+import { useUserDatetime } from "@/utils/datetime";
 import { api } from "../api/client";
 import type { AuditEntry } from "../api/types";
 import PageCard from "../components/PageCard";
@@ -18,6 +18,7 @@ const METHOD_COLOR: Record<string, string> = {
 
 export default function Audit({ embedded }: { embedded?: boolean }) {
   const { tc } = useTc();
+  const { formatFull } = useUserDatetime();
   const [rows, setRows] = useState<AuditEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [actor, setActor] = useState("");
@@ -60,7 +61,7 @@ export default function Audit({ embedded }: { embedded?: boolean }) {
           title: tc('时间'),
           dataIndex: "created_at",
           width: "14%",
-          render: (t) => (t ? dayjs(t).format("MM-DD HH:mm:ss") : "—"),
+          render: (t) => formatFull(t),
         },
         { title: "操作人", dataIndex: "actor", width: "12%", render: (a) => <Tag>{a}</Tag> },
         {

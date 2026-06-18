@@ -15,6 +15,7 @@ import { CheckCircleOutlined, CloseCircleOutlined, LoadingOutlined } from "@ant-
 import type { Circuit, ProvisionResult } from "../api/types";
 import { ConfigPreviewPre } from "../utils/configPreview";
 import { useTc } from "@/i18n/useTc";
+import { useUserDatetime } from "@/utils/datetime";
 
 const WO_STATUS_LABEL: Record<string, string> = {
   completed: "已完成",
@@ -65,13 +66,6 @@ type Props = {
   open?: boolean;
 };
 
-function fmtTs(ts?: string | null) {
-  if (!ts) return "—";
-  const d = new Date(ts);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleString("zh-CN", { hour12: false });
-}
-
 function summarizeOutput(output?: string | null) {
   if (!output) return "—";
   const line = output.split("\n").find((l) => l.trim()) || output;
@@ -88,6 +82,7 @@ export default function ProvisionFeedbackModal({
   open: openProp,
 }: Props) {
   const { tc } = useTc();
+  const { formatLong } = useUserDatetime();
   const open = openProp ?? !!circuit;
   const isTeardown = woType === "decommission";
   const success = result?.status === "completed";
@@ -230,7 +225,7 @@ export default function ProvisionFeedbackModal({
                 dataIndex: "created_at",
                 width: 150,
                 render: (v?: string) => (
-                  <span style={{ fontSize: 12 }}>{fmtTs(v)}</span>
+                  <span style={{ fontSize: 12 }}>{formatLong(v)}</span>
                 ),
               },
               {

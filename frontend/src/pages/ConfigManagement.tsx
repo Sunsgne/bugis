@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Button, Card, Table, Tag, Tabs, App as AntApp, Empty, Descriptions, Typography, Tooltip, Alert } from "antd";
 import { CloudUploadOutlined, DiffOutlined, ReloadOutlined, BookOutlined, SettingOutlined } from "@ant-design/icons";
-import dayjs from "dayjs";
+import { useUserDatetime } from "@/utils/datetime";
 import { api } from "../api/client";
 import { configPreviewModalProps, ConfigPreviewPre } from "../utils/configPreview";
 import { usePlatformSettings } from "../hooks/usePlatformSettings";
@@ -64,6 +64,7 @@ function ColoredDiff({ text }: { text: string }) {
 
 export default function ConfigManagement() {
   const { tc } = useTc();
+  const { formatLong, formatShort } = useUserDatetime();
   const { message, modal } = AntApp.useApp();
   const { platform } = usePlatformSettings();
   const [devices, setDevices] = useState<ConfigDeviceRow[]>([]);
@@ -282,7 +283,7 @@ export default function ConfigManagement() {
                     <Descriptions size="small" bordered column={2} style={{ marginBottom: 12 }}>
                       <Descriptions.Item label={tc('学习版本')}>v{learned.latest_snapshot_version}</Descriptions.Item>
                       <Descriptions.Item label={tc('学习时间')}>
-                        {learned.latest_snapshot_at ? dayjs(learned.latest_snapshot_at).format("YYYY-MM-DD HH:mm:ss") : "-"}
+                        {learned.latest_snapshot_at ? formatLong(learned.latest_snapshot_at) : "-"}
                       </Descriptions.Item>
                       <Descriptions.Item label={tc('业务数')}>
                         {learned.inventory?.service_count ?? 0}
@@ -432,7 +433,7 @@ export default function ConfigManagement() {
                           title: tc('时间'),
                           dataIndex: "created_at",
                           width: 112,
-                          render: (t) => (t ? dayjs(t).format("MM-DD HH:mm") : "—"),
+                          render: (t) => formatShort(t),
                         },
                         {
                           title: "",

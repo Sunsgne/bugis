@@ -152,6 +152,7 @@ def fetch_network_overview_buckets(
         label = bucket.strftime("%H:%M") if bucket else ""
         out.append({
             "t": label,
+            "bucket": bucket.isoformat() if bucket else None,
             "rx": round(float(row["rx"] or 0), 1),
             "tx": round(float(row["tx"] or 0), 1),
             "latency": None,

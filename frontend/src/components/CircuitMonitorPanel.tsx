@@ -13,7 +13,8 @@ import {
   Tag,
   Typography,
 } from "antd";
-import dayjs, { type Dayjs } from "dayjs";
+import { useUserDatetime } from "@/utils/datetime";
+import type { Dayjs } from "dayjs";
 import { api } from "../api/client";
 import type {
   CircuitAvailability,
@@ -27,7 +28,6 @@ import {
   HOUR_OPTIONS,
   sampleLimitForWindow,
   spanHoursFor,
-  timeLabel,
   windowLabelFor,
   type RangeMode,
 } from "../utils/monitorRange";
@@ -59,6 +59,7 @@ export default function CircuitMonitorPanel({
   latencyProbeEnabled = true,
 }: Props) {
   const { tc } = useTc();
+  const { timezone, timeLabel, formatFull, userNow } = useUserDatetime();
   const [rangeMode, setRangeMode] = useState<RangeMode>("preset");
   const [hours, setHours] = useState(compact ? 6 : 24);
   const [customRange, setCustomRange] = useState<[Dayjs, Dayjs] | null>(null);
@@ -74,8 +75,8 @@ export default function CircuitMonitorPanel({
   );
 
   const windowLabel = useMemo(
-    () => windowLabelFor(rangeMode, hours, customRange),
-    [rangeMode, customRange, hours],
+    () => windowLabelFor(rangeMode, hours, customRange, undefined, timezone),
+    [rangeMode, customRange, hours, timezone],
   );
 
   const load = useCallback(async () => {
@@ -83,7 +84,7 @@ export default function CircuitMonitorPanel({
     if (rangeMode === "custom" && !customRange) return;
     setLoading(true);
     try {
-      const rangeParams = buildRangeParams(rangeMode, hours, customRange);
+      const rangeParams = buildRangeParams(rangeMode, hours, customRange, timezone);
       const limit = sampleLimitForWindow(rangeMode, hours, customRange);
       const [h, t, a, b] = await Promise.all([
         api.get<CircuitHealth>(`/telemetry/circuits/${circuitId}/health`, {
@@ -123,7 +124,7 @@ export default function CircuitMonitorPanel({
         rx: s.rx_mbps,
         tx: s.tx_mbps,
       })),
-    [traffic, spanHours],
+    [traffic, spanHours, timeLabel],
   );
 
   const qosChartData = useMemo(
@@ -134,7 +135,7 @@ export default function CircuitMonitorPanel({
         jitter: s.jitter_ms,
         loss: s.packet_loss_pct,
       })),
-    [traffic, spanHours],
+    [traffic, spanHours, timeLabel],
   );
 
   const trafficOpt = useMemo(
@@ -142,8 +143,8 @@ export default function CircuitMonitorPanel({
     [chartData, traffic?.p95],
   );
   const latencyOpt = useMemo(() => latencyJitterOption(qosChartData, "t"), [qosChartData]);
-  const chartKey = chartRangeKey(circuitId, rangeMode, hours, customRange, chartData.length);
-  const qosChartKey = chartRangeKey(circuitId, rangeMode, hours, customRange, qosChartData.length);
+  const chartKey = chartRangeKey(circuitId, rangeMode, hours, customRange, chartData.length, timezone);
+  const qosChartKey = chartRangeKey(circuitId, rangeMode, hours, customRange, qosChartData.length, timezone);
 
   const scoreColor = (v: number) => (v >= 90 ? "#52c41a" : v >= 70 ? "#fa8c16" : "#cf1322");
   const chartHeight = compact ? 220 : 280;
@@ -188,7 +189,7 @@ export default function CircuitMonitorPanel({
                 format="YYYY-MM-DD HH:mm"
                 value={customRange}
                 onChange={(vals) => setCustomRange(vals as [Dayjs, Dayjs] | null)}
-                disabledDate={(current) => !!current && current > dayjs().endOf("day")}
+                disabledDate={(current) => !!current && current > userNow().endOf("day")}
               />
               <Button size="small" type="primary" loading={loading} onClick={load}>{tc('查询')}</Button>
             </>
@@ -325,12 +326,12 @@ export default function CircuitMonitorPanel({
               {
                 title: tc('开始'),
                 dataIndex: "started_at",
-                render: (v: string) => dayjs(v).format("MM-DD HH:mm:ss"),
+                render: (v: string) => formatFull(v),
               },
               {
                 title: tc('结束'),
                 dataIndex: "ended_at",
-                render: (v?: string) => (v ? dayjs(v).format("MM-DD HH:mm:ss") : "进行中"),
+                render: (v?: string) => (v ? formatFull(v) : "进行中"),
               },
               {
                 title: tc('时长'),
