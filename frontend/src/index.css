@@ -189,6 +189,23 @@ body {
   width: 100%;
 }
 
+.overlay-vni-sidebar {
+  background: #fafafa;
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+  padding: 12px;
+  min-height: 520px;
+}
+
+.overlay-vni-list-table .ant-table-row:hover > td,
+.overlay-vni-device-table .ant-table-row:hover > td {
+  background: #fff7ed !important;
+}
+
+.overlay-topology-panel .ant-statistic-title {
+  font-size: 12px;
+}
+
 .chart-card > .ant-card-body {
   display: flex;
   flex-direction: column;

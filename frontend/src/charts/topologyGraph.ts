@@ -32,6 +32,42 @@ export type OverlayTopo = {
   vnis: number[];
 };
 
+export type OverlayTopoOptions = {
+  /** When set, only members of this VNI and their tunnels are drawn. */
+  selectedVni?: number | null;
+};
+
+export type VniMemberSummary = {
+  vni: number;
+  deviceCount: number;
+  devices: { id: number; name: string; vtep_ip: string; status: string }[];
+};
+
+/** Build VNI → device membership index for search / filter panels. */
+export function buildVniMemberIndex(topo: OverlayTopo | null | undefined): VniMemberSummary[] {
+  if (!topo?.nodes?.length) return [];
+  const byVni = new Map<number, VniMemberSummary["devices"]>();
+  for (const node of topo.nodes) {
+    for (const vni of node.vnis ?? []) {
+      const list = byVni.get(vni) ?? [];
+      list.push({
+        id: node.id,
+        name: node.name,
+        vtep_ip: node.vtep_ip,
+        status: node.status,
+      });
+      byVni.set(vni, list);
+    }
+  }
+  return Array.from(byVni.entries())
+    .map(([vni, devices]) => ({
+      vni,
+      deviceCount: devices.length,
+      devices: devices.sort((a, b) => a.name.localeCompare(b.name)),
+    }))
+    .sort((a, b) => a.vni - b.vni);
+}
+
 function fmtG(mbps: number): string {
   return mbps >= 1000 ? `${(mbps / 1000).toFixed(0)}G` : `${mbps}M`;
 }
@@ -173,49 +209,87 @@ export function physicalTopologyOption(topo: Topology): EChartsOption {
   };
 }
 
-/** EVPN overlay full-mesh per VNI with force layout. */
-export function overlayTopologyOption(topo: OverlayTopo | null | undefined): EChartsOption | null {
+/** EVPN overlay graph — edges are only drawn when a VNI is selected (scalable). */
+export function overlayTopologyOption(
+  topo: OverlayTopo | null | undefined,
+  options?: OverlayTopoOptions,
+): EChartsOption | null {
   if (!topo?.nodes?.length) return null;
+
+  const selectedVni = options?.selectedVni ?? null;
+
+  const visibleNodes =
+    selectedVni != null
+      ? topo.nodes.filter((n) => (n.vnis ?? []).includes(selectedVni))
+      : topo.nodes;
+
+  const visibleNodeIds = new Set(visibleNodes.map((n) => n.id));
+
+  const visibleEdges =
+    selectedVni != null
+      ? topo.edges.filter(
+          (e) =>
+            e.vni === selectedVni &&
+            visibleNodeIds.has(e.source) &&
+            visibleNodeIds.has(e.target),
+        )
+      : [];
 
   const vniColor = (vni: number) =>
     VNI_PALETTE[(topo.vnis.indexOf(vni) + VNI_PALETTE.length) % VNI_PALETTE.length];
 
-  const n = topo.nodes.length;
+  const accent = selectedVni != null ? vniColor(selectedVni) : "#059669";
+
+  const n = visibleNodes.length;
   const cx = 420;
   const cy = 280;
-  const r = Math.min(200, 80 + n * 22);
+  const r = Math.min(220, 90 + n * 24);
 
-  const graphNodes = topo.nodes.map((node, i) => {
-    const angle = (2 * Math.PI * i) / n - Math.PI / 2;
+  const graphNodes = visibleNodes.map((node, i) => {
+    const angle = (2 * Math.PI * i) / Math.max(n, 1) - Math.PI / 2;
     const up = node.status === "up";
+    const vniCount = node.vnis?.length ?? 0;
     return {
       id: String(node.id),
       name: node.name,
       x: cx + r * Math.cos(angle),
       y: cy + r * Math.sin(angle),
       symbol: "circle",
-      symbolSize: 58,
+      symbolSize: selectedVni != null ? 62 : 54,
       itemStyle: {
-        color: up ? "#d1fae5" : "#f1f5f9",
-        borderColor: up ? "#059669" : "#94a3b8",
-        borderWidth: 2,
+        color: up ? (selectedVni != null ? `${accent}22` : "#d1fae5") : "#f1f5f9",
+        borderColor: up ? accent : "#94a3b8",
+        borderWidth: selectedVni != null ? 3 : 2,
         shadowBlur: 12,
-        shadowColor: up ? "rgba(16, 185, 129, 0.35)" : "rgba(148, 163, 184, 0.2)",
+        shadowColor: up ? `${accent}55` : "rgba(148, 163, 184, 0.2)",
       },
       label: {
         show: true,
         position: "bottom" as const,
         distance: 10,
-        formatter: `{name|${node.name}}\n{ip|${node.vtep_ip}}`,
+        formatter:
+          selectedVni != null
+            ? `{name|${node.name}}\n{ip|${node.vtep_ip}}`
+            : `{name|${node.name}}\n{ip|${node.vtep_ip}}\n{vnis|${vniCount} VNI}`,
         rich: {
           name: { fontSize: 11, fontWeight: 700, color: chartText.primary, lineHeight: 16 },
           ip: { fontSize: 10, color: chartText.secondary, lineHeight: 14 },
+          vnis: { fontSize: 9, color: chartText.muted, lineHeight: 14 },
         },
       },
       tooltip: {
-        formatter: () =>
-          `<b>${node.name}</b><br/>VTEP ${node.vtep_ip}<br/>` +
-          `VNI ${node.vnis.join(", ") || "-"}<br/>状态 ${up ? "Up" : node.status}`,
+        formatter: () => {
+          const vniText =
+            selectedVni != null
+              ? `VNI ${selectedVni}`
+              : `VNI ${(node.vnis ?? []).slice(0, 12).join(", ")}${
+                  vniCount > 12 ? ` … +${vniCount - 12}` : ""
+                }`;
+          return (
+            `<b>${node.name}</b><br/>VTEP ${node.vtep_ip}<br/>` +
+            `${vniText}<br/>状态 ${up ? "Up" : node.status}`
+          );
+        },
       },
     };
   });
@@ -224,7 +298,7 @@ export function overlayTopologyOption(topo: OverlayTopo | null | undefined): ECh
     graphNodes.map((gn) => [gn.id, { x: gn.x as number, y: gn.y as number }]),
   );
 
-  const links = topo.edges.map((e, idx) => {
+  const links = visibleEdges.map((e, idx) => {
     const color = vniColor(e.vni);
     const a = nodePos[String(e.source)];
     const b = nodePos[String(e.target)];
@@ -236,14 +310,14 @@ export function overlayTopologyOption(topo: OverlayTopo | null | undefined): ECh
       value: e.vni,
       lineStyle: {
         color,
-        width: 2,
+        width: 2.5,
         type: "dashed" as const,
         curveness,
-        opacity: 0.72,
+        opacity: 0.88,
       },
-      emphasis: { lineStyle: { width: 3.5, opacity: 1 } },
+      emphasis: { lineStyle: { width: 4, opacity: 1 } },
       label: {
-        show: topo.edges.length <= 12,
+        show: visibleEdges.length <= 8,
         formatter: `VNI ${e.vni}`,
         fontSize: 10,
         color,
@@ -251,38 +325,54 @@ export function overlayTopologyOption(topo: OverlayTopo | null | undefined): ECh
     };
   });
 
-  const categories = topo.vnis.map((v) => ({
-    name: `VNI ${v}`,
-    itemStyle: { color: vniColor(v) },
-  }));
+  const legend =
+    selectedVni != null
+      ? {
+          data: [`VNI ${selectedVni}`],
+          bottom: 8,
+          textStyle: { color: chartText.secondary, fontFamily: chartFont },
+        }
+      : undefined;
 
   return {
-    animationDuration: 800,
+    animationDuration: 600,
     animationEasing: "cubicOut",
-    tooltip: { trigger: "item", backgroundColor: chartText.tooltipBg, borderColor: chartText.tooltipBorder, textStyle: { color: "#e2e8f0", fontSize: 12 } },
-    legend: {
-      data: topo.vnis.map((v) => `VNI ${v}`),
-      bottom: 8,
-      textStyle: { color: chartText.secondary, fontFamily: chartFont },
+    tooltip: {
+      trigger: "item",
+      backgroundColor: chartText.tooltipBg,
+      borderColor: chartText.tooltipBorder,
+      textStyle: { color: "#e2e8f0", fontSize: 12 },
     },
+    legend,
+    graphic:
+      selectedVni == null && topo.vnis.length > 0
+        ? [
+            {
+              type: "text",
+              left: "center",
+              top: "middle",
+              style: {
+                text: "选择右侧 VNI 查看隧道互联",
+                fill: chartText.muted,
+                fontSize: 13,
+                fontFamily: chartFont,
+              },
+              silent: true,
+            },
+          ]
+        : undefined,
     series: [
       {
         type: "graph",
         layout: "none",
         roam: true,
-        scaleLimit: { min: 0.5, max: 2.2 },
-        categories,
-        data: graphNodes.map((gn) => ({
-          ...gn,
-          category: Math.max(
-            0,
-            topo.vnis.indexOf(topo.nodes.find((n) => n.id === Number(gn.id))?.vnis[0] ?? topo.vnis[0]),
-          ),
-        })),
+        scaleLimit: { min: 0.45, max: 2.4 },
+        data: graphNodes,
         links,
         emphasis: { focus: "adjacency" },
         edgeSymbol: ["circle", "arrow"],
         edgeSymbolSize: [3, 9],
+        blur: { itemStyle: { opacity: 0.2 }, lineStyle: { opacity: 0.08 } },
       },
     ],
   };
