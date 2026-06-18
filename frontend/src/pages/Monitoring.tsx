@@ -151,7 +151,7 @@ export default function Monitoring() {
                   description={
                     <>
                       当前没有已激活（active）的专线。请先在
-                      <Link to="/circuits"> 专线编排 </Link>
+                      <Link to="/circuits"> 专线管理 </Link>
                       创建并开通专线，或点击刷新重试。
                     </>
                   }
@@ -193,7 +193,7 @@ export default function Monitoring() {
               {!circuits.length && (
                 <Link to="/circuits">
                   <Button type="primary" icon={<PlusOutlined />}>
-                    前往专线编排
+                    前往专线管理
                   </Button>
                 </Link>
               )}

@@ -1,10 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Button,
   Card, Table, Tag, Drawer, Timeline, Collapse, Empty, Space, Modal,
   Form, Input, Popconfirm, App as AntApp,
+  DatePicker, Select, Typography,
 } from "antd";
-import { EditOutlined, DeleteOutlined, StopOutlined } from "@ant-design/icons";
+import {
+  EditOutlined, DeleteOutlined, StopOutlined, SearchOutlined, ReloadOutlined,
+} from "@ant-design/icons";
+import dayjs, { type Dayjs } from "dayjs";
 import { api } from "../api/client";
 import type { WorkOrder } from "../api/types";
 import PageCard from "../components/PageCard";
@@ -12,6 +16,16 @@ import { dataTableProps } from "../utils/table";
 import { formModalProps } from "../utils/formModal";
 import { action, empty, page, toast } from "../constants/uiCopy";
 import { WORK_ORDER_STATUS, statusMeta } from "../constants/statusLabels";
+
+const { RangePicker } = DatePicker;
+
+const RANGE_PRESETS: { label: string; value: [Dayjs, Dayjs] }[] = [
+  { label: "今天", value: [dayjs().startOf("day"), dayjs().endOf("day")] },
+  { label: "近 7 天", value: [dayjs().subtract(6, "day").startOf("day"), dayjs().endOf("day")] },
+  { label: "近 30 天", value: [dayjs().subtract(29, "day").startOf("day"), dayjs().endOf("day")] },
+  { label: "本月", value: [dayjs().startOf("month"), dayjs().endOf("month")] },
+  { label: "本年", value: [dayjs().startOf("year"), dayjs().endOf("year")] },
+];
 const TYPE_LABEL: Record<string, string> = {
   provision: "开通",
   modify: "变更",
@@ -31,6 +45,43 @@ export default function WorkOrders() {
   const [current, setCurrent] = useState<WorkOrder | null>(null);
   const [editTarget, setEditTarget] = useState<WorkOrder | null>(null);
   const [editForm] = Form.useForm();
+
+  // --- 开通日志搜索 / 过滤 ---
+  const [keyword, setKeyword] = useState("");
+  const [range, setRange] = useState<[Dayjs, Dayjs] | null>(null);
+  const [statusFilter, setStatusFilter] = useState<string | undefined>();
+  const [typeFilter, setTypeFilter] = useState<string | undefined>();
+
+  const filtered = useMemo(() => {
+    const kw = keyword.trim().toLowerCase();
+    const from = range?.[0]?.startOf("day");
+    const to = range?.[1]?.endOf("day");
+    return rows.filter((r) => {
+      if (statusFilter && r.status !== statusFilter) return false;
+      if (typeFilter && r.type !== typeFilter) return false;
+      if (from && to) {
+        if (!r.created_at) return false;
+        const ts = dayjs(r.created_at);
+        if (ts.isBefore(from) || ts.isAfter(to)) return false;
+      }
+      if (kw) {
+        const hay = [r.code, r.title, r.requested_by, r.approved_by]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        if (!hay.includes(kw)) return false;
+      }
+      return true;
+    });
+  }, [rows, keyword, range, statusFilter, typeFilter]);
+
+  const hasFilter = !!(keyword || range || statusFilter || typeFilter);
+  function resetFilters() {
+    setKeyword("");
+    setRange(null);
+    setStatusFilter(undefined);
+    setTypeFilter(undefined);
+  }
 
   async function doEdit() {
     const v = await editForm.validateFields();
@@ -80,12 +131,69 @@ export default function WorkOrders() {
 
   return (
     <PageCard title={page.workOrders}>
+      <div
+        style={{
+          marginBottom: 16,
+          padding: "12px 16px",
+          background: "var(--ant-color-fill-quaternary, #fafafa)",
+          borderRadius: 10,
+          border: "1px solid var(--ant-color-border-secondary, #f0f0f0)",
+        }}
+      >
+        <Space size={[12, 12]} wrap align="center">
+          <Input
+            allowClear
+            prefix={<SearchOutlined />}
+            placeholder="搜索工单号 / 标题 / 申请人"
+            value={keyword}
+            onChange={(e) => setKeyword(e.target.value)}
+            style={{ width: 240 }}
+          />
+          <RangePicker
+            value={range as never}
+            onChange={(v) => setRange((v as [Dayjs, Dayjs] | null) ?? null)}
+            presets={RANGE_PRESETS}
+            allowClear
+            placeholder={["开始日期", "结束日期"]}
+          />
+          <Select
+            allowClear
+            placeholder="状态"
+            value={statusFilter}
+            onChange={setStatusFilter}
+            style={{ width: 130 }}
+            options={Object.entries(WORK_ORDER_STATUS).map(([value, m]) => ({
+              value,
+              label: m.label,
+            }))}
+          />
+          <Select
+            allowClear
+            placeholder="类型"
+            value={typeFilter}
+            onChange={setTypeFilter}
+            style={{ width: 120 }}
+            options={Object.entries(TYPE_LABEL).map(([value, label]) => ({
+              value,
+              label,
+            }))}
+          />
+          {hasFilter && (
+            <Button icon={<ReloadOutlined />} onClick={resetFilters}>
+              重置
+            </Button>
+          )}
+          <Typography.Text type="secondary">
+            {hasFilter ? `筛选出 ${filtered.length} / ${rows.length} 条` : `共 ${rows.length} 条`}
+          </Typography.Text>
+        </Space>
+      </div>
       <Table
         rowKey="id"
         loading={loading}
-        dataSource={rows}
+        dataSource={filtered}
         {...dataTableProps()}
-        locale={{ emptyText: empty.default }}
+        locale={{ emptyText: hasFilter ? "无匹配工单 · 调整筛选条件" : empty.default }}
         pagination={{
           pageSize: 15,
           hideOnSinglePage: true,
