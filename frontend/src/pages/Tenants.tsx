@@ -22,6 +22,7 @@ import { dataTableProps, PAGE_SIZE_OPTIONS, pageRangeLabel, tablePagination } fr
 import { formModalProps } from "../utils/formModal";
 import { TENANT_STATUS, statusMeta } from "../constants/statusLabels";
 import { page as pageCopy } from "../constants/uiCopy";
+import { useTc } from "@/i18n/useTc";
 
 const TYPE_LABEL: Record<string, string> = {
   enterprise: "企业专线",
@@ -31,6 +32,7 @@ const TYPE_LABEL: Record<string, string> = {
 };
 
 export default function Tenants() {
+  const { tc } = useTc();
   const { message } = AntApp.useApp();
   const [rows, setRows] = useState<Tenant[]>([]);
   const [total, setTotal] = useState(0);
@@ -63,7 +65,7 @@ export default function Tenants() {
     const values = await form.validateFields();
     try {
       await api.post("/tenants", values);
-      message.success("客户已创建");
+      message.success(tc('客户已创建'));
       setOpen(false);
       form.resetFields();
       load(1);
@@ -76,7 +78,7 @@ export default function Tenants() {
   async function remove(id: number) {
     try {
       await api.delete(`/tenants/${id}`);
-      message.success("已删除");
+      message.success(tc('已删除'));
       load();
     } catch (e: any) {
       message.error(e?.response?.data?.detail || "删除失败");
@@ -87,9 +89,7 @@ export default function Tenants() {
     <PageCard
       title={pageCopy.tenants}
       extra={
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>
-          新建客户
-        </Button>
+        <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>{tc('新建客户')}</Button>
       }
     >
       <ListToolbar
@@ -97,7 +97,7 @@ export default function Tenants() {
         left={
           <Input.Search
             allowClear
-            placeholder="搜索客户名称或编码"
+            placeholder={tc('搜索客户名称或编码')}
             style={{ width: 280 }}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -133,20 +133,20 @@ export default function Tenants() {
         columns={[
           { title: "名称", dataIndex: "name", width: "16%", ellipsis: true },
           {
-            title: "编码",
+            title: tc('编码'),
             dataIndex: "code",
             width: "10%",
             render: (c) => <Tag>{c}</Tag>,
           },
           {
-            title: "类型",
+            title: tc('类型'),
             dataIndex: "type",
             width: "12%",
             ellipsis: true,
             render: (t) => TYPE_LABEL[t] || t,
           },
           {
-            title: "状态",
+            title: tc('状态'),
             dataIndex: "status",
             width: "8%",
             render: (s) => {
@@ -155,40 +155,36 @@ export default function Tenants() {
             },
           },
           {
-            title: "专线数",
+            title: tc('专线数'),
             dataIndex: "circuits_total",
             width: "8%",
             align: "right",
             render: (n) => n ?? 0,
           },
           {
-            title: "联系人",
+            title: tc('联系人'),
             dataIndex: "contact_name",
             width: "12%",
             ellipsis: true,
             render: (v) => v || "—",
           },
           {
-            title: "邮箱",
+            title: tc('邮箱'),
             dataIndex: "contact_email",
             width: "18%",
             ellipsis: true,
             render: (v) => v || "—",
           },
           {
-            title: "操作",
+            title: tc('操作'),
             width: "16%",
             className: "table-actions",
             render: (_, r) => (
               <Space size={4} className="table-actions">
-                <Link to={`/circuits?tenant=${r.id}`}>查看专线</Link>
-                <Button type="link" size="small" onClick={() => setPortalTenant(r)}>
-                  门户账号
-                </Button>
-                <Popconfirm title="确认删除?" onConfirm={() => remove(r.id)}>
-                  <Button type="link" size="small" danger>
-                    删除
-                  </Button>
+                <Link to={`/circuits?tenant=${r.id}`}>{tc('查看专线')}</Link>
+                <Button type="link" size="small" onClick={() => setPortalTenant(r)}>{tc('门户账号')}</Button>
+                <Popconfirm title={tc('确认删除?')} onConfirm={() => remove(r.id)}>
+                  <Button type="link" size="small" danger>{tc('删除')}</Button>
                 </Popconfirm>
               </Space>
             ),
@@ -197,27 +193,27 @@ export default function Tenants() {
       />
 
       <Modal
-        title="新建客户"
+        title={tc('新建客户')}
         open={open}
         onOk={onCreate}
         onCancel={() => setOpen(false)}
-        okText="创建"
+        okText={tc('创建')}
         {...formModalProps}
       >
         <Form form={form} layout="vertical" className="app-form" initialValues={{ type: "enterprise", status: "active" }}>
-          <Form.Item name="name" label="客户名称" rules={[{ required: true }]}>
+          <Form.Item name="name" label={tc('客户名称')} rules={[{ required: true }]}>
             <Input />
           </Form.Item>
-          <Form.Item name="code" label="编码" rules={[{ required: true }]}>
-            <Input placeholder="例如 BANK-BJ" />
+          <Form.Item name="code" label={tc('编码')} rules={[{ required: true }]}>
+            <Input placeholder={tc('例如 BANK-BJ')} />
           </Form.Item>
-          <Form.Item name="type" label="类型">
+          <Form.Item name="type" label={tc('类型')}>
             <Select options={Object.entries(TYPE_LABEL).map(([value, label]) => ({ value, label }))} />
           </Form.Item>
-          <Form.Item name="contact_name" label="联系人">
+          <Form.Item name="contact_name" label={tc('联系人')}>
             <Input />
           </Form.Item>
-          <Form.Item name="contact_email" label="邮箱">
+          <Form.Item name="contact_email" label={tc('邮箱')}>
             <Input />
           </Form.Item>
         </Form>

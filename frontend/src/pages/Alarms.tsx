@@ -8,8 +8,10 @@ import PageCard from "../components/PageCard";
 import { dataTableProps } from "../utils/table";
 import { action, empty, page } from "../constants/uiCopy";
 import { ALARM_KIND, ALARM_SEVERITY, ALARM_STATUS, statusMeta } from "../constants/statusLabels";
+import { useTc } from "@/i18n/useTc";
 
 export default function Alarms() {
+  const { tc } = useTc();
   const { message } = AntApp.useApp();
   const [rows, setRows] = useState<Alarm[]>([]);
   const [loading, setLoading] = useState(false);
@@ -62,9 +64,7 @@ export default function Alarms() {
                 { label: "全域", value: "all" },
               ]}
             />
-            <Button icon={<ThunderboltOutlined />} type="primary" onClick={evaluate}>
-              触发评估
-            </Button>
+            <Button icon={<ThunderboltOutlined />} type="primary" onClick={evaluate}>{tc('触发评估')}</Button>
             <Button icon={<ReloadOutlined />} onClick={load} />
           </Space>
         }
@@ -85,7 +85,7 @@ export default function Alarms() {
           }}
           columns={[
             {
-              title: "级别",
+              title: tc('级别'),
               dataIndex: "severity",
               width: "10%",
               render: (s) => {
@@ -94,7 +94,7 @@ export default function Alarms() {
               },
             },
             {
-              title: "类型",
+              title: tc('类型'),
               dataIndex: "kind",
               width: "10%",
               ellipsis: true,
@@ -103,13 +103,13 @@ export default function Alarms() {
             { title: "标题", dataIndex: "title", width: "26%", ellipsis: true },
             { title: "详情", dataIndex: "detail", width: "24%", ellipsis: true, render: (v) => v || "—" },
             {
-              title: "时间",
+              title: tc('时间'),
               dataIndex: "created_at",
               width: "14%",
               render: (t) => (t ? dayjs(t).format("MM-DD HH:mm:ss") : "—"),
             },
             {
-              title: "状态",
+              title: tc('状态'),
               dataIndex: "status",
               width: "10%",
               render: (s, r) => {
@@ -123,7 +123,7 @@ export default function Alarms() {
               },
             },
             {
-              title: "操作",
+              title: tc('操作'),
               width: "12%",
               className: "table-actions",
               render: (_, r) =>
@@ -134,9 +134,7 @@ export default function Alarms() {
                         {action.ack}
                       </Button>
                     )}
-                    <Button type="link" size="small" onClick={() => clear(r.id)}>
-                      清除
-                    </Button>
+                    <Button type="link" size="small" onClick={() => clear(r.id)}>{tc('清除')}</Button>
                   </Space>
                 ) : null,
             },

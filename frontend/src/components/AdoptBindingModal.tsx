@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "../api/client";
 import type { Circuit, DevicePortBinding, Paginated, Tenant } from "../api/types";
 import { formatVlanLabel } from "../utils/networkDisplay";
+import { useTc } from "@/i18n/useTc";
 
 type Props = {
   open: boolean;
@@ -19,6 +20,7 @@ export default function AdoptBindingModal({
   onClose,
   onSuccess,
 }: Props) {
+  const { tc } = useTc();
   const { message } = AntApp.useApp();
   const [form] = Form.useForm();
   const [tenantOptions, setTenantOptions] = useState<{ value: number; label: string }[]>([]);
@@ -108,19 +110,16 @@ export default function AdoptBindingModal({
 
   return (
     <Modal
-      title="纳管现网业务"
+      title={tc('纳管现网业务')}
       open={open}
       onCancel={onClose}
       onOk={submit}
       confirmLoading={loading}
-      okText="纳管到平台"
+      okText={tc('纳管到平台')}
       destroyOnClose
       maskClosable={!loading}
     >
-      <Typography.Paragraph type="secondary" style={{ marginBottom: 16 }}>
-        将设备上已运行的 S-VID 业务登记到平台，<Typography.Text strong>不会向设备下发任何配置</Typography.Text>
-        ，现网流量不受影响。建议开启「定时现网自学习」以持续同步线下变更。
-      </Typography.Paragraph>
+      <Typography.Paragraph type="secondary" style={{ marginBottom: 16 }}>{tc('将设备上已运行的 S-VID 业务登记到平台，')}<Typography.Text strong>{tc('不会向设备下发任何配置')}</Typography.Text>{tc('，现网流量不受影响。建议开启「定时现网自学习」以持续同步线下变更。')}</Typography.Paragraph>
       {binding ? (
         <Typography.Paragraph style={{ marginBottom: 16 }}>
           接口 {binding.interface_name} ·{" "}
@@ -130,24 +129,24 @@ export default function AdoptBindingModal({
         </Typography.Paragraph>
       ) : null}
       <Form form={form} layout="vertical" className="app-form">
-        <Form.Item name="name" label="业务名称" rules={[{ required: true, message: "请输入名称" }]}>
-          <Input placeholder="专线名称" />
+        <Form.Item name="name" label={tc('业务名称')} rules={[{ required: true, message: "请输入名称" }]}>
+          <Input placeholder={tc('专线名称')} />
         </Form.Item>
-        <Form.Item name="tenant_id" label="客户" rules={[{ required: true, message: "请选择客户" }]}>
+        <Form.Item name="tenant_id" label={tc('客户')} rules={[{ required: true, message: "请选择客户" }]}>
           <Select
             showSearch
             filterOption={false}
             loading={tenantsLoading}
             onSearch={tenantSearchTimer}
             options={tenantOptions}
-            placeholder="搜索客户名称或编码"
+            placeholder={tc('搜索客户名称或编码')}
           />
         </Form.Item>
-        <Form.Item name="bandwidth_mbps" label="带宽 (Mbps)">
+        <Form.Item name="bandwidth_mbps" label={tc('带宽 (Mbps)')}>
           <InputNumber min={1} style={{ width: "100%" }} />
         </Form.Item>
-        <Form.Item name="description" label="备注">
-          <Input.TextArea rows={2} placeholder="可选" />
+        <Form.Item name="description" label={tc('备注')}>
+          <Input.TextArea rows={2} placeholder={tc('可选')} />
         </Form.Item>
       </Form>
     </Modal>

@@ -18,6 +18,7 @@ import { api } from "../api/client";
 import type { Device, LinkPlan, LinkUsage, UplinkCandidate } from "../api/types";
 import { usePlatformSettings } from "../hooks/usePlatformSettings";
 import InterfaceNameCell from "./InterfaceNameCell";
+import { useTc } from "@/i18n/useTc";
 import {
   formatInterfaceShort,
   formatInterfaceTooltip,
@@ -50,6 +51,7 @@ function portOptionLabel(c: UplinkCandidate) {
 }
 
 function PortCandidateOption({ candidate }: { candidate: UplinkCandidate }) {
+  const { tc } = useTc();
   const short = formatInterfaceShort(candidate.name);
   const desc = candidate.description?.trim();
   const unavailable = candidate.score <= 0;
@@ -59,7 +61,7 @@ function PortCandidateOption({ candidate }: { candidate: UplinkCandidate }) {
         <Tooltip title={short === candidate.name ? undefined : formatInterfaceTooltip(candidate.name)}>
           <InterfaceNameCell name={candidate.name} />
         </Tooltip>
-        {unavailable ? <Tag color="default">不推荐</Tag> : null}
+        {unavailable ? <Tag color="default">{tc('不推荐')}</Tag> : null}
       </div>
       {desc ? (
         <div className="backbone-port-option-desc" title={desc}>
@@ -107,6 +109,7 @@ type Props = {
 };
 
 export default function BackboneLinkModal({ open, devices, editLink, onClose, onSaved }: Props) {
+  const { tc } = useTc();
   const { message } = AntApp.useApp();
   const { platform } = usePlatformSettings();
   const isEdit = Boolean(editLink);
@@ -223,7 +226,7 @@ export default function BackboneLinkModal({ open, devices, editLink, onClose, on
   async function applySuggestions() {
     const picks = suggestions.filter((_, idx) => selectedKeys.includes(idx));
     if (!picks.length) {
-      message.warning("请至少选择一条推荐链路");
+      message.warning(tc('请至少选择一条推荐链路'));
       return;
     }
     setSaving(true);
@@ -254,7 +257,7 @@ export default function BackboneLinkModal({ open, devices, editLink, onClose, on
     setSaving(true);
     try {
       await api.post("/capacity/links", values);
-      message.success("骨干链路已创建");
+      message.success(tc('骨干链路已创建'));
       onSaved();
       onClose();
     } catch (e: any) {
@@ -270,7 +273,7 @@ export default function BackboneLinkModal({ open, devices, editLink, onClose, on
     setSaving(true);
     try {
       await api.patch(`/capacity/links/${editLink.link_id}`, values);
-      message.success("骨干链路已更新");
+      message.success(tc('骨干链路已更新'));
       onSaved();
       onClose();
     } catch (e: any) {
@@ -293,9 +296,7 @@ export default function BackboneLinkModal({ open, devices, editLink, onClose, on
       extra={
         isEdit ? null : (
           <Space>
-            <Button onClick={loadSuggestions} loading={loadingSuggestions}>
-              刷新推荐
-            </Button>
+            <Button onClick={loadSuggestions} loading={loadingSuggestions}>{tc('刷新推荐')}</Button>
             <Button
               type="primary"
               loading={saving}
@@ -308,9 +309,7 @@ export default function BackboneLinkModal({ open, devices, editLink, onClose, on
         )
       }
     >
-      <Typography.Paragraph type="secondary">
-        骨干 / DCI 链路优先选用 VLAN 子接口（H3C Vlan-interface、华为 Vlanif），其次聚合口与物理上联口。请确保已 SNMP 发现或现网学习。
-      </Typography.Paragraph>
+      <Typography.Paragraph type="secondary">{tc('骨干 / DCI 链路优先选用 VLAN 子接口（H3C Vlan-interface、华为 Vlanif），其次聚合口与物理上联口。请确保已 SNMP 发现或现网学习。')}</Typography.Paragraph>
 
       {!isEdit ? (
         <Table<LinkPlan>
@@ -328,13 +327,13 @@ export default function BackboneLinkModal({ open, devices, editLink, onClose, on
           locale={{ emptyText: "暂无推荐 · 请确认设备已 SNMP 发现且跨站点存在未建链路" }}
           columns={[
             {
-              title: "链路",
+              title: tc('链路'),
               dataIndex: "name",
               width: 160,
               ellipsis: true,
             },
             {
-              title: "类型",
+              title: tc('类型'),
               dataIndex: "type",
               width: 100,
               render: (t: string) => (
@@ -342,7 +341,7 @@ export default function BackboneLinkModal({ open, devices, editLink, onClose, on
               ),
             },
             {
-              title: "A 端",
+              title: tc('A 端'),
               width: 200,
               render: (_: unknown, row) => (
                 <EndpointCell
@@ -353,7 +352,7 @@ export default function BackboneLinkModal({ open, devices, editLink, onClose, on
               ),
             },
             {
-              title: "Z 端",
+              title: tc('Z 端'),
               width: 200,
               render: (_: unknown, row) => (
                 <EndpointCell
@@ -364,19 +363,19 @@ export default function BackboneLinkModal({ open, devices, editLink, onClose, on
               ),
             },
             {
-              title: "带宽",
+              title: tc('带宽'),
               dataIndex: "capacity_mbps",
               width: 90,
               render: (v: number) => fmtBw(v),
             },
             {
-              title: "评分",
+              title: tc('评分'),
               dataIndex: "score",
               width: 72,
               render: (v: number) => <Tag color={v >= 80 ? "green" : "gold"}>{v}</Tag>,
             },
             {
-              title: "依据",
+              title: tc('依据'),
               dataIndex: "reason",
               ellipsis: true,
             },
@@ -391,14 +390,14 @@ export default function BackboneLinkModal({ open, devices, editLink, onClose, on
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
           <Form.Item
             name="device_a_id"
-            label="A 端设备"
+            label={tc('A 端设备')}
             rules={[{ required: true, message: "请选择 A 端设备" }]}
           >
             <Select
               showSearch
               optionFilterProp="label"
               options={deviceOptions}
-              placeholder="选择设备"
+              placeholder={tc('选择设备')}
               onChange={async (id) => {
                 await loadCandidates(id, "a");
                 const zId = form.getFieldValue("device_z_id");
@@ -408,14 +407,14 @@ export default function BackboneLinkModal({ open, devices, editLink, onClose, on
           </Form.Item>
           <Form.Item
             name="device_z_id"
-            label="Z 端设备"
+            label={tc('Z 端设备')}
             rules={[{ required: true, message: "请选择 Z 端设备" }]}
           >
             <Select
               showSearch
               optionFilterProp="label"
               options={deviceOptions}
-              placeholder="选择设备"
+              placeholder={tc('选择设备')}
               onChange={async (id) => {
                 await loadCandidates(id, "z");
                 const aId = form.getFieldValue("device_a_id");
@@ -437,7 +436,7 @@ export default function BackboneLinkModal({ open, devices, editLink, onClose, on
           >
             <Select
               showSearch
-              placeholder="选择接口"
+              placeholder={tc('选择接口')}
               optionFilterProp="label"
               popupMatchSelectWidth={false}
               styles={{ popup: { root: { minWidth: 420 } } }}
@@ -468,7 +467,7 @@ export default function BackboneLinkModal({ open, devices, editLink, onClose, on
           >
             <Select
               showSearch
-              placeholder="选择接口"
+              placeholder={tc('选择接口')}
               optionFilterProp="label"
               popupMatchSelectWidth={false}
               styles={{ popup: { root: { minWidth: 420 } } }}
@@ -491,10 +490,10 @@ export default function BackboneLinkModal({ open, devices, editLink, onClose, on
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 16 }}>
-          <Form.Item name="name" label="链路名称" rules={[{ required: true }]}>
-            <Input placeholder="自动生成" />
+          <Form.Item name="name" label={tc('链路名称')} rules={[{ required: true }]}>
+            <Input placeholder={tc('自动生成')} />
           </Form.Item>
-          <Form.Item name="type" label="类型" rules={[{ required: true }]}>
+          <Form.Item name="type" label={tc('类型')} rules={[{ required: true }]}>
             <Select
               options={[
                 { value: "dci", label: LINK_TYPE_LABEL.dci },
@@ -502,13 +501,13 @@ export default function BackboneLinkModal({ open, devices, editLink, onClose, on
               ]}
             />
           </Form.Item>
-          <Form.Item name="capacity_mbps" label="合同带宽 (Mbps)" rules={[{ required: true }]}>
+          <Form.Item name="capacity_mbps" label={tc('合同带宽 (Mbps)')} rules={[{ required: true }]}>
             <Input type="number" min={1} />
           </Form.Item>
         </div>
 
-        <Form.Item name="alarm_utilization_pct" label="利用率告警阈值 (%)" extra={alarmHint}>
-          <InputNumber min={0} max={100} style={{ width: "100%" }} placeholder="平台默认" />
+        <Form.Item name="alarm_utilization_pct" label={tc('利用率告警阈值 (%)')} extra={alarmHint}>
+          <InputNumber min={0} max={100} style={{ width: "100%" }} placeholder={tc('平台默认')} />
         </Form.Item>
 
         {manualPlan ? (

@@ -6,6 +6,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { useTc } from "@/i18n/useTc";
 
 export type SelectOption = { value: string; label: string };
 
@@ -28,6 +29,7 @@ export default function FormSelect({
   className,
   allowClear,
 }: Props) {
+  const { tc } = useTc();
   const resolved = value ?? "";
 
   return (
@@ -41,9 +43,7 @@ export default function FormSelect({
       </SelectTrigger>
       <SelectContent position="popper" className="max-h-72">
         {allowClear && resolved ? (
-          <SelectItem value="__clear__" className="text-muted-foreground">
-            清除选择
-          </SelectItem>
+          <SelectItem value="__clear__" className="text-muted-foreground">{tc('清除选择')}</SelectItem>
         ) : null}
         {options.map((o) => (
           <SelectItem key={o.value} value={o.value}>

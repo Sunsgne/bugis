@@ -34,6 +34,7 @@ import {
 import EChart from "./EChart";
 import { latencyJitterOption, trafficWithP95Option } from "../charts/options";
 import { empty } from "../constants/uiCopy";
+import { useTc } from "@/i18n/useTc";
 
 const { Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -57,6 +58,7 @@ export default function CircuitMonitorPanel({
   pollSec = 15,
   latencyProbeEnabled = true,
 }: Props) {
+  const { tc } = useTc();
   const [rangeMode, setRangeMode] = useState<RangeMode>("preset");
   const [hours, setHours] = useState(compact ? 6 : 24);
   const [customRange, setCustomRange] = useState<[Dayjs, Dayjs] | null>(null);
@@ -159,7 +161,7 @@ export default function CircuitMonitorPanel({
     >
       <Space wrap style={{ justifyContent: "space-between", width: "100%" }}>
         <Space wrap>
-          <Text type="secondary">时间范围</Text>
+          <Text type="secondary">{tc('时间范围')}</Text>
           <Select
             size="small"
             value={rangeMode}
@@ -188,20 +190,17 @@ export default function CircuitMonitorPanel({
                 onChange={(vals) => setCustomRange(vals as [Dayjs, Dayjs] | null)}
                 disabledDate={(current) => !!current && current > dayjs().endOf("day")}
               />
-              <Button size="small" type="primary" loading={loading} onClick={load}>
-                查询
-              </Button>
+              <Button size="small" type="primary" loading={loading} onClick={load}>{tc('查询')}</Button>
             </>
           )}
-          {health?.tunnel_down && <Tag color="error">链路中断</Tag>}
+          {health?.tunnel_down && <Tag color="error">{tc('链路中断')}</Tag>}
           {latencyProbeEnabled && health && health.qos_samples === 0 && (
-            <Tag color="default">QoS 待拨测</Tag>
+            <Tag color="default">{tc('QoS 待拨测')}</Tag>
           )}
-          {!latencyProbeEnabled && <Tag color="default">延迟探测已关闭</Tag>}
+          {!latencyProbeEnabled && <Tag color="default">{tc('延迟探测已关闭')}</Tag>}
         </Space>
         {!compact && billing?.billable_95_mbps != null && (
-          <Text type="secondary">
-            当月 95 计费带宽 <Text strong>{billing.billable_95_mbps} Mbps</Text>
+          <Text type="secondary">{tc('当月 95 计费带宽')}<Text strong>{billing.billable_95_mbps} Mbps</Text>
             <span style={{ marginLeft: 8, fontSize: 12 }}>({windowLabel})</span>
           </Text>
         )}
@@ -223,23 +222,23 @@ export default function CircuitMonitorPanel({
                   strokeColor={scoreColor(health.health_score)}
                   format={(p) => `${p}`}
                 />
-                <div style={{ color: "#888", fontSize: 12 }}>健康指数</div>
+                <div style={{ color: "#888", fontSize: 12 }}>{tc('健康指数')}</div>
               </div>
             </Card>
           )}
           {latencyProbeEnabled && (
             <>
               <Card size="small" className="chart-card">
-                <Statistic title="平均时延" value={health.avg_latency_ms} suffix="ms" />
+                <Statistic title={tc('平均时延')} value={health.avg_latency_ms} suffix="ms" />
               </Card>
               <Card size="small" className="chart-card">
-                <Statistic title="抖动" value={health.avg_jitter_ms} suffix="ms" />
+                <Statistic title={tc('抖动')} value={health.avg_jitter_ms} suffix="ms" />
               </Card>
             </>
           )}
           <Card size="small" className="chart-card">
             <Statistic
-              title="可用率"
+              title={tc('可用率')}
               value={availability?.uptime_pct ?? 100}
               suffix="%"
               valueStyle={{
@@ -249,7 +248,7 @@ export default function CircuitMonitorPanel({
           </Card>
           <Card size="small" className="chart-card">
             <Statistic
-              title="窗口 95 计费"
+              title={tc('窗口 95 计费')}
               value={traffic?.p95?.billable_95_mbps ?? 0}
               suffix="Mbps"
               valueStyle={{ color: "#ff6600" }}
@@ -300,14 +299,14 @@ export default function CircuitMonitorPanel({
             {qosChartData.length ? (
               <EChart key={`latency-${qosChartKey}`} option={latencyOpt} height={chartHeight} />
             ) : (
-              <Empty description="暂无拨测数据 · 调度器轮询或手动「端到端拨测」后显示" />
+              <Empty description={tc('暂无拨测数据 · 调度器轮询或手动「端到端拨测」后显示')} />
             )}
           </Card>
         )}
       </div>
 
       {availability && availability.events.length > 0 && (
-        <Card size="small" title="中断 / 闪断事件">
+        <Card size="small" title={tc('中断 / 闪断事件')}>
           <Table
             size="small"
             rowKey="id"
@@ -315,7 +314,7 @@ export default function CircuitMonitorPanel({
             dataSource={availability.events}
             columns={[
               {
-                title: "类型",
+                title: tc('类型'),
                 dataIndex: "kind",
                 width: 80,
                 render: (k: string) => {
@@ -324,17 +323,17 @@ export default function CircuitMonitorPanel({
                 },
               },
               {
-                title: "开始",
+                title: tc('开始'),
                 dataIndex: "started_at",
                 render: (v: string) => dayjs(v).format("MM-DD HH:mm:ss"),
               },
               {
-                title: "结束",
+                title: tc('结束'),
                 dataIndex: "ended_at",
                 render: (v?: string) => (v ? dayjs(v).format("MM-DD HH:mm:ss") : "进行中"),
               },
               {
-                title: "时长",
+                title: tc('时长'),
                 dataIndex: "duration_sec",
                 render: (v?: number) => (v != null ? `${v}s` : "-"),
               },

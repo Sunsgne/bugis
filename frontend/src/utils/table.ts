@@ -1,4 +1,6 @@
 import type { TablePaginationConfig, TableProps } from "antd";
+import i18n from "../i18n";
+import { tablePaginationTotal } from "../i18n/helpers";
 
 export function buildListQuery(params: Record<string, string | number | boolean | undefined | null>) {
   const sp = new URLSearchParams();
@@ -12,16 +14,19 @@ export function buildListQuery(params: Record<string, string | number | boolean 
 export const PAGE_SIZE_OPTIONS = [20, 50, 100, 200] as const;
 
 export function pageRangeLabel(total: number, page: number, pageSize: number): string {
-  if (total === 0) return "暂无数据";
+  const t = i18n.t.bind(i18n);
+  if (total === 0) return t("table.noData");
   const start = (page - 1) * pageSize + 1;
   const end = Math.min(page * pageSize, total);
-  return `第 ${start.toLocaleString()}–${end.toLocaleString()} 条，共 ${total.toLocaleString()} 条`;
+  return t("table.range", {
+    start: start.toLocaleString(),
+    end: end.toLocaleString(),
+    total: total.toLocaleString(),
+  });
 }
 
-/** Consistent table layout: fixed columns, no stray gaps from pinned actions. */
 export function dataTableProps(
   scrollX?: number,
-  /** When false, skip horizontal scroll (e.g. empty table — avoids a stray scrollbar). */
   enableScroll = true,
 ): Pick<TableProps<unknown>, "size" | "tableLayout" | "className" | "scroll"> {
   return {
@@ -38,6 +43,7 @@ export function tablePagination(
   pageSize: number,
   onChange: (page: number, pageSize: number) => void,
 ): TablePaginationConfig {
+  const t = i18n.t.bind(i18n);
   return {
     current: page,
     pageSize,
@@ -45,8 +51,7 @@ export function tablePagination(
     showSizeChanger: true,
     showQuickJumper: total > pageSize * 2,
     pageSizeOptions: PAGE_SIZE_OPTIONS.map(String),
-    showTotal: (t, range) =>
-      range ? `第 ${range[0].toLocaleString()}–${range[1].toLocaleString()} 条，共 ${t.toLocaleString()} 条` : `共 ${t.toLocaleString()} 条`,
+    showTotal: (n, range) => tablePaginationTotal(t, n, range as [number, number] | undefined),
     onChange,
   };
 }

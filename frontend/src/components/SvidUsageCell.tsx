@@ -2,6 +2,7 @@ import { Button, Input, Popover, Space, Table, Tag, Typography } from "antd";
 import { useMemo, useState } from "react";
 import type { SvidUsage } from "@/api/types";
 import { formatVlanLabel } from "@/utils/networkDisplay";
+import { useTc } from "@/i18n/useTc";
 
 const SVID_SOURCE: Record<string, { label: string; color: string }> = {
   platform: { label: "平台", color: "blue" },
@@ -54,6 +55,7 @@ type DetailProps = {
 };
 
 function SvidUsageDetailPanel({ list }: DetailProps) {
+  const { tc } = useTc();
   const [search, setSearch] = useState("");
 
   const filtered = useMemo(() => {
@@ -83,7 +85,7 @@ function SvidUsageDetailPanel({ list }: DetailProps) {
     <div style={{ width: 860, maxWidth: "min(96vw, 860px)" }}>
       <Input.Search
         allowClear
-        placeholder="搜索客户 / 接口 / 业务 / S-VID / 限速"
+        placeholder={tc('搜索客户 / 接口 / 业务 / S-VID / 限速')}
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         style={{ marginBottom: 8 }}
@@ -102,14 +104,14 @@ function SvidUsageDetailPanel({ list }: DetailProps) {
         scroll={{ x: 820, y: 300 }}
         columns={[
           {
-            title: "客户",
+            title: tc('客户'),
             width: 120,
             fixed: "left",
             ellipsis: true,
             render: (_: unknown, u?: SvidUsage) => formatCustomer(u || {}),
           },
           {
-            title: "业务",
+            title: tc('业务'),
             width: 140,
             ellipsis: true,
             render: (_: unknown, u?: SvidUsage) => formatBusiness(u || {}),
@@ -124,7 +126,7 @@ function SvidUsageDetailPanel({ list }: DetailProps) {
             ),
           },
           {
-            title: "限速带宽",
+            title: tc('限速带宽'),
             width: 88,
             render: (_: unknown, u?: SvidUsage) => formatRateLimit(u || {}),
           },
@@ -135,21 +137,21 @@ function SvidUsageDetailPanel({ list }: DetailProps) {
             render: (v?: number) => (v != null ? v : "—"),
           },
           {
-            title: "描述",
+            title: tc('描述'),
             dataIndex: "description",
             width: 140,
             ellipsis: true,
             render: (v?: string) => v || "—",
           },
           {
-            title: "专线",
+            title: tc('专线'),
             dataIndex: "circuit_code",
             width: 96,
             ellipsis: true,
             render: (v?: string) => v || "—",
           },
           {
-            title: "来源",
+            title: tc('来源'),
             width: 72,
             render: (_: unknown, u?: SvidUsage) =>
               SVID_SOURCE[u?.source || "platform"]?.label || u?.source || "—",
@@ -169,6 +171,7 @@ type Props = {
 };
 
 export default function SvidUsageCell({ list, inlineMax = 2, summaryThreshold = 8 }: Props) {
+  const { tc } = useTc();
   if (!list?.length) {
     return <Typography.Text type="secondary">—</Typography.Text>;
   }
@@ -208,9 +211,7 @@ export default function SvidUsageCell({ list, inlineMax = 2, summaryThreshold = 
         </Popover>
       ) : (
         <Popover trigger="click" placement="left" title={popoverTitle} content={popoverContent}>
-          <Button type="link" size="small" style={{ padding: 0, height: "auto" }}>
-            明细
-          </Button>
+          <Button type="link" size="small" style={{ padding: 0, height: "auto" }}>{tc('明细')}</Button>
         </Popover>
       )}
     </Space>

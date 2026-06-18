@@ -54,6 +54,7 @@ import { PageCard } from "@/components";
 import ListToolbar from "../components/ListToolbar";
 import DeviceFormDialog, { type DeviceFormValues } from "@/components/DeviceFormDialog";
 import DevicePortDrawer from "@/components/DevicePortDrawer";
+import { useTc } from "@/i18n/useTc";
 
 const VENDOR_SHORT: Record<string, string> = {
   h3c: "H3C",
@@ -122,6 +123,7 @@ function buildDevicePayload(
 }
 
 export default function Devices() {
+  const { tc } = useTc();
   const { message, modal } = AntApp.useApp();
   const [rows, setRows] = useState<Device[]>([]);
   const [total, setTotal] = useState(0);
@@ -225,7 +227,7 @@ export default function Devices() {
 
     try {
       await api.post("/devices", buildDevicePayload(values, snmpDefaults));
-      message.success("设备已纳管");
+      message.success(tc('设备已纳管'));
       setFormOpen(false);
       setPage(1);
       load(1);
@@ -295,7 +297,7 @@ export default function Devices() {
         message.success(`SNMP 发现 ${data.length} 个接口 · ${svidCount} 个端口有 S-VID 占用`);
       }
       if (svidCount === 0 && simCount < data.length) {
-        message.info("S-VID 需从 running-config 解析，请执行「现网学习」后重新检测");
+        message.info(tc('S-VID 需从 running-config 解析，请执行「现网学习」后重新检测'));
       }
       bumpPortDrawer();
       return data;
@@ -319,7 +321,7 @@ export default function Devices() {
           `${d.name} 学习完成 · ${inv?.service_count ?? 0} 个业务 · v${data.snapshot_version}`,
         );
         if (svidTotal === 0) {
-          message.info("未解析到 S-VID，请确认设备 running-config 含 service-instance / dot1q 配置");
+          message.info(tc('未解析到 S-VID，请确认设备 running-config 含 service-instance / dot1q 配置'));
         }
         bumpPortDrawer();
       } else {
@@ -416,22 +418,20 @@ export default function Devices() {
   return (
     <PageCard
       title={pageCopy.devices}
-      description="多厂商 Fabric 纳管 · SNMP / NETCONF / SSH"
+      description={tc('多厂商 Fabric 纳管 · SNMP / NETCONF / SSH')}
       extra={
         <Space wrap size={8}>
           <Dropdown
             menu={{
               items: [
-                { key: "mgmt", label: <Link to="/settings/management">南向接口</Link> },
-                { key: "snmp", label: <Link to="/settings/snmp">SNMP 采集</Link> },
+                { key: "mgmt", label: <Link to="/settings/management">{tc('南向接口')}</Link> },
+                { key: "snmp", label: <Link to="/settings/snmp">{tc('SNMP 采集')}</Link> },
               ],
             }}
           >
-            <Button icon={<SettingOutlined />}>设置</Button>
+            <Button icon={<SettingOutlined />}>{tc('设置')}</Button>
           </Dropdown>
-          <Button icon={<DownloadOutlined />} onClick={exportCsv}>
-            导出
-          </Button>
+          <Button icon={<DownloadOutlined />} onClick={exportCsv}>{tc('导出')}</Button>
           <input
             ref={importRef}
             type="file"
@@ -443,12 +443,8 @@ export default function Devices() {
               e.target.value = "";
             }}
           />
-          <Button icon={<UploadOutlined />} onClick={() => importRef.current?.click()}>
-            导入
-          </Button>
-          <Button type="primary" icon={<PlusOutlined />} onClick={openCreateModal}>
-            纳管设备
-          </Button>
+          <Button icon={<UploadOutlined />} onClick={() => importRef.current?.click()}>{tc('导入')}</Button>
+          <Button type="primary" icon={<PlusOutlined />} onClick={openCreateModal}>{tc('纳管设备')}</Button>
         </Space>
       }
     >
@@ -457,7 +453,7 @@ export default function Devices() {
         left={
           <Input.Search
             allowClear
-            placeholder="搜索名称或管理 IP"
+            placeholder={tc('搜索名称或管理 IP')}
             style={{ width: 280 }}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -467,7 +463,7 @@ export default function Devices() {
         }
         right={
           <Space size={6}>
-            <Typography.Text type="secondary">导入即学习</Typography.Text>
+            <Typography.Text type="secondary">{tc('导入即学习')}</Typography.Text>
             <Switch checked={learnOnImport} onChange={setLearnOnImport} size="small" />
           </Space>
         }
@@ -476,18 +472,18 @@ export default function Devices() {
       <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
         <Col xs={24} sm={8}>
           <Card size="small" styles={{ body: { padding: "12px 16px" } }}>
-            <Statistic title="设备总数" value={total} suffix="台" />
+            <Statistic title={tc('设备总数')} value={total} suffix="台" />
           </Card>
         </Col>
         <Col xs={12} sm={8}>
           <Card size="small" styles={{ body: { padding: "12px 16px" } }}>
-            <Statistic title="在线" value={stats.online} valueStyle={{ color: "#3f8600" }} suffix="台" />
+            <Statistic title={tc('在线')} value={stats.online} valueStyle={{ color: "#3f8600" }} suffix="台" />
           </Card>
         </Col>
         <Col xs={12} sm={8}>
           <Card size="small" styles={{ body: { padding: "12px 16px" } }}>
             <Statistic
-              title="离线"
+              title={tc('离线')}
               value={stats.offline}
               valueStyle={{ color: stats.offline ? "#cf1322" : "#8c8c8c" }}
               suffix="台"
@@ -508,7 +504,7 @@ export default function Devices() {
         })}
         columns={[
           {
-            title: "设备",
+            title: tc('设备'),
             dataIndex: "name",
             width: "22%",
             ellipsis: true,
@@ -534,19 +530,19 @@ export default function Devices() {
             ),
           },
           {
-            title: "厂商",
+            title: tc('厂商'),
             dataIndex: "vendor",
             width: "8%",
             render: (v: string) => <Tag>{VENDOR_SHORT[v] || v}</Tag>,
           },
           {
-            title: "角色",
+            title: tc('角色'),
             dataIndex: "role",
             width: "6%",
             render: (r: string) => labelForOption(DEVICE_ROLE_OPTIONS, r).split(" ")[0],
           },
           {
-            title: "管理 IP",
+            title: tc('管理 IP'),
             dataIndex: "mgmt_ip",
             width: "18%",
             ellipsis: true,
@@ -583,13 +579,13 @@ export default function Devices() {
             },
           },
           {
-            title: "站点",
+            title: tc('站点'),
             width: "12%",
             ellipsis: true,
             render: (_: unknown, r: Device) => siteName(r.site_id),
           },
           {
-            title: "凭证",
+            title: tc('凭证'),
             width: "5%",
             align: "center" as const,
             render: (_: unknown, r: Device) =>
@@ -610,7 +606,7 @@ export default function Devices() {
               ),
           },
           {
-            title: "状态",
+            title: tc('状态'),
             dataIndex: "status",
             width: "8%",
             render: (s: string) => (
@@ -618,16 +614,14 @@ export default function Devices() {
             ),
           },
           {
-            title: "操作",
+            title: tc('操作'),
             key: "actions",
             width: "18%",
             className: "table-actions",
             render: (_: unknown, r: Device) => (
                 <Space size={4} className="table-actions">
-                  <Button size="small" type="primary" icon={<ApiOutlined />} onClick={() => openPorts(r)}>
-                  端口
-                </Button>
-                <Tooltip title="编辑设备信息">
+                  <Button size="small" type="primary" icon={<ApiOutlined />} onClick={() => openPorts(r)}>{tc('端口')}</Button>
+                <Tooltip title={tc('编辑设备信息')}>
                   <Button size="small" icon={<EditOutlined />} onClick={() => openEditModal(r)} />
                 </Tooltip>
                 <Dropdown
@@ -637,39 +631,39 @@ export default function Devices() {
                       {
                         key: "learn",
                         icon: <BookOutlined />,
-                        label: "现网学习",
+                        label: tc('现网学习'),
                         onClick: () => learnConfig(r),
                       },
                       {
                         key: "init",
                         icon: <RocketOutlined />,
-                        label: "初始化",
+                        label: tc('初始化'),
                         onClick: () => initialize(r),
                       },
                       {
                         key: "check",
                         icon: <RadarChartOutlined />,
-                        label: "检测",
+                        label: tc('检测'),
                         onClick: () => check(r.id),
                       },
                       {
                         key: "discover",
                         icon: <NodeIndexOutlined />,
-                        label: "SNMP 发现",
+                        label: tc('SNMP 发现'),
                         onClick: () => discover(r.id),
                       },
                       { type: "divider" },
                       {
                         key: "delete",
                         icon: <DeleteOutlined />,
-                        label: "删除",
+                        label: tc('删除'),
                         danger: true,
                         onClick: () =>
                           modal.confirm({
-                            title: "确认删除该设备?",
+                            title: tc('确认删除该设备?'),
                             content: "此操作不可撤销，将永久删除该设备及其关联数据。",
                             okType: "danger",
-                            okText: "删除",
+                            okText: tc('删除'),
                             onOk: () => remove(r.id),
                           }),
                       },
@@ -717,9 +711,7 @@ export default function Devices() {
         width={960}
         destroyOnClose
       >
-        <Typography.Paragraph type="secondary">
-          标准基线预览（管理 / Loopback / Underlay / EVPN Overlay）· 确认后 dry-run 下发并归档初始化快照
-        </Typography.Paragraph>
+        <Typography.Paragraph type="secondary">{tc('标准基线预览（管理 / Loopback / Underlay / EVPN Overlay）· 确认后 dry-run 下发并归档初始化快照')}</Typography.Paragraph>
         <ConfigPreviewPre>{initBaseline}</ConfigPreviewPre>
       </Modal>
     </PageCard>

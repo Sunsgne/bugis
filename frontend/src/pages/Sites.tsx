@@ -20,8 +20,10 @@ import PageCard from "../components/PageCard";
 import { dataTableProps } from "../utils/table";
 import { formModalProps } from "../utils/formModal";
 import { action, page, toast } from "../constants/uiCopy";
+import { useTc } from "@/i18n/useTc";
 
 export default function Sites() {
+  const { tc } = useTc();
   const { message } = AntApp.useApp();
   const [rows, setRows] = useState<Site[]>([]);
   const [controllers, setControllers] = useState<Controller[]>([]);
@@ -73,9 +75,7 @@ export default function Sites() {
     <PageCard
       title={page.sites}
       extra={
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>
-          新建站点
-        </Button>
+        <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>{tc('新建站点')}</Button>
       }
     >
       <Table
@@ -101,14 +101,14 @@ export default function Sites() {
             render: (v) => (v ? <Tag>{v}</Tag> : "—"),
           },
           {
-            title: "Underlay 网段",
+            title: tc('Underlay 网段'),
             dataIndex: "underlay_prefix",
             width: "14%",
             ellipsis: true,
             render: (v) => v || "—",
           },
           {
-            title: "下发模式",
+            title: tc('下发模式'),
             dataIndex: "delivery_mode",
             width: "18%",
             ellipsis: true,
@@ -116,15 +116,15 @@ export default function Sites() {
               m === "controller" ? (
                 <Tag color="purple">控制器: {controllerName(r.controller_id) || "?"}</Tag>
               ) : (
-                <Tag color="green">直连下发</Tag>
+                <Tag color="green">{tc('直连下发')}</Tag>
               ),
           },
           {
-            title: "操作",
+            title: tc('操作'),
             width: "10%",
             className: "table-actions",
             render: (_, r) => (
-              <Popconfirm title="确认删除该站点?" onConfirm={() => remove(r.id)}>
+              <Popconfirm title={tc('确认删除该站点?')} onConfirm={() => remove(r.id)}>
                 <Button type="link" size="small" danger>
                   {action.delete}
                 </Button>
@@ -134,7 +134,7 @@ export default function Sites() {
         ]}
       />
       <Modal
-        title="新建 Fabric 站点"
+        title={tc('新建 Fabric 站点')}
         open={open}
         onOk={onCreate}
         onCancel={() => setOpen(false)}
@@ -142,22 +142,22 @@ export default function Sites() {
         {...formModalProps}
       >
         <Form form={form} layout="vertical" className="app-form">
-          <Form.Item name="name" label="站点名称" rules={[{ required: true }]}>
-            <Input placeholder="例如 北京 Fabric PoP" />
+          <Form.Item name="name" label={tc('站点名称')} rules={[{ required: true }]}>
+            <Input placeholder={tc('例如 北京 Fabric PoP')} />
           </Form.Item>
-          <Form.Item name="code" label="编码" rules={[{ required: true }]}>
-            <Input placeholder="例如 BJ-DC1" />
+          <Form.Item name="code" label={tc('编码')} rules={[{ required: true }]}>
+            <Input placeholder={tc('例如 BJ-DC1')} />
           </Form.Item>
-          <Form.Item name="region" label="区域">
-            <Input placeholder="例如 华北" />
+          <Form.Item name="region" label={tc('区域')}>
+            <Input placeholder={tc('例如 华北')} />
           </Form.Item>
           <Form.Item name="bgp_asn" label="BGP ASN">
-            <InputNumber style={{ width: "100%" }} placeholder="例如 65001" />
+            <InputNumber style={{ width: "100%" }} placeholder={tc('例如 65001')} />
           </Form.Item>
-          <Form.Item name="underlay_prefix" label="Underlay 网段">
-            <Input placeholder="例如 10.1.0.0/16" />
+          <Form.Item name="underlay_prefix" label={tc('Underlay 网段')}>
+            <Input placeholder={tc('例如 10.1.0.0/16')} />
           </Form.Item>
-          <Form.Item name="delivery_mode" label="下发模式" initialValue="direct">
+          <Form.Item name="delivery_mode" label={tc('下发模式')} initialValue="direct">
             <Select
               options={[
                 { value: "direct", label: "直连下发 (NETCONF/CLI)" },
@@ -166,7 +166,7 @@ export default function Sites() {
             />
           </Form.Item>
           {deliveryMode === "controller" && (
-            <Form.Item name="controller_id" label="关联控制器" rules={[{ required: true }]}>
+            <Form.Item name="controller_id" label={tc('关联控制器')} rules={[{ required: true }]}>
               <Select
                 options={controllers.map((c) => ({
                   value: c.id,

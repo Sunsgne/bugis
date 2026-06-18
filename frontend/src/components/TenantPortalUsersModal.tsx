@@ -3,6 +3,7 @@ import { Button, Form, Input, Modal, Select, Space, Table, Tag, App as AntApp } 
 import { PlusOutlined } from "@ant-design/icons";
 import { api } from "../api/client";
 import { formModalProps } from "../utils/formModal";
+import { useTc } from "@/i18n/useTc";
 
 interface PortalUser {
   id: number;
@@ -21,6 +22,7 @@ interface Props {
 }
 
 export default function TenantPortalUsersModal({ tenantId, tenantName, open, onClose }: Props) {
+  const { tc } = useTc();
   const { message } = AntApp.useApp();
   const [users, setUsers] = useState<PortalUser[]>([]);
   const [loading, setLoading] = useState(false);
@@ -45,7 +47,7 @@ export default function TenantPortalUsersModal({ tenantId, tenantName, open, onC
     const values = await form.validateFields();
     try {
       await api.post(`/tenants/${tenantId}/users`, values);
-      message.success("门户账号已创建");
+      message.success(tc('门户账号已创建'));
       setCreateOpen(false);
       form.resetFields();
       load();
@@ -58,7 +60,7 @@ export default function TenantPortalUsersModal({ tenantId, tenantName, open, onC
   async function onDelete(userId: number) {
     try {
       await api.delete(`/tenants/${tenantId}/users/${userId}`);
-      message.success("已删除");
+      message.success(tc('已删除'));
       load();
     } catch (e: unknown) {
       const err = e as { response?: { data?: { detail?: string } } };
@@ -76,13 +78,9 @@ export default function TenantPortalUsersModal({ tenantId, tenantName, open, onC
         footer={null}
         width={640}
       >
-        <p style={{ color: "#666", marginBottom: 12 }}>
-          客户使用此账号登录 <strong>/portal</strong>，仅可查看本租户专线、流量与 95 计费数据。
-        </p>
+        <p style={{ color: "#666", marginBottom: 12 }}>{tc('客户使用此账号登录')}<strong>/portal</strong>{tc('，仅可查看本租户专线、流量与 95 计费数据。')}</p>
         <Space style={{ marginBottom: 12 }}>
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
-            新建门户账号
-          </Button>
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>{tc('新建门户账号')}</Button>
         </Space>
         <Table
           size="small"
@@ -95,7 +93,7 @@ export default function TenantPortalUsersModal({ tenantId, tenantName, open, onC
             { title: "用户名", dataIndex: "username" },
             { title: "姓名", dataIndex: "full_name", render: (v?: string) => v || "—" },
             {
-              title: "角色",
+              title: tc('角色'),
               dataIndex: "role",
               render: (r: string) => (
                 <Tag color={r === "tenant_admin" ? "blue" : "default"}>
@@ -104,12 +102,10 @@ export default function TenantPortalUsersModal({ tenantId, tenantName, open, onC
               ),
             },
             {
-              title: "操作",
+              title: tc('操作'),
               width: 80,
               render: (_: unknown, row: PortalUser) => (
-                <Button type="link" danger size="small" onClick={() => onDelete(row.id)}>
-                  删除
-                </Button>
+                <Button type="link" danger size="small" onClick={() => onDelete(row.id)}>{tc('删除')}</Button>
               ),
             },
           ]}
@@ -117,26 +113,26 @@ export default function TenantPortalUsersModal({ tenantId, tenantName, open, onC
       </Modal>
 
       <Modal
-        title="新建门户账号"
+        title={tc('新建门户账号')}
         open={createOpen}
         onOk={onCreate}
         onCancel={() => setCreateOpen(false)}
         destroyOnClose
       >
         <Form form={form} layout="vertical" initialValues={{ role: "tenant_viewer" }}>
-          <Form.Item name="username" label="登录用户名" rules={[{ required: true, min: 3 }]}>
-            <Input placeholder="例如 acme_ops" />
+          <Form.Item name="username" label={tc('登录用户名')} rules={[{ required: true, min: 3 }]}>
+            <Input placeholder={tc('例如 acme_ops')} />
           </Form.Item>
-          <Form.Item name="password" label="初始密码" rules={[{ required: true, min: 8 }]}>
-            <Input.Password placeholder="至少 8 位" />
+          <Form.Item name="password" label={tc('初始密码')} rules={[{ required: true, min: 8 }]}>
+            <Input.Password placeholder={tc('至少 8 位')} />
           </Form.Item>
-          <Form.Item name="full_name" label="显示名称">
-            <Input placeholder="可选" />
+          <Form.Item name="full_name" label={tc('显示名称')}>
+            <Input placeholder={tc('可选')} />
           </Form.Item>
-          <Form.Item name="email" label="邮箱">
-            <Input placeholder="可选" />
+          <Form.Item name="email" label={tc('邮箱')}>
+            <Input placeholder={tc('可选')} />
           </Form.Item>
-          <Form.Item name="role" label="角色">
+          <Form.Item name="role" label={tc('角色')}>
             <Select
               options={[
                 { value: "tenant_viewer", label: "只读 — 查看专线与流量" },

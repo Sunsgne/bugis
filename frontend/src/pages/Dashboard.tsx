@@ -26,6 +26,7 @@ import {
 } from "../charts/options";
 import { empty } from "../constants/uiCopy";
 import { useBrand } from "../context/BrandContext";
+import { useTc } from "@/i18n/useTc";
 
 const WO_STATUS: Record<string, string> = {
   completed: "green", failed: "red", running: "processing",
@@ -33,6 +34,7 @@ const WO_STATUS: Record<string, string> = {
 };
 
 export default function Dashboard() {
+  const { tc } = useTc();
   const { brand } = useBrand();
   const [data, setData] = useState<DashboardData | null>(null);
   const [traffic, setTraffic] = useState<any[]>([]);
@@ -150,7 +152,7 @@ export default function Dashboard() {
 
       <Row gutter={[16, 16]}>
         <Col xs={24} lg={16}>
-          <Card className="chart-card" title="全网流量态势 · Rx/Tx 聚合 (Mbps)" style={{ height: "100%" }}>
+          <Card className="chart-card" title={tc('全网流量态势 · Rx/Tx 聚合 (Mbps)')} style={{ height: "100%" }}>
             {traffic.length ? (
               <EChart option={trafficOpt} height={300} />
             ) : (
@@ -159,7 +161,7 @@ export default function Dashboard() {
           </Card>
         </Col>
         <Col xs={24} lg={8}>
-          <Card className="chart-card" title="告警态势 · 按严重级别" style={{ height: "100%" }}>
+          <Card className="chart-card" title={tc('告警态势 · 按严重级别')} style={{ height: "100%" }}>
             {sevData.length ? (
               <EChart option={alarmOpt} height={300} />
             ) : (
@@ -174,7 +176,7 @@ export default function Dashboard() {
 
       <Row gutter={[16, 16]}>
         <Col xs={24} md={8}>
-          <Card className="chart-card" title="设备厂商 · 异构分布" style={{ height: "100%" }}>
+          <Card className="chart-card" title={tc('设备厂商 · 异构分布')} style={{ height: "100%" }}>
             {vendorData.length ? (
               <EChart option={vendorOpt} height={260} />
             ) : (
@@ -183,7 +185,7 @@ export default function Dashboard() {
           </Card>
         </Col>
         <Col xs={24} md={8}>
-          <Card className="chart-card" title="专线生命周期 · 状态分布" style={{ height: "100%" }}>
+          <Card className="chart-card" title={tc('专线生命周期 · 状态分布')} style={{ height: "100%" }}>
             {statusData.length ? (
               <EChart option={statusOpt} height={260} />
             ) : (
@@ -192,11 +194,11 @@ export default function Dashboard() {
           </Card>
         </Col>
         <Col xs={24} md={8}>
-          <Card className="chart-card" title="SDN 控制面 · Bugis Controller" style={{ height: "100%" }}
+          <Card className="chart-card" title={tc('SDN 控制面 · Bugis Controller')} style={{ height: "100%" }}
             extra={<Tag color="green">{sdn?.name ? "在线" : "—"}</Tag>}>
             <Row gutter={16}>
               <Col span={8}><Statistic title="VTEP" value={sdn?.vtep_count ?? 0} prefix={<ShareAltOutlined />} /></Col>
-              <Col span={8}><Statistic title="EVPN 路由" value={sdn?.route_count ?? 0} /></Col>
+              <Col span={8}><Statistic title={tc('EVPN 路由')} value={sdn?.route_count ?? 0} /></Col>
               <Col span={8}><Statistic title="VNI" value={sdn?.vni_count ?? 0} /></Col>
             </Row>
             <div style={{ marginTop: 16 }}>
@@ -213,9 +215,9 @@ export default function Dashboard() {
 
       <Row gutter={[16, 16]}>
         <Col xs={24} md={8}>
-          <Card className="chart-card" title="Fabric 容量 · 站点分配" style={{ height: "100%" }}>
+          <Card className="chart-card" title={tc('Fabric 容量 · 站点分配')} style={{ height: "100%" }}>
             <div style={{ marginBottom: 12 }}>
-              <span style={{ color: "#888" }}>全域分配率</span>
+              <span style={{ color: "#888" }}>{tc('全域分配率')}</span>
               <Progress percent={totalCap ? Math.round((usedCap / totalCap) * 1000) / 10 : 0}
                 strokeColor={utilColor(totalCap ? (usedCap / totalCap) * 100 : 0)} />
             </div>
@@ -232,7 +234,7 @@ export default function Dashboard() {
           </Card>
         </Col>
         <Col xs={24} md={8}>
-          <Card className="chart-card" title="链路负载 · DCI / Fabric" style={{ height: "100%" }}>
+          <Card className="chart-card" title={tc('链路负载 · DCI / Fabric')} style={{ height: "100%" }}>
             {links.map((l) => (
               <div key={l.link_id} style={{ marginBottom: 10 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
@@ -246,7 +248,7 @@ export default function Dashboard() {
           </Card>
         </Col>
         <Col xs={24} md={8}>
-          <Card className="chart-card" title="操作日志 · 最近动态" style={{ height: "100%" }}>
+          <Card className="chart-card" title={tc('操作日志 · 最近动态')} style={{ height: "100%" }}>
             <Table
               size="small"
               rowKey="id"

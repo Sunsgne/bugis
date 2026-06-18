@@ -6,6 +6,7 @@ import dayjs from "dayjs";
 import { api } from "../api/client";
 import { configPreviewModalProps, ConfigPreviewPre } from "../utils/configPreview";
 import { usePlatformSettings } from "../hooks/usePlatformSettings";
+import { useTc } from "@/i18n/useTc";
 
 const VENDOR_COLOR: Record<string, string> = {
   h3c: "blue", huawei: "red", juniper: "green", arista: "orange", cisco: "purple", frr: "cyan",
@@ -62,6 +63,7 @@ function ColoredDiff({ text }: { text: string }) {
 }
 
 export default function ConfigManagement() {
+  const { tc } = useTc();
   const { message, modal } = AntApp.useApp();
   const { platform } = usePlatformSettings();
   const [devices, setDevices] = useState<ConfigDeviceRow[]>([]);
@@ -139,7 +141,7 @@ export default function ConfigManagement() {
     try {
       await api.post(`/devices/${sel}/learn`);
       hide();
-      message.success("现网配置学习完成");
+      message.success(tc('现网配置学习完成'));
       select(sel);
       loadDevices();
     } catch (e: any) {
@@ -176,23 +178,17 @@ export default function ConfigManagement() {
             : "定时自动拉取已关闭"
         }
         description={
-          <>
-            可在
-            <Link to="/settings/config-learn"> 平台设置 → 配置管理 </Link>
-            调整自动拉取、变更保护与快照策略。
-          </>
+          <>{tc('可在')}<Link to="/settings/config-learn">{tc('平台设置 → 配置管理')}</Link>{tc('调整自动拉取、变更保护与快照策略。')}</>
         }
         action={
           <Link to="/settings/config-learn">
-            <Button size="small" icon={<SettingOutlined />}>
-              去设置
-            </Button>
+            <Button size="small" icon={<SettingOutlined />}>{tc('去设置')}</Button>
           </Link>
         }
       />
       <Card
         className="config-panel-card config-management-devices"
-        title="设备配置"
+        title={tc('设备配置')}
         extra={<Button size="small" icon={<ReloadOutlined />} onClick={loadDevices} />}
       >
         <Table<ConfigDeviceRow>
@@ -208,7 +204,7 @@ export default function ConfigManagement() {
           rowClassName={(r) => (r.device_id === sel ? "ant-table-row-selected" : "")}
           columns={[
             {
-              title: "设备",
+              title: tc('设备'),
               dataIndex: "name",
               width: 148,
               ellipsis: { showTitle: false },
@@ -219,7 +215,7 @@ export default function ConfigManagement() {
               ),
             },
             {
-              title: "厂商",
+              title: tc('厂商'),
               dataIndex: "vendor",
               width: 72,
               align: "center",
@@ -230,14 +226,14 @@ export default function ConfigManagement() {
               ),
             },
             {
-              title: "版本",
+              title: tc('版本'),
               dataIndex: "latest_version",
               width: 56,
               align: "center",
               render: (v?: number) => (v ? `v${v}` : "—"),
             },
             {
-              title: "现网学习",
+              title: tc('现网学习'),
               dataIndex: "learned_version",
               render: (v?: number, r?: ConfigDeviceRow) =>
                 v ? (
@@ -245,7 +241,7 @@ export default function ConfigManagement() {
                     v{v} · {r?.service_count ?? 0} 业务
                   </Tag>
                 ) : (
-                  <Tag className="config-inline-tag">未学习</Tag>
+                  <Tag className="config-inline-tag">{tc('未学习')}</Tag>
                 ),
             },
           ]}
@@ -254,56 +250,50 @@ export default function ConfigManagement() {
 
       <Card
         className="config-panel-card config-management-detail"
-        title="配置管理"
+        title={tc('配置管理')}
         extra={
           <Button.Group>
-            <Button icon={<BookOutlined />} onClick={runLearn} disabled={!sel}>
-              现网学习
-            </Button>
-            <Button type="primary" icon={<CloudUploadOutlined />} onClick={backup} disabled={!sel}>
-              备份现网配置
-            </Button>
+            <Button icon={<BookOutlined />} onClick={runLearn} disabled={!sel}>{tc('现网学习')}</Button>
+            <Button type="primary" icon={<CloudUploadOutlined />} onClick={backup} disabled={!sel}>{tc('备份现网配置')}</Button>
           </Button.Group>
         }
       >
         {!sel ? (
-          <Empty description="选择左侧设备" />
+          <Empty description={tc('选择左侧设备')} />
         ) : (
           <Tabs
             className="config-tabs"
             items={[
               {
                 key: "running",
-                label: "平台期望配置 (Desired)",
+                label: tc('平台期望配置 (Desired)'),
                 children: (
                   <>
-                    <Typography.Text type="secondary" style={{ display: "block", marginBottom: 8, fontSize: 12 }}>
-                      由平台纳管专线拼装的目标配置；与设备现网配置可能不同。备份请使用右上角「备份现网配置」。
-                    </Typography.Text>
+                    <Typography.Text type="secondary" style={{ display: "block", marginBottom: 8, fontSize: 12 }}>{tc('由平台纳管专线拼装的目标配置；与设备现网配置可能不同。备份请使用右上角「备份现网配置」。')}</Typography.Text>
                     <pre className="config-pre config-pre-fill">{running}</pre>
                   </>
                 ),
               },
               {
                 key: "learned",
-                label: "现网学习",
+                label: tc('现网学习'),
                 children: learned?.has_learned_config ? (
                   <>
                     <Descriptions size="small" bordered column={2} style={{ marginBottom: 12 }}>
-                      <Descriptions.Item label="学习版本">v{learned.latest_snapshot_version}</Descriptions.Item>
-                      <Descriptions.Item label="学习时间">
+                      <Descriptions.Item label={tc('学习版本')}>v{learned.latest_snapshot_version}</Descriptions.Item>
+                      <Descriptions.Item label={tc('学习时间')}>
                         {learned.latest_snapshot_at ? dayjs(learned.latest_snapshot_at).format("YYYY-MM-DD HH:mm:ss") : "-"}
                       </Descriptions.Item>
-                      <Descriptions.Item label="业务数">
+                      <Descriptions.Item label={tc('业务数')}>
                         {learned.inventory?.service_count ?? 0}
                       </Descriptions.Item>
-                      <Descriptions.Item label="接入绑定">
+                      <Descriptions.Item label={tc('接入绑定')}>
                         {learned.inventory?.binding_count ?? learned.inventory?.access_bindings?.length ?? 0}
                       </Descriptions.Item>
-                      <Descriptions.Item label="VLAN 数">
+                      <Descriptions.Item label={tc('VLAN 数')}>
                         {learned.inventory?.vlan_ids?.length ?? 0}
                       </Descriptions.Item>
-                      <Descriptions.Item label="漂移行数">{learned.drift_line_count ?? 0}</Descriptions.Item>
+                      <Descriptions.Item label={tc('漂移行数')}>{learned.drift_line_count ?? 0}</Descriptions.Item>
                     </Descriptions>
                     {learned.inventory?.l2_services?.length > 0 && (
                       <Table
@@ -321,7 +311,7 @@ export default function ConfigManagement() {
                           { title: "RD", dataIndex: "rd", width: 140, ellipsis: true },
                           { title: "RT", dataIndex: "rt", width: 140, ellipsis: true },
                           {
-                            title: "接口",
+                            title: tc('接口'),
                             dataIndex: "interfaces",
                             width: 180,
                             ellipsis: true,
@@ -375,16 +365,12 @@ export default function ConfigManagement() {
                         ]}
                       />
                     )}
-                    <Button size="small" icon={<DiffOutlined />} onClick={loadDrift}>
-                      平台 vs 现网 配置漂移
-                    </Button>
+                    <Button size="small" icon={<DiffOutlined />} onClick={loadDrift}>{tc('平台 vs 现网 配置漂移')}</Button>
                     {drift && <ColoredDiff text={drift} />}
                   </>
                 ) : (
-                  <Empty description="尚未执行现网学习">
-                    <Button type="primary" icon={<BookOutlined />} onClick={runLearn}>
-                      立即学习
-                    </Button>
+                  <Empty description={tc('尚未执行现网学习')}>
+                    <Button type="primary" icon={<BookOutlined />} onClick={runLearn}>{tc('立即学习')}</Button>
                   </Empty>
                 ),
               },
@@ -393,9 +379,7 @@ export default function ConfigManagement() {
                 label: `版本历史 (${snaps.length})`,
                 children: (
                   <>
-                    <Button size="small" icon={<DiffOutlined />} onClick={loadDiff} style={{ marginBottom: 8 }}>
-                      对比最近两版
-                    </Button>
+                    <Button size="small" icon={<DiffOutlined />} onClick={loadDiff} style={{ marginBottom: 8 }}>{tc('对比最近两版')}</Button>
                     {diff && <ColoredDiff text={diff} />}
                     <Table
                       size="small"
@@ -410,11 +394,11 @@ export default function ConfigManagement() {
                         showTotal: (total) => `共 ${total} 个版本`,
                       }}
                       dataSource={snaps}
-                      locale={{ emptyText: <Empty description="暂无快照，点击「备份现网配置」" /> }}
+                      locale={{ emptyText: <Empty description={tc('暂无快照，点击「备份现网配置」')} /> }}
                       columns={[
                         { title: "版本", dataIndex: "version", width: 72, render: (v) => `v${v}` },
                         {
-                          title: "来源",
+                          title: tc('来源'),
                           dataIndex: "source",
                           width: 96,
                           render: (s: string) => (
@@ -428,14 +412,14 @@ export default function ConfigManagement() {
                         },
                         { title: "行数", dataIndex: "lines", width: 72, align: "right" },
                         {
-                          title: "操作人",
+                          title: tc('操作人'),
                           dataIndex: "created_by",
                           width: 88,
                           ellipsis: true,
                           render: (v?: string) => v || "—",
                         },
                         {
-                          title: "备注",
+                          title: tc('备注'),
                           dataIndex: "note",
                           ellipsis: true,
                           render: (v?: string) => (
@@ -445,7 +429,7 @@ export default function ConfigManagement() {
                           ),
                         },
                         {
-                          title: "时间",
+                          title: tc('时间'),
                           dataIndex: "created_at",
                           width: 112,
                           render: (t) => (t ? dayjs(t).format("MM-DD HH:mm") : "—"),
@@ -454,7 +438,7 @@ export default function ConfigManagement() {
                           title: "",
                           width: 56,
                           fixed: "right",
-                          render: (_, r) => <a onClick={() => viewSnap(r.id)}>查看</a>,
+                          render: (_, r) => <a onClick={() => viewSnap(r.id)}>{tc('查看')}</a>,
                         },
                       ]}
                     />

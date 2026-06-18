@@ -28,6 +28,7 @@ import {
 import EChart from "./EChart";
 import { latencyJitterOption, trafficWithP95Option } from "../charts/options";
 import { empty } from "../constants/uiCopy";
+import { useTc } from "@/i18n/useTc";
 
 const { Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -45,6 +46,7 @@ export default function PortalCircuitMonitorPanel({
   pollSec = 30,
   latencyProbeEnabled = true,
 }: Props) {
+  const { tc } = useTc();
   const [rangeMode, setRangeMode] = useState<RangeMode>("preset");
   const [hours, setHours] = useState(compact ? 6 : 24);
   const [customRange, setCustomRange] = useState<[Dayjs, Dayjs] | null>(null);
@@ -138,7 +140,7 @@ export default function PortalCircuitMonitorPanel({
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <Space wrap style={{ justifyContent: "space-between", width: "100%" }}>
         <Space wrap>
-          <Text type="secondary">时间范围</Text>
+          <Text type="secondary">{tc('时间范围')}</Text>
           <Select
             size="small"
             value={rangeMode}
@@ -161,15 +163,12 @@ export default function PortalCircuitMonitorPanel({
                 onChange={(vals) => setCustomRange(vals as [Dayjs, Dayjs] | null)}
                 disabledDate={(current) => !!current && current > dayjs().endOf("day")}
               />
-              <Button size="small" type="primary" loading={loading} onClick={loadMetrics}>
-                查询
-              </Button>
+              <Button size="small" type="primary" loading={loading} onClick={loadMetrics}>{tc('查询')}</Button>
             </>
           )}
         </Space>
         {billing?.billable_95_mbps != null && (
-          <Text type="secondary">
-            95 计费带宽 <Text strong>{billing.billable_95_mbps} Mbps</Text>
+          <Text type="secondary">{tc('95 计费带宽')}<Text strong>{billing.billable_95_mbps} Mbps</Text>
             <span style={{ marginLeft: 8, fontSize: 12 }}>({billing.period || windowLabel})</span>
           </Text>
         )}
@@ -181,7 +180,7 @@ export default function PortalCircuitMonitorPanel({
 
       {rangeMode === "preset" && billing?.available_months?.length ? (
         <Space wrap>
-          <Text type="secondary">月95 账期</Text>
+          <Text type="secondary">{tc('月95 账期')}</Text>
           <Select
             size="small"
             style={{ width: 120 }}
@@ -189,27 +188,25 @@ export default function PortalCircuitMonitorPanel({
             options={billing.available_months.map((m) => ({ value: m, label: m }))}
             onChange={setBillingMonth}
           />
-          <Button size="small" onClick={loadBilling}>
-            重算
-          </Button>
+          <Button size="small" onClick={loadBilling}>{tc('重算')}</Button>
         </Space>
       ) : null}
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12 }}>
         <Card size="small">
-          <Statistic title="健康指数" value={health?.health_score ?? 0} suffix="/ 100" />
+          <Statistic title={tc('健康指数')} value={health?.health_score ?? 0} suffix="/ 100" />
         </Card>
         {latencyProbeEnabled && (
           <Card size="small">
-            <Statistic title="平均时延" value={health?.avg_latency_ms ?? 0} suffix="ms" />
+            <Statistic title={tc('平均时延')} value={health?.avg_latency_ms ?? 0} suffix="ms" />
           </Card>
         )}
         <Card size="small">
-          <Statistic title="可用率" value={availability?.uptime_pct ?? 100} suffix="%" />
+          <Statistic title={tc('可用率')} value={availability?.uptime_pct ?? 100} suffix="%" />
         </Card>
         <Card size="small">
           <Statistic
-            title="窗口 95 计费"
+            title={tc('窗口 95 计费')}
             value={traffic?.p95?.billable_95_mbps ?? 0}
             suffix="Mbps"
             valueStyle={{ color: "#ff6600" }}
@@ -236,7 +233,7 @@ export default function PortalCircuitMonitorPanel({
       )}
 
       {availability && availability.events.length > 0 && (
-        <Card size="small" title="中断 / 闪断事件">
+        <Card size="small" title={tc('中断 / 闪断事件')}>
           <Table
             size="small"
             rowKey="id"
@@ -244,7 +241,7 @@ export default function PortalCircuitMonitorPanel({
             dataSource={availability.events}
             columns={[
               {
-                title: "类型",
+                title: tc('类型'),
                 dataIndex: "kind",
                 render: (k: string) => (
                   <Tag color={k === "interruption" ? "red" : "orange"}>
@@ -253,12 +250,12 @@ export default function PortalCircuitMonitorPanel({
                 ),
               },
               {
-                title: "开始",
+                title: tc('开始'),
                 dataIndex: "started_at",
                 render: (v: string) => dayjs(v).format("MM-DD HH:mm:ss"),
               },
               {
-                title: "时长",
+                title: tc('时长'),
                 dataIndex: "duration_sec",
                 render: (v?: number) => (v != null ? `${v}s` : "-"),
               },

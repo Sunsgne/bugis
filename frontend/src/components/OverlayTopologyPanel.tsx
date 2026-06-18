@@ -15,6 +15,7 @@ import {
 } from "antd";
 import { ClearOutlined, SearchOutlined } from "@ant-design/icons";
 import TopologyGraph from "./TopologyGraph";
+import { useTc } from "@/i18n/useTc";
 import {
   buildVniMemberIndex,
   overlayTopologyOption,
@@ -37,6 +38,7 @@ type Props = {
 };
 
 export default function OverlayTopologyPanel({ topo, overlayInventory }: Props) {
+  const { tc } = useTc();
   const [selectedVni, setSelectedVni] = useState<number | undefined>(undefined);
   const [selectedDeviceId, setSelectedDeviceId] = useState<number | undefined>(undefined);
   const [search, setSearch] = useState("");
@@ -108,7 +110,7 @@ export default function OverlayTopologyPanel({ topo, overlayInventory }: Props) 
   }
 
   if (!topo?.nodes?.length || !chartOpt) {
-    return <Empty description="Overlay 尚未建立 · 开通控制器托管专线后自动呈现" />;
+    return <Empty description={tc('Overlay 尚未建立 · 开通控制器托管专线后自动呈现')} />;
   }
 
   const tunnelCount =
@@ -139,9 +141,7 @@ export default function OverlayTopologyPanel({ topo, overlayInventory }: Props) 
                   : ` · ${topo.nodes.length} 台设备 · ${scopedVnis.length} 个 VNI · 选择 VNI 查看隧道`}
             </Text>
             {hasActiveFilter && (
-              <Button size="small" icon={<ClearOutlined />} onClick={clearFilters}>
-                清除筛选
-              </Button>
+              <Button size="small" icon={<ClearOutlined />} onClick={clearFilters}>{tc('清除筛选')}</Button>
             )}
           </Space>
           <TopologyGraph option={chartOpt} height={520} />
@@ -151,11 +151,11 @@ export default function OverlayTopologyPanel({ topo, overlayInventory }: Props) 
           <div className="overlay-vni-sidebar">
             <Space direction="vertical" size={12} style={{ width: "100%" }}>
               <div>
-                <Text strong>检索</Text>
+                <Text strong>{tc('检索')}</Text>
                 <Select
                   showSearch
                   allowClear
-                  placeholder="按设备反查 VNI"
+                  placeholder={tc('按设备反查 VNI')}
                   style={{ width: "100%", marginTop: 8 }}
                   value={selectedDeviceId}
                   onChange={(v) => selectDevice(v ?? undefined)}
@@ -165,7 +165,7 @@ export default function OverlayTopologyPanel({ topo, overlayInventory }: Props) 
                 <Select
                   showSearch
                   allowClear
-                  placeholder="输入或选择 VNI"
+                  placeholder={tc('输入或选择 VNI')}
                   style={{ width: "100%", marginTop: 8 }}
                   value={selectedVni}
                   onChange={(v) => {
@@ -181,7 +181,7 @@ export default function OverlayTopologyPanel({ topo, overlayInventory }: Props) 
                 <Input
                   allowClear
                   prefix={<SearchOutlined />}
-                  placeholder="按号码筛选 VNI 列表"
+                  placeholder={tc('按号码筛选 VNI 列表')}
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   style={{ marginTop: 8 }}
@@ -203,11 +203,11 @@ export default function OverlayTopologyPanel({ topo, overlayInventory }: Props) 
                   <Statistic title="VNI" value={scopedVnis.length} valueStyle={{ fontSize: 18 }} />
                 </Col>
                 <Col span={8}>
-                  <Statistic title="设备" value={topo.nodes.length} valueStyle={{ fontSize: 18 }} />
+                  <Statistic title={tc('设备')} value={topo.nodes.length} valueStyle={{ fontSize: 18 }} />
                 </Col>
                 <Col span={8}>
                   <Statistic
-                    title="隧道"
+                    title={tc('隧道')}
                     value={selectedVni != null ? tunnelCount : "—"}
                     valueStyle={{ fontSize: 18 }}
                   />
@@ -218,7 +218,7 @@ export default function OverlayTopologyPanel({ topo, overlayInventory }: Props) 
                 <div>
                   <Space wrap style={{ marginBottom: 4 }}>
                     <Text strong>VNI {selectedRow.vni}</Text>
-                    {selectedRow.platformManaged && <Tag color="blue">平台纳管</Tag>}
+                    {selectedRow.platformManaged && <Tag color="blue">{tc('平台纳管')}</Tag>}
                   </Space>
                   <Text type="secondary" style={{ fontSize: 12, display: "block" }}>
                     关联设备 ({selectedRow.deviceCount})
@@ -233,7 +233,7 @@ export default function OverlayTopologyPanel({ topo, overlayInventory }: Props) 
                     scroll={{ y: 140 }}
                     columns={[
                       {
-                        title: "设备",
+                        title: tc('设备'),
                         dataIndex: "name",
                         ellipsis: true,
                         render: (name: string, row: { id: number }) => (
@@ -254,7 +254,7 @@ export default function OverlayTopologyPanel({ topo, overlayInventory }: Props) 
                         ellipsis: true,
                       },
                       {
-                        title: "状态",
+                        title: tc('状态'),
                         dataIndex: "status",
                         width: 56,
                         render: (s: string) => (
@@ -264,9 +264,7 @@ export default function OverlayTopologyPanel({ topo, overlayInventory }: Props) 
                     ]}
                   />
                   {selectedRow.deviceCount < 2 && (
-                    <Text type="secondary" style={{ fontSize: 12 }}>
-                      单点 VNI，无设备间隧道。
-                    </Text>
+                    <Text type="secondary" style={{ fontSize: 12 }}>{tc('单点 VNI，无设备间隧道。')}</Text>
                   )}
                 </div>
               ) : selectedDevice ? (
@@ -295,18 +293,18 @@ export default function OverlayTopologyPanel({ topo, overlayInventory }: Props) 
                         render: (v: number, row: VniMemberSummary) => (
                           <Space size={4}>
                             <Text strong>{v}</Text>
-                            {row.platformManaged && <Tag color="blue" style={{ margin: 0 }}>平台</Tag>}
+                            {row.platformManaged && <Tag color="blue" style={{ margin: 0 }}>{tc('平台')}</Tag>}
                           </Space>
                         ),
                       },
                       {
-                        title: "设备数",
+                        title: tc('设备数'),
                         dataIndex: "deviceCount",
                         width: 64,
                         align: "right",
                       },
                       {
-                        title: "对端",
+                        title: tc('对端'),
                         dataIndex: "devices",
                         ellipsis: true,
                         render: (devices: { name: string; id: number }[]) => {
@@ -328,7 +326,7 @@ export default function OverlayTopologyPanel({ topo, overlayInventory }: Props) 
                 </div>
               ) : (
                 <div>
-                  <Text strong>VNI 列表</Text>
+                  <Text strong>{tc('VNI 列表')}</Text>
                   <Table
                     className="overlay-vni-list-table"
                     size="small"
@@ -357,19 +355,19 @@ export default function OverlayTopologyPanel({ topo, overlayInventory }: Props) 
                         render: (v: number, row: VniMemberSummary) => (
                           <Space size={4}>
                             <Text strong>{v}</Text>
-                            {row.platformManaged && <Tag color="blue" style={{ margin: 0 }}>平台</Tag>}
+                            {row.platformManaged && <Tag color="blue" style={{ margin: 0 }}>{tc('平台')}</Tag>}
                           </Space>
                         ),
                       },
                       {
-                        title: "设备数",
+                        title: tc('设备数'),
                         dataIndex: "deviceCount",
                         width: 64,
                         align: "right",
                         sorter: (a: VniMemberSummary, b: VniMemberSummary) => a.deviceCount - b.deviceCount,
                       },
                       {
-                        title: "设备",
+                        title: tc('设备'),
                         dataIndex: "devices",
                         ellipsis: true,
                         render: (devices: { name: string }[]) => {

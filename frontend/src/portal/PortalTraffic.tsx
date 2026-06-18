@@ -4,6 +4,7 @@ import { Alert, Empty, Select, Spin } from "antd";
 import { api } from "../api/client";
 import PortalCircuitMonitorPanel from "../components/PortalCircuitMonitorPanel";
 import PageCard from "../components/PageCard";
+import { useTc } from "@/i18n/useTc";
 
 interface Row {
   id: number;
@@ -17,6 +18,7 @@ interface Row {
 const MONITORABLE = new Set(["active", "degraded", "provisioning"]);
 
 export default function PortalTraffic() {
+  const { tc } = useTc();
   const [params, setParams] = useSearchParams();
   const [circuits, setCircuits] = useState<Row[]>([]);
   const [selected, setSelected] = useState<number | null>(null);
@@ -53,13 +55,13 @@ export default function PortalTraffic() {
   const current = circuits.find((c) => c.id === selected);
 
   return (
-    <PageCard title="流量洞察" description="5 分钟粒度采样 · 95 计费 · 历史数据永久保留">
+    <PageCard title={tc('流量洞察')} description={tc('5 分钟粒度采样 · 95 计费 · 历史数据永久保留')}>
       {circuits.length === 0 ? (
-        <Empty description="暂无可监控的运行中专线" />
+        <Empty description={tc('暂无可监控的运行中专线')} />
       ) : (
         <>
           <div style={{ marginBottom: 16 }}>
-            <span style={{ marginRight: 8, color: "#666" }}>选择专线</span>
+            <span style={{ marginRight: 8, color: "#666" }}>{tc('选择专线')}</span>
             <Select
               style={{ minWidth: 320 }}
               value={selected ?? undefined}
@@ -74,7 +76,7 @@ export default function PortalTraffic() {
             type="info"
             showIcon
             message="95 计费说明"
-            description="系统按采样点聚合流量，取所选时间窗口内第 95 百分位作为计费带宽（入向/出向取较大值）。切换快捷时间范围会自动刷新图表；自选时间需点击「查询」。"
+            description={tc('系统按采样点聚合流量，取所选时间窗口内第 95 百分位作为计费带宽（入向/出向取较大值）。切换快捷时间范围会自动刷新图表；自选时间需点击「查询」。')}
             style={{ marginBottom: 16 }}
           />
           {selected ? (

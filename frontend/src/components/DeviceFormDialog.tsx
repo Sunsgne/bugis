@@ -24,6 +24,7 @@ import {
 } from "@/constants/formOptions";
 import type { Device, ManagementDefaults, Site, SnmpDefaults } from "@/api/types";
 import { formModalProps } from "@/utils/formModal";
+import { useTc } from "@/i18n/useTc";
 
 export type DeviceFormValues = {
   name: string;
@@ -145,6 +146,7 @@ export default function DeviceFormDialog({
   snmpDefaults,
   onSubmit,
 }: Props) {
+  const { tc } = useTc();
   const isEdit = mode === "edit";
   const [form] = Form.useForm<DeviceFormValues>();
   const [submitting, setSubmitting] = useState(false);
@@ -182,7 +184,7 @@ export default function DeviceFormDialog({
       onCancel={() => onOpenChange(false)}
       confirmLoading={submitting}
       okText={isEdit ? "保存" : "创建"}
-      cancelText="取消"
+      cancelText={tc('取消')}
       {...formModalProps}
       width={760}
     >
@@ -198,7 +200,7 @@ export default function DeviceFormDialog({
             type="warning"
             showIcon
             message="敏感字段不会回显"
-            description="登录密码、Enable 密码与 SNMP 密钥留空则不修改。厂商纳管后不可变更。"
+            description={tc('登录密码、Enable 密码与 SNMP 密钥留空则不修改。厂商纳管后不可变更。')}
             style={{ marginBottom: 16 }}
           />
         ) : (
@@ -208,34 +210,33 @@ export default function DeviceFormDialog({
             message="远程登录凭证说明"
             description={
               <>
-                <strong>配置下发 / 初始化</strong> 使用 NETCONF 或 SSH CLI。
-                <strong> SNMP 发现</strong> 独立配置 Community / v3。全局默认见{" "}
-                <Link to="/settings/management">南向接口</Link> 与 <Link to="/settings/snmp">SNMP 采集</Link>。
+                <strong>{tc('配置下发 / 初始化')}</strong>{tc('使用 NETCONF 或 SSH CLI。')}<strong>{tc('SNMP 发现')}</strong> 独立配置 Community / v3。全局默认见{" "}
+                <Link to="/settings/management">{tc('南向接口')}</Link>{tc('与')}<Link to="/settings/snmp">{tc('SNMP 采集')}</Link>。
               </>
             }
             style={{ marginBottom: 16 }}
           />
         )}
 
-        <Typography.Text strong>基础信息</Typography.Text>
+        <Typography.Text strong>{tc('基础信息')}</Typography.Text>
         <Row gutter={16} style={{ marginTop: 12 }}>
           <Col xs={24} sm={12}>
-            <Form.Item name="name" label="名称" rules={[{ required: true, message: "请输入设备名称" }]}>
+            <Form.Item name="name" label={tc('名称')} rules={[{ required: true, message: "请输入设备名称" }]}>
               <Input placeholder="BJ-LEAF-01" />
             </Form.Item>
           </Col>
           <Col xs={24} sm={12}>
-            <Form.Item name="vendor" label="厂商" extra={isEdit ? "纳管后不可修改" : undefined}>
+            <Form.Item name="vendor" label={tc('厂商')} extra={isEdit ? "纳管后不可修改" : undefined}>
               <Select options={VENDOR_OPTIONS} disabled={isEdit} />
             </Form.Item>
           </Col>
           <Col xs={24} sm={12}>
-            <Form.Item name="model" label="型号">
+            <Form.Item name="model" label={tc('型号')}>
               <Input placeholder="S6850 / CE12800 / MX204 …" />
             </Form.Item>
           </Col>
           <Col xs={24} sm={12}>
-            <Form.Item name="role" label="角色">
+            <Form.Item name="role" label={tc('角色')}>
               <Select options={DEVICE_ROLE_OPTIONS} />
             </Form.Item>
           </Col>
@@ -245,28 +246,26 @@ export default function DeviceFormDialog({
             </Form.Item>
           </Col>
           <Col xs={24}>
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              主/备管理 IP 互为主备：主地址不可达时自动切换至备地址进行 SSH/SNMP/拨测。
-            </Typography.Text>
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>{tc('主/备管理 IP 互为主备：主地址不可达时自动切换至备地址进行 SSH/SNMP/拨测。')}</Typography.Text>
           </Col>
           <Col xs={24} sm={8}>
-            <Form.Item name="mgmt_ip_primary_label" label="主 IP 类型">
-              <Input placeholder="管理网" />
+            <Form.Item name="mgmt_ip_primary_label" label={tc('主 IP 类型')}>
+              <Input placeholder={tc('管理网')} />
             </Form.Item>
           </Col>
           <Col xs={24} sm={16}>
-            <Form.Item name="mgmt_ip" label="主管理 IP" rules={[{ required: true, message: "请输入主管理 IP" }]}>
-              <Input placeholder="10.1.0.11 或内网地址" />
+            <Form.Item name="mgmt_ip" label={tc('主管理 IP')} rules={[{ required: true, message: "请输入主管理 IP" }]}>
+              <Input placeholder={tc('10.1.0.11 或内网地址')} />
             </Form.Item>
           </Col>
           <Col xs={24} sm={8}>
-            <Form.Item name="mgmt_ip_backup_label" label="备 IP 类型">
-              <Input placeholder="公网" />
+            <Form.Item name="mgmt_ip_backup_label" label={tc('备 IP 类型')}>
+              <Input placeholder={tc('公网')} />
             </Form.Item>
           </Col>
           <Col xs={24} sm={16}>
-            <Form.Item name="mgmt_ip_backup" label="备管理 IP">
-              <Input placeholder="公网 IP（可选）" />
+            <Form.Item name="mgmt_ip_backup" label={tc('备管理 IP')}>
+              <Input placeholder={tc('公网 IP（可选）')} />
             </Form.Item>
           </Col>
           <Col xs={24} sm={12}>
@@ -280,10 +279,10 @@ export default function DeviceFormDialog({
             </Form.Item>
           </Col>
           <Col xs={24} sm={12}>
-            <Form.Item name="site_id" label="数据中心">
+            <Form.Item name="site_id" label={tc('数据中心')}>
               <Select
                 allowClear
-                placeholder="选择站点"
+                placeholder={tc('选择站点')}
                 options={sites.map((s) => ({ value: s.id, label: `${s.code} · ${s.name}` }))}
               />
             </Form.Item>
@@ -294,7 +293,7 @@ export default function DeviceFormDialog({
             </Form.Item>
           </Col>
           <Col xs={24} sm={12}>
-            <Form.Item name="is_route_reflector" label="路由反射器" valuePropName="checked">
+            <Form.Item name="is_route_reflector" label={tc('路由反射器')} valuePropName="checked">
               <Switch />
             </Form.Item>
           </Col>
@@ -302,7 +301,7 @@ export default function DeviceFormDialog({
 
         <Divider style={{ margin: "16px 0" }} />
 
-        <Typography.Text strong>南向登录凭证</Typography.Text>
+        <Typography.Text strong>{tc('南向登录凭证')}</Typography.Text>
         {vendor && VENDOR_AUTH_HINT[vendor] ? (
           <Typography.Paragraph type="secondary" style={{ marginBottom: 12, marginTop: 4 }}>
             {VENDOR_AUTH_HINT[vendor]}
@@ -310,17 +309,17 @@ export default function DeviceFormDialog({
         ) : null}
         <Row gutter={16}>
           <Col xs={24} sm={12}>
-            <Form.Item name="management_transport" label="配置下发传输">
+            <Form.Item name="management_transport" label={tc('配置下发传输')}>
               <Select options={MANAGEMENT_TRANSPORT_OPTIONS} />
             </Form.Item>
           </Col>
           <Col xs={24} sm={12}>
-            <Form.Item name="username" label="用户名">
+            <Form.Item name="username" label={tc('用户名')}>
               <Input placeholder="admin / netconf" />
             </Form.Item>
           </Col>
           <Col xs={24} sm={12}>
-            <Form.Item name="password" label="登录密码">
+            <Form.Item name="password" label={tc('登录密码')}>
               <Input.Password
                 autoComplete="new-password"
                 placeholder={isEdit ? (device?.password_set ? "已配置 · 留空不修改" : "NETCONF / SSH") : "NETCONF / SSH"}
@@ -328,7 +327,7 @@ export default function DeviceFormDialog({
             </Form.Item>
           </Col>
           <Col xs={24} sm={12}>
-            <Form.Item name="enable_password" label="Enable 密码">
+            <Form.Item name="enable_password" label={tc('Enable 密码')}>
               <Input.Password
                 autoComplete="new-password"
                 placeholder={isEdit ? (device?.enable_password_set ? "已配置 · 留空不修改" : "可选") : "可选"}
@@ -338,7 +337,7 @@ export default function DeviceFormDialog({
           <Col xs={24} sm={12}>
             <Form.Item
               name="netconf_port"
-              label="NETCONF 端口"
+              label={tc('NETCONF 端口')}
               rules={[{ required: true, type: "number", min: 1, max: 65535 }]}
             >
               <InputNumber min={1} max={65535} style={{ width: "100%" }} />
@@ -347,15 +346,15 @@ export default function DeviceFormDialog({
           <Col xs={24} sm={12}>
             <Form.Item
               name="ssh_port"
-              label="SSH 端口"
+              label={tc('SSH 端口')}
               rules={[{ required: true, type: "number", min: 1, max: 65535 }]}
             >
               <InputNumber min={1} max={65535} style={{ width: "100%" }} />
             </Form.Item>
           </Col>
           <Col span={24}>
-            <Form.Item name="netmiko_device_type" label="Netmiko 设备类型" extra="留空则按厂商自动选择，如 hp_comware、cisco_xr">
-              <Input placeholder="留空则按厂商自动选择" />
+            <Form.Item name="netmiko_device_type" label={tc('Netmiko 设备类型')} extra="留空则按厂商自动选择，如 hp_comware、cisco_xr">
+              <Input placeholder={tc('留空则按厂商自动选择')} />
             </Form.Item>
           </Col>
         </Row>
@@ -364,9 +363,8 @@ export default function DeviceFormDialog({
 
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
           <div>
-            <Typography.Text strong>SNMP 采集</Typography.Text>
-            <Typography.Paragraph type="secondary" style={{ marginBottom: 0, marginTop: 4 }}>
-              默认 Community <Typography.Text code>{snmpDefaults.community}</Typography.Text> · UDP {snmpDefaults.port}
+            <Typography.Text strong>{tc('SNMP 采集')}</Typography.Text>
+            <Typography.Paragraph type="secondary" style={{ marginBottom: 0, marginTop: 4 }}>{tc('默认 Community')}<Typography.Text code>{snmpDefaults.community}</Typography.Text> · UDP {snmpDefaults.port}
             </Typography.Paragraph>
           </div>
           <Form.Item name="snmp_enabled" valuePropName="checked" style={{ marginBottom: 0 }}>
@@ -381,7 +379,7 @@ export default function DeviceFormDialog({
             items={[
               {
                 key: "snmp-adv",
-                label: "高级参数（留空则使用平台默认）",
+                label: tc('高级参数（留空则使用平台默认）'),
                 children: (
                   <Row gutter={16}>
                     <Col xs={24} sm={12}>
@@ -398,7 +396,7 @@ export default function DeviceFormDialog({
                     <Col xs={24} sm={12}>
                       <Form.Item
                         name="snmp_port"
-                        label="UDP 端口"
+                        label={tc('UDP 端口')}
                         extra={vendor === "huawei" ? "华为 CE 常见 16161（非标准 161）" : undefined}
                         rules={[{ type: "number", min: 1, max: 65535 }]}
                       >
@@ -406,24 +404,24 @@ export default function DeviceFormDialog({
                       </Form.Item>
                     </Col>
                     <Col xs={24} sm={12}>
-                      <Form.Item name="snmp_version" label="版本">
+                      <Form.Item name="snmp_version" label={tc('版本')}>
                         <Select options={SNMP_VERSION_OPTIONS} />
                       </Form.Item>
                     </Col>
                     {snmpVersion === "3" ? (
                       <>
                         <Col xs={24} sm={12}>
-                          <Form.Item name="snmp_v3_username" label="SNMPv3 用户名">
+                          <Form.Item name="snmp_v3_username" label={tc('SNMPv3 用户名')}>
                             <Input />
                           </Form.Item>
                         </Col>
                         <Col xs={24} sm={12}>
-                          <Form.Item name="snmp_v3_security_level" label="安全级别">
+                          <Form.Item name="snmp_v3_security_level" label={tc('安全级别')}>
                             <Select options={SNMP_V3_SECURITY_OPTIONS} />
                           </Form.Item>
                         </Col>
                         <Col xs={24} sm={12}>
-                          <Form.Item name="snmp_v3_auth_password" label="认证密码">
+                          <Form.Item name="snmp_v3_auth_password" label={tc('认证密码')}>
                             <Input.Password
                               autoComplete="new-password"
                               placeholder={
@@ -433,7 +431,7 @@ export default function DeviceFormDialog({
                           </Form.Item>
                         </Col>
                         <Col xs={24} sm={12}>
-                          <Form.Item name="snmp_v3_priv_password" label="加密密码">
+                          <Form.Item name="snmp_v3_priv_password" label={tc('加密密码')}>
                             <Input.Password
                               autoComplete="new-password"
                               placeholder={

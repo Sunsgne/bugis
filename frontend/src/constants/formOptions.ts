@@ -1,24 +1,33 @@
-/** Shared select options with full readable labels (dropdown uses popupMatchSelectWidth=false globally). */
+import i18n from "../i18n";
+import { tcStatic } from "../i18n/useTc";
+
+function tc(s: string): string {
+  return tcStatic(s, i18n.language);
+}
+
+function tKey(key: string, zh: string): string {
+  return i18n.t(key, { defaultValue: zh });
+}
 
 export const VENDOR_OPTIONS = [
-  { value: "h3c", label: "H3C 新华三" },
-  { value: "huawei", label: "Huawei 华为" },
-  { value: "juniper", label: "Juniper 瞻博" },
-  { value: "arista", label: "Arista" },
-  { value: "cisco", label: "Cisco 思科" },
-  { value: "frr", label: "FRR 开源路由" },
+  { value: "h3c", get label() { return tKey("form.vendor.h3c", tc("H3C 新华三")); } },
+  { value: "huawei", get label() { return tKey("form.vendor.huawei", tc("Huawei 华为")); } },
+  { value: "juniper", get label() { return tKey("form.vendor.juniper", tc("Juniper 瞻博")); } },
+  { value: "arista", get label() { return "Arista"; } },
+  { value: "cisco", get label() { return tKey("form.vendor.cisco", tc("Cisco 思科")); } },
+  { value: "frr", get label() { return tKey("form.vendor.frr", tc("FRR 开源路由")); } },
 ];
 
 export const DEVICE_ROLE_OPTIONS = [
-  { value: "spine", label: "Spine 核心" },
-  { value: "leaf", label: "Leaf 接入" },
-  { value: "border_leaf", label: "Border Leaf 边界" },
-  { value: "vtep", label: "VTEP 隧道端点" },
-  { value: "pe", label: "PE 提供商边缘" },
-  { value: "p", label: "P 核心路由器" },
-  { value: "rr", label: "RR 路由反射器" },
-  { value: "dci_gw", label: "DCI Gateway 互联网关" },
-  { value: "cpe", label: "CPE 客户设备" },
+  { value: "spine", get label() { return tKey("form.deviceRole.spine", tc("Spine 核心")); } },
+  { value: "leaf", get label() { return tKey("form.deviceRole.leaf", tc("Leaf 接入")); } },
+  { value: "border_leaf", get label() { return tKey("form.deviceRole.border_leaf", tc("Border Leaf 边界")); } },
+  { value: "vtep", get label() { return tKey("form.deviceRole.vtep", tc("VTEP 隧道端点")); } },
+  { value: "pe", get label() { return tKey("form.deviceRole.pe", tc("PE 提供商边缘")); } },
+  { value: "p", get label() { return tKey("form.deviceRole.p", tc("P 核心路由器")); } },
+  { value: "rr", get label() { return tKey("form.deviceRole.rr", tc("RR 路由反射器")); } },
+  { value: "dci_gw", get label() { return tKey("form.deviceRole.dci_gw", tc("DCI Gateway 互联网关")); } },
+  { value: "cpe", get label() { return tKey("form.deviceRole.cpe", tc("CPE 客户设备")); } },
 ];
 
 export const OVERLAY_OPTIONS = [
@@ -32,7 +41,7 @@ export const SNMP_VERSION_OPTIONS = [
 ];
 
 export const MANAGEMENT_TRANSPORT_OPTIONS = [
-  { value: "auto", label: "自动（按厂商默认）" },
+  { value: "auto", get label() { return tKey("form.managementTransport.auto", tc("自动（按厂商默认）")); } },
   { value: "netconf", label: "NETCONF" },
   { value: "ssh", label: "SSH CLI" },
 ];
@@ -47,6 +56,6 @@ export function labelForOption(
   options: readonly { value: string; label: string }[],
   value: string | undefined | null,
 ): string {
-  if (!value) return "—";
+  if (!value) return tc("—");
   return options.find((o) => o.value === value)?.label ?? value;
 }

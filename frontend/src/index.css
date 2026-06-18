@@ -183,6 +183,43 @@ body {
   }
 }
 
+.portal-mobile-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+}
+
+.portal-mobile-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.portal-mobile-sider {
+  position: relative;
+  z-index: 1;
+  height: 100% !important;
+  max-width: min(85vw, 232px) !important;
+}
+
+@media (max-width: 991px) {
+  .portal-desktop-sider {
+    display: none !important;
+  }
+
+  .portal-content {
+    padding: 16px !important;
+  }
+
+  .portal-header-title {
+    font-size: 14px !important;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
 /* Chart containers */
 .echart-host,
 .topology-graph {
@@ -881,6 +918,25 @@ body {
   flex: 1;
   min-width: 0;
   padding: 0 0 0 24px !important;
+}
+
+@media (max-width: 991px) {
+  .settings-layout-inner {
+    flex-direction: column !important;
+  }
+
+  .settings-layout-sider {
+    width: 100% !important;
+    max-width: 100% !important;
+    flex: none !important;
+    margin-bottom: 12px;
+    box-shadow: none !important;
+    border-bottom: 1px solid #f0f0f0;
+  }
+
+  .settings-layout-inner > .ant-layout-content.settings-layout-content {
+    padding: 0 !important;
+  }
 }
 
 /* Brand settings */

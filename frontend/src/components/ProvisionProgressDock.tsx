@@ -6,6 +6,7 @@ import {
   LoadingOutlined,
 } from "@ant-design/icons";
 import type { Circuit, ProvisionResult } from "../api/types";
+import { useTc } from "@/i18n/useTc";
 
 type Props = {
   circuit: Circuit | null;
@@ -41,6 +42,7 @@ export default function ProvisionProgressDock({
   onOpenDetails,
   onClose,
 }: Props) {
+  const { tc } = useTc();
   if (!circuit) return null;
 
   const isTeardown = woType === "decommission";
@@ -132,9 +134,7 @@ export default function ProvisionProgressDock({
         <Typography.Text type="secondary" style={{ fontSize: 12 }}>
           {jobs.length ? `设备作业 ${okJobs}/${jobs.length}` : circuit.name}
         </Typography.Text>
-        <Button type="link" size="small" onClick={onOpenDetails}>
-          查看详情
-        </Button>
+        <Button type="link" size="small" onClick={onOpenDetails}>{tc('查看详情')}</Button>
       </Space>
     </div>
   );
