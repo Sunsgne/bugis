@@ -133,6 +133,37 @@ export default function GeneralSettings() {
               <Switch checkedChildren="开" unCheckedChildren="关" />
             </Form.Item>
           </Col>
+          <Col xs={24} md={8}>
+            <Form.Item
+              name="snapshot_before_change"
+              label="变更前自动快照"
+              valuePropName="checked"
+              tooltip="每次开通/拆除前自动拉取各目标设备的现网 running-config 并存为快照(source=pre_change)，用于变更对比与应急还原。尽力而为，拉取失败不阻断变更。"
+            >
+              <Switch checkedChildren="开" unCheckedChildren="关" />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={8}>
+            <Form.Item
+              name="async_provisioning"
+              label="异步开通（后台队列）"
+              valuePropName="checked"
+              tooltip="开启后开通/拆除请求会进入后台队列(状态=排队中)立即返回，由工作线程异步下发，避免大量并发操作占满请求线程。前端在工单详情/进度弹窗中轮询进度。"
+            >
+              <Switch checkedChildren="开" unCheckedChildren="关" />
+            </Form.Item>
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col xs={12} md={6}>
+            <Form.Item
+              name="provision_max_concurrency"
+              label="并发下发数"
+              tooltip="后台工作线程同时执行的设备下发数量上限。"
+            >
+              <InputNumber min={1} max={64} style={{ width: "100%" }} />
+            </Form.Item>
+          </Col>
         </Row>
         <Row gutter={16}>
           <Col xs={12} md={6}>

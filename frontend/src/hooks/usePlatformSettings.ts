@@ -43,6 +43,10 @@ export interface PlatformSettings {
   mfa_allow_totp?: boolean;
   mfa_allow_email?: boolean;
   expose_openapi?: boolean;
+  protect_live_config?: boolean;
+  snapshot_before_change?: boolean;
+  async_provisioning?: boolean;
+  provision_max_concurrency?: number;
   notes?: string;
 }
 
