@@ -17,6 +17,7 @@ from app.models.link import Link
 from app.schemas.telemetry import CircuitHealth
 from app.services import platform_settings as platform_cfg
 from app.services.circuit_alarm_settings import effective_thresholds
+from app.services import alarm_messages as msg
 
 
 def _active_by_key(db: Session, dedup_key: str) -> Alarm | None:
@@ -86,10 +87,11 @@ def evaluate_circuit_health(db: Session, circuit: Circuit, health: CircuitHealth
     key_down = f"circuit:{cid}:down"
     latest_down = health.tunnel_down
     if circuit.status in (CircuitStatus.FAILED, CircuitStatus.DEGRADED) or latest_down:
+        copy = msg.build_circuit_tunnel_down(circuit.code, circuit.status.value)
         raise_alarm(
             db, "tunnel_down", AlarmSeverity.CRITICAL,
-            f"专线 {circuit.code} 状态异常 ({circuit.status.value})",
-            key_down, circuit_id=cid,
+            copy.title,
+            key_down, detail=copy.detail, circuit_id=cid,
         )
     else:
         clear_by_key(db, key_down)
@@ -100,10 +102,11 @@ def evaluate_circuit_health(db: Session, circuit: Circuit, health: CircuitHealth
     # Packet loss
     key_loss = f"circuit:{cid}:loss"
     if health.avg_packet_loss_pct > th.packet_loss_pct:
+        copy = msg.build_circuit_loss(circuit.code, health.avg_packet_loss_pct, th.packet_loss_pct)
         raise_alarm(
             db, "sla_loss", AlarmSeverity.MAJOR,
-            f"专线 {circuit.code} 丢包率超阈值 {health.avg_packet_loss_pct}%",
-            key_loss, detail=f"threshold={th.packet_loss_pct}%",
+            copy.title,
+            key_loss, detail=copy.detail,
             circuit_id=cid,
         )
     else:
@@ -112,10 +115,11 @@ def evaluate_circuit_health(db: Session, circuit: Circuit, health: CircuitHealth
     # Latency
     key_lat = f"circuit:{cid}:latency"
     if health.avg_latency_ms > th.latency_ms:
+        copy = msg.build_circuit_latency(circuit.code, health.avg_latency_ms, th.latency_ms)
         raise_alarm(
             db, "sla_latency", AlarmSeverity.MINOR,
-            f"专线 {circuit.code} 时延超阈值 {health.avg_latency_ms}ms",
-            key_lat, detail=f"threshold={th.latency_ms}ms",
+            copy.title,
+            key_lat, detail=copy.detail,
             circuit_id=cid,
         )
     else:
@@ -124,10 +128,13 @@ def evaluate_circuit_health(db: Session, circuit: Circuit, health: CircuitHealth
     # Utilization
     key_util = f"circuit:{cid}:utilization"
     if health.peak_utilization_pct > th.utilization_pct:
+        copy = msg.build_circuit_utilization(
+            circuit.code, health.peak_utilization_pct, th.utilization_pct
+        )
         raise_alarm(
             db, "utilization", AlarmSeverity.MINOR,
-            f"专线 {circuit.code} 带宽利用率峰值 {health.peak_utilization_pct}%",
-            key_util, detail=f"阈值 {th.utilization_pct}% · 考虑扩容带宽", circuit_id=cid,
+            copy.title,
+            key_util, detail=copy.detail, circuit_id=cid,
         )
     else:
         clear_by_key(db, key_util)
@@ -135,10 +142,11 @@ def evaluate_circuit_health(db: Session, circuit: Circuit, health: CircuitHealth
     # Composite health score
     key_health = f"circuit:{cid}:health"
     if health.health_score < th.health_score_min:
+        copy = msg.build_circuit_health(circuit.code, health.health_score, th.health_score_min)
         raise_alarm(
             db, "health", AlarmSeverity.MAJOR,
-            f"专线 {circuit.code} 健康评分偏低 ({health.health_score})",
-            key_health, detail=f"threshold={th.health_score_min}",
+            copy.title,
+            key_health, detail=copy.detail,
             circuit_id=cid,
         )
     else:
@@ -159,13 +167,14 @@ def evaluate_circuit_availability(db: Session, circuit: Circuit) -> None:
 
     key_interrupt = f"circuit:{cid}:interruption"
     if open_ev and open_ev.kind == "interruption":
+        copy = msg.build_circuit_interruption(circuit.code, open_ev.detail)
         raise_alarm(
             db,
             "circuit_interruption",
             AlarmSeverity.CRITICAL,
-            f"专线 {circuit.code} 中断中",
+            copy.title,
             key_interrupt,
-            detail=open_ev.detail,
+            detail=copy.detail,
             circuit_id=cid,
         )
     else:
@@ -174,12 +183,16 @@ def evaluate_circuit_availability(db: Session, circuit: Circuit) -> None:
     flaps = availability_service.flap_count(db, cid)
     key_flap = f"circuit:{cid}:flap"
     if flaps >= availability_service.FLAP_COUNT_THRESHOLD:
+        copy = msg.build_circuit_flap(
+            circuit.code, flaps, availability_service.FLAP_WINDOW_MIN
+        )
         raise_alarm(
             db,
             "circuit_flap",
             AlarmSeverity.MAJOR,
-            f"专线 {circuit.code} 闪断频繁 ({flaps} 次/{availability_service.FLAP_WINDOW_MIN}min)",
+            copy.title,
             key_flap,
+            detail=copy.detail,
             circuit_id=cid,
         )
     else:
@@ -196,17 +209,20 @@ def evaluate_link_health(db: Session, link: Link, health) -> None:
     plat = platform_cfg.get_or_create(db)
     threshold = link_alarm_settings.effective_utilization_threshold(link, plat)
     if health.peak_utilization_pct > threshold:
+        copy = msg.build_link_utilization(
+            link.name,
+            health.peak_utilization_pct,
+            threshold,
+            capacity_mbps=health.capacity_mbps,
+            traffic_mbps=health.traffic_mbps,
+        )
         raise_alarm(
             db,
             "link_utilization",
             AlarmSeverity.MAJOR,
-            f"骨干链路 {link.name} 利用率 {health.peak_utilization_pct}%",
+            copy.title,
             key_util,
-            detail=(
-                f"阈值 {threshold}% · "
-                f"容量 {health.capacity_mbps} Mbps · "
-                f"峰值流量 {health.traffic_mbps} Mbps"
-            ),
+            detail=copy.detail,
             device_id=link.device_a_id,
         )
     else:

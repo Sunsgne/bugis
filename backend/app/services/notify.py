@@ -13,22 +13,20 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models.alarm import Alarm
-from app.models.enums import SEVERITY_RANK, NotificationType
+from app.models.enums import AlarmSeverity, AlarmStatus, SEVERITY_RANK, NotificationType
 from app.models.notification import NotificationChannel
+from app.services import alarm_messages as msg
 
 logger = logging.getLogger("bugis.notify")
 
 
 def _format_text(alarm: Alarm) -> str:
-    return (
-        f"[Bugis 告警] {alarm.severity.value.upper()} | {alarm.kind}\n"
-        f"{alarm.title}"
-        + (f"\n详情: {alarm.detail}" if alarm.detail else "")
-    )
+    return msg.format_notification_text(alarm)
 
 
 def build_payload(channel: NotificationChannel, alarm: Alarm) -> dict:
     text = _format_text(alarm)
+    structured = msg.format_notification_payload(alarm)
     if channel.type == NotificationType.SLACK:
         return {"text": text}
     if channel.type in (NotificationType.DINGTALK, NotificationType.WECOM):
@@ -41,25 +39,17 @@ def build_payload(channel: NotificationChannel, alarm: Alarm) -> dict:
             "@context": "https://schema.org/extensions",
             "themeColor": "CF1322" if alarm.severity.value in ("critical", "major")
             else "1677FF",
-            "title": f"[Bugis] {alarm.severity.value.upper()} · {alarm.kind}",
-            "text": text,
+            "title": structured["title"],
+            "text": text.replace("\n", "<br/>"),
         }
     if channel.type == NotificationType.EMAIL:
+        sev = msg.severity_label(alarm.severity.value)
         return {
             "to": channel.url,
-            "subject": f"[Bugis][{alarm.severity.value.upper()}] {alarm.title}",
+            "subject": f"[Bugis][{sev}] {alarm.title}",
             "body": text,
         }
-    # generic webhook
-    return {
-        "source": "bugis",
-        "severity": alarm.severity.value,
-        "kind": alarm.kind,
-        "title": alarm.title,
-        "detail": alarm.detail,
-        "circuit_id": alarm.circuit_id,
-        "device_id": alarm.device_id,
-    }
+    return structured
 
 
 def _send(channel: NotificationChannel, payload: dict) -> tuple[bool, str]:
@@ -85,10 +75,10 @@ def _send_email(channel: NotificationChannel, payload: dict) -> tuple[bool, str]
     import smtplib
     from email.mime.text import MIMEText
 
-    msg = MIMEText(payload["body"], "plain", "utf-8")
-    msg["Subject"] = payload["subject"]
-    msg["From"] = getattr(settings, "smtp_from", "bugis@localhost")
-    msg["To"] = payload["to"]
+    msg_obj = MIMEText(payload["body"], "plain", "utf-8")
+    msg_obj["Subject"] = payload["subject"]
+    msg_obj["From"] = getattr(settings, "smtp_from", "bugis@localhost")
+    msg_obj["To"] = payload["to"]
     port = int(getattr(settings, "smtp_port", 25) or 25)
     security = (getattr(settings, "smtp_security", "starttls") or "starttls").lower()
     user = getattr(settings, "smtp_user", "") or ""
@@ -103,10 +93,22 @@ def _send_email(channel: NotificationChannel, payload: dict) -> tuple[bool, str]
                 s.starttls()
             if user:
                 s.login(user, password)
-            s.send_message(msg)
+            s.send_message(msg_obj)
         return True, "sent"
     except Exception as exc:
         return False, f"smtp error: {exc}"
+
+
+def auto_acknowledge_after_notify(db: Session, alarm: Alarm) -> bool:
+    """Auto-ack lower-severity alarms once at least one channel accepted delivery."""
+    if alarm.status != AlarmStatus.ACTIVE:
+        return False
+    if alarm.severity not in msg.AUTO_ACK_AFTER_NOTIFY:
+        return False
+    alarm.status = AlarmStatus.ACKNOWLEDGED
+    alarm.acknowledged_by = msg.AUTO_ACK_ACTOR
+    db.flush()
+    return True
 
 
 def dispatch_for_alarm(db: Session, alarm: Alarm) -> int:
@@ -116,6 +118,7 @@ def dispatch_for_alarm(db: Session, alarm: Alarm) -> int:
     ).scalars().all()
     threshold_rank = SEVERITY_RANK.get(alarm.severity.value, 0)
     dispatched = 0
+    delivered = 0
     for ch in channels:
         if SEVERITY_RANK.get(ch.min_severity.value, 0) > threshold_rank:
             continue
@@ -123,14 +126,20 @@ def dispatch_for_alarm(db: Session, alarm: Alarm) -> int:
         ch.last_status = ("ok" if ok else "failed") + f": {detail}"
         ch.last_dispatch_at = datetime.now(timezone.utc)
         dispatched += 1
+        if ok:
+            delivered += 1
+    if delivered > 0:
+        auto_acknowledge_after_notify(db, alarm)
     return dispatched
 
 
 def test_channel(db: Session, channel: NotificationChannel) -> dict:
+    copy = msg.build_test_notification()
     sample = Alarm(
         severity=channel.min_severity,
-        kind="test",
-        title="测试通知 / Test notification from Bugis",
+        kind=copy.kind,
+        title=copy.title,
+        detail=copy.detail,
         dedup_key="test",
     )
     ok, detail = _send(channel, build_payload(channel, sample))

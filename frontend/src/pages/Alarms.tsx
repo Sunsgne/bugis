@@ -7,15 +7,7 @@ import type { Alarm } from "../api/types";
 import PageCard from "../components/PageCard";
 import { dataTableProps } from "../utils/table";
 import { action, empty, page } from "../constants/uiCopy";
-import { ALARM_STATUS, statusMeta } from "../constants/statusLabels";
-
-const SEV_COLOR: Record<string, string> = {
-  critical: "red",
-  major: "volcano",
-  minor: "orange",
-  warning: "gold",
-  info: "blue",
-};
+import { ALARM_KIND, ALARM_SEVERITY, ALARM_STATUS, statusMeta } from "../constants/statusLabels";
 
 export default function Alarms() {
   const { message } = AntApp.useApp();
@@ -95,12 +87,21 @@ export default function Alarms() {
             {
               title: "级别",
               dataIndex: "severity",
-              width: "8%",
-              render: (s) => <Tag color={SEV_COLOR[s]}>{s.toUpperCase()}</Tag>,
+              width: "10%",
+              render: (s) => {
+                const m = statusMeta(ALARM_SEVERITY, s);
+                return <Tag color={m.color}>{m.label}</Tag>;
+              },
             },
-            { title: "类型", dataIndex: "kind", width: "12%", ellipsis: true, render: (k) => <Tag>{k}</Tag> },
-            { title: "标题", dataIndex: "title", width: "24%", ellipsis: true },
-            { title: "详情", dataIndex: "detail", width: "22%", ellipsis: true, render: (v) => v || "—" },
+            {
+              title: "类型",
+              dataIndex: "kind",
+              width: "10%",
+              ellipsis: true,
+              render: (k) => <Tag>{ALARM_KIND[k] || k}</Tag>,
+            },
+            { title: "标题", dataIndex: "title", width: "26%", ellipsis: true },
+            { title: "详情", dataIndex: "detail", width: "24%", ellipsis: true, render: (v) => v || "—" },
             {
               title: "时间",
               dataIndex: "created_at",
@@ -110,10 +111,15 @@ export default function Alarms() {
             {
               title: "状态",
               dataIndex: "status",
-              width: "8%",
-              render: (s) => {
+              width: "10%",
+              render: (s, r) => {
                 const m = statusMeta(ALARM_STATUS, s);
-                return <Tag color={m.color}>{m.label}</Tag>;
+                const auto = r.acknowledged_by === "system:auto-notify";
+                return (
+                  <Tag color={m.color}>
+                    {auto && s === "acknowledged" ? "已确认(自动)" : m.label}
+                  </Tag>
+                );
               },
             },
             {
