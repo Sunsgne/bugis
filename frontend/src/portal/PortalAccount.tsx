@@ -19,13 +19,16 @@ import {
   SaveOutlined,
   UserOutlined,
 } from "@ant-design/icons";
+import { useTranslation } from "react-i18next";
 import { api } from "../api/client";
 import { useAuth } from "../auth";
+import UserPreferencesCard from "../components/UserPreferencesCard";
 
 const { Text, Paragraph, Title } = Typography;
 
 export default function PortalAccount() {
   const { message } = AntApp.useApp();
+  const { t } = useTranslation();
   const { user, refreshUser } = useAuth();
   const [profileForm] = Form.useForm();
   const [pwdForm] = Form.useForm();
@@ -53,7 +56,7 @@ export default function PortalAccount() {
         full_name: v.full_name || null,
         email: v.email || null,
       });
-      message.success("资料已更新");
+      message.success(t("account.profileSaved"));
       await refreshUser();
     } catch (e: any) {
       message.error(e?.response?.data?.detail || "保存失败");
@@ -135,35 +138,39 @@ export default function PortalAccount() {
 
   return (
     <Space direction="vertical" size={20} style={{ width: "100%", maxWidth: 880 }}>
+      <UserPreferencesCard />
+
       <Card
         title={
           <Space>
             <UserOutlined />
-            账号资料
+            {t("account.profile")}
           </Space>
         }
         styles={{ header: { borderBottom: "1px solid #f0f0f0" } }}
       >
         <Descriptions size="small" column={2} style={{ marginBottom: 16 }}>
-          <Descriptions.Item label="账号">{user?.username}</Descriptions.Item>
-          <Descriptions.Item label="角色">
-            <Tag color="blue">{user?.role === "tenant_admin" ? "租户管理员" : "租户只读"}</Tag>
+          <Descriptions.Item label={t("account.username")}>{user?.username}</Descriptions.Item>
+          <Descriptions.Item label={t("account.role")}>
+            <Tag color="blue">
+              {user?.role === "tenant_admin" ? t("portal.roleTenantAdmin") : t("portal.roleTenantViewer")}
+            </Tag>
           </Descriptions.Item>
         </Descriptions>
         <Form form={profileForm} layout="vertical" style={{ maxWidth: 420 }}>
-          <Form.Item name="full_name" label="姓名 / 称呼">
-            <Input placeholder="请输入姓名" maxLength={128} />
+          <Form.Item name="full_name" label={t("account.fullName")}>
+            <Input placeholder={t("account.fullNamePlaceholder")} maxLength={128} />
           </Form.Item>
           <Form.Item
             name="email"
-            label="邮箱"
-            tooltip="用于接收登录验证码、密码找回邮件"
-            rules={[{ type: "email", message: "请输入正确的邮箱地址" }]}
+            label={t("account.email")}
+            tooltip={t("account.emailTooltip")}
+            rules={[{ type: "email", message: t("account.emailPlaceholder") }]}
           >
-            <Input placeholder="name@example.com" maxLength={255} />
+            <Input placeholder={t("account.emailPlaceholder")} maxLength={255} />
           </Form.Item>
           <Button type="primary" icon={<SaveOutlined />} loading={savingProfile} onClick={saveProfile}>
-            保存资料
+            {t("account.saveProfile")}
           </Button>
         </Form>
       </Card>

@@ -399,6 +399,10 @@ def update_profile(
         user.email = email
     if "full_name" in data:
         user.full_name = (data["full_name"] or "").strip() or None
+    if "locale" in data and data["locale"] is not None:
+        user.locale = data["locale"]
+    if "timezone" in data and data["timezone"] is not None:
+        user.timezone = data["timezone"]
     db.add(user)
     db.commit()
     db.refresh(user)

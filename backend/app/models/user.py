@@ -47,5 +47,7 @@ class User(Base, TimestampMixin):
     last_login_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    locale: Mapped[str] = mapped_column(String(8), default="zh")
+    timezone: Mapped[str] = mapped_column(String(64), default="Asia/Shanghai")
 
     tenant: Mapped["Tenant | None"] = relationship()

@@ -11,6 +11,8 @@ export interface User {
   tenant_id?: number | null;
   mfa_enabled?: boolean;
   mfa_method?: string;
+  locale?: string;
+  timezone?: string;
 }
 
 interface AuthCtx {

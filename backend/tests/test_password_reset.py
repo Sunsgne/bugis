@@ -39,6 +39,37 @@ def test_profile_self_update(client):
     client.patch("/api/v1/auth/profile", json={"email": None}, headers=headers)
 
 
+def test_profile_locale_timezone(client):
+    login = client.post(
+        "/api/v1/auth/login",
+        data={"username": "admin", "password": "admin123"},
+    ).json()
+    headers = {"Authorization": f"Bearer {login['access_token']}"}
+
+    r = client.patch(
+        "/api/v1/auth/profile",
+        json={"locale": "en", "timezone": "America/New_York"},
+        headers=headers,
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["locale"] == "en"
+    assert body["timezone"] == "America/New_York"
+
+    bad = client.patch(
+        "/api/v1/auth/profile",
+        json={"locale": "fr"},
+        headers=headers,
+    )
+    assert bad.status_code == 422
+
+    client.patch(
+        "/api/v1/auth/profile",
+        json={"locale": "zh", "timezone": "Asia/Shanghai"},
+        headers=headers,
+    )
+
+
 def test_forgot_password_is_generic_for_unknown_user(client):
     r = client.post(
         "/api/v1/auth/forgot-password",

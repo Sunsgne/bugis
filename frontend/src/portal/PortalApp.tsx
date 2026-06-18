@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Link, Navigate, Route, Routes, useNavigate, useLocation } from "react-router-dom";
 import { Avatar, Dropdown, Layout, Menu, Space, Tag, Typography } from "antd";
 import {
@@ -32,26 +33,26 @@ export interface PortalMe {
   role: string;
 }
 
-const MENU = [
-  { key: "/portal", label: "总览", icon: <LayoutDashboard size={16} /> },
-  { key: "/portal/circuits", label: "我的专线", icon: <Cable size={16} /> },
-  { key: "/portal/traffic", label: "流量洞察", icon: <LineChart size={16} /> },
-  { key: "/portal/account", label: "账号与安全", icon: <ShieldCheck size={16} /> },
-];
-
 export default function PortalApp() {
   const { user, logout, isTenantUser } = useAuth();
   const { brand } = useBrand();
+  const { t } = useTranslation();
   const nav = useNavigate();
   const loc = useLocation();
   const [me, setMe] = useState<PortalMe | null>(null);
   const accent = brand.accent_color || "#ff6600";
+  const menu = [
+    { key: "/portal", label: t("portal.menu.dashboard"), icon: <LayoutDashboard size={16} /> },
+    { key: "/portal/circuits", label: t("portal.menu.circuits"), icon: <Cable size={16} /> },
+    { key: "/portal/traffic", label: t("portal.menu.traffic"), icon: <LineChart size={16} /> },
+    { key: "/portal/account", label: t("portal.menu.account"), icon: <ShieldCheck size={16} /> },
+  ];
   const roleLabel =
     user?.role === "tenant_admin"
-      ? "租户管理员"
+      ? t("portal.roleTenantAdmin")
       : user?.role === "tenant_viewer"
-        ? "租户只读"
-        : me?.tenant_code || "客户门户";
+        ? t("portal.roleTenantViewer")
+        : me?.tenant_code || t("portal.portalLabel");
 
   useEffect(() => {
     if (!isTenantUser) return;
@@ -62,7 +63,7 @@ export default function PortalApp() {
     return <Navigate to="/login" replace />;
   }
 
-  const selected = MENU.map((m) => m.key)
+  const selected = menu.map((m) => m.key)
     .sort((a, b) => b.length - a.length)
     .find((k) => loc.pathname === k || loc.pathname.startsWith(`${k}/`)) || "/portal";
 
@@ -103,7 +104,7 @@ export default function PortalApp() {
           theme="dark"
           mode="inline"
           selectedKeys={[selected]}
-          items={MENU.map((m) => ({
+          items={menu.map((m) => ({
             key: m.key,
             icon: m.icon,
             label: m.label,

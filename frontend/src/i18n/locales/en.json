@@ -1,0 +1,75 @@
+{
+  "nav": {
+    "groups": {
+      "overview": "Overview",
+      "resources": "Customers",
+      "circuits": "Circuits",
+      "network": "Network & Control",
+      "ops": "Observability",
+      "system": "Platform"
+    },
+    "items": {
+      "dashboard": "Dashboard",
+      "tenants": "Tenants",
+      "sites": "Fabric Sites",
+      "devices": "Devices",
+      "circuits": "Circuits",
+      "workOrders": "Work Orders",
+      "controllers": "SDN Controllers",
+      "controlPlane": "Control Plane",
+      "config": "Config Center",
+      "topology": "Topology",
+      "capacity": "Capacity",
+      "monitoring": "Traffic Insights",
+      "alarms": "Alarms",
+      "settings": "Settings"
+    }
+  },
+  "action": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "logout": "Sign out",
+    "changePassword": "Change password",
+    "accountSettings": "Account settings"
+  },
+  "account": {
+    "title": "Account settings",
+    "profile": "Profile",
+    "preferences": "Language & timezone",
+    "username": "Username",
+    "role": "Role",
+    "fullName": "Display name",
+    "fullNamePlaceholder": "Your name",
+    "email": "Email",
+    "emailPlaceholder": "name@example.com",
+    "emailTooltip": "Used for login codes and password recovery",
+    "saveProfile": "Save profile",
+    "profileSaved": "Profile updated",
+    "saveFailed": "Save failed",
+    "language": "Language",
+    "timezone": "Timezone",
+    "timezoneHint": "Charts, alarms and audit timestamps use this timezone",
+    "preferencesSaved": "Preferences saved",
+    "languageZh": "简体中文",
+    "languageEn": "English"
+  },
+  "portal": {
+    "menu": {
+      "dashboard": "Overview",
+      "circuits": "My circuits",
+      "traffic": "Traffic",
+      "account": "Account & security"
+    },
+    "roleTenantAdmin": "Tenant admin",
+    "roleTenantViewer": "Tenant viewer",
+    "portalLabel": "Customer portal"
+  },
+  "monitor": {
+    "last1h": "Last 1 hour",
+    "last6h": "Last 6 hours",
+    "last24h": "Last 24 hours",
+    "last7d": "Last 7 days",
+    "last30d": "Last 30 days",
+    "lastNh": "Last {{hours}}h"
+  }
+}

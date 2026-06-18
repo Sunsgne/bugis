@@ -1,0 +1,75 @@
+{
+  "nav": {
+    "groups": {
+      "overview": "业务总览",
+      "resources": "客户管理",
+      "circuits": "专线业务",
+      "network": "网络与控制面",
+      "ops": "可观测性",
+      "system": "平台治理"
+    },
+    "items": {
+      "dashboard": "运营驾驶舱",
+      "tenants": "客户",
+      "sites": "Fabric 站点",
+      "devices": "网络设备",
+      "circuits": "专线管理",
+      "workOrders": "操作日志",
+      "controllers": "SDN 控制器",
+      "controlPlane": "控制面视图",
+      "config": "配置中心",
+      "topology": "物理拓扑",
+      "capacity": "容量规划",
+      "monitoring": "流量洞察",
+      "alarms": "告警态势",
+      "settings": "平台设置"
+    }
+  },
+  "action": {
+    "save": "保存",
+    "cancel": "取消",
+    "logout": "退出登录",
+    "changePassword": "修改密码",
+    "accountSettings": "个人设置"
+  },
+  "account": {
+    "title": "个人设置",
+    "profile": "账号资料",
+    "preferences": "语言与时区",
+    "username": "账号",
+    "role": "角色",
+    "fullName": "姓名 / 称呼",
+    "fullNamePlaceholder": "请输入姓名",
+    "email": "邮箱",
+    "emailPlaceholder": "name@example.com",
+    "emailTooltip": "用于接收登录验证码、密码找回邮件",
+    "saveProfile": "保存资料",
+    "profileSaved": "资料已更新",
+    "saveFailed": "保存失败",
+    "language": "界面语言",
+    "timezone": "时区",
+    "timezoneHint": "图表、告警与审计时间将按此时区显示",
+    "preferencesSaved": "偏好已保存",
+    "languageZh": "简体中文",
+    "languageEn": "English"
+  },
+  "portal": {
+    "menu": {
+      "dashboard": "总览",
+      "circuits": "我的专线",
+      "traffic": "流量洞察",
+      "account": "账号与安全"
+    },
+    "roleTenantAdmin": "租户管理员",
+    "roleTenantViewer": "租户只读",
+    "portalLabel": "客户门户"
+  },
+  "monitor": {
+    "last1h": "近 1 小时",
+    "last6h": "近 6 小时",
+    "last24h": "近 24 小时",
+    "last7d": "近 7 天",
+    "last30d": "近 30 天",
+    "lastNh": "近 {{hours}} 小时"
+  }
+}

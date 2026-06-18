@@ -1,10 +1,16 @@
 """Auth & user schemas."""
 from __future__ import annotations
 
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
 from pydantic import BaseModel, Field, field_validator
 
 from app.models.enums import MfaMethod, UserRole, UserScope
 from app.schemas.common import TimestampedSchema
+
+SUPPORTED_LOCALES = frozenset({"zh", "en"})
+DEFAULT_LOCALE = "zh"
+DEFAULT_TIMEZONE = "Asia/Shanghai"
 
 
 class Token(BaseModel):
@@ -116,6 +122,8 @@ class UserOut(TimestampedSchema):
     is_active: bool
     mfa_enabled: bool = False
     mfa_method: MfaMethod = MfaMethod.NONE
+    locale: str = DEFAULT_LOCALE
+    timezone: str = DEFAULT_TIMEZONE
 
 
 class PasswordChangeRequest(BaseModel):
@@ -128,6 +136,30 @@ class ProfileUpdateRequest(BaseModel):
 
     full_name: str | None = Field(default=None, max_length=128)
     email: str | None = Field(default=None, max_length=255)
+    locale: str | None = Field(default=None, max_length=8)
+    timezone: str | None = Field(default=None, max_length=64)
+
+    @field_validator("locale")
+    @classmethod
+    def validate_locale(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        code = v.strip().lower()
+        if code not in SUPPORTED_LOCALES:
+            raise ValueError("locale must be zh or en")
+        return code
+
+    @field_validator("timezone")
+    @classmethod
+    def validate_timezone(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        tz = v.strip()
+        try:
+            ZoneInfo(tz)
+        except ZoneInfoNotFoundError as exc:
+            raise ValueError("invalid IANA timezone") from exc
+        return tz
 
 
 class ForgotPasswordRequest(BaseModel):

@@ -1,8 +1,21 @@
+import type { TFunction } from "i18next";
 import type { Dayjs } from "dayjs";
 import dayjs from "dayjs";
+import { formatUserTimeLabel } from "./datetime";
 
 export type RangeMode = "preset" | "custom";
 
+export function getHourOptions(t: TFunction) {
+  return [
+    { value: 1, label: t("monitor.last1h") },
+    { value: 6, label: t("monitor.last6h") },
+    { value: 24, label: t("monitor.last24h") },
+    { value: 168, label: t("monitor.last7d") },
+    { value: 720, label: t("monitor.last30d") },
+  ];
+}
+
+/** @deprecated use getHourOptions(t) */
 export const HOUR_OPTIONS = [
   { value: 1, label: "近 1 小时" },
   { value: 6, label: "近 6 小时" },
@@ -36,17 +49,21 @@ export function spanHoursFor(mode: RangeMode, hours: number, customRange: [Dayjs
   return hours;
 }
 
-export function windowLabelFor(mode: RangeMode, hours: number, customRange: [Dayjs, Dayjs] | null) {
+export function windowLabelFor(
+  mode: RangeMode,
+  hours: number,
+  customRange: [Dayjs, Dayjs] | null,
+  t?: TFunction,
+) {
   if (mode === "custom" && customRange) {
     return `${customRange[0].format("MM-DD HH:mm")} ~ ${customRange[1].format("MM-DD HH:mm")}`;
   }
-  return HOUR_OPTIONS.find((o) => o.value === hours)?.label || `近 ${hours}h`;
+  const options = t ? getHourOptions(t) : HOUR_OPTIONS;
+  return options.find((o) => o.value === hours)?.label || (t ? t("monitor.lastNh", { hours }) : `近 ${hours}h`);
 }
 
 export function timeLabel(iso: string | undefined, spanHours: number) {
-  if (!iso) return "";
-  if (spanHours <= 1) return dayjs(iso).format("HH:mm");
-  return dayjs(iso).format("MM-DD HH:mm");
+  return formatUserTimeLabel(iso, spanHours);
 }
 
 export function chartRangeKey(

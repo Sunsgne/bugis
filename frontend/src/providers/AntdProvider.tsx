@@ -1,12 +1,16 @@
 import { App, ConfigProvider } from "antd";
+import enUS from "antd/locale/en_US";
 import zhCN from "antd/locale/zh_CN";
 import type { ReactNode } from "react";
+import { useLocale } from "../context/LocaleContext";
 
 /** Wraps hybrid antd pages (Circuits, Dashboard, Settings…) with required context. */
 export default function AntdProvider({ children }: { children: ReactNode }) {
+  const { locale } = useLocale();
+
   return (
     <ConfigProvider
-      locale={zhCN}
+      locale={locale === "en" ? enUS : zhCN}
       theme={{
         token: {
           colorPrimary: "#ff6600",

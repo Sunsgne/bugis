@@ -18,8 +18,10 @@ import {
   Menu,
   ChevronRight,
   KeyRound,
+  UserCog,
 } from "lucide-react";
 import { useMemo, useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import PortalApp from "./portal/PortalApp";
 import { isTenantAccount, useAuth } from "./auth";
 import { api, getToken, fetchStreamTicket } from "./api/client";
@@ -37,6 +39,7 @@ import Topology from "./pages/Topology";
 import Controllers from "./pages/Controllers";
 import ControlPlane from "./pages/ControlPlane";
 import ConfigManagement from "./pages/ConfigManagement";
+import AccountSettings from "./pages/AccountSettings";
 import Notifications from "./pages/Notifications";
 import UsersPage from "./pages/Users";
 import Audit from "./pages/Audit";
@@ -51,7 +54,6 @@ import ManagementSettings from "./pages/settings/ManagementSettings";
 import BrandSettings from "./pages/settings/BrandSettings";
 import IntegrationSettings from "./pages/settings/IntegrationSettings";
 import SecuritySettings from "./pages/settings/SecuritySettings";
-import { nav, action } from "./constants/uiCopy";
 import { useBrand } from "./context/BrandContext";
 import { BrandLogo } from "./components/BrandLogo";
 import ChangePasswordDialog from "./components/ChangePasswordDialog";
@@ -69,63 +71,57 @@ import { cn } from "@/lib/utils";
 type NavItem = { key: string; label: string; icon: React.ReactNode };
 type NavGroup = { label: string; items: NavItem[] };
 
-const MENU: NavGroup[] = [
-  {
-    label: nav.groups.overview,
-    items: [{ key: "/", label: nav.items.dashboard, icon: <LayoutDashboard className="h-4 w-4" /> }],
-  },
-  {
-    label: nav.groups.resources,
-    items: [{ key: "/tenants", label: nav.items.tenants, icon: <Users className="h-4 w-4" /> }],
-  },
-  {
-    label: nav.groups.circuits,
-    items: [
-      { key: "/circuits", label: nav.items.circuits, icon: <Cable className="h-4 w-4" /> },
-      { key: "/work-orders", label: nav.items.workOrders, icon: <ClipboardList className="h-4 w-4" /> },
-    ],
-  },
-  {
-    label: nav.groups.network,
-    items: [
-      { key: "/sites", label: nav.items.sites, icon: <MapPin className="h-4 w-4" /> },
-      { key: "/devices", label: nav.items.devices, icon: <Server className="h-4 w-4" /> },
-      { key: "/topology", label: nav.items.topology, icon: <Network className="h-4 w-4" /> },
-      { key: "/controllers", label: nav.items.controllers, icon: <Cloud className="h-4 w-4" /> },
-      { key: "/control-plane", label: nav.items.controlPlane, icon: <Share2 className="h-4 w-4" /> },
-      { key: "/config", label: nav.items.config, icon: <FileText className="h-4 w-4" /> },
-    ],
-  },
-  {
-    label: nav.groups.ops,
-    items: [
-      { key: "/monitoring", label: nav.items.monitoring, icon: <LineChart className="h-4 w-4" /> },
-      { key: "/alarms", label: nav.items.alarms, icon: <Bell className="h-4 w-4" /> },
-      { key: "/capacity", label: nav.items.capacity, icon: <Gauge className="h-4 w-4" /> },
-    ],
-  },
-  {
-    label: nav.groups.system,
-    items: [{ key: "/settings", label: nav.items.settings, icon: <Settings className="h-4 w-4" /> }],
-  },
-];
+function buildMenu(t: (key: string) => string): NavGroup[] {
+  return [
+    {
+      label: t("nav.groups.overview"),
+      items: [{ key: "/", label: t("nav.items.dashboard"), icon: <LayoutDashboard className="h-4 w-4" /> }],
+    },
+    {
+      label: t("nav.groups.resources"),
+      items: [{ key: "/tenants", label: t("nav.items.tenants"), icon: <Users className="h-4 w-4" /> }],
+    },
+    {
+      label: t("nav.groups.circuits"),
+      items: [
+        { key: "/circuits", label: t("nav.items.circuits"), icon: <Cable className="h-4 w-4" /> },
+        { key: "/work-orders", label: t("nav.items.workOrders"), icon: <ClipboardList className="h-4 w-4" /> },
+      ],
+    },
+    {
+      label: t("nav.groups.network"),
+      items: [
+        { key: "/sites", label: t("nav.items.sites"), icon: <MapPin className="h-4 w-4" /> },
+        { key: "/devices", label: t("nav.items.devices"), icon: <Server className="h-4 w-4" /> },
+        { key: "/topology", label: t("nav.items.topology"), icon: <Network className="h-4 w-4" /> },
+        { key: "/controllers", label: t("nav.items.controllers"), icon: <Cloud className="h-4 w-4" /> },
+        { key: "/control-plane", label: t("nav.items.controlPlane"), icon: <Share2 className="h-4 w-4" /> },
+        { key: "/config", label: t("nav.items.config"), icon: <FileText className="h-4 w-4" /> },
+      ],
+    },
+    {
+      label: t("nav.groups.ops"),
+      items: [
+        { key: "/monitoring", label: t("nav.items.monitoring"), icon: <LineChart className="h-4 w-4" /> },
+        { key: "/alarms", label: t("nav.items.alarms"), icon: <Bell className="h-4 w-4" /> },
+        { key: "/capacity", label: t("nav.items.capacity"), icon: <Gauge className="h-4 w-4" /> },
+      ],
+    },
+    {
+      label: t("nav.groups.system"),
+      items: [{ key: "/settings", label: t("nav.items.settings"), icon: <Settings className="h-4 w-4" /> }],
+    },
+  ];
+}
 
-const ROUTE_KEYS = MENU.flatMap((g) => g.items.map((i) => i.key));
-
-const PAGE_TITLE: Record<string, string> = MENU.reduce((acc, g) => {
-  g.items.forEach((i) => {
-    acc[i.key] = i.label;
-  });
-  return acc;
-}, {} as Record<string, string>);
-
-function selectedMenuKey(pathname: string): string {
+function selectedMenuKey(pathname: string, routeKeys: string[]): string {
   if (pathname.startsWith("/settings")) return "/settings";
-  const match = ROUTE_KEYS.filter((k) => k !== "/")
+  if (pathname.startsWith("/account")) return "/account";
+  const match = routeKeys.filter((k) => k !== "/")
     .sort((a, b) => b.length - a.length)
     .find((k) => pathname.startsWith(k));
   if (match) return match;
-  return pathname === "/" ? "/" : ROUTE_KEYS.find((k) => k === pathname) || "/";
+  return pathname === "/" ? "/" : routeKeys.find((k) => k === pathname) || "/";
 }
 
 function AlarmBell({ onClick }: { onClick: () => void }) {
@@ -199,7 +195,20 @@ function Shell() {
   const loc = useLocation();
   const { user, logout } = useAuth();
   const { brand } = useBrand();
-  const selected = useMemo(() => selectedMenuKey(loc.pathname), [loc.pathname]);
+  const { t } = useTranslation();
+  const MENU = useMemo(() => buildMenu(t), [t]);
+  const routeKeys = useMemo(() => MENU.flatMap((g) => g.items.map((i) => i.key)), [MENU]);
+  const pageTitle = useMemo(
+    () =>
+      MENU.reduce((acc, g) => {
+        g.items.forEach((i) => {
+          acc[i.key] = i.label;
+        });
+        return acc;
+      }, { "/account": t("account.title") } as Record<string, string>),
+    [MENU, t],
+  );
+  const selected = selectedMenuKey(loc.pathname, routeKeys);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
 
@@ -263,7 +272,7 @@ function Shell() {
               <Menu className="h-5 w-5" />
             </Button>
             <h1 className="text-base font-semibold text-foreground">
-              {PAGE_TITLE[selected] || brand.header_title}
+              {pageTitle[selected] || brand.header_title}
             </h1>
           </div>
           <div className="flex items-center gap-2">
@@ -278,13 +287,17 @@ function Shell() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => navTo("/account")}>
+                  <UserCog className="mr-2 h-4 w-4" />
+                  {t("action.accountSettings")}
+                </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setChangePasswordOpen(true)}>
                   <KeyRound className="mr-2 h-4 w-4" />
-                  {action.changePassword}
+                  {t("action.changePassword")}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={logout}>
                   <LogOut className="mr-2 h-4 w-4" />
-                  {action.logout}
+                  {t("action.logout")}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -306,6 +319,7 @@ function Shell() {
             <Route path="/circuits" element={<Circuits />} />
             <Route path="/work-orders" element={<WorkOrders />} />
             <Route path="/config" element={<ConfigManagement />} />
+            <Route path="/account" element={<AccountSettings />} />
             <Route path="/topology" element={<Topology />} />
             <Route path="/capacity" element={<Capacity />} />
             <Route path="/monitoring" element={<Monitoring />} />
