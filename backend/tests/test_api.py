@@ -1159,6 +1159,15 @@ def test_circuit_monitoring_apis(client, auth_headers):
     assert custom_avail.status_code == 200
     assert "uptime_pct" in custom_avail.json()
 
+    health_window = client.get(
+        f"/api/v1/telemetry/circuits/{circuit['id']}/health",
+        headers=auth_headers,
+        params={"hours": 24, "limit": 5},
+    )
+    assert health_window.status_code == 200
+    body = health_window.json()
+    assert body["samples"] <= 5
+
 
 def test_delete_decommissioned_circuit(client, auth_headers):
     _, tenant, dev_a, _ = _bootstrap_topology(client, auth_headers)

@@ -108,8 +108,11 @@ def list_circuit_samples(
     elif hours is not None:
         since = datetime.now(timezone.utc) - timedelta(hours=max(1, min(hours, 24 * 366)))
         stmt = stmt.where(TelemetrySample.created_at >= since)
-    stmt = stmt.order_by(TelemetrySample.created_at.asc(), TelemetrySample.id.asc()).limit(limit)
-    return list(db.execute(stmt).scalars().all())
+    # Newest samples first, then reverse so charts receive oldest-first series.
+    stmt = stmt.order_by(TelemetrySample.created_at.desc(), TelemetrySample.id.desc()).limit(limit)
+    rows = list(db.execute(stmt).scalars().all())
+    rows.reverse()
+    return rows
 
 
 def chart_p95(samples: list[TelemetrySample]) -> dict:
@@ -234,13 +237,36 @@ def billing_95th(db: Session, circuit: Circuit, period: str | None = None) -> di
     }
 
 
-def compute_health(db: Session, circuit: Circuit, limit: int = 100) -> CircuitHealth:
-    samples = db.execute(
-        select(TelemetrySample)
-        .where(TelemetrySample.circuit_id == circuit.id)
-        .order_by(TelemetrySample.id.desc())
-        .limit(limit)
-    ).scalars().all()
+def compute_health(
+    db: Session,
+    circuit: Circuit,
+    *,
+    limit: int = 100,
+    hours: int | None = None,
+    start_at: datetime | None = None,
+    end_at: datetime | None = None,
+) -> CircuitHealth:
+    windowed = hours is not None or (start_at is not None and end_at is not None)
+    if windowed:
+        samples = list_circuit_samples(
+            db,
+            circuit.id,
+            limit=limit,
+            hours=hours,
+            start_at=start_at,
+            end_at=end_at,
+        )
+        latest = samples[-1] if samples else None
+    else:
+        samples = list(
+            db.execute(
+                select(TelemetrySample)
+                .where(TelemetrySample.circuit_id == circuit.id)
+                .order_by(TelemetrySample.id.desc())
+                .limit(limit)
+            ).scalars().all()
+        )
+        latest = samples[0] if samples else None
 
     n = len(samples)
     qos_samples = [s for s in samples if s.source == "probe"]
@@ -260,8 +286,7 @@ def compute_health(db: Session, circuit: Circuit, limit: int = 100) -> CircuitHe
 
     avg_util = sum(s.utilization_pct for s in samples) / n
     peak_util = max(s.utilization_pct for s in samples)
-    latest = samples[0]
-    tunnel_down = latest.tunnel_state == "down"
+    tunnel_down = bool(latest and latest.tunnel_state == "down")
 
     avg_lat = avg_jit = avg_loss = 0.0
     if qos_samples:

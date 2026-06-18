@@ -138,13 +138,28 @@ def circuit_billing(
 @router.get("/circuits/{circuit_id}/health", response_model=CircuitHealth)
 def circuit_health(
     circuit_id: int,
+    limit: int = 5000,
+    hours: int | None = Query(None),
+    start_at: datetime | None = Query(None),
+    end_at: datetime | None = Query(None),
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
     circuit = db.get(Circuit, circuit_id)
     if not circuit:
         raise HTTPException(status_code=404, detail="circuit not found")
-    return telemetry_service.compute_health(db, circuit)
+    if (start_at and not end_at) or (end_at and not start_at):
+        raise HTTPException(status_code=400, detail="start_at and end_at must be provided together")
+    if start_at and end_at and start_at >= end_at:
+        raise HTTPException(status_code=400, detail="start_at must be before end_at")
+    return telemetry_service.compute_health(
+        db,
+        circuit,
+        limit=limit,
+        hours=hours,
+        start_at=start_at,
+        end_at=end_at,
+    )
 
 
 @router.post("/collect", response_model=dict)

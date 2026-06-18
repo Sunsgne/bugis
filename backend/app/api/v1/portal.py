@@ -145,6 +145,7 @@ def portal_get_circuit(
 @router.get("/circuits/{circuit_id}/traffic-summary")
 def portal_traffic_summary(
     circuit_id: int,
+    limit: int = 5000,
     hours: int | None = 24,
     start_at: datetime | None = Query(None),
     end_at: datetime | None = Query(None),
@@ -155,10 +156,10 @@ def portal_traffic_summary(
     samples = telemetry_service.list_circuit_samples(
         db,
         circuit.id,
+        limit=limit,
         hours=hours if not (start_at and end_at) else None,
         start_at=start_at,
         end_at=end_at,
-        limit=5000,
     )
     p95 = telemetry_service.chart_p95(samples) if samples else {
         "in_95_mbps": 0.0,
@@ -206,8 +207,19 @@ def portal_availability(
 @router.get("/circuits/{circuit_id}/health")
 def portal_health(
     circuit_id: int,
+    limit: int = 5000,
+    hours: int | None = Query(None),
+    start_at: datetime | None = Query(None),
+    end_at: datetime | None = Query(None),
     user: User = Depends(require_tenant_user),
     db: Session = Depends(get_db),
 ):
     circuit = get_tenant_circuit(db, user, circuit_id)
-    return telemetry_service.compute_health(db, circuit)
+    return telemetry_service.compute_health(
+        db,
+        circuit,
+        limit=limit,
+        hours=hours,
+        start_at=start_at,
+        end_at=end_at,
+    )

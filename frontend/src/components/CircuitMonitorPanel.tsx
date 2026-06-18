@@ -21,6 +21,16 @@ import type {
   TrafficBilling,
   TrafficSummary,
 } from "../api/types";
+import {
+  buildRangeParams,
+  chartRangeKey,
+  HOUR_OPTIONS,
+  sampleLimitForWindow,
+  spanHoursFor,
+  timeLabel,
+  windowLabelFor,
+  type RangeMode,
+} from "../utils/monitorRange";
 import EChart from "./EChart";
 import { latencyJitterOption, trafficWithP95Option } from "../charts/options";
 import { empty } from "../constants/uiCopy";
@@ -28,51 +38,16 @@ import { empty } from "../constants/uiCopy";
 const { Text } = Typography;
 const { RangePicker } = DatePicker;
 
-const HOUR_OPTIONS = [
-  { value: 1, label: "近 1 小时" },
-  { value: 6, label: "近 6 小时" },
-  { value: 24, label: "近 24 小时" },
-  { value: 168, label: "近 7 天" },
-  { value: 720, label: "近 30 天" },
-];
-
 const EVENT_KIND: Record<string, { label: string; color: string }> = {
   interruption: { label: "中断", color: "red" },
   flash: { label: "闪断", color: "orange" },
 };
-
-type RangeMode = "preset" | "custom";
 
 type Props = {
   circuitId: number;
   compact?: boolean;
   pollSec?: number;
 };
-
-function buildRangeParams(mode: RangeMode, hours: number, customRange: [Dayjs, Dayjs] | null) {
-  if (mode === "custom" && customRange) {
-    const [start, end] = customRange;
-    return { start_at: start.toISOString(), end_at: end.toISOString() };
-  }
-  return { hours };
-}
-
-function sampleLimitForWindow(mode: RangeMode, hours: number, customRange: [Dayjs, Dayjs] | null) {
-  const spanHours =
-    mode === "custom" && customRange
-      ? Math.max(1, Math.ceil(customRange[1].diff(customRange[0], "hour", true)))
-      : hours;
-  if (spanHours <= 6) return 120;
-  if (spanHours <= 24) return 288;
-  if (spanHours <= 168) return 500;
-  return 2000;
-}
-
-function timeLabel(iso: string | undefined, spanHours: number) {
-  if (!iso) return "";
-  const fmt = spanHours > 24 ? "MM-DD HH:mm" : "HH:mm";
-  return dayjs(iso).format(fmt);
-}
 
 export default function CircuitMonitorPanel({ circuitId, compact = false, pollSec = 15 }: Props) {
   const [rangeMode, setRangeMode] = useState<RangeMode>("preset");
@@ -84,19 +59,15 @@ export default function CircuitMonitorPanel({ circuitId, compact = false, pollSe
   const [billing, setBilling] = useState<TrafficBilling | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const spanHours = useMemo(() => {
-    if (rangeMode === "custom" && customRange) {
-      return Math.max(1, Math.ceil(customRange[1].diff(customRange[0], "hour", true)));
-    }
-    return hours;
-  }, [rangeMode, customRange, hours]);
+  const spanHours = useMemo(
+    () => spanHoursFor(rangeMode, hours, customRange),
+    [rangeMode, customRange, hours],
+  );
 
-  const windowLabel = useMemo(() => {
-    if (rangeMode === "custom" && customRange) {
-      return `${customRange[0].format("MM-DD HH:mm")} ~ ${customRange[1].format("MM-DD HH:mm")}`;
-    }
-    return HOUR_OPTIONS.find((o) => o.value === hours)?.label || `近 ${hours}h`;
-  }, [rangeMode, customRange, hours]);
+  const windowLabel = useMemo(
+    () => windowLabelFor(rangeMode, hours, customRange),
+    [rangeMode, customRange, hours],
+  );
 
   const load = useCallback(async () => {
     if (!circuitId) return;
@@ -106,7 +77,9 @@ export default function CircuitMonitorPanel({ circuitId, compact = false, pollSe
       const rangeParams = buildRangeParams(rangeMode, hours, customRange);
       const limit = sampleLimitForWindow(rangeMode, hours, customRange);
       const [h, t, a, b] = await Promise.all([
-        api.get<CircuitHealth>(`/telemetry/circuits/${circuitId}/health`),
+        api.get<CircuitHealth>(`/telemetry/circuits/${circuitId}/health`, {
+          params: { ...rangeParams, limit },
+        }),
         api.get<TrafficSummary>(`/telemetry/circuits/${circuitId}/traffic-summary`, {
           params: { ...rangeParams, limit },
         }),
@@ -152,6 +125,7 @@ export default function CircuitMonitorPanel({ circuitId, compact = false, pollSe
     [chartData, traffic?.p95],
   );
   const latencyOpt = useMemo(() => latencyJitterOption(chartData, "t"), [chartData]);
+  const chartKey = chartRangeKey(circuitId, rangeMode, hours, customRange, chartData.length);
 
   const scoreColor = (v: number) => (v >= 90 ? "#52c41a" : v >= 70 ? "#fa8c16" : "#cf1322");
   const chartHeight = compact ? 220 : 280;
@@ -283,19 +257,24 @@ export default function CircuitMonitorPanel({ circuitId, compact = false, pollSe
         <Card
           size="small"
           className="chart-card"
-          title="流量 · Rx / Tx（含 95 参考线）"
+          title={`流量 · Rx / Tx（${windowLabel}，${chartData.length} 点）`}
           loading={loading}
         >
           {chartData.length ? (
-            <EChart option={trafficOpt} height={chartHeight} />
+            <EChart key={`traffic-${chartKey}`} option={trafficOpt} height={chartHeight} />
           ) : (
             <Empty description={empty.traffic} />
           )}
         </Card>
 
-        <Card size="small" className="chart-card" title="时延 · 抖动 · 丢包" loading={loading}>
+        <Card
+          size="small"
+          className="chart-card"
+          title={`时延 · 抖动 · 丢包（${windowLabel}）`}
+          loading={loading}
+        >
           {chartData.length ? (
-            <EChart option={latencyOpt} height={chartHeight} />
+            <EChart key={`latency-${chartKey}`} option={latencyOpt} height={chartHeight} />
           ) : (
             <Empty description={empty.traffic} />
           )}

@@ -15,6 +15,16 @@ import {
 import dayjs, { type Dayjs } from "dayjs";
 import { api } from "../api/client";
 import type { CircuitAvailability, CircuitHealth, TrafficBilling, TrafficSummary } from "../api/types";
+import {
+  buildRangeParams,
+  chartRangeKey,
+  HOUR_OPTIONS,
+  sampleLimitForWindow,
+  spanHoursFor,
+  timeLabel,
+  windowLabelFor,
+  type RangeMode,
+} from "../utils/monitorRange";
 import EChart from "./EChart";
 import { latencyJitterOption, trafficWithP95Option } from "../charts/options";
 import { empty } from "../constants/uiCopy";
@@ -22,42 +32,11 @@ import { empty } from "../constants/uiCopy";
 const { Text } = Typography;
 const { RangePicker } = DatePicker;
 
-const HOUR_OPTIONS = [
-  { value: 1, label: "近 1 小时" },
-  { value: 6, label: "近 6 小时" },
-  { value: 24, label: "近 24 小时" },
-  { value: 168, label: "近 7 天" },
-  { value: 720, label: "近 30 天" },
-];
-
-type RangeMode = "preset" | "custom";
-
 type Props = {
   circuitId: number;
   compact?: boolean;
   pollSec?: number;
 };
-
-function buildTrafficParams(mode: RangeMode, hours: number, customRange: [Dayjs, Dayjs] | null) {
-  if (mode === "custom" && customRange) {
-    const [start, end] = customRange;
-    return { start_at: start.toISOString(), end_at: end.toISOString() };
-  }
-  return { hours };
-}
-
-function timeLabel(iso: string | undefined, spanHours: number) {
-  if (!iso) return "";
-  const fmt = spanHours > 24 ? "MM-DD HH:mm" : "HH:mm";
-  return dayjs(iso).format(fmt);
-}
-
-function spanHoursFor(mode: RangeMode, hours: number, customRange: [Dayjs, Dayjs] | null) {
-  if (mode === "custom" && customRange) {
-    return Math.max(1, Math.ceil(customRange[1].diff(customRange[0], "hour", true)));
-  }
-  return hours;
-}
 
 export default function PortalCircuitMonitorPanel({
   circuitId,
@@ -75,45 +54,63 @@ export default function PortalCircuitMonitorPanel({
   const [loading, setLoading] = useState(false);
 
   const base = `/portal/circuits/${circuitId}`;
+  const spanHours = useMemo(
+    () => spanHoursFor(rangeMode, hours, customRange),
+    [rangeMode, hours, customRange],
+  );
+  const windowLabel = useMemo(
+    () => windowLabelFor(rangeMode, hours, customRange),
+    [rangeMode, hours, customRange],
+  );
 
-  const load = useCallback(async () => {
+  const loadMetrics = useCallback(async () => {
     if (!circuitId) return;
     if (rangeMode === "custom" && !customRange) return;
     setLoading(true);
     try {
-      const trafficParams = buildTrafficParams(rangeMode, hours, customRange);
-      const availParams = buildTrafficParams(rangeMode, hours, customRange);
-      const [h, t, a, b] = await Promise.all([
-        api.get<CircuitHealth>(`${base}/health`),
-        api.get<TrafficSummary>(`${base}/traffic-summary`, { params: trafficParams }),
-        api.get<CircuitAvailability>(`${base}/availability`, { params: availParams }),
-        api.get<TrafficBilling>(`${base}/billing`, {
-          params: billingMonth && rangeMode === "preset" ? { period: billingMonth } : {},
-        }),
+      const rangeParams = buildRangeParams(rangeMode, hours, customRange);
+      const limit = sampleLimitForWindow(rangeMode, hours, customRange);
+      const [h, t, a] = await Promise.all([
+        api.get<CircuitHealth>(`${base}/health`, { params: { ...rangeParams, limit } }),
+        api.get<TrafficSummary>(`${base}/traffic-summary`, { params: { ...rangeParams, limit } }),
+        api.get<CircuitAvailability>(`${base}/availability`, { params: rangeParams }),
       ]);
       setHealth(h.data);
       setTraffic(t.data);
       setAvailability(a.data);
-      setBilling(b.data);
-      if (!billingMonth && b.data.available_months?.length) {
-        setBillingMonth(b.data.available_months[0]);
-      }
     } finally {
       setLoading(false);
     }
-  }, [circuitId, hours, rangeMode, customRange, billingMonth, base]);
+  }, [circuitId, hours, rangeMode, customRange, base]);
+
+  const loadBilling = useCallback(async () => {
+    if (!circuitId) return;
+    try {
+      const { data } = await api.get<TrafficBilling>(`${base}/billing`, {
+        params: billingMonth && rangeMode === "preset" ? { period: billingMonth } : {},
+      });
+      setBilling(data);
+      if (!billingMonth && data.available_months?.length) {
+        setBillingMonth(data.available_months[0]);
+      }
+    } catch {
+      /* billing is optional for chart rendering */
+    }
+  }, [circuitId, billingMonth, rangeMode, base]);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    loadMetrics();
+  }, [loadMetrics]);
+
+  useEffect(() => {
+    loadBilling();
+  }, [loadBilling]);
 
   useEffect(() => {
     if (!circuitId || pollSec <= 0 || rangeMode === "custom") return;
-    const t = setInterval(load, pollSec * 1000);
+    const t = setInterval(loadMetrics, pollSec * 1000);
     return () => clearInterval(t);
-  }, [circuitId, pollSec, load, rangeMode]);
-
-  const spanHours = spanHoursFor(rangeMode, hours, customRange);
+  }, [circuitId, pollSec, loadMetrics, rangeMode]);
 
   const chartData = useMemo(
     () =>
@@ -133,11 +130,7 @@ export default function PortalCircuitMonitorPanel({
     [chartData, traffic?.p95],
   );
   const latencyOpt = useMemo(() => latencyJitterOption(chartData, "t"), [chartData]);
-
-  const windowLabel =
-    rangeMode === "custom" && customRange
-      ? `${customRange[0].format("MM-DD HH:mm")} ~ ${customRange[1].format("MM-DD HH:mm")}`
-      : HOUR_OPTIONS.find((o) => o.value === hours)?.label || `近 ${hours}h`;
+  const chartKey = chartRangeKey(circuitId, rangeMode, hours, customRange, chartData.length);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -166,7 +159,7 @@ export default function PortalCircuitMonitorPanel({
                 onChange={(vals) => setCustomRange(vals as [Dayjs, Dayjs] | null)}
                 disabledDate={(current) => !!current && current > dayjs().endOf("day")}
               />
-              <Button size="small" type="primary" loading={loading} onClick={load}>
+              <Button size="small" type="primary" loading={loading} onClick={loadMetrics}>
                 查询
               </Button>
             </>
@@ -194,7 +187,7 @@ export default function PortalCircuitMonitorPanel({
             options={billing.available_months.map((m) => ({ value: m, label: m }))}
             onChange={setBillingMonth}
           />
-          <Button size="small" onClick={load}>
+          <Button size="small" onClick={loadBilling}>
             重算
           </Button>
         </Space>
@@ -220,17 +213,17 @@ export default function PortalCircuitMonitorPanel({
         </Card>
       </div>
 
-      <Card size="small" title="流量 · Rx / Tx（含 95 参考线）" loading={loading}>
+      <Card size="small" title={`流量 · Rx / Tx（${windowLabel}，${chartData.length} 点）`} loading={loading}>
         {chartData.length ? (
-          <EChart option={trafficOpt} height={compact ? 220 : 280} />
+          <EChart key={`traffic-${chartKey}`} option={trafficOpt} height={compact ? 220 : 280} />
         ) : (
           <Empty description={empty.traffic} />
         )}
       </Card>
 
-      <Card size="small" title="时延 · 抖动 · 丢包" loading={loading}>
+      <Card size="small" title={`时延 · 抖动 · 丢包（${windowLabel}）`} loading={loading}>
         {chartData.length ? (
-          <EChart option={latencyOpt} height={compact ? 180 : 220} />
+          <EChart key={`latency-${chartKey}`} option={latencyOpt} height={compact ? 180 : 220} />
         ) : (
           <Empty description={empty.traffic} />
         )}
