@@ -57,6 +57,7 @@ import { formatOperStatus } from "../utils/networkDisplay";
 import CircuitMonitorPanel from "../components/CircuitMonitorPanel";
 import CircuitEndpointsEditor from "../components/CircuitEndpointsEditor";
 import ProvisionFeedbackModal from "../components/ProvisionFeedbackModal";
+import ProvisionProgressDock from "../components/ProvisionProgressDock";
 
 const SERVICE_LABEL: Record<string, string> = {
   l2vpn_evpn: "EVPN L2VPN",
@@ -155,6 +156,7 @@ export default function Circuits() {
   const [provisionError, setProvisionError] = useState<string | null>(null);
   const [provisioningId, setProvisioningId] = useState<number | null>(null);
   const [provisionType, setProvisionType] = useState<string>("provision");
+  const [detailsOpen, setDetailsOpen] = useState(false);
 
   async function loadCircuits(p = page, ps = pageSize, q = search) {
     setLoading(true);
@@ -332,6 +334,7 @@ export default function Circuits() {
     setProvisionError(null);
     setProvisionLoading(false);
     setProvisioningId(null);
+    setDetailsOpen(false);
   }
 
   async function executeProvision(
@@ -1135,13 +1138,24 @@ export default function Circuits() {
         )}
       </Drawer>
 
-      <ProvisionFeedbackModal
+      <ProvisionProgressDock
         circuit={provisionCircuit}
         woType={provisionType}
         loading={provisionLoading}
         result={provisionResult}
         error={provisionError}
+        onOpenDetails={() => setDetailsOpen(true)}
         onClose={closeProvisionFeedback}
+      />
+
+      <ProvisionFeedbackModal
+        open={detailsOpen}
+        circuit={provisionCircuit}
+        woType={provisionType}
+        loading={provisionLoading}
+        result={provisionResult}
+        error={provisionError}
+        onClose={() => setDetailsOpen(false)}
       />
     </PageCard>
   );

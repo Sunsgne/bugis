@@ -7,6 +7,7 @@ import {
 } from "antd";
 import {
   EditOutlined, DeleteOutlined, StopOutlined, SearchOutlined, ReloadOutlined,
+  LoadingOutlined,
 } from "@ant-design/icons";
 import dayjs, { type Dayjs } from "dayjs";
 import { api } from "../api/client";
@@ -38,6 +39,15 @@ const LEVEL_COLOR: Record<string, string> = {
   error: "red",
 };
 
+const TERMINAL = ["completed", "failed", "cancelled", "rolled_back"];
+
+function fmtTs(ts?: string | null) {
+  if (!ts) return "—";
+  const d = new Date(ts);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString("zh-CN", { hour12: false });
+}
+
 export default function WorkOrders() {
   const { message } = AntApp.useApp();
   const [rows, setRows] = useState<WorkOrder[]>([]);
@@ -46,7 +56,7 @@ export default function WorkOrders() {
   const [editTarget, setEditTarget] = useState<WorkOrder | null>(null);
   const [editForm] = Form.useForm();
 
-  // --- 开通日志搜索 / 过滤 ---
+  // --- 操作日志搜索 / 过滤 ---
   const [keyword, setKeyword] = useState("");
   const [range, setRange] = useState<[Dayjs, Dayjs] | null>(null);
   const [statusFilter, setStatusFilter] = useState<string | undefined>();
@@ -120,7 +130,7 @@ export default function WorkOrders() {
   }
   useEffect(() => {
     load();
-    const t = setInterval(load, 8000);
+    const t = setInterval(load, 5000);
     return () => clearInterval(t);
   }, []);
 
@@ -128,6 +138,22 @@ export default function WorkOrders() {
     const { data } = await api.get<WorkOrder>(`/work-orders/${id}`);
     setCurrent(data);
   }
+
+  // Live-poll the open detail drawer while the work order is still in progress,
+  // so 开通/拆除 progress streams in instead of appearing only when finished.
+  useEffect(() => {
+    if (!current || TERMINAL.includes(current.status)) return;
+    const id = current.id;
+    const t = setInterval(async () => {
+      try {
+        const { data } = await api.get<WorkOrder>(`/work-orders/${id}`);
+        setCurrent(data);
+      } catch {
+        /* keep last */
+      }
+    }, 2500);
+    return () => clearInterval(t);
+  }, [current?.id, current?.status]);
 
   return (
     <PageCard title={page.workOrders}>
@@ -216,7 +242,12 @@ export default function WorkOrders() {
             width: "10%",
             render: (s) => {
               const m = statusMeta(WORK_ORDER_STATUS, s);
-              return <Tag color={m.color}>{m.label}</Tag>;
+              const busy = s === "running" || s === "scheduled";
+              return (
+                <Tag color={m.color} icon={busy ? <LoadingOutlined spin /> : undefined}>
+                  {m.label}
+                </Tag>
+              );
             },
           },
           { title: "申请人", dataIndex: "requested_by", width: "10%", ellipsis: true, render: (v) => v || "—" },
@@ -314,6 +345,7 @@ export default function WorkOrders() {
                       {j.device_name || `设备 #${j.device_id}`} · {j.operation} ·{" "}
                       <Tag color={j.status.includes("fail") ? "red" : "green"}>{j.status}</Tag>
                       <Tag>{j.transport}</Tag>
+                      <Tag color="default">{fmtTs(j.created_at)}</Tag>
                     </span>
                   ),
                   children: (

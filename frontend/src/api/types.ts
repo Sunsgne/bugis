@@ -225,6 +225,7 @@ export interface ConfigJob {
   rendered_config?: string;
   rollback_config?: string;
   output?: string;
+  created_at?: string;
 }
 
 export interface WorkOrderEvent {
