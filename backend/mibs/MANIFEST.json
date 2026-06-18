@@ -1,7 +1,7 @@
 {
   "updated": "2026-06-15",
   "source": "https://github.com/net-snmp/net-snmp/tree/master/mibs",
-  "notes": "IETF standard MIBs for IF-MIB interface discovery and HC counter polling. Vendor MIBs (H3C HH3C-IF-EXT, etc.) may be placed under vendor/.",
+  "notes": "IETF standard MIBs for IF-MIB interface discovery and HC counter polling. Vendor private MIBs may be placed under vendor/. Huawei per-AC traffic uses standard IF-MIB on the sub-interface ifIndex; H3C per-service-instance traffic uses the private HH3C-EVC-MIB (hh3cEvcSrvInstStatInfoTable, OID 1.3.6.1.4.1.25506.2.106.1.4) indexed by (ifIndex, serviceInstanceId) — symbolic OIDs in app/services/mib_registry.py::HH3C_EVC.",
   "mibs": [
     {
       "file": "ietf/SNMPv2-SMI.txt",

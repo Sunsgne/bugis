@@ -79,6 +79,42 @@ IF_OPER_STATUS: dict[int, str] = {
 }
 
 
+class HH3C_EVC:
+    """H3C private HH3C-EVC-MIB — per service-instance forwarding statistics.
+
+    Comware standard IF-MIB counters only aggregate a whole port; per-circuit
+    (per Ethernet service-instance / AC) traffic must come from this private
+    MIB. Requires ``statistics enable`` on the service-instance (which the H3C
+    L2VPN apply template configures), exposed as hh3cEvcSrvInstEnableInStat /
+    OutStat. Tables are indexed by (ifIndex, hh3cEvcSrvInstId).
+
+    OID base hh3cEvc = enterprises.hh3c(25506).hh3cCommon(2).hh3cEvc(106)
+    Source: H3C HH3C-EVC-MIB (hh3cEvcSrvInstStatInfoTable 1.3.6.1.4.1.25506.2.106.1.4).
+    """
+
+    MIB = "HH3C-EVC-MIB"
+    ENTERPRISE = "H3C(25506)"
+
+    # hh3cEvcSrvInstStatInfoTable columns (indexed by ifIndex.srvInstId)
+    srvInstInPackets = MibOid(
+        "hh3cEvcSrvInstInPackets", "1.3.6.1.4.1.25506.2.106.1.4.1.1", MIB
+    )
+    srvInstInBytes = MibOid(
+        "hh3cEvcSrvInstInBytes", "1.3.6.1.4.1.25506.2.106.1.4.1.2", MIB
+    )
+    srvInstOutPackets = MibOid(
+        "hh3cEvcSrvInstOutPackets", "1.3.6.1.4.1.25506.2.106.1.4.1.3", MIB
+    )
+    srvInstOutBytes = MibOid(
+        "hh3cEvcSrvInstOutBytes", "1.3.6.1.4.1.25506.2.106.1.4.1.4", MIB
+    )
+
+    @staticmethod
+    def stat_index(ifindex: int, srv_inst_id: int) -> str:
+        """Composite table index: <ifIndex>.<serviceInstanceId>."""
+        return f"{ifindex}.{srv_inst_id}"
+
+
 def list_bundled_mibs() -> list[dict]:
     """Return metadata for MIB text files shipped under backend/mibs/."""
     manifest_path = MIB_ROOT / "MANIFEST.json"
