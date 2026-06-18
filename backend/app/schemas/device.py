@@ -47,6 +47,33 @@ class DeviceInterfaceOut(DeviceInterfaceBase, TimestampedSchema):
     device_id: int
 
 
+class InterfaceDescriptionItem(BaseModel):
+    name: str
+    description: str | None = None
+
+
+class InterfaceDescriptionBulkIn(BaseModel):
+    items: list[InterfaceDescriptionItem]
+    push: bool = True
+
+
+class InterfaceDescriptionResult(BaseModel):
+    name: str
+    description: str | None = None
+    updated: bool
+    note: str | None = None
+
+
+class InterfaceDescriptionBulkOut(BaseModel):
+    device: str
+    updated: int
+    pushed: bool
+    dry_run: bool
+    output: str | None = None
+    rendered: str | None = None
+    results: list[InterfaceDescriptionResult] = []
+
+
 class DevicePortBindingOut(BaseModel):
     interface_name: str
     binding_type: str  # platform | device
