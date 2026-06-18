@@ -14,8 +14,10 @@ def run_cli(device: Device, command: str, *, read_timeout: int | None = None) ->
     except ImportError as exc:  # pragma: no cover
         raise RuntimeError("netmiko not installed") from exc
 
+    from app.services.credential_store import southbound_device
+
     driver = get_driver(device.vendor)
-    params = driver._cli_params(device)  # noqa: SLF001 — shared with drivers
+    params = driver._cli_params(southbound_device(device))  # noqa: SLF001
     timeout = read_timeout or driver._cli_read_timeout()  # noqa: SLF001
     conn = ConnectHandler(**params)
     try:
