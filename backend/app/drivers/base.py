@@ -33,6 +33,12 @@ _CONFIRM_PROMPT = re.compile(
     re.IGNORECASE,
 )
 
+# A successful ``save`` returns one of these (VRP / Comware wording variants).
+_SAVE_SUCCESS = re.compile(
+    r"save.*success|saved\s+successfully|successfully\s+saved|配置.*成功|保存.*成功",
+    re.IGNORECASE | re.DOTALL,
+)
+
 
 def _xml_escape(text: str) -> str:
     """Minimal XML text escaping for NETCONF CLI-RPC payloads."""
@@ -97,7 +103,39 @@ class BaseDriver:
         except Exception:
             # Fallback: generic template that documents the intent.
             template = self._env.get_template(f"_generic/{service_type}_{operation}.j2")
-        return template.render(**ctx)
+        return self._with_persistence(template.render(**ctx), operation)
+
+    # --- persistence footer (display only) -----------------------------
+    def _persistence_footer(self) -> list[str] | None:
+        """Trailing persistence commands shown in the rendered config.
+
+        Huawei VRP8/CE is two-stage: ``commit`` writes the candidate to running,
+        then (back in user view) ``save`` persists to startup. H3C Comware is
+        single-stage: ``save force`` persists to startup. These are rendered for
+        operator visibility; the live push executes them through the transport
+        layer (see ``config_text._HASH_PERSIST`` — they are stripped from the
+        pushed command list).
+        """
+        if self.vendor == Vendor.HUAWEI:
+            return ["commit", "#", "return", "#", "save"]
+        if self.vendor == Vendor.H3C:
+            return ["return", "#", "save force"]
+        return None
+
+    def _with_persistence(self, rendered: str, operation: str) -> str:
+        footer = self._persistence_footer()
+        if footer is None or operation not in ("apply", "remove"):
+            return rendered
+        lines = rendered.splitlines()
+        trailing_nl = rendered.endswith("\n")
+        for i in range(len(lines) - 1, -1, -1):
+            if lines[i].strip().lower() == "return":
+                lines[i : i + 1] = footer
+                break
+        else:
+            lines.extend(footer)
+        out = "\n".join(lines)
+        return out + "\n" if trailing_nl else out
 
     # --- pushing -------------------------------------------------------
     def push(
@@ -521,8 +559,12 @@ class BaseDriver:
         read_timeout = self._cli_read_timeout()
         try:
             out = timing(cmd, read_timeout=read_timeout) or ""
+            # ``save`` is interactive on Huawei: answer the confirm prompt and
+            # wait for the success banner (Comware ``save force`` is silent).
             if _CONFIRM_PROMPT.search(out):
-                out += timing("Y", read_timeout=read_timeout) or ""
+                out += timing("y", read_timeout=read_timeout) or ""
+            if self.vendor == Vendor.HUAWEI and not _SAVE_SUCCESS.search(out):
+                out += f"\n[warn] save confirmation not detected: {out.strip()[-160:]}"
             return "\n" + out
         except Exception as exc:  # noqa: BLE001
             return f"\n[warn] save to startup config failed: {exc}"

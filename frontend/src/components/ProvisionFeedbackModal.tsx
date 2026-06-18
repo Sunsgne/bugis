@@ -61,7 +61,15 @@ type Props = {
   result: ProvisionResult | null;
   error: string | null;
   onClose: () => void;
+  open?: boolean;
 };
+
+function fmtTs(ts?: string | null) {
+  if (!ts) return "—";
+  const d = new Date(ts);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString("zh-CN", { hour12: false });
+}
 
 function summarizeOutput(output?: string | null) {
   if (!output) return "—";
@@ -76,8 +84,9 @@ export default function ProvisionFeedbackModal({
   result,
   error,
   onClose,
+  open: openProp,
 }: Props) {
-  const open = !!circuit;
+  const open = openProp ?? !!circuit;
   const isTeardown = woType === "decommission";
   const success = result?.status === "completed";
   const failed = !!error || result?.status === "failed";
@@ -206,14 +215,22 @@ export default function ProvisionFeedbackModal({
                 title: "设备",
                 render: (_, row) => row.device_name || `#${row.device_id}`,
               },
-              { title: "操作", dataIndex: "operation", width: 72 },
-              { title: "传输", dataIndex: "transport", width: 88 },
+              { title: "操作", dataIndex: "operation", width: 64 },
+              { title: "传输", dataIndex: "transport", width: 80 },
               {
                 title: "状态",
                 dataIndex: "status",
-                width: 96,
+                width: 90,
                 render: (s: string) => (
                   <Tag color={JOB_STATUS_COLOR[s] || "default"}>{JOB_STATUS_LABEL[s] || s}</Tag>
+                ),
+              },
+              {
+                title: "时间",
+                dataIndex: "created_at",
+                width: 150,
+                render: (v?: string) => (
+                  <span style={{ fontSize: 12 }}>{fmtTs(v)}</span>
                 ),
               },
               {

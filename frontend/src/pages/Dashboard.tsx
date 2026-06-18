@@ -246,7 +246,7 @@ export default function Dashboard() {
           </Card>
         </Col>
         <Col xs={24} md={8}>
-          <Card className="chart-card" title="开通日志 · 最近动态" style={{ height: "100%" }}>
+          <Card className="chart-card" title="操作日志 · 最近动态" style={{ height: "100%" }}>
             <Table
               size="small"
               rowKey="id"
