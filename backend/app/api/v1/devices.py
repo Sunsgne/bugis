@@ -27,6 +27,7 @@ from app.schemas.device import (
 from app.schemas.pagination import PaginatedResponse, paginate_query, paginated
 from app.services import baseline, config_learn, config_mgmt, port_inventory, snmp, snmp_settings as snmp_cfg
 from app.services import device_management, interface_admin, platform_settings as platform_cfg
+from app.services.credential_store import encrypt_device_fields
 
 router = APIRouter()
 
@@ -96,7 +97,7 @@ def create_device(
     db: Session = Depends(get_db),
     user: User = Depends(require_operator),
 ):
-    device = Device(**_normalize_snmp_fields(payload.model_dump()))
+    device = Device(**encrypt_device_fields(_normalize_snmp_fields(payload.model_dump())))
     db.add(device)
     db.flush()
     should_learn = False
@@ -136,7 +137,9 @@ def update_device(
     device = db.get(Device, device_id)
     if not device:
         raise HTTPException(status_code=404, detail="device not found")
-    for k, v in _normalize_snmp_fields(payload.model_dump(exclude_unset=True)).items():
+    for k, v in encrypt_device_fields(
+        _normalize_snmp_fields(payload.model_dump(exclude_unset=True))
+    ).items():
         setattr(device, k, v)
     db.commit()
     db.refresh(device)

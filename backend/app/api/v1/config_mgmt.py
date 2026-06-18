@@ -16,7 +16,7 @@ router = APIRouter()
 
 
 @router.get("/devices")
-def list_device_configs(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+def list_device_configs(db: Session = Depends(get_db), _: User = Depends(require_operator)):
     """All devices with a summary of their latest config snapshot."""
     devices = db.execute(select(Device).order_by(Device.id)).scalars().all()
     out = []
@@ -48,7 +48,7 @@ def list_device_configs(db: Session = Depends(get_db), _: User = Depends(get_cur
 
 @router.get("/devices/{device_id}/running")
 def running_config(
-    device_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_user)
+    device_id: int, db: Session = Depends(get_db), _: User = Depends(require_operator)
 ):
     device = db.get(Device, device_id)
     if not device:
@@ -85,7 +85,7 @@ def backup_config(
 
 @router.get("/devices/{device_id}/snapshots")
 def list_snapshots(
-    device_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_user)
+    device_id: int, db: Session = Depends(get_db), _: User = Depends(require_operator)
 ):
     rows = db.execute(
         select(DeviceConfigSnapshot)
@@ -106,7 +106,7 @@ def list_snapshots(
 @router.get("/devices/{device_id}/snapshots/{snap_id}")
 def get_snapshot(
     device_id: int, snap_id: int,
-    db: Session = Depends(get_db), _: User = Depends(get_current_user)
+    db: Session = Depends(get_db), _: User = Depends(require_operator)
 ):
     snap = db.get(DeviceConfigSnapshot, snap_id)
     if not snap or snap.device_id != device_id:
@@ -120,7 +120,7 @@ def diff_config(
     a: int | None = None,
     b: int | None = None,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(require_operator),
 ):
     """Diff two snapshots (defaults to the two most recent)."""
     snaps = db.execute(
@@ -149,7 +149,7 @@ def diff_config(
 def config_drift(
     device_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(require_operator),
 ):
     """Diff platform-assembled running config vs latest learned live config."""
     device = db.get(Device, device_id)

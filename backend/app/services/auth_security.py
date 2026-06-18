@@ -233,7 +233,7 @@ def verify_turnstile(plat: PlatformSettings, token: str | None, ip_address: str)
     secret = plat.turnstile_secret_key or ""
     if not secret or not token:
         return False
-    if settings.dry_run and token == "dry-run-turnstile":
+    if settings.dry_run and settings.app_env != "production" and token == "dry-run-turnstile":
         return True
     try:
         resp = httpx.post(

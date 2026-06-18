@@ -119,8 +119,51 @@ def ensure_platform_settings(db: Session) -> None:
     from app.services import platform_settings
 
     row = platform_settings.get_or_create(db)
-    if row.dry_run != settings.dry_run:
-        row.dry_run = settings.dry_run
-        db.commit()
-        db.refresh(row)
     platform_settings.sync_to_runtime(row)
+
+
+def encrypt_credentials_at_rest(db: Session) -> None:
+    """One-time migration: encrypt plaintext device/controller/SNMP secrets."""
+    from app.models.device import Device
+    from app.models.snmp_settings import SnmpSettings
+    from app.services.credential_store import (
+        encrypt_device_model,
+        encrypt_value,
+        is_encrypted,
+    )
+
+    changed = False
+    for device in db.execute(select(Device)).scalars():
+        before = (
+            device.password,
+            device.enable_password,
+            device.snmp_community,
+            device.snmp_v3_auth_password,
+            device.snmp_v3_priv_password,
+        )
+        encrypt_device_model(device)
+        after = (
+            device.password,
+            device.enable_password,
+            device.snmp_community,
+            device.snmp_v3_auth_password,
+            device.snmp_v3_priv_password,
+        )
+        if before != after:
+            changed = True
+
+    for ctrl in db.execute(select(Controller)).scalars():
+        if ctrl.password and not is_encrypted(ctrl.password):
+            ctrl.password = encrypt_value(ctrl.password)
+            changed = True
+
+    snmp = db.get(SnmpSettings, 1)
+    if snmp:
+        for field in ("community", "write_community", "v3_auth_password", "v3_priv_password"):
+            val = getattr(snmp, field, None)
+            if val and not is_encrypted(val):
+                setattr(snmp, field, encrypt_value(val))
+                changed = True
+
+    if changed:
+        db.commit()

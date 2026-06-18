@@ -62,7 +62,7 @@ class StreamTicketOut(BaseModel):
 
 class UserCreate(BaseModel):
     username: str
-    password: str
+    password: str = Field(min_length=8, max_length=128)
     full_name: str | None = None
     email: str | None = None
     role: UserRole = UserRole.OPERATOR
@@ -92,7 +92,7 @@ class UserUpdate(BaseModel):
 
 class TenantUserCreate(BaseModel):
     username: str
-    password: str
+    password: str = Field(min_length=8, max_length=128)
     full_name: str | None = None
     email: str | None = None
     role: UserRole = UserRole.TENANT_VIEWER
@@ -120,7 +120,7 @@ class UserOut(TimestampedSchema):
 
 class PasswordChangeRequest(BaseModel):
     current_password: str
-    new_password: str
+    new_password: str = Field(min_length=8, max_length=128)
 
 
 class ProfileUpdateRequest(BaseModel):

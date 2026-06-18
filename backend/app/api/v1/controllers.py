@@ -10,6 +10,7 @@ from app.core.database import get_db
 from app.models.controller import Controller
 from app.models.enums import ControllerType
 from app.models.user import User
+from app.services.credential_store import encrypt_value
 from app.schemas.controller import (
     ControllerCreate,
     ControllerOut,
@@ -37,7 +38,10 @@ def create_controller(
             status_code=400,
             detail="Bugis SDN 控制器为平台内置组件，启动时自动注册，无需手动添加",
         )
-    controller = Controller(**payload.model_dump())
+    data = payload.model_dump()
+    if data.get("password"):
+        data["password"] = encrypt_value(data["password"])
+    controller = Controller(**data)
     db.add(controller)
     db.commit()
     db.refresh(controller)
@@ -60,6 +64,8 @@ def update_controller(
             detail="内置 Bugis SDN 控制器不可修改",
         )
     for k, v in payload.model_dump(exclude_unset=True).items():
+        if k == "password" and v:
+            v = encrypt_value(v)
         setattr(controller, k, v)
     db.commit()
     db.refresh(controller)

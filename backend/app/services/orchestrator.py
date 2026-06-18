@@ -11,8 +11,11 @@ vendor configuration via the appropriate southbound driver and applies it
 """
 from __future__ import annotations
 
+import logging
 import secrets
 from typing import Callable
+
+logger = logging.getLogger("bugis.orchestrator")
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -68,8 +71,8 @@ def _refresh_live_inventory(db: Session, circuit: Circuit) -> None:
             seen.add(dev.id)
             try:
                 port_inventory.scan_device(db, dev, include_legacy=False)
-            except Exception:  # noqa: BLE001
-                pass
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("inventory refresh failed for %s: %s", dev.name, exc)
 
 
 def _devices_without_baseline(db: Session, circuit: Circuit) -> list[str]:
@@ -274,9 +277,9 @@ def _render_sr_policy(
         )
         return True
     except Exception as exc:  # noqa: BLE001
-        _log(db, wo, f"SR Policy render skipped on {device.name}: {exc}",
-             level="warning", actor=actor)
-        return True
+        _log(db, wo, f"SR Policy render failed on {device.name}: {exc}",
+             level="error", actor=actor)
+        return False
 
 
 def _dci_gateways(db: Session, circuit: Circuit) -> list[Device]:
@@ -377,7 +380,11 @@ def _remove_previous_endpoints(
 
 def execute(db: Session, wo: WorkOrder, actor: str | None = None) -> WorkOrder:
     """Render and apply configuration for a work order."""
-    if wo.status not in (WorkOrderStatus.APPROVED, WorkOrderStatus.SCHEDULED):
+    if wo.status not in (
+        WorkOrderStatus.APPROVED,
+        WorkOrderStatus.SCHEDULED,
+        WorkOrderStatus.RUNNING,
+    ):
         raise ValueError("work order must be approved before execution")
 
     circuit = wo.circuit
@@ -425,13 +432,15 @@ def execute(db: Session, wo: WorkOrder, actor: str | None = None) -> WorkOrder:
         if plat.protect_live_config:
             missing = _devices_without_baseline(db, circuit)
             if missing:
+                wo.status = WorkOrderStatus.FAILED
+                circuit.status = CircuitStatus.FAILED
                 _log(
                     db, wo,
-                    "现网配置保护：以下设备暂无现网学习基线，无法核对未纳管业务，"
-                    "下发采用增量合并(merge)不会整体覆盖，但建议先执行『现网学习』再下发："
+                    "现网配置保护：以下设备暂无现网学习基线，已阻断下发："
                     + "、".join(missing),
-                    level="warning", actor=actor,
+                    level="error", actor=actor,
                 )
+                return wo
         if errors:
             wo.status = WorkOrderStatus.FAILED
             circuit.status = CircuitStatus.FAILED
@@ -439,11 +448,15 @@ def execute(db: Session, wo: WorkOrder, actor: str | None = None) -> WorkOrder:
                  level="error", actor=actor)
             return wo
 
-    wo.status = WorkOrderStatus.RUNNING
-    circuit.status = CircuitStatus.PROVISIONING
     operation = _operation_for(wo.type)
     service_type: ServiceType = circuit.service_type
+    if wo.status != WorkOrderStatus.RUNNING:
+        wo.status = WorkOrderStatus.RUNNING
+        circuit.status = CircuitStatus.PROVISIONING
     _log(db, wo, f"Execution started: {operation} {service_type.value}", actor=actor)
+    db.commit()
+    db.refresh(wo)
+    db.refresh(circuit)
 
     # Pre-change snapshot: save each target device's live running-config before
     # touching it, so the change always has a "before" version for rollback /
@@ -966,13 +979,15 @@ def _render_and_push(
         # the erroring command), so on overall rollback we must scrub every
         # attempted device to avoid leaving dirty config behind.
         if (
-            operation == "apply"
+            operation in ("apply", "remove")
             and rollbacks is not None
             and job.rollback_config
+            and (operation == "apply" or result.success)
         ):
             _register_driver_rollback(
                 db, wo, circuit, device, service_type, job.rollback_config,
-                actor, is_gateway, rollbacks, partial_failure=not result.success,
+                actor, is_gateway, rollbacks,
+                partial_failure=operation == "apply" and not result.success,
             )
         return result.success
     except Exception as exc:  # noqa: BLE001

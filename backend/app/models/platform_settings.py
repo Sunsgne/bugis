@@ -68,7 +68,7 @@ class PlatformSettings(Base, TimestampMixin):
     mfa_required_portal: Mapped[bool] = mapped_column(Boolean, default=False)
     mfa_allow_totp: Mapped[bool] = mapped_column(Boolean, default=True)
     mfa_allow_email: Mapped[bool] = mapped_column(Boolean, default=True)
-    expose_openapi: Mapped[bool] = mapped_column(Boolean, default=True)
+    expose_openapi: Mapped[bool] = mapped_column(Boolean, default=False)
 
     # Live-config protection: before pushing a circuit, refresh per-interface
     # S-VID usage from the cached learned snapshot (zero switch load) so the

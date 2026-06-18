@@ -14,7 +14,7 @@ from app.core.database import get_db
 from app.drivers import get_driver
 from app.models.circuit import Circuit
 from app.models.device import Device
-from app.models.enums import WorkOrderType
+from app.models.enums import CircuitStatus, WorkOrderStatus, WorkOrderType
 from app.models.user import User
 from app.models.workorder import WorkOrder
 from app.schemas.workorder import (
@@ -223,6 +223,12 @@ def provision_circuit(
     circuit = db.get(Circuit, circuit_id)
     if not circuit:
         raise HTTPException(status_code=404, detail="circuit not found")
+    if wo_type == WorkOrderType.PROVISION and circuit.status == CircuitStatus.ACTIVE:
+        if not getattr(circuit, "adopted", False):
+            raise HTTPException(
+                status_code=409,
+                detail="专线已处于 active 状态，请勿重复开通；如需变更请使用 MODIFY 工单",
+            )
     payload: str | None = None
     if body and body.previous_endpoints:
         payload = json.dumps(
@@ -258,7 +264,7 @@ def provision_circuit(
 
 @router.get("/{wo_id}/preview")
 def preview_work_order(
-    wo_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_user)
+    wo_id: int, db: Session = Depends(get_db), _: User = Depends(require_operator)
 ):
     """Render (dry-run) the configuration without applying it."""
     wo = db.get(WorkOrder, wo_id)
@@ -287,7 +293,7 @@ def preview_work_order(
 
 @router.get("/{wo_id}/ansible")
 def export_ansible(
-    wo_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_user)
+    wo_id: int, db: Session = Depends(get_db), _: User = Depends(require_operator)
 ):
     """Export this work order's config as Ansible inventory + playbook."""
     wo = db.get(WorkOrder, wo_id)
@@ -304,7 +310,7 @@ def export_ansible(
 
 @router.get("/{wo_id}/ansible/download")
 def download_ansible_archive(
-    wo_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_user)
+    wo_id: int, db: Session = Depends(get_db), _: User = Depends(require_operator)
 ):
     """Download inventory + playbook + per-device configs as a zip archive."""
     wo = db.get(WorkOrder, wo_id)

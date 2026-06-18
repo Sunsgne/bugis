@@ -6,6 +6,7 @@
 #
 # Node 1 (leader): BUGIS_SCHEDULER_ENABLED=true  BUGIS_RUN_MIGRATIONS=true
 # Node 2+ (follower): BUGIS_SCHEDULER_ENABLED=false BUGIS_RUN_MIGRATIONS=false
+#                      BUGIS_WORKER_ENABLED=false
 #
 # Usage:
 #   docker compose -f docker-compose.ha-app.yml --env-file deploy/ha/app.env up -d --build
@@ -19,6 +20,7 @@ services:
       BUGIS_APP_ENV: production
       BUGIS_DRY_RUN: ${BUGIS_DRY_RUN:-false}
       BUGIS_SCHEDULER_ENABLED: ${BUGIS_SCHEDULER_ENABLED:-true}
+      BUGIS_WORKER_ENABLED: ${BUGIS_WORKER_ENABLED:-true}
       BUGIS_SCHEDULER_INTERVAL_SECONDS: ${BUGIS_SCHEDULER_INTERVAL_SECONDS:-30}
       BUGIS_CONTROLLER_NODE_ID: ${BUGIS_CONTROLLER_NODE_ID:-bugis-1}
       BUGIS_RUN_MIGRATIONS: ${BUGIS_RUN_MIGRATIONS:-false}

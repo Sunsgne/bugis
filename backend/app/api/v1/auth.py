@@ -4,13 +4,14 @@ from __future__ import annotations
 import secrets
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Header, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, is_tenant_user, require_admin
 from app.core.database import get_db
+from app.core.security_hardening import client_ip_from_request
 from app.core.security import create_access_token, hash_password, verify_password
 from app.models.auth_challenge import AuthChallenge
 from app.models.enums import MfaMethod, TenantStatus, UserRole, UserScope
@@ -41,12 +42,7 @@ router = APIRouter()
 
 
 def _client_ip(request: Request) -> str:
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    if request.client:
-        return request.client.host
-    return "unknown"
+    return client_ip_from_request(request)
 
 
 def _load_user(db: Session, username: str) -> User | None:
@@ -170,6 +166,7 @@ def login(
     request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db),
+    x_turnstile_token: str | None = Header(default=None, alias="X-Turnstile-Token"),
 ):
     ip_address = _client_ip(request)
     user = _authenticate_credentials(
@@ -177,7 +174,7 @@ def login(
         username=form_data.username,
         password=form_data.password,
         ip_address=ip_address,
-        turnstile_token=None,
+        turnstile_token=x_turnstile_token,
     )
     plat = platform_cfg.get_or_create(db)
     if auth_security.mfa_required_for_user(user, plat):
@@ -213,7 +210,18 @@ def login_json(
 
 
 @router.post("/mfa/verify", response_model=Token)
-def mfa_verify(payload: MfaVerifyRequest, db: Session = Depends(get_db)):
+def mfa_verify(
+    payload: MfaVerifyRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    ip_address = _client_ip(request)
+    plat = platform_cfg.get_or_create(db)
+    if auth_security.is_ip_rate_limited(db, plat, ip_address):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="验证尝试过于频繁，请稍后再试",
+        )
     challenge = auth_security.consume_challenge(
         db, purpose="mfa_login", token=payload.mfa_token, code=None
     )
@@ -233,6 +241,10 @@ def mfa_verify(payload: MfaVerifyRequest, db: Session = Depends(get_db)):
             and auth_security.hash_code(payload.code) == challenge.code_hash
         )
     if not ok:
+        auth_security.record_login_attempt(
+            db, ip_address=ip_address, username=user.username, success=False
+        )
+        db.commit()
         raise HTTPException(status_code=401, detail="验证码错误")
 
     challenge.consumed_at = challenge.consumed_at or challenge.created_at
@@ -242,7 +254,18 @@ def mfa_verify(payload: MfaVerifyRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/mfa/send-email")
-def mfa_send_email(payload: MfaSendEmailRequest, db: Session = Depends(get_db)):
+def mfa_send_email(
+    payload: MfaSendEmailRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    ip_address = _client_ip(request)
+    plat = platform_cfg.get_or_create(db)
+    if auth_security.is_ip_rate_limited(db, plat, ip_address):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="验证邮件发送过于频繁，请稍后再试",
+        )
     challenge = db.execute(
         select(AuthChallenge).where(
             AuthChallenge.purpose == "mfa_login",

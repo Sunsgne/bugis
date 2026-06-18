@@ -66,6 +66,12 @@ def stream_events(
         db.close()
 
     def event_gen() -> Iterator[str]:
+        db2 = SessionLocal()
+        try:
+            auth_security.consume_challenge(db2, purpose="sse", token=ticket)
+            db2.commit()
+        finally:
+            db2.close()
         max_iterations = max(1, int(600 / interval))
         for _ in range(max_iterations):
             payload = json.dumps(_snapshot())
