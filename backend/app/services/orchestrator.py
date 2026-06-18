@@ -56,6 +56,37 @@ def _log(db: Session, wo: WorkOrder, message: str, level: str = "info",
     )
 
 
+def _removed_config_items(rendered: str) -> list[str]:
+    """Extract the concrete teardown commands (undo / no / delete) from a
+    rendered remove config so we can show the operator exactly what was
+    recovered, mirroring the provisioning process log."""
+    items: list[str] = []
+    for raw in (rendered or "").splitlines():
+        s = raw.strip()
+        if not s or s.startswith("#") or s.startswith("!"):
+            continue
+        low = s.lower()
+        if low.startswith(("undo ", "no ", "delete ")):
+            items.append(s)
+    return items
+
+
+def _log_teardown_details(
+    db: Session, wo: WorkOrder, device: Device, rendered: str, actor: str | None,
+    *, is_gateway: bool = False,
+) -> None:
+    """Emit a per-device 'what was removed' breakdown for a remove push."""
+    items = _removed_config_items(rendered)
+    tag = "[GW] " if is_gateway else ""
+    if not items:
+        return
+    _log(
+        db, wo,
+        f"{tag}{device.name} 回收配置 {len(items)} 项：" + "； ".join(items),
+        actor=actor,
+    )
+
+
 def next_work_order_code(db: Session) -> str:
     while True:
         code = "WO-" + secrets.token_hex(3).upper()
@@ -785,6 +816,12 @@ def _render_and_push(
             level="info" if result.success else "error",
             actor=actor,
         )
+        # Teardown process detail: list exactly which config was recovered, so a
+        # decommission shows a clear step-by-step like provisioning does.
+        if operation == "remove" and result.success:
+            _log_teardown_details(
+                db, wo, device, rendered, actor, is_gateway=is_gateway
+            )
         # Register cleanup for ANY apply attempt (success OR failure): a failed
         # push may have partially applied (e.g. bridge-domain/VSI created before
         # the erroring command), so on overall rollback we must scrub every
