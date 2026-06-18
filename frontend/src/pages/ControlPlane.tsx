@@ -24,33 +24,10 @@ import {
   CloudServerOutlined,
 } from "@ant-design/icons";
 import { api } from "../api/client";
-import TopologyGraph from "../components/TopologyGraph";
-import { overlayTopologyOption } from "../charts/topologyGraph";
+import OverlayTopologyPanel from "../components/OverlayTopologyPanel";
 import { empty, page } from "../constants/uiCopy";
 
 const { Text } = Typography;
-
-function OverlayMap({ topo }: { topo: any }) {
-  const chartOpt = useMemo(
-    () => (topo?.nodes?.length ? overlayTopologyOption(topo) : null),
-    [topo],
-  );
-
-  if (!topo?.nodes?.length || !chartOpt) {
-    return <Empty description="Overlay 尚未建立 · 开通控制器托管专线后自动呈现" />;
-  }
-
-  return (
-    <div>
-      <Space style={{ marginBottom: 8 }} wrap>
-        <Text type="secondary" style={{ fontSize: 12 }}>
-          滚轮缩放 · 拖拽平移 · 按 VNI 着色
-        </Text>
-      </Space>
-      <TopologyGraph option={chartOpt} height={520} />
-    </div>
-  );
-}
 
 function OverlayScanSummary({ overlay }: { overlay: any }) {
   const items: any[] = Array.isArray(overlay?.items) ? overlay.items : [];
@@ -460,7 +437,7 @@ export default function ControlPlane() {
       </Card>
 
       <Card title="VXLAN / SR-MPLS Overlay">
-        <OverlayMap topo={topo} />
+        <OverlayTopologyPanel topo={topo} overlayInventory={overlay} />
       </Card>
 
       <Card title="VTEP 邻居表">
