@@ -219,6 +219,38 @@ def fleet_overlay_inventory(db: Session) -> dict:
             )
         devices_scanned += 1
 
+    # Platform-managed circuits on endpoint devices without a learned L2 match.
+    for ep, circuit in db.execute(
+        select(CircuitEndpoint, Circuit)
+        .join(Circuit, Circuit.id == CircuitEndpoint.circuit_id)
+        .where(
+            Circuit.vni.is_not(None),
+            Circuit.status.in_(tuple(_TOPOLOGY_RETAIN_STATES)),
+        )
+    ).all():
+        device = db.get(Device, ep.device_id)
+        if not device:
+            continue
+        if any(e.circuit_id == circuit.id and e.device_id == device.id for e in all_items):
+            continue
+        vsi = circuit.vsi_name or f"vsi_{circuit.code.replace('-', '_').lower()}"
+        all_items.append(
+            OverlayServiceEntry(
+                device_id=device.id,
+                device_name=device.name,
+                vendor=device.vendor.value,
+                service_name=vsi,
+                vni=circuit.vni,
+                rd=circuit.route_distinguisher,
+                rt=circuit.route_target,
+                interfaces=[ep.interface_name],
+                source="platform",
+                circuit_id=circuit.id,
+                circuit_code=circuit.code,
+                circuit_name=circuit.name,
+            )
+        )
+
     # Controller VTEP VNIs (platform-provisioned state).
     controller_vnis: set[int] = set()
     for peer in db.execute(select(VtepPeer)).scalars().all():

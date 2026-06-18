@@ -425,6 +425,8 @@ def execute(db: Session, wo: WorkOrder, actor: str | None = None) -> WorkOrder:
                     port_inventory.scan_device(db, ep.device)
                 except Exception:  # noqa: BLE001
                     pass
+        if wo.type != WorkOrderType.DECOMMISSION:
+            bugis_controller.sync_circuit_overlay(db, circuit, work_order_id=wo.id)
         return wo
 
     # Pre-flight compliance validation (skip for decommission).
