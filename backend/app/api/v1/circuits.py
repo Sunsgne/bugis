@@ -30,7 +30,7 @@ from app.schemas.circuit import (
 )
 from app.schemas.pagination import PaginatedResponse, paginate_query, paginated
 from app.schemas.path import PathPreviewRequest, PathPreviewResponse
-from app.services import allocation, circuit_adopt, path_service, port_inventory, probe, validation
+from app.services import allocation, circuit_adopt, concurrent_scan, path_service, port_inventory, probe, validation
 from app.services import platform_settings as platform_cfg
 from app.services.circuit_alarm_settings import thresholds_out
 
@@ -593,13 +593,6 @@ def replace_endpoints(
         new_endpoints.append(endpoint)
     db.flush()
 
-    if circuit.adopted:
-        device_ids = {ep.device_id for ep in new_endpoints}
-        for did in device_ids:
-            dev = db.get(Device, did)
-            if dev:
-                port_inventory.scan_device(db, dev, include_legacy=False)
-
     if circuit.path_mode == PathMode.EXPLICIT_SR:
         endpoint_ids = [ep.device_id for ep in new_endpoints]
         via_ids = [h.device_id for h in sorted(circuit.path_hops, key=lambda h: h.sequence)]
@@ -612,6 +605,11 @@ def replace_endpoints(
             )
 
     db.commit()
+    if circuit.adopted:
+        concurrent_scan.scan_devices_parallel(
+            [ep.device_id for ep in new_endpoints],
+            include_legacy=False,
+        )
     db.refresh(circuit)
     return _to_circuit_out(db, circuit)
 

@@ -103,6 +103,7 @@ export default function DevicePortDrawer({
   const [bindings, setBindings] = useState<DevicePortBindings | null>(null);
   const [ifacesLoading, setIfacesLoading] = useState(false);
   const [bindingsLoading, setBindingsLoading] = useState(false);
+  const [bindingsRefreshing, setBindingsRefreshing] = useState(false);
   const [ifaceSvidOnly, setIfaceSvidOnly] = useState(false);
   const [ifaceSearch, setIfaceSearch] = useState("");
   const [ifaceStatus, setIfaceStatus] = useState<"all" | "up" | "down" | "allocated">("all");
@@ -118,14 +119,22 @@ export default function DevicePortDrawer({
   const [savingDesc, setSavingDesc] = useState(false);
 
   async function loadBindings(deviceId: number, refresh = false) {
-    setBindingsLoading(true);
+    if (refresh) {
+      setBindingsRefreshing(true);
+    } else {
+      setBindingsLoading(true);
+    }
     try {
       const { data } = await api.get<DevicePortBindings>(`/devices/${deviceId}/port-bindings`, {
         params: refresh ? { scan: true } : undefined,
       });
       setBindings(data);
     } finally {
-      setBindingsLoading(false);
+      if (refresh) {
+        setBindingsRefreshing(false);
+      } else {
+        setBindingsLoading(false);
+      }
     }
   }
 
@@ -157,7 +166,10 @@ export default function DevicePortDrawer({
     }
 
     let cancelled = false;
-    void loadBindings(device.id, true);
+    void (async () => {
+      await loadBindings(device.id, false);
+      if (!cancelled) void loadBindings(device.id, true);
+    })();
     (async () => {
       const rows = await loadIfaces(device.id, false);
       if (cancelled) return;
@@ -575,6 +587,7 @@ export default function DevicePortDrawer({
                       <Tag color="orange">现网占用 {bindings.device_only_bindings}</Tag>
                       <Tag>已绑定接口 {bindings.bound_interfaces}</Tag>
                       <Tag color="green">空闲接口 {bindings.unbound_interfaces.length}</Tag>
+                      {bindingsRefreshing ? <Tag color="processing">同步现网占用…</Tag> : null}
                     </Space>
                   </div>
                 ) : null}
@@ -737,7 +750,10 @@ export default function DevicePortDrawer({
           binding={adoptBinding}
           deviceId={device.id}
           onClose={() => setAdoptBinding(null)}
-          onSuccess={() => loadBindings(device.id, true)}
+          onSuccess={() => {
+            message.success("纳管成功，已登记到平台（未下发配置）");
+            void loadBindings(device.id, false);
+          }}
         />
       ) : null}
     </Drawer>

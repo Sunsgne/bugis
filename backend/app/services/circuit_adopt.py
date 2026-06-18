@@ -9,7 +9,7 @@ from app.models.device import Device
 from app.models.enums import AccessMode, CircuitStatus, ServiceType
 from app.models.tenant import Tenant
 from app.schemas.circuit import CircuitAdoptBinding, CircuitAdoptCreate, CircuitEndpointCreate
-from app.services import allocation, port_inventory
+from app.services import allocation, concurrent_scan, port_inventory
 
 
 def _endpoint_tuple(
@@ -60,7 +60,6 @@ def validate_adopted_endpoints_replace(
         if not device:
             raise HTTPException(status_code=404, detail=f"device {ep.device_id} not found")
 
-        port_inventory.scan_device(db, device, include_legacy=False)
         row = find_adoptable_binding(
             db,
             device,
@@ -162,14 +161,18 @@ def adopt_circuit_from_inventory(
     if not tenant:
         raise HTTPException(status_code=404, detail="tenant not found")
 
-    device_ids = {b.device_id for b in payload.bindings}
+    device_ids = list({b.device_id for b in payload.bindings})
     devices: dict[int, Device] = {}
     for did in device_ids:
         dev = db.get(Device, did)
         if not dev:
             raise HTTPException(status_code=404, detail=f"device {did} not found")
-        port_inventory.scan_device(db, dev, include_legacy=False)
         devices[did] = dev
+
+    if payload.refresh_inventory:
+        concurrent_scan.scan_devices_parallel(device_ids, include_legacy=False)
+        for dev in devices.values():
+            db.refresh(dev)
 
     adopted_rows: list[dict] = []
     for binding in payload.bindings:
