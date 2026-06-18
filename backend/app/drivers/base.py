@@ -110,14 +110,16 @@ class BaseDriver:
         """Trailing persistence commands shown in the rendered config.
 
         Huawei VRP8/CE is two-stage: ``commit`` writes the candidate to running,
-        then (back in user view) ``save`` persists to startup. H3C Comware is
-        single-stage: ``save force`` persists to startup. These are rendered for
-        operator visibility; the live push executes them through the transport
-        layer (see ``config_text._HASH_PERSIST`` — they are stripped from the
-        pushed command list).
+        then (back in user view) ``save`` persists to startup (interactive
+        ``[Y/N]`` — answer ``Y``). H3C Comware is single-stage: ``save force``
+        persists to startup. These are rendered for operator visibility; the live
+        push executes them through the transport layer (see
+        ``config_text._HASH_PERSIST`` — they are stripped from the pushed
+        command list; ``save`` confirmation is auto-answered in
+        ``_save_if_needed``).
         """
         if self.vendor == Vendor.HUAWEI:
-            return ["commit", "#", "return", "#", "save"]
+            return ["commit", "#", "return", "#", "save", "# confirm save [Y/N]: Y"]
         if self.vendor == Vendor.H3C:
             return ["return", "#", "save force"]
         return None
