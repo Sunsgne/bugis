@@ -49,7 +49,7 @@ import {
   labelForOption,
 } from "../constants/formOptions";
 import { page as pageCopy, toast as toastCopy } from "../constants/uiCopy";
-import { buildListQuery, dataTableProps, tablePagination } from "../utils/table";
+import { buildListQuery, dataTableProps, TABLE_SCROLL, tablePagination, withMobileHide } from "../utils/table";
 import { PageCard } from "@/components";
 import ListToolbar from "../components/ListToolbar";
 import DeviceFormDialog, { type DeviceFormValues } from "@/components/DeviceFormDialog";
@@ -497,12 +497,13 @@ export default function Devices() {
         loading={loading}
         dataSource={rows}
         locale={{ emptyText: "暂无设备 · 从导入或纳管开始" }}
-        {...dataTableProps()}
+        {...dataTableProps(TABLE_SCROLL.lg)}
         pagination={tablePagination(total, page, pageSize, (p, ps) => {
           setPage(p);
           setPageSize(ps);
         })}
-        columns={[
+        columns={withMobileHide(
+          [
           {
             title: tc('设备'),
             dataIndex: "name",
@@ -580,12 +581,14 @@ export default function Devices() {
           },
           {
             title: tc('站点'),
+            key: "site",
             width: "12%",
             ellipsis: true,
             render: (_: unknown, r: Device) => siteName(r.site_id),
           },
           {
             title: tc('凭证'),
+            key: "credentials",
             width: "5%",
             align: "center" as const,
             render: (_: unknown, r: Device) =>
@@ -597,6 +600,7 @@ export default function Devices() {
           },
           {
             title: "SNMP",
+            key: "snmp",
             width: "7%",
             render: (_: unknown, r: Device) =>
               r.snmp_enabled === false ? (
@@ -675,7 +679,9 @@ export default function Devices() {
               </Space>
             ),
           },
-        ]}
+        ],
+          ["vendor", "role", "site", "credentials", "snmp"],
+        )}
       />
 
       <DevicePortDrawer

@@ -5,7 +5,7 @@ import dayjs from "dayjs";
 import { api } from "../api/client";
 import type { AuditEntry } from "../api/types";
 import PageCard from "../components/PageCard";
-import { dataTableProps } from "../utils/table";
+import { dataTableProps, TABLE_SCROLL, withMobileHide } from "../utils/table";
 import { empty, page } from "../constants/uiCopy";
 import { useTc } from "@/i18n/useTc";
 
@@ -53,9 +53,10 @@ export default function Audit({ embedded }: { embedded?: boolean }) {
       rowKey="id"
       loading={loading}
       dataSource={rows}
-      {...dataTableProps()}
+      {...dataTableProps(TABLE_SCROLL.lg)}
       locale={{ emptyText: empty.default }}
-      columns={[
+      columns={withMobileHide(
+        [
         {
           title: tc('时间'),
           dataIndex: "created_at",
@@ -79,7 +80,9 @@ export default function Audit({ embedded }: { embedded?: boolean }) {
           ),
         },
         { title: "来源 IP", dataIndex: "source_ip", width: "14%", ellipsis: true, render: (v) => v || "—" },
-      ]}
+      ],
+        ["method", "path", "source_ip"],
+      )}
     />
   );
 

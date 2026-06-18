@@ -5,7 +5,7 @@ import dayjs from "dayjs";
 import { api } from "../api/client";
 import type { Alarm } from "../api/types";
 import PageCard from "../components/PageCard";
-import { dataTableProps } from "../utils/table";
+import { dataTableProps, TABLE_SCROLL, withMobileHide } from "../utils/table";
 import { action, empty, page } from "../constants/uiCopy";
 import { ALARM_KIND, ALARM_SEVERITY, ALARM_STATUS, statusMeta } from "../constants/statusLabels";
 import { useTc } from "@/i18n/useTc";
@@ -74,7 +74,7 @@ export default function Alarms() {
           loading={loading}
           dataSource={rows}
           style={{ width: "100%" }}
-          {...dataTableProps(undefined, false)}
+          {...dataTableProps(TABLE_SCROLL.md)}
           locale={{
             emptyText: (
               <Empty
@@ -83,7 +83,8 @@ export default function Alarms() {
               />
             ),
           }}
-          columns={[
+          columns={withMobileHide(
+            [
             {
               title: tc('级别'),
               dataIndex: "severity",
@@ -138,7 +139,9 @@ export default function Alarms() {
                   </Space>
                 ) : null,
             },
-          ]}
+          ],
+            ["kind", "detail", "status"],
+          )}
         />
       </PageCard>
     </div>

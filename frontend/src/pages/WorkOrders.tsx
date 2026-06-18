@@ -13,7 +13,7 @@ import dayjs, { type Dayjs } from "dayjs";
 import { api } from "../api/client";
 import type { WorkOrder } from "../api/types";
 import PageCard from "../components/PageCard";
-import { dataTableProps } from "../utils/table";
+import { dataTableProps, TABLE_SCROLL, withMobileHide } from "../utils/table";
 import { formModalProps } from "../utils/formModal";
 import { action, empty, page, toast } from "../constants/uiCopy";
 import { WORK_ORDER_STATUS, statusMeta } from "../constants/statusLabels";
@@ -218,7 +218,7 @@ export default function WorkOrders() {
         rowKey="id"
         loading={loading}
         dataSource={filtered}
-        {...dataTableProps()}
+        {...dataTableProps(TABLE_SCROLL.lg)}
         locale={{ emptyText: hasFilter ? "无匹配工单 · 调整筛选条件" : empty.default }}
         pagination={{
           pageSize: 15,
@@ -227,7 +227,8 @@ export default function WorkOrders() {
           showTotal: (t) => `共 ${t} 张工单`,
         }}
         onRow={(r) => ({ onClick: () => openDetail(r.id), style: { cursor: "pointer" } })}
-        columns={[
+        columns={withMobileHide(
+          [
           { title: "工单号", dataIndex: "code", width: "12%", ellipsis: true },
           { title: "标题", dataIndex: "title", width: "22%", ellipsis: true },
           {
@@ -254,6 +255,7 @@ export default function WorkOrders() {
           { title: "审批人", dataIndex: "approved_by", width: "10%", ellipsis: true, render: (v) => v || "—" },
           {
             title: tc('配置作业'),
+            key: "config_jobs",
             width: "8%",
             align: "center",
             render: (_, r) => <Tag color="geekblue">{r.config_jobs.length}</Tag>,
@@ -284,7 +286,9 @@ export default function WorkOrders() {
               </Space>
             ),
           },
-        ]}
+        ],
+          ["requested_by", "approved_by", "config_jobs"],
+        )}
       />
 
       <Modal

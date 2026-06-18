@@ -27,6 +27,7 @@ import {
 import { empty } from "../constants/uiCopy";
 import { useBrand } from "../context/BrandContext";
 import { useTc } from "@/i18n/useTc";
+import { dataTableProps, TABLE_SCROLL } from "../utils/table";
 
 const WO_STATUS: Record<string, string> = {
   completed: "green", failed: "red", running: "processing",
@@ -250,6 +251,7 @@ export default function Dashboard() {
         <Col xs={24} md={8}>
           <Card className="chart-card" title={tc('操作日志 · 最近动态')} style={{ height: "100%" }}>
             <Table
+              {...dataTableProps(TABLE_SCROLL.sm)}
               size="small"
               rowKey="id"
               pagination={false}

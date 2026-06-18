@@ -18,7 +18,7 @@ import type { Paginated, Tenant } from "../api/types";
 import TenantPortalUsersModal from "../components/TenantPortalUsersModal";
 import ListToolbar from "../components/ListToolbar";
 import PageCard from "../components/PageCard";
-import { dataTableProps, PAGE_SIZE_OPTIONS, pageRangeLabel, tablePagination } from "../utils/table";
+import { dataTableProps, PAGE_SIZE_OPTIONS, pageRangeLabel, TABLE_SCROLL, tablePagination, withMobileHide } from "../utils/table";
 import { formModalProps } from "../utils/formModal";
 import { TENANT_STATUS, statusMeta } from "../constants/statusLabels";
 import { page as pageCopy } from "../constants/uiCopy";
@@ -125,12 +125,13 @@ export default function Tenants() {
         rowKey="id"
         loading={loading}
         dataSource={rows}
-        {...dataTableProps()}
+        {...dataTableProps(TABLE_SCROLL.md)}
         pagination={tablePagination(total, page, pageSize, (p, ps) => {
           setPage(p);
           setPageSize(ps);
         })}
-        columns={[
+        columns={withMobileHide(
+          [
           { title: "名称", dataIndex: "name", width: "16%", ellipsis: true },
           {
             title: tc('编码'),
@@ -189,7 +190,9 @@ export default function Tenants() {
               </Space>
             ),
           },
-        ]}
+        ],
+          ["code", "type", "circuits_total", "contact_name", "contact_email"],
+        )}
       />
 
       <Modal

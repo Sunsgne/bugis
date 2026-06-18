@@ -22,6 +22,7 @@ import InterfaceNameCell from "../components/InterfaceNameCell";
 import { utilColor } from "../charts/options";
 import { fetchAllPages } from "../utils/pagination";
 import { useTc } from "@/i18n/useTc";
+import { dataTableProps, TABLE_SCROLL } from "../utils/table";
 
 const LINK_TYPE_LABEL: Record<string, string> = {
   dci: "跨站点 DCI",
@@ -185,6 +186,7 @@ export default function Capacity() {
         }
       >
         <Table<SiteCapacity>
+          {...dataTableProps(TABLE_SCROLL.lg)}
           size="small"
           className="data-table capacity-data-table"
           rowKey="site_id"
@@ -269,6 +271,7 @@ export default function Capacity() {
           message="选用 Vlan-interface / Vlanif 子接口；端口描述标注 bw(100Mbps) 可自动写入合同带宽；利用率超链路或平台阈值触发告警"
         />
         <Table<LinkUsage>
+          {...dataTableProps(TABLE_SCROLL.xl)}
           size="small"
           className="data-table capacity-data-table capacity-link-table"
           rowKey="link_id"

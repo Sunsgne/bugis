@@ -739,6 +739,21 @@ body {
   width: 100% !important;
 }
 
+@media (max-width: 768px) {
+  .data-table .ant-table {
+    font-size: 12px;
+  }
+
+  .data-table .ant-table-thead > tr > th,
+  .data-table .ant-table-tbody > tr > td {
+    padding: 8px 10px !important;
+  }
+
+  .data-table .table-actions .ant-btn {
+    padding-inline: 6px;
+  }
+}
+
 /* ── Borderless UI: shadow + spacing instead of hard lines ── */
 .ant-card {
   border: none !important;

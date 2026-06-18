@@ -27,6 +27,7 @@ import { api } from "../api/client";
 import OverlayTopologyPanel from "../components/OverlayTopologyPanel";
 import { empty, page } from "../constants/uiCopy";
 import { useTc } from "@/i18n/useTc";
+import { dataTableProps, TABLE_SCROLL } from "../utils/table";
 
 const { Text } = Typography;
 
@@ -311,6 +312,7 @@ export default function ControlPlane() {
         <Row gutter={[16, 16]}>
           <Col xs={24} xl={16}>
             <Table
+              {...dataTableProps(TABLE_SCROLL.lg)}
               rowKey={(row: { device_id?: number; service_name?: string; vni?: number }) =>
                 `${row.device_id}-${row.service_name}-${row.vni ?? "u"}`
               }
@@ -355,6 +357,7 @@ export default function ControlPlane() {
 
       <Card title={tc('控制器集群 · HA')} size="small">
         <Table
+          {...dataTableProps(TABLE_SCROLL.md)}
           rowKey="node_id"
           dataSource={cluster?.nodes || []}
           pagination={false}
@@ -385,6 +388,7 @@ export default function ControlPlane() {
 
       <Card title={tc('BGP EVPN 对等会话')} size="small">
         <Table
+          {...dataTableProps(TABLE_SCROLL.lg)}
           rowKey="id"
           dataSource={bgp}
           pagination={false}
@@ -408,6 +412,7 @@ export default function ControlPlane() {
 
       <Card title={tc('数据面编排绑定')} size="small">
         <Table
+          {...dataTableProps(TABLE_SCROLL.md)}
           rowKey="id"
           dataSource={bindings.slice(0, 50)}
           pagination={false}
@@ -434,6 +439,7 @@ export default function ControlPlane() {
 
       <Card title={tc('VTEP 邻居表')}>
         <Table
+          {...dataTableProps(TABLE_SCROLL.md)}
           rowKey="id"
           dataSource={vteps}
           pagination={false}
@@ -470,6 +476,7 @@ export default function ControlPlane() {
         }
       >
         <Table
+          {...dataTableProps(TABLE_SCROLL.lg)}
           rowKey="id"
           dataSource={routes}
           size="small"

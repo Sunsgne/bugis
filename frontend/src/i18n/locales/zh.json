@@ -1359,5 +1359,187 @@
     "loginFail": "凭证无效，请检查后重试",
     "loginOk": "欢迎回来",
     "saved": "已保存"
+  },
+  "smtp": {
+    "categories": {
+      "国内邮箱": "国内邮箱",
+      "国内企业邮": "国内企业邮",
+      "云邮件服务": "云邮件服务",
+      "国际邮箱": "国际邮箱",
+      "事务邮件 ESP": "事务邮件 ESP",
+      "其他": "其他"
+    },
+    "security": {
+      "starttls": "STARTTLS (推荐，端口 587)",
+      "ssl": "SSL/TLS (端口 465)",
+      "none": "无加密 (端口 25，内网)"
+    },
+    "presets": {
+      "qq": {
+        "name": "QQ 邮箱",
+        "userHint": "完整 QQ 邮箱地址",
+        "fromHint": "与 QQ 邮箱相同",
+        "doc": "需在 QQ 邮箱设置中开启 SMTP 并使用授权码（非 QQ 密码）。"
+      },
+      "foxmail": {
+        "name": "Foxmail",
+        "userHint": "Foxmail 邮箱地址",
+        "doc": "与 QQ 邮箱共用 SMTP，使用授权码登录。"
+      },
+      "163": {
+        "name": "网易 163",
+        "userHint": "163 邮箱地址",
+        "doc": "需在网易邮箱 → 设置 → POP3/SMTP 中开启并获取授权码。"
+      },
+      "126": {
+        "name": "网易 126",
+        "userHint": "126 邮箱地址",
+        "doc": "需开启 SMTP 并使用客户端授权码。"
+      },
+      "yeah": {
+        "name": "网易 Yeah.net",
+        "userHint": "Yeah.net 邮箱地址"
+      },
+      "sina": {
+        "name": "新浪邮箱",
+        "userHint": "新浪邮箱地址",
+        "doc": "需开启 SMTP 并使用授权码。"
+      },
+      "sohu": {
+        "name": "搜狐邮箱",
+        "userHint": "搜狐邮箱地址"
+      },
+      "aliyun_personal": {
+        "name": "阿里个人邮箱",
+        "userHint": "阿里邮箱地址"
+      },
+      "exmail": {
+        "name": "腾讯企业邮",
+        "userHint": "企业邮箱账号",
+        "fromHint": "已验证的发件地址",
+        "doc": "腾讯企业邮 / 微信企业邮箱管理后台可查看 SMTP 参数。"
+      },
+      "aliyun_enterprise": {
+        "name": "阿里企业邮",
+        "userHint": "企业邮箱账号",
+        "doc": "阿里云企业邮箱（万网邮）SMTP 服务器。"
+      },
+      "netease_enterprise": {
+        "name": "网易企业邮",
+        "userHint": "企业邮箱账号"
+      },
+      "feishu": {
+        "name": "飞书企业邮箱",
+        "userHint": "飞书邮箱账号",
+        "doc": "需在飞书管理后台开启第三方客户端 / SMTP。"
+      },
+      "aliyun_dm": {
+        "name": "阿里云邮件推送",
+        "userHint": "控制台发信地址",
+        "fromHint": "已验证发信域名地址",
+        "doc": "阿里云 DirectMail 控制台获取 SMTP 账号与密码。"
+      },
+      "tencent_ses": {
+        "name": "腾讯云邮件推送",
+        "userHint": "控制台 SMTP 账号",
+        "doc": "腾讯云 SES 控制台 → 发信地址 → SMTP 设置。"
+      },
+      "huawei_dm": {
+        "name": "华为云邮件",
+        "userHint": "华为云邮件账号"
+      },
+      "gmail": {
+        "name": "Gmail / Google Workspace",
+        "userHint": "Gmail 地址",
+        "doc": "需开启两步验证并使用应用专用密码（App Password）。"
+      },
+      "outlook365": {
+        "name": "Microsoft 365 / Exchange Online",
+        "userHint": "Microsoft 365 邮箱",
+        "doc": "组织需允许 SMTP AUTH；部分租户需开启基本身份验证例外。"
+      },
+      "outlook": {
+        "name": "Outlook.com / Hotmail",
+        "userHint": "Outlook 邮箱地址"
+      },
+      "icloud": {
+        "name": "Apple iCloud",
+        "userHint": "iCloud 邮箱",
+        "doc": "需生成应用专用密码。"
+      },
+      "yahoo": {
+        "name": "Yahoo Mail",
+        "userHint": "Yahoo 邮箱",
+        "doc": "需使用应用密码。"
+      },
+      "zoho": {
+        "name": "Zoho Mail",
+        "userHint": "Zoho 邮箱",
+        "doc": "企业版可用 smtppro.zoho.com。"
+      },
+      "zoho_pro": {
+        "name": "Zoho Mail (企业)",
+        "userHint": "Zoho 企业邮箱"
+      },
+      "fastmail": {
+        "name": "Fastmail",
+        "userHint": "Fastmail 账号"
+      },
+      "proton": {
+        "name": "Proton Mail (Bridge)",
+        "userHint": "Proton Bridge 本地账号",
+        "doc": "需在本机运行 Proton Mail Bridge。"
+      },
+      "sendgrid": {
+        "name": "SendGrid",
+        "userHint": "apikey",
+        "doc": "用户名固定为 apikey，密码为 SendGrid API Key。"
+      },
+      "mailgun": {
+        "name": "Mailgun",
+        "userHint": "postmaster@your-domain",
+        "doc": "Mailgun 控制台 → Sending → SMTP credentials。"
+      },
+      "ses_us_east_1": {
+        "name": "Amazon SES (us-east-1)",
+        "userHint": "SMTP 用户名 (IAM)",
+        "doc": "AWS SES 控制台创建 SMTP 凭证；发件人需在 SES 验证。"
+      },
+      "ses_ap_southeast_1": {
+        "name": "Amazon SES (ap-southeast-1)",
+        "userHint": "SMTP 用户名 (IAM)"
+      },
+      "ses_eu_west_1": {
+        "name": "Amazon SES (eu-west-1)",
+        "userHint": "SMTP 用户名 (IAM)"
+      },
+      "postmark": {
+        "name": "Postmark",
+        "userHint": "Server API Token"
+      },
+      "sparkpost": {
+        "name": "SparkPost",
+        "userHint": "SMTP 用户名"
+      },
+      "mailjet": {
+        "name": "Mailjet",
+        "userHint": "API Key",
+        "doc": "密码为 Mailjet Secret Key。"
+      },
+      "brevo": {
+        "name": "Brevo (Sendinblue)",
+        "userHint": "登录邮箱",
+        "doc": "SMTP 密钥在 Brevo → SMTP & API 获取。"
+      },
+      "mailchimp": {
+        "name": "Mailchimp Transactional (Mandrill)",
+        "userHint": "任意用户名",
+        "doc": "密码为 Mandrill API Key。"
+      },
+      "custom": {
+        "name": "自定义 / 其他",
+        "doc": "手动填写 SMTP 主机、端口与加密方式。"
+      }
+    }
   }
 }
