@@ -283,6 +283,9 @@ export default function ConfigManagement() {
                       <Descriptions.Item label="业务数">
                         {learned.inventory?.service_count ?? 0}
                       </Descriptions.Item>
+                      <Descriptions.Item label="接入绑定">
+                        {learned.inventory?.binding_count ?? learned.inventory?.access_bindings?.length ?? 0}
+                      </Descriptions.Item>
                       <Descriptions.Item label="VLAN 数">
                         {learned.inventory?.vlan_ids?.length ?? 0}
                       </Descriptions.Item>
@@ -310,6 +313,49 @@ export default function ConfigManagement() {
                             ellipsis: true,
                             render: (v: string[]) => v?.join(", ") || "—",
                           },
+                        ]}
+                      />
+                    )}
+                    {learned.inventory?.access_bindings?.length > 0 && (
+                      <Table
+                        size="small"
+                        rowKey={(row) => `${row.interface}-${row.s_vid ?? "na"}-${row.service_instance ?? row.bridge_domain ?? ""}`}
+                        pagination={false}
+                        className="config-binding-table"
+                        style={{ marginBottom: 12 }}
+                        dataSource={learned.inventory.access_bindings}
+                        tableLayout="fixed"
+                        scroll={{ x: 960 }}
+                        columns={[
+                          { title: "接口", dataIndex: "interface", width: 160, ellipsis: true },
+                          { title: "模式", dataIndex: "access_mode", width: 72 },
+                          {
+                            title: "S-VID",
+                            dataIndex: "s_vid",
+                            width: 72,
+                            render: (v: number | null) => v ?? "—",
+                          },
+                          {
+                            title: "C-VID",
+                            dataIndex: "c_vid",
+                            width: 72,
+                            render: (v: number | null) => v ?? "—",
+                          },
+                          {
+                            title: "SI / BD",
+                            width: 120,
+                            ellipsis: true,
+                            render: (_: unknown, row: { service_instance?: number; bridge_domain?: string; vsi_name?: string }) =>
+                              row.service_instance != null
+                                ? `SI ${row.service_instance}`
+                                : row.bridge_domain
+                                  ? `BD ${row.bridge_domain}`
+                                  : row.vsi_name || "—",
+                          },
+                          { title: "VSI", dataIndex: "vsi_name", width: 140, ellipsis: true, render: (v: string) => v || "—" },
+                          { title: "VNI", dataIndex: "vni", width: 88, render: (v: number) => v ?? "—" },
+                          { title: "RD", dataIndex: "rd", width: 140, ellipsis: true, render: (v: string) => v || "—" },
+                          { title: "RT", dataIndex: "rt", width: 140, ellipsis: true, render: (v: string) => v || "—" },
                         ]}
                       />
                     )}

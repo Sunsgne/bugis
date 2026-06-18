@@ -170,14 +170,30 @@ traffic behavior tb-rl
 traffic policy tp-rl
  classifier tc-rl behavior tb-rl
 #
+bridge-domain 30100
+ vxlan vni 30100
+ evpn
+  route-distinguisher 65002:30100
+  vpn-target 65002:30100 import-extcommunity
 interface GE1/0/1.100 mode l2
  encapsulation dot1q vid 100
  traffic-policy tp-rl inbound
  traffic-policy tp-rl outbound
- bridge-domain 100
+ bridge-domain 30100
 """
     parsed = port_inventory._parse_interface_blocks(config, Vendor.HUAWEI)
-    assert parsed["GE1/0/1.100"][0].rate_limit_mbps == 600
+    entry = parsed["GE1/0/1.100"][0]
+    assert entry.s_vid == 100
+    assert entry.bridge_domain == "30100"
+    assert entry.rate_limit_mbps == 600
+    bd_map = port_inventory._parse_huawei_bd_map(config)
+    assert bd_map["30100"]["vni"] == 30100
+    port_inventory._enrich_svid_entry(
+        entry,
+        catalog=port_inventory._CircuitCatalog({}, {}, {}),
+        bd_map=bd_map,
+    )
+    assert entry.vni == 30100
 
 
 def test_huawei_subinterface_helpers():

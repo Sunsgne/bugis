@@ -30,11 +30,44 @@ class L2Service:
 
 
 @dataclass
+class AccessBinding:
+    """Per-AC chain: interface / encapsulation → overlay service → VNI."""
+
+    interface: str
+    access_mode: str = "dot1q"
+    s_vid: int | None = None
+    c_vid: int | None = None
+    service_instance: int | None = None
+    vsi_name: str | None = None
+    bridge_domain: str | None = None
+    vni: int | None = None
+    rd: str | None = None
+    rt: str | None = None
+    description: str | None = None
+
+    def as_dict(self) -> dict:
+        return {
+            "interface": self.interface,
+            "access_mode": self.access_mode,
+            "s_vid": self.s_vid,
+            "c_vid": self.c_vid,
+            "service_instance": self.service_instance,
+            "vsi_name": self.vsi_name,
+            "bridge_domain": self.bridge_domain,
+            "vni": self.vni,
+            "rd": self.rd,
+            "rt": self.rt,
+            "description": self.description,
+        }
+
+
+@dataclass
 class LearnedInventory:
     loopback_ip: str | None = None
     bgp_asn: int | None = None
     bgp_router_id: str | None = None
     l2_services: list[L2Service] = field(default_factory=list)
+    access_bindings: list[AccessBinding] = field(default_factory=list)
     interface_count: int = 0
     vlan_ids: list[int] = field(default_factory=list)
 
@@ -44,9 +77,11 @@ class LearnedInventory:
             "bgp_asn": self.bgp_asn,
             "bgp_router_id": self.bgp_router_id,
             "l2_services": [s.as_dict() for s in self.l2_services],
+            "access_bindings": [b.as_dict() for b in self.access_bindings],
             "interface_count": self.interface_count,
             "vlan_ids": sorted(set(self.vlan_ids)),
             "service_count": len(self.l2_services),
+            "binding_count": len(self.access_bindings),
         }
 
 
@@ -76,6 +111,193 @@ def _parse_bgp_asn(config: str, vendor: Vendor) -> tuple[int | None, str | None]
     asn = int(m.group(1)) if m else None
     rid_m = re.search(r"(?:bgp router-id|router-id)\s+(\d+\.\d+\.\d+\.\d+)", config, re.I)
     return asn, rid_m.group(1) if rid_m else None
+
+
+def _build_h3c_vsi_registry(config: str) -> dict[str, dict]:
+    out: dict[str, dict] = {}
+    for m in re.finditer(
+        r"^vsi\s+(\S+)\s*$(.+?)(?=^vsi\s|\Z)",
+        config,
+        re.MULTILINE | re.DOTALL | re.IGNORECASE,
+    ):
+        name = m.group(1)
+        body = m.group(2)
+        vni_m = re.search(r"vxlan\s+(\d+)", body, re.I)
+        rd_m = re.search(r"route-distinguisher\s+(\S+)", body, re.I)
+        rt_m = re.search(r"vpn-target\s+(\S+)\s+import-extcommunity", body, re.I)
+        out[name] = {
+            "vni": int(vni_m.group(1)) if vni_m else None,
+            "rd": rd_m.group(1) if rd_m else None,
+            "rt": rt_m.group(1) if rt_m else None,
+        }
+    return out
+
+
+def _build_huawei_bd_registry(config: str) -> dict[str, dict]:
+    out: dict[str, dict] = {}
+    for m in re.finditer(
+        r"^bridge-domain\s+(\S+)\s*$(.+?)(?=^bridge-domain\s|\Z)",
+        config,
+        re.MULTILINE | re.DOTALL | re.IGNORECASE,
+    ):
+        bd = m.group(1)
+        body = m.group(2)
+        vni_m = re.search(r"vxlan\s+vni\s+(\d+)", body, re.I)
+        rd_m = re.search(r"route-distinguisher\s+(\S+)", body, re.I)
+        rt_m = re.search(r"vpn-target\s+(\S+)\s+import-extcommunity", body, re.I)
+        out[bd] = {
+            "vni": int(vni_m.group(1)) if vni_m else None,
+            "rd": rd_m.group(1) if rd_m else None,
+            "rt": rt_m.group(1) if rt_m else None,
+        }
+    return out
+
+
+def _parse_h3c_access_bindings(config: str, vsi_reg: dict[str, dict]) -> list[AccessBinding]:
+    bindings: list[AccessBinding] = []
+    for m in re.finditer(
+        r"^interface\s+(\S+)\s*$(.+?)(?=^interface\s|\Z)",
+        config,
+        re.MULTILINE | re.DOTALL,
+    ):
+        iface = m.group(1)
+        block = m.group(2)
+        iface_desc_m = re.search(r"^\s*description\s+(.+)$", block, re.MULTILINE | re.IGNORECASE)
+        iface_desc = iface_desc_m.group(1).strip() if iface_desc_m else None
+
+        for si_m in re.finditer(
+            r"service-instance\s+(\d+)\s*\n(.*?)(?=^\s*service-instance\s|\Z)",
+            block,
+            re.MULTILINE | re.DOTALL | re.IGNORECASE,
+        ):
+            si_id = int(si_m.group(1))
+            si_body = si_m.group(2)
+            desc_m = re.search(r"^\s*description\s+(.+)$", si_body, re.MULTILINE | re.IGNORECASE)
+            vsi_m = re.search(r"xconnect\s+vsi\s+(\S+)", si_body, re.I)
+            vsi_name = vsi_m.group(1) if vsi_m else None
+            meta = vsi_reg.get(vsi_name or "", {})
+
+            if re.search(r"encapsulation\s+untagged", si_body, re.I):
+                bindings.append(
+                    AccessBinding(
+                        interface=iface,
+                        access_mode="access",
+                        service_instance=si_id,
+                        vsi_name=vsi_name,
+                        vni=meta.get("vni"),
+                        rd=meta.get("rd"),
+                        rt=meta.get("rt"),
+                        description=(desc_m.group(1).strip() if desc_m else None) or iface_desc,
+                    )
+                )
+                continue
+
+            qinq_m = re.search(
+                r"encapsulation\s+s-vid\s+(\d+)\s+c-vid\s+(\d+)", si_body, re.I
+            )
+            if qinq_m:
+                bindings.append(
+                    AccessBinding(
+                        interface=iface,
+                        access_mode="qinq",
+                        s_vid=int(qinq_m.group(1)),
+                        c_vid=int(qinq_m.group(2)),
+                        service_instance=si_id,
+                        vsi_name=vsi_name,
+                        vni=meta.get("vni"),
+                        rd=meta.get("rd"),
+                        rt=meta.get("rt"),
+                        description=(desc_m.group(1).strip() if desc_m else None) or iface_desc,
+                    )
+                )
+                continue
+
+            dot1q_m = re.search(r"encapsulation\s+s-vid\s+(\d+)", si_body, re.I)
+            if dot1q_m:
+                bindings.append(
+                    AccessBinding(
+                        interface=iface,
+                        access_mode="dot1q",
+                        s_vid=int(dot1q_m.group(1)),
+                        service_instance=si_id,
+                        vsi_name=vsi_name,
+                        vni=meta.get("vni"),
+                        rd=meta.get("rd"),
+                        rt=meta.get("rt"),
+                        description=(desc_m.group(1).strip() if desc_m else None) or iface_desc,
+                    )
+                )
+    return bindings
+
+
+def _parse_huawei_access_bindings(config: str, bd_reg: dict[str, dict]) -> list[AccessBinding]:
+    bindings: list[AccessBinding] = []
+    for m in re.finditer(
+        r"^interface\s+(\S+)(?:\s+mode\s+\S+)?\s*$(.+?)(?=^interface\s|\Z|^#|\Z)",
+        config,
+        re.MULTILINE | re.DOTALL,
+    ):
+        iface = m.group(1)
+        block = m.group(2)
+        bd_m = re.search(r"bridge-domain\s+(\S+)", block, re.I)
+        if not bd_m:
+            continue
+        bd = bd_m.group(1)
+        meta = bd_reg.get(bd, {})
+        desc_m = re.search(r"^\s*description\s+(.+)$", block, re.MULTILINE | re.IGNORECASE)
+        description = desc_m.group(1).strip() if desc_m else None
+
+        if re.search(r"encapsulation\s+untag", block, re.I):
+            bindings.append(
+                AccessBinding(
+                    interface=iface,
+                    access_mode="access",
+                    bridge_domain=bd,
+                    vni=meta.get("vni"),
+                    rd=meta.get("rd"),
+                    rt=meta.get("rt"),
+                    description=description,
+                )
+            )
+            continue
+
+        qinq_matches = list(
+            re.finditer(
+                r"encapsulation\s+qinq\s+vid\s+(\d+)\s+ce-vid\s+(\d+)", block, re.I
+            )
+        )
+        if qinq_matches:
+            for qinq_m in qinq_matches:
+                bindings.append(
+                    AccessBinding(
+                        interface=iface,
+                        access_mode="qinq",
+                        s_vid=int(qinq_m.group(1)),
+                        c_vid=int(qinq_m.group(2)),
+                        bridge_domain=bd,
+                        vni=meta.get("vni"),
+                        rd=meta.get("rd"),
+                        rt=meta.get("rt"),
+                        description=description,
+                    )
+                )
+            continue
+
+        dot1q_m = re.search(r"encapsulation\s+dot1q\s+vid\s+(\d+)", block, re.I)
+        if dot1q_m:
+            bindings.append(
+                AccessBinding(
+                    interface=iface,
+                    access_mode="dot1q",
+                    s_vid=int(dot1q_m.group(1)),
+                    bridge_domain=bd,
+                    vni=meta.get("vni"),
+                    rd=meta.get("rd"),
+                    rt=meta.get("rt"),
+                    description=description,
+                )
+            )
+    return bindings
 
 
 def _parse_h3c_services(config: str) -> list[L2Service]:
@@ -226,17 +448,27 @@ def parse_inventory(config: str, vendor: Vendor) -> LearnedInventory:
     inv.vlan_ids = _collect_vlan_ids(config, vendor)
 
     if vendor == Vendor.H3C:
+        vsi_reg = _build_h3c_vsi_registry(config)
         inv.l2_services = _parse_h3c_services(config)
+        inv.access_bindings = _parse_h3c_access_bindings(config, vsi_reg)
     elif vendor == Vendor.HUAWEI:
+        bd_reg = _build_huawei_bd_registry(config)
         inv.l2_services = _parse_huawei_services(config)
+        inv.access_bindings = _parse_huawei_access_bindings(config, bd_reg)
     elif vendor == Vendor.CISCO:
         inv.l2_services = _parse_cisco_services(config)
     elif vendor == Vendor.JUNIPER:
         inv.l2_services = _parse_juniper_services(config)
     else:
         inv.l2_services = _parse_h3c_services(config) or _parse_cisco_services(config)
+        if inv.l2_services:
+            vsi_reg = _build_h3c_vsi_registry(config)
+            inv.access_bindings = _parse_h3c_access_bindings(config, vsi_reg)
 
     for svc in inv.l2_services:
         inv.vlan_ids.extend(svc.vlans)
+    for binding in inv.access_bindings:
+        if binding.s_vid is not None:
+            inv.vlan_ids.append(binding.s_vid)
     inv.vlan_ids = sorted(set(inv.vlan_ids))
     return inv

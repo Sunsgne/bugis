@@ -50,6 +50,49 @@ def test_parse_h3c_inventory():
     assert svc.rd == "65001:10100"
     assert "GE1/0/5" in svc.interfaces
     assert 120 in inv.vlan_ids
+    assert len(inv.access_bindings) == 1
+    binding = inv.access_bindings[0]
+    assert binding.interface == "GE1/0/5"
+    assert binding.s_vid == 120
+    assert binding.service_instance == 120
+    assert binding.vsi_name == "vsi_DEMO"
+    assert binding.vni == 10100
+    assert binding.rd == "65001:10100"
+    assert binding.rt == "65001:10100"
+
+
+HUAWEI_CONFIG = """\
+sysname SH-PE-01
+interface LoopBack0
+ ip address 10.2.255.1 255.255.255.255
+bgp 65002
+ router-id 10.2.255.1
+bridge-domain 30100
+ vxlan vni 30100
+ evpn
+  route-distinguisher 65002:30100
+  vpn-target 65002:30100 import-extcommunity
+  vpn-target 65002:30100 export-extcommunity
+interface GE1/0/1.100 mode l2
+ description Customer A
+ encapsulation dot1q vid 100
+ bridge-domain 30100
+return
+"""
+
+
+def test_parse_huawei_access_bindings():
+    inv = config_learn_parse.parse_inventory(HUAWEI_CONFIG, Vendor.HUAWEI)
+    assert len(inv.l2_services) == 1
+    assert inv.l2_services[0].vni == 30100
+    assert len(inv.access_bindings) == 1
+    binding = inv.access_bindings[0]
+    assert binding.interface == "GE1/0/1.100"
+    assert binding.s_vid == 100
+    assert binding.bridge_domain == "30100"
+    assert binding.vni == 30100
+    assert binding.rd == "65002:30100"
+    assert binding.rt == "65002:30100"
 
 
 def test_device_learn_api(client, auth_headers):
