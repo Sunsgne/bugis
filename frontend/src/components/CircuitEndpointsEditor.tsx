@@ -54,6 +54,7 @@ function vlanConflict(
   accessMode?: string,
   innerVlanId?: number | null,
   excludeCircuitCode?: string,
+  adoptMode?: boolean,
 ): string | null {
   if (!usage?.length) return null;
   if (accessMode === "access") {
@@ -66,6 +67,10 @@ function vlanConflict(
   if (vlanId == null) return null;
   for (const u of usage) {
     if (u.access_mode === "access") return "该端口已配置 untagged，无法叠加 VLAN";
+    if (adoptMode && u.source === "device") {
+      if (accessMode === "qinq" && u.s_vid === vlanId && u.c_vid === innerVlanId) continue;
+      if (accessMode !== "qinq" && u.access_mode !== "qinq" && u.s_vid === vlanId) continue;
+    }
     if (accessMode === "qinq" && u.s_vid === vlanId && u.c_vid === innerVlanId) {
       return `QinQ S:${vlanId}/C:${innerVlanId} 已被占用`;
     }
@@ -143,12 +148,14 @@ function PortDetailPanel({
   accessMode,
   innerVlanId,
   excludeCircuitCode,
+  adoptMode,
 }: {
   iface?: DeviceInterface;
   vlanId?: number | null;
   accessMode?: string;
   innerVlanId?: number | null;
   excludeCircuitCode?: string;
+  adoptMode?: boolean;
 }) {
   if (!iface) return null;
   const speed = formatPortSpeed(iface.speed_mbps);
@@ -158,6 +165,7 @@ function PortDetailPanel({
     accessMode,
     innerVlanId,
     excludeCircuitCode,
+    adoptMode,
   );
   const short = formatInterfaceShort(iface.name);
   const desc = iface.description?.trim();
@@ -203,6 +211,8 @@ export interface CircuitEndpointsEditorProps {
   minEndpoints?: number;
   /** Ignore S-VID conflicts owned by this circuit (endpoint edit). */
   excludeCircuitCode?: string;
+  /** Allow matching on-box S-VID bindings when extending adopted circuits. */
+  adoptMode?: boolean;
 }
 
 export default function CircuitEndpointsEditor({
@@ -212,6 +222,7 @@ export default function CircuitEndpointsEditor({
   preloadDeviceIds = [],
   minEndpoints = 1,
   excludeCircuitCode,
+  adoptMode = false,
 }: CircuitEndpointsEditorProps) {
   const { message } = AntApp.useApp();
   const [ifaceByDevice, setIfaceByDevice] = useState<Record<number, DeviceInterface[]>>({});
@@ -383,6 +394,7 @@ export default function CircuitEndpointsEditor({
                             accessMode={ep.access_mode}
                             innerVlanId={ep.inner_vlan_id}
                             excludeCircuitCode={excludeCircuitCode}
+                            adoptMode={adoptMode}
                           />
                         )}
 

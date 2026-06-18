@@ -118,7 +118,7 @@ export default function CircuitExpandDetail({
           </Typography.Text>
           {canEditEndpoints && (
             <Button size="small" type="link" icon={<EditOutlined />} onClick={onEditEndpoints}>
-              修改端点并重新下发
+              {detail.adopted ? "添加端点（不下发）" : "修改端点并重新下发"}
             </Button>
           )}
         </div>

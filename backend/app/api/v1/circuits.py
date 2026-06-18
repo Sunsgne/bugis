@@ -533,31 +533,72 @@ def replace_endpoints(
         if not db.get(Device, ep.device_id):
             raise HTTPException(status_code=404, detail=f"device {ep.device_id} not found")
 
-    for ep in payload.endpoints:
-        svid = ep.vlan_id or circuit.vlan_id
-        mode = ep.access_mode or AccessMode.DOT1Q
-        ok, msg = port_inventory.check_endpoint_available(
-            db,
-            ep.device_id,
-            ep.interface_name,
-            svid,
-            ep.inner_vlan_id,
-            mode,
-            exclude_circuit_id=circuit.id,
+    adopt_rows: dict[int, dict] = {}
+    if circuit.adopted:
+        adopt_rows = circuit_adopt.validate_adopted_endpoints_replace(
+            db, circuit, payload.endpoints
         )
-        if not ok:
-            raise HTTPException(status_code=409, detail=msg)
+    else:
+        for ep in payload.endpoints:
+            svid = ep.vlan_id or circuit.vlan_id
+            mode = ep.access_mode or AccessMode.DOT1Q
+            ok, msg = port_inventory.check_endpoint_available(
+                db,
+                ep.device_id,
+                ep.interface_name,
+                svid,
+                ep.inner_vlan_id,
+                mode,
+                exclude_circuit_id=circuit.id,
+            )
+            if not ok:
+                raise HTTPException(status_code=409, detail=msg)
+
+    old_by_key: dict[tuple, CircuitEndpoint] = {}
+    for old_ep in circuit.endpoints:
+        mode = old_ep.access_mode or AccessMode.DOT1Q
+        svid = old_ep.vlan_id or circuit.vlan_id
+        key = circuit_adopt._endpoint_tuple(
+            old_ep.device_id,
+            old_ep.interface_name,
+            mode,
+            svid,
+            old_ep.inner_vlan_id,
+        )
+        old_by_key[key] = old_ep
 
     for old in list(circuit.endpoints):
         db.delete(old)
     db.flush()
 
     new_endpoints: list[CircuitEndpoint] = []
-    for ep in payload.endpoints:
-        endpoint = CircuitEndpoint(circuit_id=circuit.id, **ep.model_dump())
+    for idx, ep in enumerate(payload.endpoints):
+        mode = ep.access_mode or AccessMode.DOT1Q
+        svid = ep.vlan_id or circuit.vlan_id
+        key = circuit_adopt._endpoint_tuple(
+            ep.device_id, ep.interface_name, mode, svid, ep.inner_vlan_id
+        )
+        prev = old_by_key.get(key)
+        adopt_row = adopt_rows.get(idx)
+        endpoint = CircuitEndpoint(
+            circuit_id=circuit.id,
+            interface_description=(
+                prev.interface_description
+                if prev
+                else (adopt_row.get("description") if adopt_row else None)
+            ),
+            **ep.model_dump(),
+        )
         db.add(endpoint)
         new_endpoints.append(endpoint)
     db.flush()
+
+    if circuit.adopted:
+        device_ids = {ep.device_id for ep in new_endpoints}
+        for did in device_ids:
+            dev = db.get(Device, did)
+            if dev:
+                port_inventory.scan_device(db, dev, include_legacy=False)
 
     if circuit.path_mode == PathMode.EXPLICIT_SR:
         endpoint_ids = [ep.device_id for ep in new_endpoints]
