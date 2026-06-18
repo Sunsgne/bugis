@@ -364,7 +364,12 @@ class BaseDriver:
             return self._push_netconf_cli_h3c(m, config)
 
     def _push_netconf_cli_h3c(self, m: Any, config: str) -> str:  # pragma: no cover
-        """Apply CLI config on H3C Comware via the <CLI><Configuration> RPC."""
+        """Apply CLI config on H3C Comware via the <CLI><Configuration> RPC.
+
+        The Configuration RPC only changes the *running* config, so it is
+        followed by a ``save force`` to persist the change to the startup
+        config; otherwise the applied circuit is lost on the next reboot.
+        """
         from ncclient.xml_ import to_ele  # type: ignore
 
         from app.drivers.config_text import to_command_text
@@ -376,7 +381,27 @@ class BaseDriver:
             "</CLI>"
         )
         reply = m.dispatch(to_ele(rpc))
-        return str(reply)
+        return str(reply) + self._save_netconf_cli_h3c(m)
+
+    def _save_netconf_cli_h3c(self, m: Any) -> str:  # pragma: no cover
+        """Persist H3C running config to startup via a ``save force`` RPC.
+
+        ``save force`` is a user-view command, so it is issued through
+        ``<Execution>`` (``<Configuration>`` runs in system view) and never
+        prompts thanks to ``force``. Best-effort: a failure is reported but does
+        not abort the push, as the config is already live.
+        """
+        from ncclient.xml_ import to_ele  # type: ignore
+
+        save_rpc = (
+            '<CLI xmlns="http://www.h3c.com/netconf/action:1.0">'
+            "<Execution>save force</Execution>"
+            "</CLI>"
+        )
+        try:
+            return "\n" + str(m.dispatch(to_ele(save_rpc)))
+        except Exception as exc:  # noqa: BLE001
+            return f"\n[warn] save to startup config failed: {exc}"
 
     def _push_cli(self, device: Any, config: str) -> str:  # pragma: no cover
         try:
@@ -403,6 +428,7 @@ class BaseDriver:
             # so the sanitized commands must NOT include a trailing return/quit.
             output = self._send_config_commands(conn, commands, read_timeout)
             output += self._commit_if_needed(conn)
+            output += self._save_if_needed(conn)
             return output
         finally:
             conn.disconnect()
@@ -456,6 +482,50 @@ class BaseDriver:
             return "\n" + (commit() or "")
         except Exception:  # noqa: BLE001 - legacy VRP5 has no candidate to commit
             return ""
+
+    def _save_if_needed(self, conn: Any) -> str:  # pragma: no cover
+        """Persist the running config to the startup config (save to flash).
+
+        ``commit`` (Huawei VRP8 / CE two-stage) only writes the candidate into
+        the *running* datastore, and on single-stage H3C Comware the config
+        commands likewise only change the *running* config. Neither survives a
+        device reboot until it is explicitly **saved** to the startup
+        configuration — the exact gap reported from the field, where a circuit
+        apply/teardown looked successful but was lost after a power cycle.
+
+        Both EVPN-VXLAN vendors therefore need an explicit save after a
+        successful apply/teardown:
+
+          * H3C Comware (and Huawei S-series) -> ``save force`` (no prompt)
+          * Huawei VRP8 / CE (Datacom)        -> ``save`` (auto-confirm ``Y``)
+
+        Best-effort: a save failure is surfaced in the output but never aborts
+        the push, since at that point the change is already live on the box.
+        """
+        if self.vendor not in (Vendor.H3C, Vendor.HUAWEI):
+            return ""
+        # Prefer netmiko's vendor-aware save_config(): it emits ``save force``
+        # for hp_comware and ``save`` + confirmation for huawei / huawei_vrpv8.
+        save_config = getattr(conn, "save_config", None)
+        if callable(save_config):
+            try:
+                return "\n" + (save_config() or "")
+            except Exception as exc:  # noqa: BLE001
+                return f"\n[warn] save to startup config failed: {exc}"
+        # Fallback for transports without netmiko's helper: send the command and
+        # auto-confirm any "Are you sure ... [Y/N]" prompt (Huawei ``save``).
+        timing = getattr(conn, "send_command_timing", None)
+        if not callable(timing):
+            return ""
+        cmd = "save force" if self.vendor == Vendor.H3C else "save"
+        read_timeout = self._cli_read_timeout()
+        try:
+            out = timing(cmd, read_timeout=read_timeout) or ""
+            if _CONFIRM_PROMPT.search(out):
+                out += timing("Y", read_timeout=read_timeout) or ""
+            return "\n" + out
+        except Exception as exc:  # noqa: BLE001
+            return f"\n[warn] save to startup config failed: {exc}"
 
 
 NETMIKO_DEVICE_TYPES = {

@@ -37,6 +37,7 @@ class FakeConn:
         self.paging_cmds: list[str] = []
         self.disconnected = False
         self.committed = False
+        self.saved = False
         FakeConn.instances.append(self)
 
     def send_command(self, cmd, **kwargs):
@@ -51,6 +52,10 @@ class FakeConn:
     def commit(self, **kwargs):
         self.committed = True
         return "commit complete"
+
+    def save_config(self, **kwargs):
+        self.saved = True
+        return "save complete"
 
     def disconnect(self):
         self.disconnected = True
@@ -103,6 +108,9 @@ def test_push_cli_sanitizes_and_sets_cmd_verify(fake_netmiko):
     # Huawei CE/datacom uses the two-stage VRP8 driver and must commit.
     assert conn.params.get("device_type") == "huawei_vrpv8"
     assert conn.committed is True
+    # commit only writes the running datastore; the config must also be saved
+    # to startup so it survives a reboot.
+    assert conn.saved is True
     # Paging disabled for Huawei.
     assert any("screen-length" in c for c in conn.paging_cmds)
     # cmd_verify must be disabled (the production fix).
@@ -123,6 +131,9 @@ def test_push_cli_h3c_does_not_commit(fake_netmiko):
     conn = fake_netmiko.instances[-1]
     assert conn.params.get("device_type") == "hp_comware"
     assert conn.committed is False  # Comware is single-stage; no commit
+    # Single-stage still only changes the running config, so it must be saved
+    # to startup (Comware ``save force``) to persist across reboots.
+    assert conn.saved is True
 
 
 def test_push_cli_noop_when_nothing_to_push(fake_netmiko):
@@ -157,7 +168,7 @@ def test_push_netconf_h3c_wraps_cli_rpc(monkeypatch):
             return False
 
         def dispatch(self, ele):
-            captured["dispatched"] = ele
+            captured.setdefault("dispatched", []).append(ele)
             return "<ok/>"
 
         def edit_config(self, **kwargs):
@@ -176,7 +187,8 @@ def test_push_netconf_h3c_wraps_cli_rpc(monkeypatch):
     device = FakeDevice(Vendor.H3C)
     out = driver._push_netconf(device, H3C_CFG)
 
-    rpc = captured["dispatched"]
+    dispatched = captured["dispatched"]
+    rpc = dispatched[0]
     assert "<Configuration>" in rpc
     assert "l2vpn enable" in rpc
     assert "vsi vsi_CIR-1" in rpc
@@ -185,6 +197,10 @@ def test_push_netconf_h3c_wraps_cli_rpc(monkeypatch):
     assert "return" not in rpc
     assert "edit_config" not in captured
     assert "<ok/>" in out
+    # A second RPC must persist the config to startup (save force) via the
+    # user-view Execution element; otherwise the apply is lost on reboot.
+    save_rpc = dispatched[1]
+    assert "<Execution>save force</Execution>" in save_rpc
 
 
 def test_push_netconf_xml_passthrough(monkeypatch):
