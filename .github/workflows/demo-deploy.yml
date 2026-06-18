@@ -8,29 +8,31 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    # NOTE: the `secrets` context cannot be used in step-level `if:` expressions
+    # (GitHub rejects it as an "Unrecognized named-value", failing the whole
+    # workflow file). Map the gate secret to a job-level env var and test that
+    # in `if:` instead.
+    env:
+      DEMO_SSH_PASSWORD: ${{ secrets.DEMO_SSH_PASSWORD }}
     steps:
       - uses: actions/checkout@v6
 
       - name: Check deploy credentials
-        env:
-          DEMO_SSH_PASSWORD: ${{ secrets.DEMO_SSH_PASSWORD }}
         run: |
           if [ -z "$DEMO_SSH_PASSWORD" ]; then
             echo "::warning::DEMO_SSH_PASSWORD secret not set — skip demo deploy"
-            exit 0
           fi
 
       - name: Install sshpass
-        if: ${{ secrets.DEMO_SSH_PASSWORD != '' }}
+        if: ${{ env.DEMO_SSH_PASSWORD != '' }}
         run: sudo apt-get update && sudo apt-get install -y sshpass
 
       - name: Deploy to demo server
-        if: ${{ secrets.DEMO_SSH_PASSWORD != '' }}
+        if: ${{ env.DEMO_SSH_PASSWORD != '' }}
         env:
           DEMO_SSH_HOST: ${{ secrets.DEMO_SSH_HOST }}
           DEMO_SSH_PORT: ${{ secrets.DEMO_SSH_PORT }}
           DEMO_SSH_USER: ${{ secrets.DEMO_SSH_USER }}
-          DEMO_SSH_PASSWORD: ${{ secrets.DEMO_SSH_PASSWORD }}
           DEMO_REMOTE_DIR: ${{ secrets.DEMO_REMOTE_DIR }}
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
           BUGIS_SECRET_KEY: ${{ secrets.BUGIS_SECRET_KEY }}

@@ -196,6 +196,24 @@ fi
 write_local_env
 generate_tls_certs
 
+# Pre-flight: never deploy a checkout whose migrations are BEHIND the live DB.
+# (A behind branch makes alembic fail with "Can't locate revision", crash-looping
+#  the backend.) Compare the live DB's current revision against local migrations.
+echo "==> Pre-flight: checking local migrations vs live database revision"
+REMOTE_REV="$(run_ssh "cd '$REMOTE_DIR' && docker compose -f docker-compose.prod.yml --env-file .env exec -T backend alembic current 2>/dev/null | tail -1 | awk '{print \$1}'" 2>/dev/null | tr -d '\r' || true)"
+if [[ -n "$REMOTE_REV" && "$REMOTE_REV" != "None" ]]; then
+  if ! grep -rqE "revision = ['\"]${REMOTE_REV}['\"]" "$ROOT/backend/alembic/versions/"; then
+    echo "ERROR: live DB is at migration '$REMOTE_REV' which this checkout does NOT contain."
+    echo "       Your branch is BEHIND the deployed database — deploying would crash the"
+    echo "       backend with alembic \"Can't locate revision\". Aborting."
+    echo "       Fix: git fetch origin main && git merge origin/main   (then re-run deploy)"
+    exit 1
+  fi
+  echo "==> Migration check OK (live DB rev '$REMOTE_REV' present in this checkout)"
+else
+  echo "==> Migration check skipped (no live revision detected — fresh deploy?)"
+fi
+
 echo "==> Packaging source from $ROOT"
 tar -czf "$ARCHIVE" \
   --exclude='./.git' \
