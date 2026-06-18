@@ -295,41 +295,60 @@ export default function Login() {
       }
     >
       <div className="pointer-events-none absolute inset-0" aria-hidden>
-        <div className="absolute -left-32 top-1/4 h-[28rem] w-[28rem] rounded-full bg-orange-500/15 blur-3xl" />
-        <div className="absolute -right-24 bottom-1/4 h-96 w-96 rounded-full bg-amber-500/10 blur-3xl" />
-        <div className="absolute left-1/2 top-1/2 h-[40rem] w-[40rem] -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/[0.02] blur-3xl" />
+        {/* Warm vignette: tame the bright orange and anchor foreground text. */}
+        <div className="absolute inset-0 bg-[radial-gradient(120%_120%_at_82%_8%,transparent_28%,rgba(28,14,3,0.55)_100%)]" />
+        <div className="absolute inset-0 bg-gradient-to-tr from-[#190d02]/70 via-[#3a1c05]/20 to-transparent" />
+        {/* Soft glows for depth. */}
+        <div className="absolute -left-40 top-1/3 h-[30rem] w-[30rem] rounded-full bg-amber-300/10 blur-3xl" />
+        <div className="absolute -right-32 bottom-1/4 h-[26rem] w-[26rem] rounded-full bg-orange-600/15 blur-3xl" />
+        {/* Subtle dotted texture. */}
+        <div
+          className="absolute inset-0 opacity-[0.05]"
+          style={{
+            backgroundImage:
+              "radial-gradient(rgba(255,255,255,0.9) 1px, transparent 1px)",
+            backgroundSize: "26px 26px",
+          }}
+        />
       </div>
 
       <div className="relative z-10 mx-auto flex w-full max-w-6xl flex-col items-stretch gap-12 px-2 lg:flex-row lg:items-center lg:gap-20">
-        <section className="flex flex-1 flex-col gap-10 lg:max-w-xl">
-          <div className="flex items-center gap-4">
+        <section className="flex flex-1 flex-col gap-9 lg:max-w-xl">
+          <div className="flex items-center gap-3.5">
             <BrandLogo brand={brand} variant="login" height={40} />
             <div>
-              <div className="text-lg font-semibold tracking-tight text-slate-100">
+              <div className="text-base font-semibold tracking-wide text-white">
                 {brand.product_name}
               </div>
               {brand.tagline ? (
-                <div className="text-sm text-slate-400">{brand.tagline}</div>
+                <div className="text-[13px] font-medium text-amber-100/75">{brand.tagline}</div>
               ) : null}
             </div>
           </div>
           <div className="space-y-5">
-            <h1 className="text-4xl font-bold leading-[1.15] tracking-tight text-white sm:text-5xl">
+            <span className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3.5 py-1.5 text-xs font-medium text-amber-50/90 backdrop-blur-sm">
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-300" />
+              Intelligent Fabric Ops
+            </span>
+            <h1 className="text-4xl font-bold leading-[1.12] tracking-tight text-white drop-shadow-[0_2px_12px_rgba(0,0,0,0.35)] sm:text-[3.25rem]">
               {brand.hero_title || brand.login_title}
             </h1>
-            <p className="max-w-md text-base leading-relaxed text-slate-400">
+            <p className="max-w-md text-[15px] font-medium leading-relaxed text-orange-50/85">
               {brand.hero_subtitle || brand.login_subtitle}
             </p>
           </div>
-          <ul className="flex flex-col gap-4">
+          <ul className="flex flex-col gap-3">
             {FEATURES.map(({ icon: Icon, label, desc }) => (
-              <li key={label} className="flex items-start gap-4">
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-orange-500/25 bg-orange-500/10 text-orange-400">
+              <li
+                key={label}
+                className="group flex items-center gap-4 rounded-2xl border border-white/15 bg-white/[0.08] px-4 py-3.5 backdrop-blur-md transition-colors hover:border-white/25 hover:bg-white/[0.12]"
+              >
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/15 text-white shadow-inner ring-1 ring-white/10">
                   <Icon className="h-5 w-5" />
                 </span>
-                <div className="pt-0.5">
-                  <div className="text-sm font-medium text-slate-200">{label}</div>
-                  <div className="text-xs text-slate-500">{desc}</div>
+                <div>
+                  <div className="text-sm font-semibold text-white">{label}</div>
+                  <div className="mt-0.5 text-xs leading-relaxed text-orange-50/70">{desc}</div>
                 </div>
               </li>
             ))}
@@ -337,13 +356,13 @@ export default function Login() {
         </section>
 
         <section className="flex w-full flex-1 justify-center lg:max-w-md lg:justify-end">
-          <Card className="login-card w-full max-w-md border-slate-800/70 bg-slate-900/75 shadow-2xl shadow-black/50 backdrop-blur-xl">
+          <Card className="login-card w-full max-w-md border-white/10 bg-stone-950/80 shadow-[0_30px_80px_-20px_rgba(0,0,0,0.7)] backdrop-blur-2xl">
             <CardHeader className="space-y-5 px-8 pb-8 pt-10 sm:px-10">
               <span
-                className="flex h-12 w-12 items-center justify-center rounded-2xl border border-orange-500/30 bg-orange-500/10 text-orange-400"
+                className="flex h-12 w-12 items-center justify-center rounded-2xl border border-orange-500/40 bg-orange-500/15 text-orange-400 shadow-[0_8px_24px_-8px_rgba(255,102,0,0.6)]"
                 style={
                   brand.accent_color
-                    ? { color: brand.accent_color, borderColor: `${brand.accent_color}55` }
+                    ? { color: brand.accent_color, borderColor: `${brand.accent_color}66` }
                     : undefined
                 }
               >
@@ -356,10 +375,10 @@ export default function Login() {
                 )}
               </span>
               <div className="space-y-2">
-                <CardTitle className="text-2xl font-semibold tracking-tight text-slate-100">
+                <CardTitle className="text-2xl font-semibold tracking-tight text-stone-50">
                   {cardTitle}
                 </CardTitle>
-                <CardDescription className="leading-relaxed text-slate-400">
+                <CardDescription className="leading-relaxed text-stone-400">
                   {cardDesc}
                 </CardDescription>
               </div>
@@ -369,7 +388,7 @@ export default function Login() {
               {mode === "mfa" ? (
                 <form onSubmit={onMfaSubmit} className="space-y-7">
                   <div className="space-y-3">
-                    <Label htmlFor="mfa-code" className="text-slate-300">
+                    <Label htmlFor="mfa-code" className="text-stone-300">
                       验证码
                     </Label>
                     <Input
@@ -381,14 +400,14 @@ export default function Login() {
                       autoComplete="one-time-code"
                       maxLength={6}
                       required
-                      className="h-12 border-slate-700 bg-slate-950/50 text-center text-lg tracking-[0.4em] text-slate-100"
+                      className="h-12 rounded-xl border-stone-700/70 bg-stone-900/60 text-center text-lg tracking-[0.4em] text-stone-100 placeholder:text-stone-500 focus-visible:border-orange-500/60 focus-visible:ring-orange-500/30"
                     />
                   </div>
                   {mfaMethods.includes("email") && (
                     <Button
                       type="button"
                       variant="outline"
-                      className="h-11 w-full border-slate-700 bg-transparent text-slate-200 hover:bg-slate-800"
+                      className="h-11 w-full rounded-xl border-stone-700 bg-transparent text-stone-200 hover:border-stone-600 hover:bg-stone-800/60 hover:text-white"
                       disabled={loading}
                       onClick={onSendEmailCode}
                     >
@@ -399,7 +418,7 @@ export default function Login() {
                   <Button
                     type="submit"
                     disabled={loading}
-                    className="h-12 w-full bg-orange-600 text-white hover:bg-orange-500"
+                    className="h-12 w-full rounded-xl bg-orange-600 font-semibold text-white shadow-[0_12px_30px_-10px_rgba(255,102,0,0.7)] transition-colors hover:bg-orange-500"
                     style={accentBtn}
                   >
                     {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "验证并登录"}
@@ -407,7 +426,7 @@ export default function Login() {
                   <Button
                     type="button"
                     variant="ghost"
-                    className="w-full text-slate-400 hover:text-slate-200"
+                    className="w-full text-stone-400 hover:text-orange-400"
                     onClick={backToLogin}
                   >
                     <ArrowLeft className="mr-1 h-4 w-4" />
@@ -417,11 +436,11 @@ export default function Login() {
               ) : mode === "forgot" ? (
                 <form onSubmit={onForgotSubmit} className="space-y-7">
                   <div className="space-y-3">
-                    <Label htmlFor="forgot-id" className="text-slate-300">
+                    <Label htmlFor="forgot-id" className="text-stone-300">
                       用户名或邮箱
                     </Label>
                     <div className="relative">
-                      <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                      <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-500" />
                       <Input
                         id="forgot-id"
                         value={resetIdentifier}
@@ -429,7 +448,7 @@ export default function Login() {
                         placeholder="请输入用户名或绑定邮箱"
                         autoComplete="username"
                         required
-                        className="h-12 border-slate-700 bg-slate-950/50 pl-10 text-slate-100"
+                        className="h-12 rounded-xl border-stone-700/70 bg-stone-900/60 pl-10 text-stone-100 placeholder:text-stone-500 focus-visible:border-orange-500/60 focus-visible:ring-orange-500/30"
                       />
                     </div>
                   </div>
@@ -439,7 +458,7 @@ export default function Login() {
                   <Button
                     type="submit"
                     disabled={loading}
-                    className="h-12 w-full bg-orange-600 text-white hover:bg-orange-500"
+                    className="h-12 w-full rounded-xl bg-orange-600 font-semibold text-white shadow-[0_12px_30px_-10px_rgba(255,102,0,0.7)] transition-colors hover:bg-orange-500"
                     style={accentBtn}
                   >
                     {loading ? (
@@ -454,7 +473,7 @@ export default function Login() {
                   <div className="flex items-center justify-between text-sm">
                     <button
                       type="button"
-                      className="text-slate-400 transition-colors hover:text-slate-200"
+                      className="text-stone-400 transition-colors hover:text-orange-400"
                       onClick={backToLogin}
                     >
                       <ArrowLeft className="mr-1 inline h-4 w-4" />
@@ -462,7 +481,7 @@ export default function Login() {
                     </button>
                     <button
                       type="button"
-                      className="text-slate-400 transition-colors hover:text-slate-200"
+                      className="text-stone-400 transition-colors hover:text-orange-400"
                       onClick={() => setMode("reset")}
                     >
                       已有验证码？
@@ -472,7 +491,7 @@ export default function Login() {
               ) : mode === "reset" ? (
                 <form onSubmit={onResetSubmit} className="space-y-6">
                   <div className="space-y-3">
-                    <Label htmlFor="reset-code" className="text-slate-300">
+                    <Label htmlFor="reset-code" className="text-stone-300">
                       邮件验证码
                     </Label>
                     <Input
@@ -483,15 +502,15 @@ export default function Login() {
                       inputMode="numeric"
                       maxLength={6}
                       required
-                      className="h-12 border-slate-700 bg-slate-950/50 text-center text-lg tracking-[0.4em] text-slate-100"
+                      className="h-12 rounded-xl border-stone-700/70 bg-stone-900/60 text-center text-lg tracking-[0.4em] text-stone-100 placeholder:text-stone-500 focus-visible:border-orange-500/60 focus-visible:ring-orange-500/30"
                     />
                   </div>
                   <div className="space-y-3">
-                    <Label htmlFor="reset-pwd" className="text-slate-300">
+                    <Label htmlFor="reset-pwd" className="text-stone-300">
                       新密码
                     </Label>
                     <div className="relative">
-                      <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                      <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-500" />
                       <Input
                         id="reset-pwd"
                         type="password"
@@ -500,16 +519,16 @@ export default function Login() {
                         placeholder="至少 8 位"
                         autoComplete="new-password"
                         required
-                        className="h-12 border-slate-700 bg-slate-950/50 pl-10 text-slate-100"
+                        className="h-12 rounded-xl border-stone-700/70 bg-stone-900/60 pl-10 text-stone-100 placeholder:text-stone-500 focus-visible:border-orange-500/60 focus-visible:ring-orange-500/30"
                       />
                     </div>
                   </div>
                   <div className="space-y-3">
-                    <Label htmlFor="reset-pwd2" className="text-slate-300">
+                    <Label htmlFor="reset-pwd2" className="text-stone-300">
                       确认新密码
                     </Label>
                     <div className="relative">
-                      <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                      <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-500" />
                       <Input
                         id="reset-pwd2"
                         type="password"
@@ -518,14 +537,14 @@ export default function Login() {
                         placeholder="请再次输入新密码"
                         autoComplete="new-password"
                         required
-                        className="h-12 border-slate-700 bg-slate-950/50 pl-10 text-slate-100"
+                        className="h-12 rounded-xl border-stone-700/70 bg-stone-900/60 pl-10 text-stone-100 placeholder:text-stone-500 focus-visible:border-orange-500/60 focus-visible:ring-orange-500/30"
                       />
                     </div>
                   </div>
                   <Button
                     type="submit"
                     disabled={loading}
-                    className="h-12 w-full bg-orange-600 text-white hover:bg-orange-500"
+                    className="h-12 w-full rounded-xl bg-orange-600 font-semibold text-white shadow-[0_12px_30px_-10px_rgba(255,102,0,0.7)] transition-colors hover:bg-orange-500"
                     style={accentBtn}
                   >
                     {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "重置密码并返回登录"}
@@ -533,7 +552,7 @@ export default function Login() {
                   <div className="flex items-center justify-between text-sm">
                     <button
                       type="button"
-                      className="text-slate-400 transition-colors hover:text-slate-200"
+                      className="text-stone-400 transition-colors hover:text-orange-400"
                       onClick={() => setMode("forgot")}
                     >
                       <ArrowLeft className="mr-1 inline h-4 w-4" />
@@ -541,7 +560,7 @@ export default function Login() {
                     </button>
                     <button
                       type="button"
-                      className="text-slate-400 transition-colors hover:text-slate-200"
+                      className="text-stone-400 transition-colors hover:text-orange-400"
                       onClick={backToLogin}
                     >
                       返回登录
@@ -551,11 +570,11 @@ export default function Login() {
               ) : (
                 <form onSubmit={onSubmit} className="space-y-7">
                   <div className="space-y-3">
-                    <Label htmlFor="username" className="text-slate-300">
+                    <Label htmlFor="username" className="text-stone-300">
                       用户名
                     </Label>
                     <div className="relative">
-                      <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                      <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-500" />
                       <Input
                         id="username"
                         value={username}
@@ -563,19 +582,19 @@ export default function Login() {
                         placeholder="请输入用户名"
                         autoComplete="username"
                         required
-                        className="h-12 border-slate-700 bg-slate-950/50 pl-10 text-slate-100"
+                        className="h-12 rounded-xl border-stone-700/70 bg-stone-900/60 pl-10 text-stone-100 placeholder:text-stone-500 focus-visible:border-orange-500/60 focus-visible:ring-orange-500/30"
                       />
                     </div>
                   </div>
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <Label htmlFor="password" className="text-slate-300">
+                      <Label htmlFor="password" className="text-stone-300">
                         密码
                       </Label>
                       {security?.password_reset_enabled ? (
                         <button
                           type="button"
-                          className="text-xs text-slate-400 transition-colors hover:text-orange-400"
+                          className="text-xs font-medium text-stone-400 transition-colors hover:text-orange-400"
                           onClick={openForgot}
                         >
                           忘记密码？
@@ -583,7 +602,7 @@ export default function Login() {
                       ) : null}
                     </div>
                     <div className="relative">
-                      <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                      <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-500" />
                       <Input
                         id="password"
                         type="password"
@@ -592,7 +611,7 @@ export default function Login() {
                         placeholder="请输入密码"
                         autoComplete="current-password"
                         required
-                        className="h-12 border-slate-700 bg-slate-950/50 pl-10 text-slate-100"
+                        className="h-12 rounded-xl border-stone-700/70 bg-stone-900/60 pl-10 text-stone-100 placeholder:text-stone-500 focus-visible:border-orange-500/60 focus-visible:ring-orange-500/30"
                       />
                     </div>
                   </div>
@@ -606,7 +625,9 @@ export default function Login() {
                   <Button
                     type="submit"
                     disabled={loading}
-                    className={cn("h-12 w-full bg-orange-600 text-white hover:bg-orange-500")}
+                    className={cn(
+                      "h-12 w-full rounded-xl bg-orange-600 font-semibold text-white shadow-[0_12px_30px_-10px_rgba(255,102,0,0.7)] transition-colors hover:bg-orange-500",
+                    )}
                     style={accentBtn}
                   >
                     {loading ? (
