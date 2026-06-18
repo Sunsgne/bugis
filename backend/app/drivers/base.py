@@ -353,7 +353,12 @@ class BaseDriver:
             timeout=self._netconf_timeout(),
         ) as m:
             if is_xml:
-                reply = m.edit_config(target="running", config=config)
+                # Always MERGE into the running datastore — never replace. This
+                # guarantees an edit-config only adds/updates the nodes in our
+                # service fragment and can never wipe unmanaged live config.
+                reply = m.edit_config(
+                    target="running", config=config, default_operation="merge"
+                )
                 return str(reply)
             # H3C Comware7 CLI-over-NETCONF RPC.
             return self._push_netconf_cli_h3c(m, config)

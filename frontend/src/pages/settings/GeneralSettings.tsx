@@ -123,6 +123,16 @@ export default function GeneralSettings() {
               <Switch checkedChildren="开" unCheckedChildren="关" />
             </Form.Item>
           </Col>
+          <Col xs={24} md={8}>
+            <Form.Item
+              name="protect_live_config"
+              label="现网配置保护"
+              valuePropName="checked"
+              tooltip="下发前用缓存的现网学习快照刷新接口 S-VID 占用（不增加交换机负担），让冲突预检基于最新现网状态；缺少学习基线的设备会给出告警提示。配置下发统一采用增量合并(merge)，不会整体覆盖现网。"
+            >
+              <Switch checkedChildren="开" unCheckedChildren="关" />
+            </Form.Item>
+          </Col>
         </Row>
         <Row gutter={16}>
           <Col xs={12} md={6}>

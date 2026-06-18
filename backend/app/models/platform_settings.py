@@ -70,6 +70,12 @@ class PlatformSettings(Base, TimestampMixin):
     mfa_allow_email: Mapped[bool] = mapped_column(Boolean, default=True)
     expose_openapi: Mapped[bool] = mapped_column(Boolean, default=True)
 
+    # Live-config protection: before pushing a circuit, refresh per-interface
+    # S-VID usage from the cached learned snapshot (zero switch load) so the
+    # collision pre-check runs against the freshest known on-box state, and warn
+    # when a target device has no learned baseline to compare against.
+    protect_live_config: Mapped[bool] = mapped_column(Boolean, default=True)
+
     notes: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
     product_name: Mapped[str] = mapped_column(String(128), default="Bugis Network")

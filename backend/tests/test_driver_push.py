@@ -210,6 +210,9 @@ def test_push_netconf_xml_passthrough(monkeypatch):
     xml = "<config><top/></config>"
     out = driver._push_netconf(device, xml)
     assert captured["edit_config"]["config"] == xml
+    # Always merge into running — never replace — to protect unmanaged live config.
+    assert captured["edit_config"].get("default_operation") == "merge"
+    assert captured["edit_config"].get("target") == "running"
     assert "<ok/>" in out
 
 
