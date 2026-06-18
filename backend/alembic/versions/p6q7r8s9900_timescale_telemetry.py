@@ -40,13 +40,24 @@ def upgrade() -> None:
 
     op.execute("CREATE EXTENSION IF NOT EXISTS timescaledb")
 
+    # Timescale requires UNIQUE/PK constraints to include the partition column.
     op.execute(
         """
-        SELECT create_hypertable(
-          'telemetry_samples', 'created_at',
-          if_not_exists => TRUE,
-          migrate_data => TRUE
-        );
+        DO $$
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM timescaledb_information.hypertables
+            WHERE hypertable_schema = 'public' AND hypertable_name = 'telemetry_samples'
+          ) THEN
+            ALTER TABLE telemetry_samples DROP CONSTRAINT IF EXISTS telemetry_samples_pkey;
+            DROP INDEX IF EXISTS ix_telemetry_samples_id;
+            ALTER TABLE telemetry_samples ADD PRIMARY KEY (id, created_at);
+            PERFORM create_hypertable(
+              'telemetry_samples', 'created_at',
+              migrate_data => TRUE
+            );
+          END IF;
+        END $$;
         """
     )
 
