@@ -213,3 +213,16 @@ def acknowledge(db: Session, alarm: Alarm, actor: str) -> Alarm:
 def clear(db: Session, alarm: Alarm) -> Alarm:
     alarm.status = AlarmStatus.CLEARED
     return alarm
+
+
+def clear_active_for_circuit(db: Session, circuit: Circuit) -> int:
+    """Clear all non-cleared alarms for a circuit (e.g. after decommission)."""
+    rows = db.execute(
+        select(Alarm).where(
+            Alarm.circuit_id == circuit.id,
+            Alarm.status != AlarmStatus.CLEARED,
+        )
+    ).scalars().all()
+    for alarm in rows:
+        alarm.status = AlarmStatus.CLEARED
+    return len(rows)
