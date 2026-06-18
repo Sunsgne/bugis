@@ -1,6 +1,8 @@
 """Northbound integration endpoints: webhook intake & Ansible export."""
 from __future__ import annotations
 
+import secrets
+
 from fastapi import APIRouter, Depends, Header, HTTPException, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -16,13 +18,16 @@ from app.models.tenant import Tenant
 from app.models.user import User
 from app.schemas.integration import WebhookProvision
 from app.schemas.workorder import WorkOrderOut
-from app.services import allocation, ansible_export, orchestrator
+from app.services import allocation, ansible_export, orchestrator, platform_settings as platform_cfg
 
 router = APIRouter()
 
 
-def _verify_webhook(x_webhook_token: str | None) -> None:
-    if x_webhook_token != settings.webhook_token:
+def _verify_webhook(db: Session, x_webhook_token: str | None) -> None:
+    plat = platform_cfg.get_or_create(db)
+    expected = plat.webhook_token or settings.webhook_token
+    supplied = x_webhook_token or ""
+    if not expected or not secrets.compare_digest(supplied, expected):
         raise HTTPException(status_code=401, detail="invalid webhook token")
 
 
@@ -37,7 +42,7 @@ def webhook_provision(
     Authenticated via the shared `X-Webhook-Token` header rather than a user
     session, so external orchestrators can drive provisioning automatically.
     """
-    _verify_webhook(x_webhook_token)
+    _verify_webhook(db, x_webhook_token)
 
     tenant = db.execute(
         select(Tenant).where(Tenant.code == payload.tenant_code)

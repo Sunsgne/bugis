@@ -11,7 +11,8 @@ _db_fd, _db_path = tempfile.mkstemp(suffix=".db")
 os.environ["BUGIS_DATABASE_URL"] = f"sqlite:///{_db_path}"
 os.environ["BUGIS_DRY_RUN"] = "true"
 os.environ["BUGIS_TELEMETRY_SIMULATION"] = "1"
-os.environ["BUGIS_SECRET_KEY"] = "test-secret"
+os.environ["BUGIS_SECRET_KEY"] = "test-secret-key-with-sufficient-length-for-fernet"
+os.environ["BUGIS_SKIP_SECURITY_CHECKS"] = "1"
 os.environ["BUGIS_SKIP_MIGRATE"] = "1"
 
 from fastapi.testclient import TestClient  # noqa: E402
@@ -34,6 +35,22 @@ def _setup_db():
     yield
     os.close(_db_fd)
     os.unlink(_db_path)
+
+
+@pytest.fixture(autouse=True)
+def _relax_live_config_guard():
+    """Most tests provision without a learned baseline; disable the production guard."""
+    from app.services import platform_settings
+
+    db = SessionLocal()
+    try:
+        row = platform_settings.get_or_create(db)
+        row.protect_live_config = False
+        db.commit()
+        platform_settings.sync_to_runtime(row)
+    finally:
+        db.close()
+    yield
 
 
 @pytest.fixture(autouse=True)

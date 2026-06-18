@@ -14,10 +14,23 @@ export default function OperationalBanner() {
   const [info, setInfo] = useState<SystemInfo | null>(null);
 
   useEffect(() => {
-    api
-      .get<SystemInfo>("/system/info")
-      .then(({ data }) => setInfo(data))
-      .catch(() => setInfo(null));
+    let cancelled = false;
+    const load = () => {
+      api
+        .get<SystemInfo>("/system/info")
+        .then(({ data }) => {
+          if (!cancelled) setInfo(data);
+        })
+        .catch(() => {
+          if (!cancelled) setInfo(null);
+        });
+    };
+    load();
+    const timer = window.setInterval(load, 60_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
   }, []);
 
   if (!info) return null;

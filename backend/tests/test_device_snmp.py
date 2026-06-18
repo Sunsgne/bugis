@@ -4,8 +4,8 @@ from __future__ import annotations
 from app.services import snmp_device
 
 
-def test_snmp_defaults_endpoint(client):
-    r = client.get("/api/v1/system/snmp-defaults")
+def test_snmp_defaults_endpoint(client, auth_headers):
+    r = client.get("/api/v1/system/snmp-defaults", headers=auth_headers)
     assert r.status_code == 200
     body = r.json()
     assert body["port"] == 161

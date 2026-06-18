@@ -50,4 +50,10 @@ def huawei_vni_ping_command(vni: int, target_ip: str, *, count: int = 5) -> str:
 
 
 def can_run_live(device: Device) -> bool:
-    return bool(device.active_mgmt_ip and device.username and device.password)
+    from app.services.credential_store import decrypt_value
+
+    return bool(
+        device.active_mgmt_ip
+        and device.username
+        and decrypt_value(device.password)
+    )

@@ -31,7 +31,7 @@ orchestration, work-order workflow, and bandwidth/SLA telemetry.
 - **控制器北向适配** — 站点可托管给 SDN/厂商控制器（华为 NCE-Fabric / 华三 SeerEngine / OpenDaylight / ONOS），开通时下发 JSON 意图到控制器北向 RESTful
 - **实时推送 (SSE)** 与 **CSV 批量导入导出**（设备 / 专线）
 - **操作审计** — 全量写操作审计日志（操作人 / 路径 / 状态 / 来源 IP）
-- **Dry-run 安全模式** — 默认仅渲染配置不下发，无需实验设备即可端到端演示
+- **Dry-run 安全模式** — 开发环境默认仅渲染配置不下发，生产需显式设置 `BUGIS_DRY_RUN=false`
 - **现代化运营门户** — React + Ant Design 大屏与管理界面
 
 ## 🏗️ 架构 / Architecture

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from prometheus_client import (
@@ -22,9 +22,11 @@ from app.bootstrap import (
     ensure_platform_settings,
     ensure_snmp_settings,
     ensure_superuser,
+    encrypt_credentials_at_rest,
 )
 from app.core.config import settings
 from app.core.database import SessionLocal, init_db
+from app.core.security_hardening import metrics_authorized, validate_production_settings
 from app.migrate import run_migrations
 from app.models.alarm import Alarm
 from app.models.circuit import Circuit
@@ -54,6 +56,7 @@ ALARMS_BY_SEVERITY = Gauge(
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    validate_production_settings()
     init_db()
     run_migrations()
     db = SessionLocal()
@@ -63,6 +66,7 @@ async def lifespan(app: FastAPI):
         ensure_cluster_node(db)
         ensure_snmp_settings(db)
         ensure_platform_settings(db)
+        encrypt_credentials_at_rest(db)
     finally:
         db.close()
     from app import scheduler, worker
@@ -92,10 +96,12 @@ from app.middleware_security import SecurityHeadersMiddleware  # noqa: E402
 
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(AuditMiddleware)
+_cors_origins = settings.cors_origins or []
+_cors_credentials = "*" not in _cors_origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins,
-    allow_credentials=True,
+    allow_origins=_cors_origins if _cors_origins else ["http://localhost:5173", "http://localhost:8080"],
+    allow_credentials=_cors_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -116,9 +122,11 @@ def health():
 
 
 @app.get("/metrics", include_in_schema=False)
-def metrics():
+def metrics(request: Request):
     if not settings.enable_metrics:
         return Response(status_code=404)
+    if settings.metrics_token and not metrics_authorized(request):
+        return Response(status_code=401)
     db = SessionLocal()
     try:
         CIRCUITS_TOTAL.set(db.scalar(select(func.count(Circuit.id))) or 0)

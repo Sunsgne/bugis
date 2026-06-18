@@ -8,25 +8,26 @@ SSH/NETCONF — inline in the request, serializing under load).
 Model
 -----
 * A work order queued for the worker is marked ``status=scheduled``.
-* The worker dispatches each scheduled work order onto a thread (device I/O is
-  blocking) and runs up to ``settings.provision_max_concurrency`` in parallel.
+* The worker atomically claims a work order (``scheduled`` -> ``running``) so
+  HA multi-node deployments never execute the same job twice.
+* Each scheduled work order runs on a thread (device I/O is blocking) with up to
+  ``settings.provision_max_concurrency`` in parallel.
 * A periodic reconcile loop also picks up any ``scheduled`` work orders that
   were never dispatched (e.g. enqueued just before a restart), so nothing is
   stranded.
 * ``process_pending`` provides a synchronous drain used by tests / manual
   triggers when no event loop is running.
 
-The worker is intentionally simple and single-process (the production stack is
-single-node). It never changes default behavior unless ``async_provisioning``
-is enabled; the provision endpoint only enqueues when that flag is on.
+Disable on HA follower nodes via ``BUGIS_WORKER_ENABLED=false``.
 """
 from __future__ import annotations
 
 import asyncio
 import logging
+import threading
 from datetime import datetime, timezone
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 
 from app.core.config import settings
 from app.core.database import SessionLocal
@@ -40,6 +41,8 @@ _loop: asyncio.AbstractEventLoop | None = None
 _reconcile_task: asyncio.Task | None = None
 _dispatch_lock: asyncio.Lock | None = None
 _inflight: set[int] = set()
+_device_locks_guard = threading.Lock()
+_device_locks: dict[int, threading.Lock] = {}
 _state: dict = {
     "running": False,
     "processed": 0,
@@ -56,15 +59,38 @@ def _max_concurrency() -> int:
         return 4
 
 
+def _device_ids_for_work_order(db, wo: WorkOrder) -> list[int]:
+    ids: set[int] = set()
+    circuit = wo.circuit
+    if not circuit:
+        return []
+    for ep in circuit.endpoints:
+        if ep.device_id:
+            ids.add(ep.device_id)
+    return sorted(ids)
+
+
+def _acquire_device_locks(device_ids: list[int]) -> list[threading.Lock]:
+    locks: list[threading.Lock] = []
+    with _device_locks_guard:
+        for did in device_ids:
+            if did not in _device_locks:
+                _device_locks[did] = threading.Lock()
+            locks.append(_device_locks[did])
+    for lock in locks:
+        lock.acquire()
+    return locks
+
+
+def _release_device_locks(locks: list[threading.Lock]) -> None:
+    for lock in reversed(locks):
+        lock.release()
+
+
 # --- enqueue -------------------------------------------------------------
 
 def enqueue(wo_id: int) -> None:
-    """Hand a scheduled work order to the running worker loop (best-effort).
-
-    Safe to call from a request (sync) thread: it schedules a dispatch on the
-    worker's event loop. If no loop is running (e.g. tests), this is a no-op and
-    the work order will be drained by ``process_pending`` / the reconcile loop.
-    """
+    """Hand a scheduled work order to the running worker loop (best-effort)."""
     loop = _loop
     if loop is None or loop.is_closed():
         return
@@ -76,13 +102,32 @@ def enqueue(wo_id: int) -> None:
 
 # --- core execution ------------------------------------------------------
 
+def _claim_work_order(db, wo_id: int) -> WorkOrder | None:
+    """Atomically claim a scheduled work order (HA-safe)."""
+    result = db.execute(
+        update(WorkOrder)
+        .where(
+            WorkOrder.id == wo_id,
+            WorkOrder.status == WorkOrderStatus.SCHEDULED,
+        )
+        .values(status=WorkOrderStatus.RUNNING)
+    )
+    if not result.rowcount:
+        db.rollback()
+        return None
+    db.commit()
+    return db.get(WorkOrder, wo_id)
+
+
 def _run_one(wo_id: int) -> WorkOrderStatus | None:
     """Execute a single scheduled work order in a fresh DB session."""
     db = SessionLocal()
+    device_locks: list[threading.Lock] = []
     try:
-        wo = db.get(WorkOrder, wo_id)
-        if not wo or wo.status != WorkOrderStatus.SCHEDULED:
+        wo = _claim_work_order(db, wo_id)
+        if not wo:
             return None
+        device_locks = _acquire_device_locks(_device_ids_for_work_order(db, wo))
         actor = wo.requested_by or "worker"
         try:
             orchestrator.execute(db, wo, actor=actor)
@@ -100,6 +145,7 @@ def _run_one(wo_id: int) -> WorkOrderStatus | None:
         db.commit()
         return status
     finally:
+        _release_device_locks(device_locks)
         db.close()
 
 
@@ -159,7 +205,6 @@ async def _execute_async(wo_id: int) -> None:
     finally:
         _inflight.discard(wo_id)
         _state["inflight"] = len(_inflight)
-        # A slot freed up — pull in any remaining queued work.
         await _dispatch_available()
 
 
@@ -183,6 +228,9 @@ async def _reconcile_loop() -> None:
 
 def start() -> None:
     global _loop, _reconcile_task, _dispatch_lock
+    if not getattr(settings, "worker_enabled", True):
+        logger.info("provisioning worker disabled (BUGIS_WORKER_ENABLED=false)")
+        return
     _loop = asyncio.get_event_loop()
     _dispatch_lock = asyncio.Lock()
     if _reconcile_task and not _reconcile_task.done():
@@ -204,10 +252,7 @@ async def stop() -> None:
 # --- synchronous drain (tests / manual trigger) --------------------------
 
 def process_pending(limit: int | None = None) -> int:
-    """Synchronously execute all (or up to ``limit``) scheduled work orders.
-
-    Used by tests and a manual admin trigger when no worker loop is running.
-    """
+    """Synchronously execute all (or up to ``limit``) scheduled work orders."""
     processed = 0
     for wo_id in _scheduled_ids(set()):
         if limit is not None and processed >= limit:
@@ -225,7 +270,8 @@ def process_pending(limit: int | None = None) -> int:
 def status() -> dict:
     return {
         **_state,
-        "enabled": bool(getattr(settings, "async_provisioning", False)),
+        "enabled": bool(getattr(settings, "async_provisioning", False))
+        and bool(getattr(settings, "worker_enabled", True)),
         "max_concurrency": _max_concurrency(),
         "pending": pending_count(),
     }

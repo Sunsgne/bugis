@@ -35,7 +35,7 @@ _CONFIRM_PROMPT = re.compile(
 
 # A successful ``save`` returns one of these (VRP / Comware wording variants).
 _SAVE_SUCCESS = re.compile(
-    r"save.*success|saved\s+successfully|successfully\s+saved|配置.*成功|保存.*成功",
+    r"save.*success|save\s+complete|saved\s+successfully|successfully\s+saved|配置.*成功|保存.*成功",
     re.IGNORECASE | re.DOTALL,
 )
 
@@ -160,7 +160,11 @@ class BaseDriver:
 
         try:
             result.output = self._real_push(device, config)
-            result.success = True
+            lower = (result.output or "").lower()
+            if "[warn] save" in lower or "save confirmation not detected" in lower:
+                result.success = False
+            else:
+                result.success = True
         except Exception as exc:  # pragma: no cover - depends on live device
             result.success = False
             result.output = f"PUSH FAILED: {exc}"
@@ -260,12 +264,16 @@ class BaseDriver:
             raise RuntimeError(
                 "ncclient not installed; install it or run in dry-run mode"
             ) from exc
+        from app.core.config import settings
+        from app.services.credential_store import southbound_device
+
+        device = southbound_device(device)
         with manager.connect(
             host=device.active_mgmt_ip,
             port=device.netconf_port,
             username=device.username,
             password=device.password,
-            hostkey_verify=False,
+            hostkey_verify=settings.netconf_hostkey_verify,
             timeout=self._netconf_timeout(),
         ) as m:
             reply = m.get_config(source="running")
@@ -313,6 +321,9 @@ class BaseDriver:
                 "netmiko not installed; install it or run in dry-run mode"
             ) from exc
         read_timeout = self._cli_read_timeout()
+        from app.services.credential_store import southbound_device
+
+        device = southbound_device(device)
         conn = ConnectHandler(**self._cli_params(device))
         try:
             self._prepare_cli_session(conn)
@@ -345,8 +356,10 @@ class BaseDriver:
         the push transparently falls back to CLI (netmiko), which is the common
         case for H3C / Huawei (BGP EVPN VXLAN templates render VRP/Comware CLI).
         """
+        from app.services.credential_store import southbound_device
         from app.services.device_management import effective_transport
 
+        device = southbound_device(device)
         primary = effective_transport(device)
         tried: list[str] = []
         last_exc: Exception | None = None
@@ -372,6 +385,10 @@ class BaseDriver:
                 "ncclient not installed; install it or run in dry-run mode"
             ) from exc
 
+        from app.core.config import settings
+        from app.services.credential_store import southbound_device
+
+        device = southbound_device(device)
         cfg = (config or "").strip()
         is_xml = cfg.startswith("<")
         if not is_xml and self.vendor != Vendor.H3C:
@@ -389,7 +406,7 @@ class BaseDriver:
             port=device.netconf_port,
             username=device.username,
             password=device.password,
-            hostkey_verify=False,
+            hostkey_verify=settings.netconf_hostkey_verify,
             timeout=self._netconf_timeout(),
         ) as m:
             if is_xml:
@@ -441,7 +458,7 @@ class BaseDriver:
         try:
             return "\n" + str(m.dispatch(to_ele(save_rpc)))
         except Exception as exc:  # noqa: BLE001
-            return f"\n[warn] save to startup config failed: {exc}"
+            raise RuntimeError(f"save to startup config failed: {exc}") from exc
 
     def _push_cli(self, device: Any, config: str) -> str:  # pragma: no cover
         try:
@@ -452,7 +469,9 @@ class BaseDriver:
             ) from exc
 
         from app.drivers.config_text import to_command_list
+        from app.services.credential_store import southbound_device
 
+        device = southbound_device(device)
         commands = to_command_list(self.vendor, config)
         if not commands:
             return "[no-op] nothing to push after sanitizing rendered config"
@@ -534,42 +553,31 @@ class BaseDriver:
         apply/teardown looked successful but was lost after a power cycle.
 
         Both EVPN-VXLAN vendors therefore need an explicit save after a
-        successful apply/teardown:
-
-          * H3C Comware (and Huawei S-series) -> ``save force`` (no prompt)
-          * Huawei VRP8 / CE (Datacom)        -> ``save`` (auto-confirm ``Y``)
-
-        Best-effort: a save failure is surfaced in the output but never aborts
-        the push, since at that point the change is already live on the box.
+        successful apply/teardown. A save failure raises so the work order is
+        marked failed rather than silently losing config on reboot.
         """
         if self.vendor not in (Vendor.H3C, Vendor.HUAWEI):
             return ""
-        # Prefer netmiko's vendor-aware save_config(): it emits ``save force``
-        # for hp_comware and ``save`` + confirmation for huawei / huawei_vrpv8.
         save_config = getattr(conn, "save_config", None)
         if callable(save_config):
             try:
-                return "\n" + (save_config() or "")
+                out = save_config() or ""
             except Exception as exc:  # noqa: BLE001
-                return f"\n[warn] save to startup config failed: {exc}"
-        # Fallback for transports without netmiko's helper: send the command and
-        # auto-confirm any "Are you sure ... [Y/N]" prompt (Huawei ``save``).
+                raise RuntimeError(f"save to startup config failed: {exc}") from exc
+            if self.vendor == Vendor.HUAWEI and out and not _SAVE_SUCCESS.search(out):
+                raise RuntimeError(f"save confirmation not detected: {out.strip()[-160:]}")
+            return "\n" + out
         timing = getattr(conn, "send_command_timing", None)
         if not callable(timing):
             return ""
         cmd = "save force" if self.vendor == Vendor.H3C else "save"
         read_timeout = self._cli_read_timeout()
-        try:
-            out = timing(cmd, read_timeout=read_timeout) or ""
-            # ``save`` is interactive on Huawei: answer the confirm prompt and
-            # wait for the success banner (Comware ``save force`` is silent).
-            if _CONFIRM_PROMPT.search(out):
-                out += timing("y", read_timeout=read_timeout) or ""
-            if self.vendor == Vendor.HUAWEI and not _SAVE_SUCCESS.search(out):
-                out += f"\n[warn] save confirmation not detected: {out.strip()[-160:]}"
-            return "\n" + out
-        except Exception as exc:  # noqa: BLE001
-            return f"\n[warn] save to startup config failed: {exc}"
+        out = timing(cmd, read_timeout=read_timeout) or ""
+        if _CONFIRM_PROMPT.search(out):
+            out += timing("y", read_timeout=read_timeout) or ""
+        if self.vendor == Vendor.HUAWEI and not _SAVE_SUCCESS.search(out):
+            raise RuntimeError(f"save confirmation not detected: {out.strip()[-160:]}")
+        return "\n" + out
 
 
 NETMIKO_DEVICE_TYPES = {

@@ -97,7 +97,7 @@ def sync_to_runtime(row: PlatformSettings) -> None:
     settings.smtp_security = row.smtp_security or "starttls"
     settings.enable_metrics = row.enable_metrics
     settings.access_token_expire_minutes = row.access_token_expire_minutes
-    settings.expose_openapi = getattr(row, "expose_openapi", True)
+    settings.expose_openapi = getattr(row, "expose_openapi", False)
 
     from app import scheduler
 

@@ -20,7 +20,7 @@ services:
     environment:
       BUGIS_DATABASE_URL: postgresql+psycopg://bugis:bugis@db:5432/bugis
       BUGIS_SECRET_KEY: please-change-this-secret-in-production
-      BUGIS_DRY_RUN: "false"
+      BUGIS_DRY_RUN: "true"
       BUGIS_EXPOSE_OPENAPI: "false"
     depends_on:
       db:

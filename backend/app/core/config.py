@@ -29,9 +29,17 @@ class Settings(BaseSettings):
 
     # --- Security / Auth ---
     secret_key: str = "change-me-in-production-please-use-a-long-random-string"
-    access_token_expire_minutes: int = 60 * 24
+    access_token_expire_minutes: int = 60 * 8
     algorithm: str = "HS256"
     expose_openapi: bool = False
+    # Comma-separated IPs allowed to set X-Forwarded-For (reverse proxy peers).
+    trusted_proxy_ips: list[str] = []
+    # Bearer / X-Metrics-Token required for /metrics when set (recommended in prod).
+    metrics_token: str = ""
+    # Skip validate_production_settings() (tests / local only).
+    skip_security_checks: bool = False
+    # Verify NETCONF host keys (recommended True in production).
+    netconf_hostkey_verify: bool = False
 
     # --- Device baseline (initialization) defaults ---
     baseline_ntp_server: str = "10.0.0.1"
@@ -40,7 +48,8 @@ class Settings(BaseSettings):
 
     # --- Provisioning ---
     # When True, configuration is rendered but NOT pushed to real devices.
-    dry_run: bool = False
+    # Defaults to safe dry-run in development; production compose sets false explicitly.
+    dry_run: bool = True
     # Explicit opt-in for lab/demo telemetry simulation (never silent in production).
     telemetry_simulation: bool = False
     # Auto-allocated VNI pool start (controller / orchestrator).
@@ -53,7 +62,8 @@ class Settings(BaseSettings):
     default_username: str = "admin"
 
     # --- CORS ---
-    cors_origins: list[str] = ["*"]
+    # Use explicit origins in production; development may use ["*"] without credentials.
+    cors_origins: list[str] = []
 
     # --- Telemetry ---
     enable_metrics: bool = True
@@ -73,6 +83,8 @@ class Settings(BaseSettings):
     provision_max_concurrency: int = 4
     # How often the worker reconciles orphaned queued work orders (seconds).
     worker_poll_seconds: int = 5
+    # Background provisioning worker (disable on HA follower nodes).
+    worker_enabled: bool = True
 
     # --- Container / HA bootstrap (production multi-node) ---
     run_migrations: bool = True

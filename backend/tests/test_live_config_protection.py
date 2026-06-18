@@ -29,6 +29,12 @@ def _bootstrap(client, auth_headers, tag: str):
 
 
 def test_protect_live_config_setting_default_and_update(client, auth_headers):
+    on = client.patch(
+        "/api/v1/system/settings/platform",
+        headers=auth_headers,
+        json={"protect_live_config": True},
+    )
+    assert on.status_code == 200
     cur = client.get("/api/v1/system/settings", headers=auth_headers).json()
     assert cur["platform"]["protect_live_config"] is True
 
@@ -119,8 +125,18 @@ def test_refresh_live_inventory_does_no_device_io(client, auth_headers, monkeypa
         db.close()
 
 
-def test_provision_logs_live_config_protection_warning(client, auth_headers):
+def test_provision_blocks_without_learned_baseline(client, auth_headers):
     from app.core.database import SessionLocal
+    from app.services import platform_settings
+
+    db = SessionLocal()
+    try:
+        row = platform_settings.get_or_create(db)
+        row.protect_live_config = True
+        db.commit()
+        platform_settings.sync_to_runtime(row)
+    finally:
+        db.close()
 
     tenant, dev = _bootstrap(client, auth_headers, "33")
     circuit = client.post(
@@ -149,6 +165,7 @@ def test_provision_logs_live_config_protection_warning(client, auth_headers):
     wo = client.post(
         f"/api/v1/work-orders/provision/{circuit['id']}", headers=auth_headers
     ).json()
-    assert wo["status"] == "completed"
+    assert wo["status"] == "failed"
     messages = "\n".join(e["message"] for e in wo.get("events", []))
     assert "现网配置保护" in messages
+    assert "阻断下发" in messages

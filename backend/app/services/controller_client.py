@@ -105,7 +105,12 @@ def deliver(controller: Controller, req: ControllerRequest, dry_run: bool = True
         with httpx.Client(verify=bool(controller.verify_tls), timeout=30) as client:
             auth = None
             if controller.username:
-                auth = (controller.username, controller.password or "")
+                from app.services.credential_store import decrypt_value
+
+                auth = (
+                    controller.username,
+                    decrypt_value(controller.password) or "",
+                )
             resp = client.request(req.method, req.url, json=req.payload, auth=auth)
             return {
                 "success": resp.is_success,

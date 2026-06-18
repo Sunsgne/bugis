@@ -381,15 +381,21 @@ export default function Circuits() {
   }
 
   async function pollWorkOrderProgress(base: ProvisionResult, terminal: string[]) {
-    // Stop the full-screen spinner; the modal shows live work-order status.
     setProvisionLoading(false);
+    let pollErrors = 0;
     for (let i = 0; i < 120; i++) {
       await new Promise((r) => setTimeout(r, 1500));
       let wo: WorkOrder;
       try {
         const { data } = await api.get<WorkOrder>(`/work-orders/${base.id}`);
         wo = data;
+        pollErrors = 0;
       } catch {
+        pollErrors += 1;
+        if (pollErrors >= 5) {
+          message.error("工单状态轮询失败，请刷新页面查看进度");
+          return;
+        }
         continue;
       }
       const merged: ProvisionResult = { ...base, ...wo };
@@ -418,25 +424,40 @@ export default function Circuits() {
     // Pre-flight compliance check before provisioning.
     const { data: v } = await api.get(`/circuits/${c.id}/validate`);
     if (!v.ok) {
+      if (v.errors > 0) {
+        modal.warning({
+          title: `预检发现 ${v.errors} 个错误`,
+          width: 560,
+          content: (
+            <div style={{ maxHeight: 320, overflow: "auto" }}>
+              {v.issues.map((i: any, idx: number) => (
+                <div key={idx} style={{ marginBottom: 4 }}>
+                  <Tag color={i.level === "error" ? "red" : "orange"}>{i.level}</Tag>
+                  <span>{i.message}</span>
+                </div>
+              ))}
+              <div style={{ color: "#cf1322", marginTop: 8 }}>
+                存在错误，编排引擎将阻断下发，请先修复后再开通。
+              </div>
+            </div>
+          ),
+        });
+        return;
+      }
       modal.confirm({
-        title: `预检发现 ${v.errors} 个错误 / ${v.warnings} 个告警`,
+        title: `预检发现 ${v.warnings} 个告警`,
         width: 560,
         content: (
           <div style={{ maxHeight: 320, overflow: "auto" }}>
             {v.issues.map((i: any, idx: number) => (
               <div key={idx} style={{ marginBottom: 4 }}>
-                <Tag color={i.level === "error" ? "red" : "orange"}>{i.level}</Tag>
+                <Tag color="orange">{i.level}</Tag>
                 <span>{i.message}</span>
               </div>
             ))}
-            {v.errors > 0 && (
-              <div style={{ color: "#cf1322", marginTop: 8 }}>
-                存在错误，下发将被编排引擎阻断。
-              </div>
-            )}
           </div>
         ),
-        okText: v.errors > 0 ? "仍尝试开通" : "继续开通",
+        okText: "继续开通",
         onOk: () => runProvision(c),
       });
       return;
