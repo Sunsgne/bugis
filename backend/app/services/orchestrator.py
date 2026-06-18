@@ -40,11 +40,57 @@ from app.models.enums import (
 )
 from app.models.site import Site
 from app.models.workorder import WorkOrder, WorkOrderEvent
-from app.services import controller_client, device_management, validation
+from app.services import (
+    controller_client,
+    device_management,
+    platform_settings as platform_cfg,
+    validation,
+)
 
 
 # A registered rollback returns True when the undo succeeded.
 RollbackFn = Callable[[], bool]
+
+
+def _refresh_live_inventory(db: Session, circuit: Circuit) -> None:
+    """Refresh per-interface S-VID usage from the cached learned snapshot.
+
+    Pure DB work (parses the latest ``source="learn"`` snapshot) — it performs
+    NO live device I/O, so it adds zero load on the switch while ensuring the
+    pre-flight collision check runs against the freshest known on-box state.
+    """
+    from app.services import port_inventory
+
+    seen: set[int] = set()
+    for ep in circuit.endpoints:
+        dev = ep.device
+        if dev and dev.id not in seen:
+            seen.add(dev.id)
+            try:
+                port_inventory.scan_device(db, dev, include_legacy=False)
+            except Exception:  # noqa: BLE001
+                pass
+
+
+def _devices_without_baseline(db: Session, circuit: Circuit) -> list[str]:
+    """Names of target devices that have no learned baseline snapshot.
+
+    Without a baseline we cannot see unmanaged on-box services, so a push there
+    could collide with / overwrite live config. Callers surface this as a
+    warning so the operator can run 现网学习 first.
+    """
+    from app.services import config_mgmt
+
+    missing: list[str] = []
+    seen: set[int] = set()
+    for ep in circuit.endpoints:
+        dev = ep.device
+        if not dev or dev.id in seen:
+            continue
+        seen.add(dev.id)
+        if config_mgmt.latest_learned(db, dev.id) is None:
+            missing.append(dev.name)
+    return missing
 
 
 def _log(db: Session, wo: WorkOrder, message: str, level: str = "info",
@@ -53,6 +99,37 @@ def _log(db: Session, wo: WorkOrder, message: str, level: str = "info",
         WorkOrderEvent(
             work_order_id=wo.id, level=level, message=message, actor=actor
         )
+    )
+
+
+def _removed_config_items(rendered: str) -> list[str]:
+    """Extract the concrete teardown commands (undo / no / delete) from a
+    rendered remove config so we can show the operator exactly what was
+    recovered, mirroring the provisioning process log."""
+    items: list[str] = []
+    for raw in (rendered or "").splitlines():
+        s = raw.strip()
+        if not s or s.startswith("#") or s.startswith("!"):
+            continue
+        low = s.lower()
+        if low.startswith(("undo ", "no ", "delete ")):
+            items.append(s)
+    return items
+
+
+def _log_teardown_details(
+    db: Session, wo: WorkOrder, device: Device, rendered: str, actor: str | None,
+    *, is_gateway: bool = False,
+) -> None:
+    """Emit a per-device 'what was removed' breakdown for a remove push."""
+    items = _removed_config_items(rendered)
+    tag = "[GW] " if is_gateway else ""
+    if not items:
+        return
+    _log(
+        db, wo,
+        f"{tag}{device.name} 回收配置 {len(items)} 项：" + "； ".join(items),
+        actor=actor,
     )
 
 
@@ -335,11 +412,26 @@ def execute(db: Session, wo: WorkOrder, actor: str | None = None) -> WorkOrder:
 
     # Pre-flight compliance validation (skip for decommission).
     if wo.type != WorkOrderType.DECOMMISSION:
+        plat = platform_cfg.get_or_create(db)
+        if plat.protect_live_config:
+            # Refresh S-VID inventory from cached learned config (zero switch
+            # load) so the collision check below sees the freshest on-box state.
+            _refresh_live_inventory(db, circuit)
         issues = validation.validate_circuit(db, circuit)
         errors = [i for i in issues if i.level == "error"]
         for i in issues:
             _log(db, wo, f"预检[{i.level}] {i.code}: {i.message}",
                  level="warning" if i.level != "error" else "error", actor=actor)
+        if plat.protect_live_config:
+            missing = _devices_without_baseline(db, circuit)
+            if missing:
+                _log(
+                    db, wo,
+                    "现网配置保护：以下设备暂无现网学习基线，无法核对未纳管业务，"
+                    "下发采用增量合并(merge)不会整体覆盖，但建议先执行『现网学习』再下发："
+                    + "、".join(missing),
+                    level="warning", actor=actor,
+                )
         if errors:
             wo.status = WorkOrderStatus.FAILED
             circuit.status = CircuitStatus.FAILED
@@ -785,6 +877,12 @@ def _render_and_push(
             level="info" if result.success else "error",
             actor=actor,
         )
+        # Teardown process detail: list exactly which config was recovered, so a
+        # decommission shows a clear step-by-step like provisioning does.
+        if operation == "remove" and result.success:
+            _log_teardown_details(
+                db, wo, device, rendered, actor, is_gateway=is_gateway
+            )
         # Register cleanup for ANY apply attempt (success OR failure): a failed
         # push may have partially applied (e.g. bridge-domain/VSI created before
         # the erroring command), so on overall rollback we must scrub every

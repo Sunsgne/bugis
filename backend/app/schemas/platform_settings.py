@@ -72,6 +72,7 @@ class PlatformSettingsBase(BaseModel):
     mfa_allow_totp: bool = True
     mfa_allow_email: bool = True
     expose_openapi: bool = True
+    protect_live_config: bool = True
 
     notes: str | None = None
 
@@ -128,6 +129,7 @@ class PlatformSettingsUpdate(BaseModel):
     mfa_allow_totp: bool | None = None
     mfa_allow_email: bool | None = None
     expose_openapi: bool | None = None
+    protect_live_config: bool | None = None
 
     notes: str | None = None
 

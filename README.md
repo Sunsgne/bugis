@@ -133,6 +133,23 @@ alembic upgrade head                              # 应用最新迁移
 alembic revision --autogenerate -m "描述变更"     # 模型变更后生成新迁移
 ```
 
+## 👤 管理员账号 / Admin accounts
+
+新增（或提升）一个平台管理员账号。凭据在运行时通过参数 / 环境变量传入，不在仓库内硬编码：
+
+```bash
+# 本地 / SQLite
+cd backend && python -m scripts.create_admin <用户名> '<密码>'
+
+# 生产环境 (Docker Compose)
+docker compose -f docker-compose.prod.yml exec backend \
+    python -m scripts.create_admin <用户名> '<密码>'
+```
+
+- 账号已存在时默认拒绝覆盖，加 `--update` 可重置密码并提升为平台管理员。
+- 为避免密码进入 shell 历史，可改用 `--password-env BUGIS_NEW_ADMIN_PASS`（从环境变量读取）。
+- 重置已有账号密码：`python -m scripts.reset_admin_password <用户名> '<新密码>'`。
+
 ## 🧪 测试 / Tests
 
 ```bash

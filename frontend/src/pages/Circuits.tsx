@@ -1064,7 +1064,7 @@ export default function Circuits() {
                               : line.startsWith("-")
                               ? "#ff7875"
                               : line.startsWith("@@")
-                              ? "#1677ff"
+                              ? "#ff8c1a"
                               : undefined,
                           }}
                         >

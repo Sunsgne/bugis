@@ -1,18 +1,20 @@
 import { useEffect, useState } from "react";
 import {
   Button,
-  Card,
   Form,
   Input,
   Modal,
+  Popconfirm,
   Select,
+  Space,
+  Switch,
   Table,
   Tag,
   App as AntApp,
   Alert,
   Typography,
 } from "antd";
-import { PlusOutlined } from "@ant-design/icons";
+import { DeleteOutlined, EditOutlined, PlusOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { api } from "../api/client";
 import { useAuth } from "../auth";
@@ -44,6 +46,8 @@ export default function Users({ embedded }: { embedded?: boolean }) {
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [form] = Form.useForm();
+  const [editing, setEditing] = useState<UserRow | null>(null);
+  const [editForm] = Form.useForm();
 
   const isAdmin = user?.role === "admin";
 
@@ -68,6 +72,48 @@ export default function Users({ embedded }: { embedded?: boolean }) {
       message.success(toast.created);
       setOpen(false);
       form.resetFields();
+      load();
+    } catch (e: any) {
+      message.error(e?.response?.data?.detail || toast.failed);
+    }
+  }
+
+  function openEdit(row: UserRow) {
+    setEditing(row);
+    editForm.setFieldsValue({
+      full_name: row.full_name,
+      email: row.email,
+      role: row.role,
+      is_active: row.is_active,
+      password: "",
+    });
+  }
+
+  async function onEdit() {
+    if (!editing) return;
+    const values = await editForm.validateFields();
+    const payload: Record<string, unknown> = {
+      full_name: values.full_name || null,
+      email: values.email || null,
+      role: values.role,
+      is_active: values.is_active,
+    };
+    if (values.password) payload.password = values.password;
+    try {
+      await api.patch(`/auth/users/${editing.id}`, payload);
+      message.success(toast.saved);
+      setEditing(null);
+      editForm.resetFields();
+      load();
+    } catch (e: any) {
+      message.error(e?.response?.data?.detail || toast.failed);
+    }
+  }
+
+  async function onDelete(row: UserRow) {
+    try {
+      await api.delete(`/auth/users/${row.id}`);
+      message.success(toast.deleted);
       load();
     } catch (e: any) {
       message.error(e?.response?.data?.detail || toast.failed);
@@ -123,11 +169,90 @@ export default function Users({ embedded }: { embedded?: boolean }) {
           {
             title: "创建时间",
             dataIndex: "created_at",
-            width: "18%",
+            width: "16%",
             render: (t) => (t ? dayjs(t).format("YYYY-MM-DD HH:mm") : "—"),
+          },
+          {
+            title: "操作",
+            key: "actions",
+            width: "14%",
+            render: (_: unknown, row: UserRow) => (
+              <Space size="small">
+                <Button
+                  type="link"
+                  size="small"
+                  icon={<EditOutlined />}
+                  onClick={() => openEdit(row)}
+                >
+                  {action.edit}
+                </Button>
+                <Popconfirm
+                  title="删除用户"
+                  description={`确认删除用户 ${row.username}？此操作不可恢复。`}
+                  okText={action.confirm}
+                  cancelText={action.cancel}
+                  okButtonProps={{ danger: true }}
+                  disabled={row.id === user?.id}
+                  onConfirm={() => onDelete(row)}
+                >
+                  <Button
+                    type="link"
+                    size="small"
+                    danger
+                    icon={<DeleteOutlined />}
+                    disabled={row.id === user?.id}
+                  >
+                    {action.delete}
+                  </Button>
+                </Popconfirm>
+              </Space>
+            ),
           },
         ]}
       />
+      <Modal
+        title="编辑用户"
+        open={!!editing}
+        onOk={onEdit}
+        onCancel={() => {
+          setEditing(null);
+          editForm.resetFields();
+        }}
+        okText={action.save}
+        {...formModalProps}
+      >
+        <Form form={editForm} layout="vertical" className="app-form">
+          <Form.Item label="用户名">
+            <Input value={editing?.username} disabled />
+          </Form.Item>
+          <Form.Item name="full_name" label="姓名">
+            <Input />
+          </Form.Item>
+          <Form.Item name="email" label="邮箱">
+            <Input />
+          </Form.Item>
+          <Form.Item name="role" label="角色">
+            <Select
+              options={[
+                { value: "admin", label: "Admin 管理员" },
+                { value: "operator", label: "Operator 操作员" },
+                { value: "viewer", label: "Viewer 只读" },
+              ]}
+            />
+          </Form.Item>
+          <Form.Item name="is_active" label="状态" valuePropName="checked">
+            <Switch checkedChildren="启用" unCheckedChildren="禁用" />
+          </Form.Item>
+          <Form.Item
+            name="password"
+            label="重置密码"
+            extra="留空则不修改；如需重置请输入至少 8 位新密码"
+            rules={[{ min: 8, message: "新密码至少 8 位" }]}
+          >
+            <Input.Password autoComplete="new-password" placeholder="留空不修改" />
+          </Form.Item>
+        </Form>
+      </Modal>
       <Modal
         title="新建用户"
         open={open}

@@ -34,19 +34,19 @@
   --card-foreground: 222 47% 11%;
   --popover: 0 0% 100%;
   --popover-foreground: 222 47% 11%;
-  --primary: 221 83% 53%;
-  --primary-foreground: 210 40% 98%;
-  --secondary: 210 40% 96%;
-  --secondary-foreground: 222 47% 11%;
-  --muted: 210 40% 96%;
-  --muted-foreground: 215 16% 47%;
-  --accent: 210 40% 96%;
-  --accent-foreground: 222 47% 11%;
+  --primary: 24 100% 50%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 24 38% 96%;
+  --secondary-foreground: 22 47% 14%;
+  --muted: 24 30% 96%;
+  --muted-foreground: 24 8% 46%;
+  --accent: 28 100% 96%;
+  --accent-foreground: 22 60% 24%;
   --destructive: 0 84% 60%;
   --destructive-foreground: 210 40% 98%;
-  --border: 214 32% 94%;
-  --input: 214 32% 94%;
-  --ring: 221 83% 53%;
+  --border: 24 24% 91%;
+  --input: 24 24% 91%;
+  --ring: 24 100% 50%;
   --radius: 0.625rem;
 }
 
@@ -81,6 +81,22 @@ body {
   border-color: hsl(var(--border));
 }
 
+/* MFA / TOTP setup layout */
+.mfa-setup-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  align-items: flex-start;
+}
+.mfa-qr {
+  background: #fff;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid hsl(var(--border));
+  line-height: 0;
+  flex-shrink: 0;
+}
+
 /* Login page (dark) */
 .login-page {
   min-height: 100vh;
@@ -90,8 +106,81 @@ body {
   align-items: center;
   justify-content: center;
   padding: clamp(24px, 4vh, 48px) clamp(20px, 4vw, 40px);
-  background: #070b14;
-  color: #e2e8f0;
+  background: var(
+    --login-bg,
+    radial-gradient(1200px 600px at 80% -10%, #3a1602 0%, #140a04 55%, #0c0703 100%)
+  );
+  color: #f5e9df;
+}
+
+.login-card {
+  position: relative;
+  border-radius: 20px;
+}
+.login-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    160deg,
+    color-mix(in srgb, var(--brand-accent, #ff6600) 55%, transparent) 0%,
+    rgba(148, 163, 184, 0.08) 38%,
+    rgba(148, 163, 184, 0.02) 100%
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* Portal header user dropdown trigger */
+.portal-user-trigger {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 12px 4px 4px;
+  border: 1px solid #eef0f4;
+  border-radius: 999px;
+  background: #fff;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+.portal-user-trigger:hover {
+  border-color: #d8dce3;
+  background: #fafbfc;
+  box-shadow: 0 2px 10px -4px rgba(15, 23, 42, 0.18);
+}
+.portal-user-meta {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+  text-align: left;
+}
+.portal-user-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1f2329;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.portal-user-role {
+  font-size: 11px;
+  color: #8a9099;
+}
+.portal-user-caret {
+  color: #9aa1ab;
+  flex-shrink: 0;
+}
+@media (max-width: 640px) {
+  .portal-user-meta {
+    display: none;
+  }
 }
 
 /* Chart containers */
@@ -450,7 +539,7 @@ body {
   margin-top: 12px;
   padding: 12px 14px;
   border-radius: 8px;
-  background: hsl(210 40% 98%);
+  background: hsl(28 60% 97%);
 }
 
 .port-detail-title {
@@ -503,7 +592,7 @@ body {
   padding: 16px 16px 4px;
   margin-bottom: 16px;
   border-radius: 8px;
-  background: hsl(210 40% 98%);
+  background: hsl(28 60% 97%);
 }
 
 .ant-descriptions-item-label,
@@ -601,7 +690,7 @@ body {
 .ant-table-thead > tr > th,
 .ant-table-thead > tr > td {
   border-bottom: none !important;
-  background: hsl(210 40% 98%) !important;
+  background: hsl(28 60% 97%) !important;
 }
 
 .ant-table-thead > tr > th::before {
@@ -613,7 +702,7 @@ body {
 }
 
 .ant-table-tbody > tr:hover > td {
-  background: hsl(210 40% 97%) !important;
+  background: hsl(28 55% 96%) !important;
 }
 
 .ant-table-cell-fix-right-first::after,
@@ -637,7 +726,7 @@ body {
 }
 
 .ant-descriptions-bordered .ant-descriptions-item-label {
-  background: hsl(210 40% 98%) !important;
+  background: hsl(28 60% 97%) !important;
 }
 
 .ant-modal-content,
@@ -683,7 +772,7 @@ body {
 .ant-pagination .ant-pagination-prev,
 .ant-pagination .ant-pagination-next {
   border: none !important;
-  background: hsl(210 40% 96%);
+  background: hsl(28 45% 95%);
 }
 
 .ant-input,
@@ -800,7 +889,7 @@ body {
 }
 
 .brand-settings-preview .brand-preview-sidebar {
-  background: #001529;
+  background: #0f172a;
   padding: 12px 16px;
   display: flex;
   align-items: center;
@@ -813,7 +902,7 @@ body {
 }
 
 .brand-settings-preview .brand-preview-hero {
-  background: linear-gradient(120deg, #0b1f3a 0%, #1668dc 60%, #13c2c2 100%);
+  background: linear-gradient(120deg, #2a1303 0%, #d24e00 55%, #ff7a1a 100%);
   padding: 20px 16px;
   color: #fff;
 }
@@ -965,7 +1054,7 @@ body {
   padding: 6px 14px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.92);
-  border: 1px solid rgba(99, 102, 241, 0.18);
+  border: 1px solid rgba(255, 102, 0, 0.2);
   color: #475569;
   font-size: 12px;
   text-align: center;
@@ -1097,7 +1186,7 @@ body {
 }
 
 .backbone-link-card:hover {
-  border-color: rgba(22, 119, 255, 0.28);
+  border-color: rgba(255, 102, 0, 0.32);
   box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
 }
 
@@ -1146,7 +1235,7 @@ body {
   width: 22px;
   height: 22px;
   border-radius: 6px;
-  background: #1677ff;
+  background: #ff6600;
   color: #fff;
   font-size: 11px;
   font-weight: 700;

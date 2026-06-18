@@ -45,6 +45,7 @@ export const action = {
   create: "创建",
   createCircuit: "开通专线",
   save: "保存",
+  edit: "编辑",
   delete: "删除",
   export: "导出",
   import: "导入",

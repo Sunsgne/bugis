@@ -14,13 +14,12 @@ undo ip vpn-instance {{ circuit.vrf_name }}
 {% else %}
 {% if partial %}
 interface {{ endpoint.interface_name }}
-{{ h3c.service_instance_qos_remove(circuit) }}
  undo service-instance {{ svid }}
 #
 {% else %}
 interface {{ endpoint.interface_name }}
-{{ h3c.service_instance_qos_remove(circuit) }}
  undo service-instance {{ svid }}
+ quit
 #
 {{ h3c.qos_policy_remove(circuit) }}
 undo interface Vsi-interface{{ circuit.vni }}

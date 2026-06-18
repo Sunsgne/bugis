@@ -804,10 +804,17 @@ def test_rate_limit_rendering(client, auth_headers):
     si = h3c.index("service-instance")
     assert vsi < si < apply
     assert "encapsulation s-vid" in h3c[si:]
-    # Huawei: traffic policy objects + traffic-policy on L2 sub-interface (现网惯例)
+    # Huawei: shared ANY classifier + per-circuit behavior/policy; traffic-policy
+    # bound on the L2 sub-interface (现网惯例).
+    assert "traffic classifier ANY type or" in hw
     assert "traffic policy tp-" in hw
     assert "traffic-policy tp-" in hw
-    assert "car cir 204800" in hw
+    assert "classifier ANY behavior tb-" in hw
+    # VRP8/CE applies the default color action automatically; the rendered car
+    # line carries only 'cir <kbps> kbps' (no cbs).
+    hw_car = next(l.strip() for l in hw.splitlines() if l.strip().startswith("car cir"))
+    assert hw_car == "car cir 204800 kbps", hw_car
+    assert "cbs" not in hw
     assert "qos lr cir" not in hw
     bd = hw.index("bridge-domain")
     subif = hw.index("interface GE1/0/7")
@@ -869,7 +876,9 @@ def test_h3c_huawei_template_quality(client, auth_headers):
     tp = hw_cfg.index("traffic-policy tp-")
     assert bd < subif < tp
     assert "traffic-policy tp-" not in hw_cfg[bd:subif]
-    assert " mtu " in hw_cfg.split("bridge-domain", 1)[1].split("interface", 1)[0]
+    # VRP8 bridge-domain view has no 'mtu' command (rejected on real CE gear),
+    # so the rendered BD section must not emit one.
+    assert " mtu " not in hw_cfg.split("bridge-domain", 1)[1].split("interface", 1)[0]
 
 
 def test_srmpls_vendor_template_quality(client, auth_headers):

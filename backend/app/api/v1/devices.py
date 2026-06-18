@@ -21,10 +21,12 @@ from app.schemas.device import (
     DeviceOut,
     DevicePortBindingsOut,
     DeviceUpdate,
+    InterfaceDescriptionBulkIn,
+    InterfaceDescriptionBulkOut,
 )
 from app.schemas.pagination import PaginatedResponse, paginate_query, paginated
 from app.services import baseline, config_learn, config_mgmt, port_inventory, snmp, snmp_settings as snmp_cfg
-from app.services import device_management, platform_settings as platform_cfg
+from app.services import device_management, interface_admin, platform_settings as platform_cfg
 
 router = APIRouter()
 
@@ -239,6 +241,36 @@ def add_interface(
     db.commit()
     db.refresh(iface)
     return iface
+
+
+@router.post(
+    "/{device_id}/interfaces/descriptions",
+    response_model=InterfaceDescriptionBulkOut,
+)
+def set_interface_descriptions(
+    device_id: int,
+    payload: InterfaceDescriptionBulkIn,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
+    """Bulk-update interface descriptions and (optionally) push to the device.
+
+    Use the customer ID alone on a physical/main port (e.g. ``SDWAN-BACKBONE``)
+    and ``<customer>:<circuit>`` on a service sub-interface
+    (e.g. ``SDWAN-BACKBONE:CIR-DD02B7``). Honors dry-run.
+    """
+    device = db.get(Device, device_id)
+    if not device:
+        raise HTTPException(status_code=404, detail="device not found")
+    if not payload.items:
+        raise HTTPException(status_code=400, detail="no interfaces provided")
+    if payload.push and not settings.dry_run:
+        try:
+            device_management.ensure_reachable_mgmt_ip(db, device)
+        except device_management.MgmtUnreachableError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+    items = [(i.name, i.description) for i in payload.items]
+    return interface_admin.apply_descriptions(db, device, items, push=payload.push)
 
 
 @router.get("/{device_id}/interfaces", response_model=list[DeviceInterfaceOut])

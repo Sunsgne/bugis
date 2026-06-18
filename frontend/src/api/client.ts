@@ -34,6 +34,7 @@ export interface LoginSecurityConfig {
   turnstile_enabled: boolean;
   turnstile_site_key: string;
   captcha_required_default: boolean;
+  password_reset_enabled: boolean;
 }
 
 export interface LoginResult {
@@ -89,6 +90,29 @@ export async function verifyMfa(
 
 export async function sendMfaEmail(mfaToken: string) {
   await axios.post("/api/v1/auth/mfa/send-email", { mfa_token: mfaToken });
+}
+
+export async function forgotPassword(
+  identifier: string,
+  turnstileToken?: string | null,
+): Promise<string> {
+  const { data } = await axios.post<{ sent: boolean; detail: string }>(
+    "/api/v1/auth/forgot-password",
+    { identifier, turnstile_token: turnstileToken || undefined },
+  );
+  return data.detail;
+}
+
+export async function resetPassword(
+  identifier: string,
+  code: string,
+  newPassword: string,
+): Promise<void> {
+  await axios.post("/api/v1/auth/reset-password", {
+    identifier,
+    code,
+    new_password: newPassword,
+  });
 }
 
 export async function fetchStreamTicket(): Promise<string> {

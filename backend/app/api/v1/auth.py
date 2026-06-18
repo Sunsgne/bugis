@@ -2,20 +2,23 @@
 from __future__ import annotations
 
 import secrets
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, is_tenant_user, require_admin
 from app.core.database import get_db
 from app.core.security import create_access_token, hash_password, verify_password
 from app.models.auth_challenge import AuthChallenge
-from app.models.enums import MfaMethod, TenantStatus, UserScope
+from app.models.enums import MfaMethod, TenantStatus, UserRole, UserScope
 from app.models.tenant import Tenant
 from app.models.user import User
 from app.schemas.auth import (
+    ForgotPasswordOut,
+    ForgotPasswordRequest,
     LoginJsonRequest,
     LoginSecurityOut,
     MfaConfirmTotpRequest,
@@ -24,10 +27,13 @@ from app.schemas.auth import (
     MfaSetupTotpOut,
     MfaVerifyRequest,
     PasswordChangeRequest,
+    ProfileUpdateRequest,
+    ResetPasswordRequest,
     StreamTicketOut,
     Token,
     UserCreate,
     UserOut,
+    UserUpdate,
 )
 from app.services import auth_security, email as email_svc, platform_settings as platform_cfg
 
@@ -45,6 +51,19 @@ def _client_ip(request: Request) -> str:
 
 def _load_user(db: Session, username: str) -> User | None:
     return db.execute(select(User).where(User.username == username)).scalar_one_or_none()
+
+
+def _load_user_by_identifier(db: Session, identifier: str) -> User | None:
+    """Resolve a user by exact username, or by e-mail (case-insensitive)."""
+    ident = identifier.strip()
+    if not ident:
+        return None
+    user = _load_user(db, ident)
+    if user:
+        return user
+    return db.execute(
+        select(User).where(func.lower(User.email) == ident.lower())
+    ).scalar_one_or_none()
 
 
 def _validate_tenant_user(db: Session, user: User) -> None:
@@ -137,10 +156,12 @@ def _authenticate_credentials(
 @router.get("/login-security", response_model=LoginSecurityOut)
 def login_security(db: Session = Depends(get_db)):
     plat = platform_cfg.get_or_create(db)
+    smtp_ready = bool((plat.smtp_host or "").strip())
     return LoginSecurityOut(
         turnstile_enabled=plat.turnstile_enabled,
         turnstile_site_key=plat.turnstile_site_key or "",
         captcha_required_default=plat.turnstile_enabled,
+        password_reset_enabled=smtp_ready,
     )
 
 
@@ -238,17 +259,127 @@ def mfa_send_email(payload: MfaSendEmailRequest, db: Session = Depends(get_db)):
     code = f"{secrets.randbelow(1_000_000):06d}"
     challenge.code_hash = auth_security.hash_code(code)
     db.add(challenge)
-    plat = platform_cfg.get_or_create(db)
-    ok, detail = email_svc.send_email(
-        db,
-        to=user.email,
-        subject=f"{plat.product_name} 登录验证码",
-        body=f"您的登录验证码为 {code}，5 分钟内有效。如非本人操作请忽略。",
-    )
+    ok, detail = email_svc.send_mfa_code_email(db, to=user.email, code=code, ttl_minutes=5)
     db.commit()
     if not ok:
         raise HTTPException(status_code=503, detail=f"邮件发送失败: {detail}")
     return {"sent": True}
+
+
+@router.post("/forgot-password", response_model=ForgotPasswordOut)
+def forgot_password(
+    payload: ForgotPasswordRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Send a one-time password-reset code to the account e-mail.
+
+    To avoid account enumeration the response is always generic regardless of
+    whether the account exists or has an e-mail bound.
+    """
+    ip_address = _client_ip(request)
+    plat = platform_cfg.get_or_create(db)
+    auth_security.purge_expired_challenges(db)
+
+    if auth_security.is_ip_rate_limited(db, plat, ip_address):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="操作过于频繁，请稍后再试",
+        )
+    if plat.turnstile_enabled and not auth_security.verify_turnstile(
+        plat, payload.turnstile_token, ip_address
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_428_PRECONDITION_REQUIRED,
+            detail="需要完成人机验证",
+        )
+
+    user = _load_user_by_identifier(db, payload.identifier)
+    if user and user.is_active and user.email:
+        code = f"{secrets.randbelow(1_000_000):06d}"
+        auth_security.create_challenge(
+            db,
+            purpose="password_reset",
+            user_id=user.id,
+            ttl_seconds=900,
+            code=code,
+        )
+        email_svc.send_password_reset_email(db, to=user.email, code=code, ttl_minutes=15)
+        auth_security.record_login_attempt(
+            db, ip_address=ip_address, username=user.username, success=True
+        )
+    db.commit()
+    return ForgotPasswordOut()
+
+
+@router.post("/reset-password", status_code=204)
+def reset_password(
+    payload: ResetPasswordRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    ip_address = _client_ip(request)
+    plat = platform_cfg.get_or_create(db)
+    auth_security.purge_expired_challenges(db)
+
+    if auth_security.is_ip_rate_limited(db, plat, ip_address):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="操作过于频繁，请稍后再试",
+        )
+
+    user = _load_user_by_identifier(db, payload.identifier)
+    challenge = None
+    if user:
+        challenge = auth_security.find_user_challenge(
+            db, purpose="password_reset", user_id=user.id
+        )
+    if not user or not challenge or not challenge.code_hash:
+        auth_security.record_login_attempt(
+            db, ip_address=ip_address, username=payload.identifier, success=False
+        )
+        db.commit()
+        raise HTTPException(status_code=400, detail="验证码无效或已过期，请重新获取")
+    if auth_security.hash_code(payload.code) != challenge.code_hash:
+        auth_security.record_login_attempt(
+            db, ip_address=ip_address, username=user.username, success=False
+        )
+        db.commit()
+        raise HTTPException(status_code=400, detail="验证码错误")
+
+    user.hashed_password = hash_password(payload.new_password)
+    auth_security.clear_failed_login(db, user)
+    challenge.consumed_at = datetime.now(timezone.utc)
+    db.add_all([user, challenge])
+    db.commit()
+
+
+@router.patch("/profile", response_model=UserOut)
+def update_profile(
+    payload: ProfileUpdateRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Self-service profile update (full name & e-mail) for any account."""
+    data = payload.model_dump(exclude_unset=True)
+    email = data.get("email")
+    if email is not None:
+        email = email.strip() or None
+        if email:
+            existing = db.execute(
+                select(User).where(
+                    func.lower(User.email) == email.lower(), User.id != user.id
+                )
+            ).scalar_one_or_none()
+            if existing:
+                raise HTTPException(status_code=409, detail="该邮箱已被其他账号使用")
+        user.email = email
+    if "full_name" in data:
+        user.full_name = (data["full_name"] or "").strip() or None
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
 
 
 @router.get("/mfa/totp/setup", response_model=MfaSetupTotpOut)
@@ -370,3 +501,79 @@ def create_user(
 @router.get("/users", response_model=list[UserOut])
 def list_users(db: Session = Depends(get_db), _: User = Depends(require_admin)):
     return db.execute(select(User)).scalars().all()
+
+
+def _active_platform_admin_count(db: Session) -> int:
+    return db.execute(
+        select(func.count())
+        .select_from(User)
+        .where(
+            User.role == UserRole.ADMIN,
+            User.scope == UserScope.PLATFORM,
+            User.is_active.is_(True),
+        )
+    ).scalar_one()
+
+
+def _get_platform_user(db: Session, user_id: int) -> User:
+    user = db.get(User, user_id)
+    if not user or is_tenant_user(user):
+        raise HTTPException(status_code=404, detail="user not found")
+    return user
+
+
+@router.patch("/users/{user_id}", response_model=UserOut)
+def update_user(
+    user_id: int,
+    payload: UserUpdate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    user = _get_platform_user(db, user_id)
+    data = payload.model_dump(exclude_unset=True)
+
+    # Guard against locking everyone out: the last active platform admin
+    # cannot be demoted or deactivated.
+    becomes_admin = data.get("role", user.role) == UserRole.ADMIN
+    stays_active = data.get("is_active", user.is_active)
+    losing_admin_rights = (
+        user.role == UserRole.ADMIN
+        and user.is_active
+        and not (becomes_admin and stays_active)
+    )
+    if losing_admin_rights and _active_platform_admin_count(db) <= 1:
+        raise HTTPException(status_code=400, detail="至少保留一个启用的管理员账号")
+
+    password = data.pop("password", None)
+    if password:
+        if len(password) < 8:
+            raise HTTPException(status_code=400, detail="新密码至少 8 位")
+        user.hashed_password = hash_password(password)
+
+    for field in ("full_name", "email", "role", "is_active"):
+        if field in data:
+            setattr(user, field, data[field])
+
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+@router.delete("/users/{user_id}", status_code=204)
+def delete_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    user = _get_platform_user(db, user_id)
+    if user.id == admin.id:
+        raise HTTPException(status_code=400, detail="不能删除当前登录账号")
+    if (
+        user.role == UserRole.ADMIN
+        and user.is_active
+        and _active_platform_admin_count(db) <= 1
+    ):
+        raise HTTPException(status_code=400, detail="至少保留一个启用的管理员账号")
+    db.delete(user)
+    db.commit()

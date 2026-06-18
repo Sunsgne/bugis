@@ -15,33 +15,45 @@
 tp-{{ circuit.code }}
 {%- endmacro %}
 
+{% macro qos_behavior_name(circuit) -%}
+tb-{{ circuit.code }}
+{%- endmacro %}
+
 {% macro qos_policy_objects(circuit) -%}
 {% if circuit.bandwidth_mbps %}
-# QoS CAR via classifier/behavior/traffic-policy (VRP); cir unit = kbps
-traffic classifier tc-{{ circuit.code }} type or
+# QoS CAR (VRP/CE): a single shared 'ANY' classifier (match-any) + one traffic
+# behavior per circuit carrying the rate (car cir, unit = kbps), referenced by a
+# per-circuit traffic-policy. A bandwidth change only updates the behavior's
+# 'car cir'; the classifier/policy/interface binding stay untouched.
+# NB: VRP8/CE applies the default color action (green & yellow pass, red
+# discard) automatically, so only 'car cir <kbps> kbps' is emitted.
+traffic classifier ANY type or
  if-match any
 #
-traffic behavior tb-{{ circuit.code }}
- car cir {{ circuit.bandwidth_mbps * 1024 }} cbs {{ circuit.bandwidth_mbps * 64000 }} green pass red discard yellow pass
+traffic behavior {{ qos_behavior_name(circuit) }}
+ car cir {{ circuit.bandwidth_mbps * 1024 }} kbps
 #
 traffic policy {{ qos_policy_name(circuit) }}
- classifier tc-{{ circuit.code }} behavior tb-{{ circuit.code }} precedence 5
+ classifier ANY behavior {{ qos_behavior_name(circuit) }} precedence 5
 #
 {% endif %}
 {%- endmacro %}
 
 {% macro qos_policy_remove(circuit) -%}
 {% if circuit.bandwidth_mbps %}
+# Recover this circuit's rate-limit objects. The shared 'ANY' classifier is left
+# in place because it is reused by every circuit's traffic-policy.
 undo traffic policy {{ qos_policy_name(circuit) }}
-undo traffic behavior tb-{{ circuit.code }}
-undo traffic classifier tc-{{ circuit.code }}
+undo traffic behavior {{ qos_behavior_name(circuit) }}
 #
 {% endif %}
 {%- endmacro %}
 
 {% macro bridge_domain_evpn(circuit) -%}
+# NB: Huawei VRP8/CE has no per-service frame-size command in the bridge-domain
+# view; jumbo/frame size follows the underlay physical interface and is managed
+# outside this provisioning scope.
 bridge-domain {{ circuit.vni }}
- mtu {{ circuit.mtu }}
  vxlan vni {{ circuit.vni }}
  evpn
   route-distinguisher {{ circuit.route_distinguisher }}
@@ -58,7 +70,6 @@ interface {{ l2_ifname(endpoint, mode, svid) }} mode l2
  encapsulation qinq vid {{ svid }} ce-vid {{ cvid }}
 {% else %}
  encapsulation dot1q vid {{ svid }}
- rewrite pop single
 {% endif %}
  bridge-domain {{ circuit.vni }}
 {% if circuit.bandwidth_mbps %}

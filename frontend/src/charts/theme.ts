@@ -14,9 +14,9 @@ export const chartText = {
 };
 
 export const chartGradients = {
-  rx: { from: "#6366f1", to: "#38bdf8" },
+  rx: { from: "#ff6600", to: "#ffb066" },
   tx: { from: "#10b981", to: "#34d399" },
-  bar: { from: "#6366f1", to: "#818cf8" },
+  bar: { from: "#ff6600", to: "#ff9a3d" },
   warn: { from: "#f59e0b", to: "#fbbf24" },
   danger: { from: "#ef4444", to: "#f87171" },
 };
@@ -33,7 +33,7 @@ export const vendorColors: Record<string, string> = {
 export const statusColors: Record<string, string> = {
   active: "#10b981",
   draft: "#94a3b8",
-  provisioning: "#6366f1",
+  provisioning: "#ff6600",
   failed: "#ef4444",
   degraded: "#f59e0b",
   decommissioned: "#cbd5e1",
@@ -84,7 +84,7 @@ export function baseTooltip() {
     axisPointer: {
       type: "cross" as const,
       crossStyle: { color: chartText.muted },
-      lineStyle: { color: "rgba(99, 102, 241, 0.35)", type: "dashed" as const },
+      lineStyle: { color: "rgba(255, 102, 0, 0.35)", type: "dashed" as const },
     },
   };
 }
