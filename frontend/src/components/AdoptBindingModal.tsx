@@ -1,8 +1,7 @@
-import { Form, Input, InputNumber, Modal, Select, Typography } from "antd";
-import { useEffect, useState } from "react";
+import { Form, Input, InputNumber, Modal, Select, Typography, App as AntApp } from "antd";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "../api/client";
-import type { Circuit, DevicePortBinding, Tenant } from "../api/types";
-import { fetchAllPages } from "../utils/pagination";
+import type { Circuit, DevicePortBinding, Paginated, Tenant } from "../api/types";
 import { formatVlanLabel } from "../utils/networkDisplay";
 
 type Props = {
@@ -20,19 +19,60 @@ export default function AdoptBindingModal({
   onClose,
   onSuccess,
 }: Props) {
+  const { message } = AntApp.useApp();
   const [form] = Form.useForm();
-  const [tenants, setTenants] = useState<Tenant[]>([]);
+  const [tenantOptions, setTenantOptions] = useState<{ value: number; label: string }[]>([]);
+  const [tenantsLoading, setTenantsLoading] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  const searchTenants = useCallback(async (q?: string) => {
+    setTenantsLoading(true);
+    try {
+      const { data } = await api.get<Paginated<Tenant>>("/tenants", {
+        params: { q: q?.trim() || undefined, page: 1, page_size: 50 },
+      });
+      setTenantOptions(
+        data.items.map((t) => ({ value: t.id, label: `${t.name} (${t.code})` })),
+      );
+    } finally {
+      setTenantsLoading(false);
+    }
+  }, []);
+
+  const tenantSearchTimer = useMemo(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    return (q: string) => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => void searchTenants(q), 250);
+    };
+  }, [searchTenants]);
 
   useEffect(() => {
     if (!open) return;
-    fetchAllPages<Tenant>("/tenants").then(setTenants);
+    void searchTenants("");
     form.setFieldsValue({
       name: binding?.business_name || binding?.vsi_name || binding?.description || "",
       tenant_id: binding?.tenant_id ?? undefined,
       bandwidth_mbps: binding?.bandwidth_mbps ?? binding?.rate_limit_mbps ?? 100,
     });
-  }, [open, binding, form]);
+  }, [open, binding, form, searchTenants]);
+
+  useEffect(() => {
+    if (!open || !binding?.tenant_id) return;
+    const preset = tenantOptions.find((o) => o.value === binding.tenant_id);
+    if (preset) return;
+    void (async () => {
+      try {
+        const { data } = await api.get<Tenant>(`/tenants/${binding.tenant_id}`);
+        setTenantOptions((prev) => {
+          if (prev.some((o) => o.value === data.id)) return prev;
+          return [{ value: data.id, label: `${data.name} (${data.code})` }, ...prev];
+        });
+      } catch {
+        // optional preset from binding row
+      }
+    })();
+  }, [open, binding?.tenant_id, tenantOptions]);
 
   async function submit() {
     if (!binding) return;
@@ -44,6 +84,7 @@ export default function AdoptBindingModal({
         tenant_id: values.tenant_id,
         bandwidth_mbps: values.bandwidth_mbps,
         description: values.description || "现网纳管（不下发配置）",
+        refresh_inventory: false,
         bindings: [
           {
             device_id: deviceId,
@@ -57,6 +98,9 @@ export default function AdoptBindingModal({
       });
       onSuccess(data);
       onClose();
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { detail?: string } } };
+      message.error(err?.response?.data?.detail || "纳管失败");
     } finally {
       setLoading(false);
     }
@@ -71,6 +115,7 @@ export default function AdoptBindingModal({
       confirmLoading={loading}
       okText="纳管到平台"
       destroyOnClose
+      maskClosable={!loading}
     >
       <Typography.Paragraph type="secondary" style={{ marginBottom: 16 }}>
         将设备上已运行的 S-VID 业务登记到平台，<Typography.Text strong>不会向设备下发任何配置</Typography.Text>
@@ -91,9 +136,11 @@ export default function AdoptBindingModal({
         <Form.Item name="tenant_id" label="客户" rules={[{ required: true, message: "请选择客户" }]}>
           <Select
             showSearch
-            optionFilterProp="label"
-            options={tenants.map((t) => ({ value: t.id, label: `${t.name} (${t.code})` }))}
-            placeholder="选择租户"
+            filterOption={false}
+            loading={tenantsLoading}
+            onSearch={tenantSearchTimer}
+            options={tenantOptions}
+            placeholder="搜索客户名称或编码"
           />
         </Form.Item>
         <Form.Item name="bandwidth_mbps" label="带宽 (Mbps)">

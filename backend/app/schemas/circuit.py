@@ -82,6 +82,7 @@ class CircuitAdoptCreate(BaseModel):
     vlan_id: int | None = None
     bandwidth_mbps: int | None = None
     description: str | None = None
+    refresh_inventory: bool = False
 
 
 class CircuitCreate(CircuitBase):

@@ -8,8 +8,94 @@ from app.models.circuit import Circuit, CircuitEndpoint
 from app.models.device import Device
 from app.models.enums import AccessMode, CircuitStatus, ServiceType
 from app.models.tenant import Tenant
-from app.schemas.circuit import CircuitAdoptBinding, CircuitAdoptCreate
-from app.services import allocation, port_inventory
+from app.schemas.circuit import CircuitAdoptBinding, CircuitAdoptCreate, CircuitEndpointCreate
+from app.services import allocation, concurrent_scan, port_inventory
+
+
+def _endpoint_tuple(
+    device_id: int,
+    interface_name: str,
+    access_mode: AccessMode | str,
+    vlan_id: int | None,
+    inner_vlan_id: int | None,
+) -> tuple:
+    mode = access_mode.value if isinstance(access_mode, AccessMode) else access_mode
+    return (
+        device_id,
+        port_inventory._normalize_iface(interface_name),
+        mode,
+        vlan_id,
+        inner_vlan_id,
+    )
+
+
+def validate_adopted_endpoints_replace(
+    db: Session,
+    circuit: Circuit,
+    endpoints: list[CircuitEndpointCreate],
+) -> dict[int, dict]:
+    """Validate endpoint replacement for an adopted circuit.
+
+    Existing endpoints may be kept as-is; new or changed endpoints must match
+    adoptable on-box bindings and share the circuit VNI/VSI. Returns payload
+    index -> binding row for newly adopted endpoints.
+    """
+    existing_keys: set[tuple] = set()
+    for ep in circuit.endpoints:
+        mode = ep.access_mode or AccessMode.DOT1Q
+        svid = ep.vlan_id or circuit.vlan_id
+        existing_keys.add(
+            _endpoint_tuple(ep.device_id, ep.interface_name, mode, svid, ep.inner_vlan_id)
+        )
+
+    adopt_rows: dict[int, dict] = {}
+    for idx, ep in enumerate(endpoints):
+        mode = ep.access_mode or AccessMode.DOT1Q
+        svid = ep.vlan_id or circuit.vlan_id
+        key = _endpoint_tuple(ep.device_id, ep.interface_name, mode, svid, ep.inner_vlan_id)
+        if key in existing_keys:
+            continue
+
+        device = db.get(Device, ep.device_id)
+        if not device:
+            raise HTTPException(status_code=404, detail=f"device {ep.device_id} not found")
+
+        row = find_adoptable_binding(
+            db,
+            device,
+            interface_name=ep.interface_name,
+            access_mode=mode,
+            vlan_id=svid,
+            inner_vlan_id=ep.inner_vlan_id,
+            for_circuit_id=circuit.id,
+        )
+        if not row:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"{ep.interface_name} 上未发现可纳管的现网绑定 "
+                    f"({mode.value}{f' vlan={svid}' if svid else ''})"
+                ),
+            )
+
+        row_vni = row.get("vni")
+        if circuit.vni is not None and row_vni is not None and int(row_vni) != circuit.vni:
+            raise HTTPException(
+                status_code=409,
+                detail=f"端点 VNI {row_vni} 与专线 VNI {circuit.vni} 不一致",
+            )
+        row_vsi = row.get("vsi_name")
+        if circuit.vsi_name and row_vsi:
+            norm_row = allocation.normalize_vsi_name(str(row_vsi))
+            if norm_row != circuit.vsi_name:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"端点 VSI {row_vsi} 与专线 VSI {circuit.vsi_name} 不一致",
+                )
+
+        adopt_rows[idx] = row
+
+    return adopt_rows
 
 
 def _binding_key(
@@ -29,8 +115,13 @@ def find_adoptable_binding(
     access_mode: AccessMode,
     vlan_id: int | None,
     inner_vlan_id: int | None = None,
+    for_circuit_id: int | None = None,
 ) -> dict | None:
-    """Return port-binding row if it exists on-box and is not yet platform-managed."""
+    """Return port-binding row if it exists on-box and is not yet platform-managed.
+
+    When ``for_circuit_id`` is set (extending an adopted circuit), bindings already
+    associated with that circuit via VNI catalog inference are still adoptable.
+    """
     bindings = port_inventory.list_port_bindings(db, device)
     mode = access_mode.value
     key = _binding_key(interface_name, mode, vlan_id, inner_vlan_id)
@@ -43,10 +134,15 @@ def find_adoptable_binding(
         )
         if row_key != key:
             continue
-        if row.get("circuit_id"):
+        circuit_id = row.get("circuit_id")
+        if circuit_id:
+            if not (for_circuit_id and circuit_id == for_circuit_id):
+                return None
+        if row.get("binding_type") == "platform" and not for_circuit_id:
             return None
-        if row.get("binding_type") == "platform":
-            return None
+        if row.get("binding_type") == "platform" and for_circuit_id:
+            if circuit_id != for_circuit_id:
+                return None
         return row
     return None
 
@@ -65,14 +161,18 @@ def adopt_circuit_from_inventory(
     if not tenant:
         raise HTTPException(status_code=404, detail="tenant not found")
 
-    device_ids = {b.device_id for b in payload.bindings}
+    device_ids = list({b.device_id for b in payload.bindings})
     devices: dict[int, Device] = {}
     for did in device_ids:
         dev = db.get(Device, did)
         if not dev:
             raise HTTPException(status_code=404, detail=f"device {did} not found")
-        port_inventory.scan_device(db, dev, include_legacy=False)
         devices[did] = dev
+
+    if payload.refresh_inventory:
+        concurrent_scan.scan_devices_parallel(device_ids, include_legacy=False)
+        for dev in devices.values():
+            db.refresh(dev)
 
     adopted_rows: list[dict] = []
     for binding in payload.bindings:

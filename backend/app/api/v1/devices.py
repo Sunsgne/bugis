@@ -287,10 +287,7 @@ def list_interfaces(
     if not device:
         raise HTTPException(status_code=404, detail="device not found")
     if scan:
-        try:
-            device_management.ensure_reachable_mgmt_ip(db, device)
-        except device_management.MgmtUnreachableError as exc:
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        # S-VID scan reads learned/cached running-config — no live southbound probe.
         port_inventory.scan_device(db, device)
         db.commit()
     rows = db.execute(
@@ -313,10 +310,7 @@ def list_port_bindings(
     if not device:
         raise HTTPException(status_code=404, detail="device not found")
     if scan:
-        try:
-            device_management.ensure_reachable_mgmt_ip(db, device)
-        except device_management.MgmtUnreachableError as exc:
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        # S-VID scan reads learned/cached running-config — no live southbound probe.
         port_inventory.scan_device(db, device)
         db.commit()
     return port_inventory.list_port_bindings(db, device)

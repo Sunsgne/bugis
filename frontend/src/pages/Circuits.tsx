@@ -545,6 +545,7 @@ export default function Circuits() {
       message.warning(`至少需要 ${minEps} 个端点`);
       return;
     }
+    const adopted = !!editEndpointsTarget.adopted;
     const previousEndpoints = (editEndpointsTarget.endpoints || []).map((e) => ({
       label: e.label,
       device_id: e.device_id,
@@ -557,13 +558,18 @@ export default function Circuits() {
     const circuitId = editEndpointsTarget.id;
     const circuitCode = editEndpointsTarget.code;
     try {
-      await api.put(`/circuits/${circuitId}/endpoints`, { endpoints });
+      const { data } = await api.put<Circuit>(`/circuits/${circuitId}/endpoints`, { endpoints });
+      setEditEndpointsTarget(null);
+      editEndpointsForm.resetFields();
+      if (adopted) {
+        message.success(`端点已登记 · ${data.endpoints?.length ?? endpoints.length} 个节点（未向设备下发配置）`);
+        loadCircuits();
+        return;
+      }
       const woType =
         editEndpointsTarget.status === "active" || editEndpointsTarget.status === "degraded"
           ? "modify"
           : "provision";
-      setEditEndpointsTarget(null);
-      editEndpointsForm.resetFields();
       await executeProvision(
         { ...editEndpointsTarget, id: circuitId, code: circuitCode },
         woType,
@@ -1095,7 +1101,13 @@ export default function Circuits() {
       </Modal>
 
       <Modal
-        title={editEndpointsTarget ? `修改端点 · ${editEndpointsTarget.code}` : "修改端点"}
+        title={
+          editEndpointsTarget
+            ? editEndpointsTarget.adopted
+              ? `添加/登记端点 · ${editEndpointsTarget.code}`
+              : `修改端点 · ${editEndpointsTarget.code}`
+            : "修改端点"
+        }
         open={!!editEndpointsTarget}
         onOk={saveEndpointsAndProvision}
         onCancel={() => {
@@ -1104,9 +1116,11 @@ export default function Circuits() {
         }}
         confirmLoading={editEndpointsSaving}
         okText={
-          editEndpointsTarget?.status === "active" || editEndpointsTarget?.status === "degraded"
-            ? "保存并重新下发"
-            : "保存并开通"
+          editEndpointsTarget?.adopted
+            ? "保存（不下发）"
+            : editEndpointsTarget?.status === "active" || editEndpointsTarget?.status === "degraded"
+              ? "保存并重新下发"
+              : "保存并开通"
         }
         cancelText="取消"
         {...formModalProps}
@@ -1117,8 +1131,12 @@ export default function Circuits() {
           type="info"
           showIcon
           style={{ marginBottom: 12 }}
-          message="修改接入端点"
-          description="可更换设备、物理端口、封装模式与 S-VID。保存后将先拆除变更前的旧接入配置，再下发新端点配置（创建变更/开通工单）。"
+          message={editEndpointsTarget?.adopted ? "纳管专线 · 登记接入端点" : "修改接入端点"}
+          description={
+            editEndpointsTarget?.adopted
+              ? "从现网选择额外接入节点并登记到平台，不会向设备下发任何配置。新增端点须为设备上已存在的 S-VID 绑定，且 VNI/VSI 须与本专线一致。"
+              : "可更换设备、物理端口、封装模式与 S-VID。保存后将先拆除变更前的旧接入配置，再下发新端点配置（创建变更/开通工单）。"
+          }
         />
         <Form form={editEndpointsForm} layout="vertical" className="app-form">
           <CircuitEndpointsEditor
@@ -1127,6 +1145,7 @@ export default function Circuits() {
             preloadDeviceIds={editEndpointsTarget?.endpoints.map((e) => e.device_id) || []}
             minEndpoints={editEndpointsTarget?.service_type === "remote_ipt" ? 1 : 2}
             excludeCircuitCode={editEndpointsTarget?.code}
+            adoptMode={!!editEndpointsTarget?.adopted}
           />
         </Form>
       </Modal>
