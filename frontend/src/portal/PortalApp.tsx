@@ -3,15 +3,17 @@ import { Link, Navigate, Route, Routes, useNavigate, useLocation } from "react-r
 import { Button, Dropdown, Layout, Menu, Space, Tag, Typography } from "antd";
 import {
   Cable,
-  Gauge,
-  KeyRound,
   LayoutDashboard,
   LineChart,
   LogOut,
+  ShieldCheck,
+  UserCog,
 } from "lucide-react";
 import { api } from "../api/client";
 import { useAuth } from "../auth";
-import ChangePasswordDialog from "../components/ChangePasswordDialog";
+import { BrandLogo } from "../components/BrandLogo";
+import { useBrand } from "../context/BrandContext";
+import PortalAccount from "./PortalAccount";
 import PortalDashboard from "./PortalDashboard";
 import PortalCircuits from "./PortalCircuits";
 import PortalCircuitDetail from "./PortalCircuitDetail";
@@ -33,14 +35,16 @@ const MENU = [
   { key: "/portal", label: "总览", icon: <LayoutDashboard size={16} /> },
   { key: "/portal/circuits", label: "我的专线", icon: <Cable size={16} /> },
   { key: "/portal/traffic", label: "流量洞察", icon: <LineChart size={16} /> },
+  { key: "/portal/account", label: "账号与安全", icon: <ShieldCheck size={16} /> },
 ];
 
 export default function PortalApp() {
   const { user, logout, isTenantUser } = useAuth();
+  const { brand } = useBrand();
   const nav = useNavigate();
   const loc = useLocation();
   const [me, setMe] = useState<PortalMe | null>(null);
-  const [pwdOpen, setPwdOpen] = useState(false);
+  const accent = brand.accent_color || "#ff6600";
 
   useEffect(() => {
     if (!isTenantUser) return;
@@ -57,16 +61,35 @@ export default function PortalApp() {
 
   return (
     <Layout style={{ minHeight: "100vh" }}>
-      <Sider width={220} theme="dark" breakpoint="lg" collapsedWidth={0}>
-        <div style={{ padding: "16px 20px", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-          <Typography.Text strong style={{ color: "#fff", fontSize: 15 }}>
-            客户门户
-          </Typography.Text>
-          <div style={{ color: "rgba(255,255,255,0.65)", fontSize: 12, marginTop: 4 }}>
+      <Sider
+        width={232}
+        theme="dark"
+        breakpoint="lg"
+        collapsedWidth={0}
+        style={{ background: "linear-gradient(180deg, #0f172a 0%, #111827 100%)" }}
+      >
+        <div
+          style={{
+            padding: "20px 20px 18px",
+            borderBottom: "1px solid rgba(255,255,255,0.08)",
+          }}
+        >
+          <Space align="center" size={10} style={{ marginBottom: 12 }}>
+            <BrandLogo brand={brand} variant="sidebar" height={26} />
+            <Typography.Text strong style={{ color: "#fff", fontSize: 15 }}>
+              {brand.product_name}
+            </Typography.Text>
+          </Space>
+          <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 11, letterSpacing: ".08em", textTransform: "uppercase" }}>
+            客户自助门户
+          </div>
+          <div style={{ color: "rgba(255,255,255,0.85)", fontSize: 13, marginTop: 6, fontWeight: 500 }}>
             {me?.tenant_name || "加载中…"}
           </div>
           {me?.tenant_code ? (
-            <Tag color="blue" style={{ marginTop: 6 }}>{me.tenant_code}</Tag>
+            <Tag style={{ marginTop: 8, border: "none", color: "#fff", background: accent }}>
+              {me.tenant_code}
+            </Tag>
           ) : null}
         </div>
         <Menu
@@ -89,7 +112,9 @@ export default function PortalApp() {
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            borderBottom: "1px solid #f0f0f0",
+            borderBottom: "1px solid #eef0f4",
+            boxShadow: "0 1px 0 rgba(15,23,42,0.04)",
+            borderTop: `3px solid ${accent}`,
           }}
         >
           <Typography.Title level={5} style={{ margin: 0 }}>
@@ -101,10 +126,10 @@ export default function PortalApp() {
               menu={{
                 items: [
                   {
-                    key: "pwd",
-                    label: "修改密码",
-                    icon: <KeyRound size={14} />,
-                    onClick: () => setPwdOpen(true),
+                    key: "account",
+                    label: "账号与安全",
+                    icon: <UserCog size={14} />,
+                    onClick: () => nav("/portal/account"),
                   },
                   {
                     key: "logout",
@@ -125,11 +150,11 @@ export default function PortalApp() {
             <Route path="/circuits" element={<PortalCircuits />} />
             <Route path="/circuits/:id" element={<PortalCircuitDetail />} />
             <Route path="/traffic" element={<PortalTraffic />} />
+            <Route path="/account" element={<PortalAccount />} />
             <Route path="*" element={<Navigate to="/portal" replace />} />
           </Routes>
         </Content>
       </Layout>
-      <ChangePasswordDialog open={pwdOpen} onClose={() => setPwdOpen(false)} />
     </Layout>
   );
 }

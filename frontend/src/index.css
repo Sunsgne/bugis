@@ -113,6 +113,30 @@ body {
   color: #f5e9df;
 }
 
+.login-card {
+  position: relative;
+  border-radius: 20px;
+}
+.login-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    160deg,
+    color-mix(in srgb, var(--brand-accent, #ff6600) 55%, transparent) 0%,
+    rgba(148, 163, 184, 0.08) 38%,
+    rgba(148, 163, 184, 0.02) 100%
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
 /* Chart containers */
 .echart-host,
 .topology-graph {

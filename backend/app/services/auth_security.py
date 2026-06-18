@@ -101,6 +101,30 @@ def consume_challenge(
     return row
 
 
+def find_user_challenge(
+    db: Session,
+    *,
+    purpose: str,
+    user_id: int,
+) -> AuthChallenge | None:
+    """Return the most recent unconsumed, unexpired challenge for a user.
+
+    Used for code-based flows (e.g. password reset) where the caller is
+    identified by username/e-mail rather than an opaque challenge token.
+    """
+    now = datetime.now(timezone.utc)
+    return db.execute(
+        select(AuthChallenge)
+        .where(
+            AuthChallenge.purpose == purpose,
+            AuthChallenge.user_id == user_id,
+            AuthChallenge.consumed_at.is_(None),
+            AuthChallenge.expires_at > now,
+        )
+        .order_by(AuthChallenge.id.desc())
+    ).scalars().first()
+
+
 def validate_challenge(
     db: Session,
     *,
