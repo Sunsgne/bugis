@@ -86,6 +86,32 @@ def test_rank_interfaces_excludes_customer_subif():
         db.close()
 
 
+def test_list_interface_candidates_all_interfaces():
+    db = SessionLocal()
+    try:
+        site = _site(db)
+        dev = _device(db, site, "hw-leaf", DeviceRole.LEAF)
+        dev.vendor = Vendor.HUAWEI
+        _iface(db, dev, "10GE1/0/2.1050", 10000, "customer access", "up")
+        _iface(db, dev, "Vlanif3001", 20000, "DCI uplink", "up")
+        _iface(db, dev, "LoopBack0", 0, "router id", "up")
+        db.commit()
+
+        ranked = link_planner.rank_interfaces(db, dev.id)
+        assert len(ranked) == 1
+        assert ranked[0].name == "Vlanif3001"
+
+        all_rows = link_planner.list_interface_candidates(db, dev.id, all_interfaces=True)
+        names = [row.name for row in all_rows]
+        assert "Vlanif3001" in names
+        assert "10GE1/0/2.1050" in names
+        assert "LoopBack0" in names
+        vlan = next(row for row in all_rows if row.name == "Vlanif3001")
+        assert vlan.description == "DCI uplink"
+    finally:
+        db.close()
+
+
 def test_plan_link_prefers_uplink_ports():
     db = SessionLocal()
     try:

@@ -54,6 +54,7 @@ class ScoredInterface:
     score: float
     reason: str
     kind: str = "physical"
+    description: str | None = None
 
 
 def is_vlan_interface(name: str) -> bool:
@@ -95,7 +96,9 @@ def _score_interface(iface: DeviceInterface, *, prefer_vlan: bool) -> ScoredInte
     reasons: list[str] = []
 
     if not _is_backbone_candidate(iface):
-        return ScoredInterface(iface.name, speed, iface.oper_status, -1000.0, "不可用", kind)
+        return ScoredInterface(
+            iface.name, speed, iface.oper_status, -1000.0, "不可用", kind, iface.description
+        )
 
     if kind == "vlan":
         score += 200
@@ -138,6 +141,7 @@ def _score_interface(iface: DeviceInterface, *, prefer_vlan: bool) -> ScoredInte
         score=round(score, 1),
         reason=" · ".join(reasons) if reasons else kind,
         kind=kind,
+        description=iface.description,
     )
 
 
@@ -153,18 +157,34 @@ def _prefer_vlan_on_device(rows: list[DeviceInterface]) -> bool:
     return any(is_vlan_interface(row.name) for row in rows)
 
 
-def rank_interfaces(db: Session, device_id: int, *, limit: int = 48) -> list[ScoredInterface]:
+def list_interface_candidates(
+    db: Session,
+    device_id: int,
+    *,
+    all_interfaces: bool = False,
+    limit: int = 48,
+) -> list[ScoredInterface]:
+    """Rank device interfaces for backbone link selection.
+
+    When ``all_interfaces`` is true, return every discovered interface (including
+  low-score / unavailable rows) for manual operator selection.
+    """
     rows = _device_interfaces(db, device_id)
     prefer_vlan = _prefer_vlan_on_device(rows)
     scored = [_score_interface(row, prefer_vlan=prefer_vlan) for row in rows]
+    scored.sort(key=lambda row: (-row.score, -row.speed_mbps, row.name))
+    if all_interfaces:
+        return scored
     scored = [row for row in scored if row.score > 0]
     if prefer_vlan:
         vlan_rows = [row for row in scored if row.kind == "vlan"]
         if vlan_rows:
-            vlan_rows.sort(key=lambda row: (-row.score, -row.speed_mbps, row.name))
             return vlan_rows[:limit]
-    scored.sort(key=lambda row: (-row.score, -row.speed_mbps, row.name))
     return scored[:limit]
+
+
+def rank_interfaces(db: Session, device_id: int, *, limit: int = 48) -> list[ScoredInterface]:
+    return list_interface_candidates(db, device_id, all_interfaces=False, limit=limit)
 
 
 def best_interface(db: Session, device_id: int) -> ScoredInterface | None:
@@ -199,6 +219,18 @@ def _default_name(device_a: Device, device_z: Device, link_type: LinkType) -> st
     if link_type == LinkType.DCI:
         return f"{short_a}↔{short_z} DCI"
     return f"{short_a}↔{short_z} 站内"
+
+
+def _interface_description(db: Session, device_id: int, ifname: str) -> str | None:
+    if not ifname:
+        return None
+    iface = db.execute(
+        select(DeviceInterface).where(
+            DeviceInterface.device_id == device_id,
+            DeviceInterface.name == ifname,
+        )
+    ).scalar_one_or_none()
+    return iface.description if iface else None
 
 
 def _capacity_for_pair(
@@ -239,7 +271,7 @@ def _resolve_named_interface(
     if iface:
         return _score_interface(iface, prefer_vlan=prefer_vlan)
     kind = _interface_kind(ifname)
-    return ScoredInterface(ifname, 10_000, "up", 50.0, "手动指定", kind)
+    return ScoredInterface(ifname, 10_000, "up", 50.0, "手动指定", kind, description=None)
 
 
 def plan_link(
@@ -285,6 +317,12 @@ def plan_link(
         "name": _default_name(device_a, device_z, link_type),
         "interface_a": pick_a.name,
         "interface_z": pick_z.name,
+        "interface_a_description": pick_a.description or _interface_description(
+            db, device_a.id, pick_a.name
+        ),
+        "interface_z_description": pick_z.description or _interface_description(
+            db, device_z.id, pick_z.name
+        ),
         "interface_a_score": pick_a.score,
         "interface_z_score": pick_z.score,
         "interface_a_reason": pick_a.reason,

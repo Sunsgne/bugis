@@ -48,6 +48,8 @@ class LinkPlanOut(BaseModel):
     name: str
     interface_a: str
     interface_z: str
+    interface_a_description: str | None = None
+    interface_z_description: str | None = None
     interface_a_score: float | None = None
     interface_z_score: float | None = None
     interface_a_reason: str | None = None
@@ -68,3 +70,4 @@ class InterfaceCandidateOut(BaseModel):
     oper_status: str | None = None
     score: float
     reason: str
+    description: str | None = None

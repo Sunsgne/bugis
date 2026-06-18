@@ -1377,6 +1377,17 @@ body {
   white-space: nowrap;
 }
 
+.backbone-port-option-desc {
+  color: var(--ant-color-text-secondary);
+  font-size: 12px;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.backbone-port-option-muted {
+  opacity: 0.72;
+}
+
 .backbone-port-option-meta {
   color: var(--ant-color-text-secondary);
   font-size: 12px;

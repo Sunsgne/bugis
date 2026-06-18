@@ -65,7 +65,7 @@ def site_capacity(db: Session) -> list[dict]:
 
 
 def link_capacity(db: Session) -> list[dict]:
-    from app.services import link_monitor
+    from app.services import link_monitor, link_planner
 
     links = db.execute(select(Link)).scalars().all()
     result = []
@@ -81,6 +81,12 @@ def link_capacity(db: Session) -> list[dict]:
             "device_z": dz.name if dz else l.device_z_id,
             "interface_a": l.interface_a,
             "interface_z": l.interface_z,
+            "interface_a_description": link_planner._interface_description(
+                db, l.device_a_id, l.interface_a or ""
+            ),
+            "interface_z_description": link_planner._interface_description(
+                db, l.device_z_id, l.interface_z or ""
+            ),
             "capacity_mbps": l.capacity_mbps,
             "reserved_mbps": l.reserved_mbps,
             "traffic_mbps": health.traffic_mbps,

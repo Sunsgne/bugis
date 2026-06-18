@@ -407,6 +407,8 @@ export interface LinkUsage {
   device_z: string;
   interface_a?: string;
   interface_z?: string;
+  interface_a_description?: string | null;
+  interface_z_description?: string | null;
   capacity_mbps: number;
   reserved_mbps: number;
   traffic_mbps?: number;
@@ -427,6 +429,8 @@ export interface LinkPlan {
   name: string;
   interface_a: string;
   interface_z: string;
+  interface_a_description?: string | null;
+  interface_z_description?: string | null;
   interface_a_score?: number;
   interface_z_score?: number;
   interface_a_reason?: string;
@@ -443,6 +447,7 @@ export interface UplinkCandidate {
   oper_status?: string | null;
   score: number;
   reason: string;
+  description?: string | null;
 }
 
 export interface AuditEntry {

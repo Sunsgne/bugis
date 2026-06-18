@@ -1,7 +1,7 @@
 """Capacity, links and topology endpoints."""
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -104,6 +104,7 @@ def plan_link_between_devices(
 @router.get("/devices/{device_id}/uplink-candidates", response_model=list[InterfaceCandidateOut])
 def list_uplink_candidates(
     device_id: int,
+    all: bool = Query(False, description="Return every discovered interface (manual selection)"),
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
@@ -116,8 +117,11 @@ def list_uplink_candidates(
             "oper_status": row.oper_status,
             "score": row.score,
             "reason": row.reason,
+            "description": row.description,
         }
-        for row in link_planner.rank_interfaces(db, device_id, limit=48)
+        for row in link_planner.list_interface_candidates(
+            db, device_id, all_interfaces=all
+        )
     ]
 
 

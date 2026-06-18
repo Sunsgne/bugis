@@ -12,6 +12,7 @@ import {
   Table,
   Tag,
   Tooltip,
+  Typography,
 } from "antd";
 import { DeleteOutlined, PlusOutlined, SearchOutlined, SyncOutlined } from "@ant-design/icons";
 import { api } from "../api/client";
@@ -291,22 +292,36 @@ export default function Capacity() {
             {
               title: "A 端",
               key: "a",
-              width: 200,
+              width: 220,
               render: (_: unknown, r) => (
                 <Space direction="vertical" size={0}>
                   <span>{r.device_a}</span>
                   {r.interface_a ? <InterfaceNameCell name={r.interface_a} /> : null}
+                  {r.interface_a_description ? (
+                    <Typography.Text type="secondary" style={{ fontSize: 12 }} title={r.interface_a_description}>
+                      {r.interface_a_description.length > 48
+                        ? `${r.interface_a_description.slice(0, 47)}…`
+                        : r.interface_a_description}
+                    </Typography.Text>
+                  ) : null}
                 </Space>
               ),
             },
             {
               title: "Z 端",
               key: "z",
-              width: 200,
+              width: 220,
               render: (_: unknown, r) => (
                 <Space direction="vertical" size={0}>
                   <span>{r.device_z}</span>
                   {r.interface_z ? <InterfaceNameCell name={r.interface_z} /> : null}
+                  {r.interface_z_description ? (
+                    <Typography.Text type="secondary" style={{ fontSize: 12 }} title={r.interface_z_description}>
+                      {r.interface_z_description.length > 48
+                        ? `${r.interface_z_description.slice(0, 47)}…`
+                        : r.interface_z_description}
+                    </Typography.Text>
+                  ) : null}
                 </Space>
               ),
             },
