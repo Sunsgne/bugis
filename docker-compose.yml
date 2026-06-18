@@ -3,6 +3,7 @@
 services:
   db:
     image: timescale/timescaledb:2.17.2-pg17
+    command: ["postgres", "-c", "shared_preload_libraries=timescaledb"]
     environment:
       POSTGRES_USER: bugis
       POSTGRES_PASSWORD: bugis
