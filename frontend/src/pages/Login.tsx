@@ -338,7 +338,7 @@ export default function Login() {
 
         <section className="flex w-full flex-1 justify-center lg:max-w-md lg:justify-end">
           <Card className="login-card w-full max-w-md border-slate-800/70 bg-slate-900/75 shadow-2xl shadow-black/50 backdrop-blur-xl">
-            <CardHeader className="space-y-4 px-8 pb-6 pt-8">
+            <CardHeader className="space-y-5 px-8 pb-8 pt-10 sm:px-10">
               <span
                 className="flex h-12 w-12 items-center justify-center rounded-2xl border border-orange-500/30 bg-orange-500/10 text-orange-400"
                 style={
@@ -355,7 +355,7 @@ export default function Login() {
                   <KeyRound className="h-5 w-5" />
                 )}
               </span>
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <CardTitle className="text-2xl font-semibold tracking-tight text-slate-100">
                   {cardTitle}
                 </CardTitle>
@@ -365,10 +365,10 @@ export default function Login() {
               </div>
             </CardHeader>
 
-            <CardContent className="px-8 pb-8">
+            <CardContent className="px-8 pb-10 sm:px-10">
               {mode === "mfa" ? (
-                <form onSubmit={onMfaSubmit} className="space-y-6">
-                  <div className="space-y-2.5">
+                <form onSubmit={onMfaSubmit} className="space-y-7">
+                  <div className="space-y-3">
                     <Label htmlFor="mfa-code" className="text-slate-300">
                       验证码
                     </Label>
@@ -415,8 +415,8 @@ export default function Login() {
                   </Button>
                 </form>
               ) : mode === "forgot" ? (
-                <form onSubmit={onForgotSubmit} className="space-y-6">
-                  <div className="space-y-2.5">
+                <form onSubmit={onForgotSubmit} className="space-y-7">
+                  <div className="space-y-3">
                     <Label htmlFor="forgot-id" className="text-slate-300">
                       用户名或邮箱
                     </Label>
@@ -470,8 +470,8 @@ export default function Login() {
                   </div>
                 </form>
               ) : mode === "reset" ? (
-                <form onSubmit={onResetSubmit} className="space-y-5">
-                  <div className="space-y-2.5">
+                <form onSubmit={onResetSubmit} className="space-y-6">
+                  <div className="space-y-3">
                     <Label htmlFor="reset-code" className="text-slate-300">
                       邮件验证码
                     </Label>
@@ -486,7 +486,7 @@ export default function Login() {
                       className="h-12 border-slate-700 bg-slate-950/50 text-center text-lg tracking-[0.4em] text-slate-100"
                     />
                   </div>
-                  <div className="space-y-2.5">
+                  <div className="space-y-3">
                     <Label htmlFor="reset-pwd" className="text-slate-300">
                       新密码
                     </Label>
@@ -504,7 +504,7 @@ export default function Login() {
                       />
                     </div>
                   </div>
-                  <div className="space-y-2.5">
+                  <div className="space-y-3">
                     <Label htmlFor="reset-pwd2" className="text-slate-300">
                       确认新密码
                     </Label>
@@ -549,8 +549,8 @@ export default function Login() {
                   </div>
                 </form>
               ) : (
-                <form onSubmit={onSubmit} className="space-y-6">
-                  <div className="space-y-2.5">
+                <form onSubmit={onSubmit} className="space-y-7">
+                  <div className="space-y-3">
                     <Label htmlFor="username" className="text-slate-300">
                       用户名
                     </Label>
@@ -567,7 +567,7 @@ export default function Login() {
                       />
                     </div>
                   </div>
-                  <div className="space-y-2.5">
+                  <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <Label htmlFor="password" className="text-slate-300">
                         密码
