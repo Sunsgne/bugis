@@ -122,6 +122,44 @@ def fetch_latency_buckets(
     ]
 
 
+def fetch_network_overview_buckets(
+    db: Session,
+    *,
+    hours: int,
+) -> list[dict[str, Any]]:
+    """Network-wide per-5m traffic trend from continuous aggregate."""
+    since = datetime.now(timezone.utc) - timedelta(hours=hours)
+    rows = db.execute(
+        text(
+            """
+            SELECT
+              bucket,
+              SUM(max_rx_mbps) AS rx,
+              SUM(max_tx_mbps) AS tx
+            FROM telemetry_samples_5m
+            WHERE bucket >= :since
+              AND source = ANY(:sources)
+            GROUP BY bucket
+            ORDER BY bucket ASC
+            """
+        ),
+        {"since": since, "sources": list(_TRAFFIC_SOURCES)},
+    ).mappings().all()
+
+    out = []
+    for row in rows:
+        bucket = row["bucket"]
+        label = bucket.strftime("%H:%M") if bucket else ""
+        out.append({
+            "t": label,
+            "rx": round(float(row["rx"] or 0), 1),
+            "tx": round(float(row["tx"] or 0), 1),
+            "latency": None,
+            "loss": None,
+        })
+    return out[-40:]
+
+
 def fetch_billing_months(db: Session, *, circuit_id: int) -> list[str]:
     rows = db.execute(
         text(

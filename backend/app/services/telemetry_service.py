@@ -320,7 +320,18 @@ def overview_traffic(
     hours: int = 24,
 ) -> list[dict]:
     """Aggregate recent telemetry into a per-minute network-wide traffic trend."""
-    since = datetime.now(timezone.utc) - timedelta(hours=max(1, min(hours, 24 * 7)))
+    eff_hours = max(1, min(hours, 24 * 7))
+    if (
+        telemetry_timescale.continuous_aggregate_available(db)
+        and telemetry_timescale.should_use_continuous_aggregate(eff_hours)
+    ):
+        buckets = telemetry_timescale.fetch_network_overview_buckets(
+            db, hours=eff_hours
+        )
+        if buckets:
+            return buckets
+
+    since = datetime.now(timezone.utc) - timedelta(hours=eff_hours)
     rows = db.execute(
         select(TelemetrySample)
         .where(TelemetrySample.created_at >= since)

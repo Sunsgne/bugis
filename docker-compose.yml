@@ -15,15 +15,27 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
   backend:
     build: ./backend
     environment:
       BUGIS_DATABASE_URL: postgresql+psycopg://bugis:bugis@db:5432/bugis
+      BUGIS_REDIS_URL: redis://redis:6379/0
       BUGIS_SECRET_KEY: please-change-this-secret-in-production
       BUGIS_DRY_RUN: "true"
       BUGIS_EXPOSE_OPENAPI: "false"
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
   frontend:

@@ -81,6 +81,14 @@ class Settings(BaseSettings):
     telemetry_raw_retention_days: int = 14
     telemetry_aggregate_retention_days: int = 400
 
+    # --- Redis (optional read cache for portal / dashboard hot paths) ---
+    redis_url: str = ""
+    redis_key_prefix: str = "bugis"
+    redis_health_ttl_seconds: int = 60
+    redis_portal_dashboard_ttl_seconds: int = 30
+    redis_traffic_summary_ttl_seconds: int = 120
+    redis_overview_ttl_seconds: int = 60
+
     # --- Provisioning concurrency / snapshots ---
     # Capture each target device's live running-config before a circuit
     # apply/teardown (source="pre_change") for diff / rollback / audit.

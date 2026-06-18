@@ -76,6 +76,9 @@ async def lifespan(app: FastAPI):
     yield
     await worker.stop()
     await scheduler.stop()
+    from app.core.redis_client import close_redis
+
+    close_redis()
 
 
 app = FastAPI(

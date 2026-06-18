@@ -20,16 +20,29 @@ services:
       retries: 5
     restart: unless-stopped
 
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
   backend:
     build: ./backend
     environment:
       BUGIS_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-bugis}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-bugis}
+      BUGIS_REDIS_URL: redis://redis:6379/0
       BUGIS_SECRET_KEY: ${BUGIS_SECRET_KEY:?set BUGIS_SECRET_KEY}
       BUGIS_APP_ENV: production
       BUGIS_DEBUG: "false"
       BUGIS_DRY_RUN: "false"
       BUGIS_TELEMETRY_SIMULATION: "false"
       BUGIS_SCHEDULER_INTERVAL_SECONDS: "20"
+      BUGIS_TELEMETRY_COLLECT_BATCH_SIZE: "500"
+      BUGIS_TELEMETRY_PROBE_BATCH_SIZE: "50"
       BUGIS_EXPOSE_OPENAPI: "false"
       BUGIS_RUN_SEED: ${BUGIS_RUN_SEED:-true}
       BUGIS_RUN_DEMO: "false"
@@ -39,6 +52,8 @@ services:
       BUGIS_WEBHOOK_TOKEN: ${BUGIS_WEBHOOK_TOKEN:?set BUGIS_WEBHOOK_TOKEN}
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]

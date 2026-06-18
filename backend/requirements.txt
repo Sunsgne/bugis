@@ -30,6 +30,9 @@ pysnmp==7.1.27
 # Metrics
 prometheus-client==0.25.0
 
+# Optional Redis cache (portal / dashboard hot reads)
+redis==5.2.1
+
 # Southbound device drivers (SSH CLI / NETCONF) — required when dry_run=false
 netmiko>=4.7.0
 ncclient>=0.7.1

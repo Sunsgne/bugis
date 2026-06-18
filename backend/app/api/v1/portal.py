@@ -8,7 +8,9 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_tenant_circuit, require_tenant_user
+from app.core.config import settings
 from app.core.database import get_db
+from app.core import redis_client
 from app.models.alarm import Alarm
 from app.models.circuit import Circuit
 from app.models.enums import AlarmStatus, CircuitStatus
@@ -21,7 +23,7 @@ from app.schemas.portal import (
     PortalMeOut,
 )
 from app.schemas.tenant import TenantSummary
-from app.services import telemetry_service
+from app.services import health_snapshot_service, telemetry_service
 from app.services.availability_service import compute_availability
 
 router = APIRouter()
@@ -73,6 +75,11 @@ def portal_dashboard(
     user: User = Depends(require_tenant_user),
     db: Session = Depends(get_db),
 ):
+    cache_key = health_snapshot_service.cache_key_portal_dashboard(user.tenant_id)
+    cached = redis_client.cache_get_json(cache_key)
+    if cached:
+        return PortalDashboardOut(**cached)
+
     circuits = db.execute(
         select(Circuit).where(Circuit.tenant_id == user.tenant_id)
     ).scalars().all()
@@ -88,20 +95,21 @@ def portal_dashboard(
             )
             or 0
         )
-    scores: list[float] = []
-    monitorable = 0
-    for c in circuits:
-        if c.status in (CircuitStatus.ACTIVE, CircuitStatus.DEGRADED):
-            monitorable += 1
-            health = telemetry_service.compute_health(db, c)
-            scores.append(health.health_score)
-    avg_health = round(sum(scores) / len(scores), 1) if scores else 100.0
-    return PortalDashboardOut(
+    avg_health, monitorable = health_snapshot_service.tenant_monitorable_stats(
+        db, user.tenant_id
+    )
+    result = PortalDashboardOut(
         summary=_tenant_summary(db, user.tenant_id),
         active_alarms=active_alarms,
         avg_health_score=avg_health,
         circuits_monitorable=monitorable,
     )
+    redis_client.cache_set_json(
+        cache_key,
+        result.model_dump(mode="json"),
+        settings.redis_portal_dashboard_ttl_seconds,
+    )
+    return result
 
 
 @router.get("/circuits", response_model=list[PortalCircuitListOut])
@@ -154,7 +162,16 @@ def portal_traffic_summary(
     db: Session = Depends(get_db),
 ):
     circuit = get_tenant_circuit(db, user, circuit_id)
-    return telemetry_service.traffic_summary_payload(
+    eff_hours = telemetry_service._window_hours(
+        hours=hours, start_at=start_at, end_at=end_at
+    )
+    use_cache = start_at is None and end_at is None and eff_hours > settings.telemetry_aggregate_after_hours
+    cache_key = health_snapshot_service.cache_key_traffic(circuit.id, eff_hours)
+    if use_cache:
+        cached = redis_client.cache_get_json(cache_key)
+        if cached:
+            return cached
+    payload = telemetry_service.traffic_summary_payload(
         db,
         circuit,
         limit=limit,
@@ -162,6 +179,45 @@ def portal_traffic_summary(
         start_at=start_at,
         end_at=end_at,
     )
+    if use_cache:
+        serializable = dict(payload)
+        serializable["samples"] = [
+            s if isinstance(s, dict) else {
+                "id": s.id,
+                "circuit_id": s.circuit_id,
+                "rx_mbps": s.rx_mbps,
+                "tx_mbps": s.tx_mbps,
+                "utilization_pct": s.utilization_pct,
+                "latency_ms": s.latency_ms,
+                "jitter_ms": s.jitter_ms,
+                "packet_loss_pct": s.packet_loss_pct,
+                "errors": s.errors,
+                "tunnel_state": s.tunnel_state,
+                "source": s.source,
+                "created_at": s.created_at.isoformat() if s.created_at else None,
+            }
+            for s in payload["samples"]
+        ]
+        serializable["qos_samples"] = [
+            s if isinstance(s, dict) else {
+                "id": s.id,
+                "circuit_id": s.circuit_id,
+                "rx_mbps": s.rx_mbps,
+                "tx_mbps": s.tx_mbps,
+                "latency_ms": s.latency_ms,
+                "jitter_ms": s.jitter_ms,
+                "packet_loss_pct": s.packet_loss_pct,
+                "source": s.source,
+                "created_at": s.created_at.isoformat() if s.created_at else None,
+            }
+            for s in payload.get("qos_samples") or []
+        ]
+        redis_client.cache_set_json(
+            cache_key,
+            serializable,
+            settings.redis_traffic_summary_ttl_seconds,
+        )
+    return payload
 
 
 @router.get("/circuits/{circuit_id}/billing")
@@ -205,7 +261,20 @@ def portal_health(
     db: Session = Depends(get_db),
 ):
     circuit = get_tenant_circuit(db, user, circuit_id)
-    return telemetry_service.compute_health(
+    windowed = hours is not None or (start_at is not None and end_at is not None)
+    if not windowed:
+        cache_key = health_snapshot_service.cache_key_health(circuit.id)
+        cached = redis_client.cache_get_json(cache_key)
+        if cached:
+            return cached
+        snap_health = health_snapshot_service.get_snapshot_health(db, circuit)
+        if snap_health is not None:
+            data = snap_health.model_dump()
+            redis_client.cache_set_json(
+                cache_key, data, settings.redis_health_ttl_seconds
+            )
+            return snap_health
+    health = telemetry_service.compute_health(
         db,
         circuit,
         limit=limit,
@@ -213,3 +282,10 @@ def portal_health(
         start_at=start_at,
         end_at=end_at,
     )
+    if not windowed:
+        redis_client.cache_set_json(
+            health_snapshot_service.cache_key_health(circuit.id),
+            health.model_dump(),
+            settings.redis_health_ttl_seconds,
+        )
+    return health

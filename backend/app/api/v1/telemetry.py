@@ -8,6 +8,8 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, require_operator
+from app.core.config import settings
+from app.core import redis_client
 from app.core.database import get_db
 from app.models.circuit import Circuit
 from app.models.device import Device
@@ -22,7 +24,7 @@ from app.schemas.telemetry import (
     TelemetrySampleIn,
     TelemetrySampleOut,
 )
-from app.services import alarm_service, telemetry_service
+from app.services import alarm_service, health_snapshot_service, telemetry_service
 
 router = APIRouter()
 
@@ -141,7 +143,21 @@ def circuit_health(
         raise HTTPException(status_code=400, detail="start_at and end_at must be provided together")
     if start_at and end_at and start_at >= end_at:
         raise HTTPException(status_code=400, detail="start_at must be before end_at")
-    return telemetry_service.compute_health(
+    windowed = hours is not None or (start_at is not None and end_at is not None)
+    if not windowed:
+        cache_key = health_snapshot_service.cache_key_health(circuit_id)
+        cached = redis_client.cache_get_json(cache_key)
+        if cached:
+            return CircuitHealth(**cached)
+        snap_health = health_snapshot_service.get_snapshot_health(db, circuit)
+        if snap_health is not None:
+            redis_client.cache_set_json(
+                cache_key,
+                snap_health.model_dump(),
+                settings.redis_health_ttl_seconds,
+            )
+            return snap_health
+    health = telemetry_service.compute_health(
         db,
         circuit,
         limit=limit,
@@ -149,6 +165,13 @@ def circuit_health(
         start_at=start_at,
         end_at=end_at,
     )
+    if not windowed:
+        redis_client.cache_set_json(
+            health_snapshot_service.cache_key_health(circuit_id),
+            health.model_dump(),
+            settings.redis_health_ttl_seconds,
+        )
+    return health
 
 
 @router.post("/collect", response_model=dict)
@@ -171,6 +194,8 @@ def collect_telemetry(
     db.flush()
     for c in circuits:
         health = telemetry_service.compute_health(db, c)
+        health_snapshot_service.upsert_from_health(db, c.id, health)
+        health_snapshot_service.invalidate_circuit(c)
         alarm_service.evaluate_circuit_health(db, c, health)
         alarm_service.evaluate_circuit_availability(db, c)
     db.commit()
@@ -196,9 +221,21 @@ def simulate(
 
 
 @router.get("/overview")
-def overview(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+def overview(
+    hours: int = 24,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
     """Aggregate traffic trend across all circuits (per-minute buckets)."""
-    return telemetry_service.overview_traffic(db)
+    cache_key = health_snapshot_service.cache_key_overview(hours)
+    cached = redis_client.cache_get_json(cache_key)
+    if cached:
+        return cached
+    data = telemetry_service.overview_traffic(db, hours=hours)
+    redis_client.cache_set_json(
+        cache_key, data, settings.redis_overview_ttl_seconds
+    )
+    return data
 
 
 @router.get("/dashboard")

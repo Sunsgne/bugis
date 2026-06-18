@@ -21,7 +21,7 @@ from app.core.database import SessionLocal
 from app.models.circuit import Circuit
 from app.models.enums import CircuitStatus
 from app.models.link import Link
-from app.services import alarm_service, config_learn, link_monitor, platform_settings, telemetry_service
+from app.services import alarm_service, config_learn, health_snapshot_service, link_monitor, platform_settings, telemetry_service
 from app.controller import bgp_peering, ha
 
 logger = logging.getLogger("bugis.scheduler")
@@ -140,6 +140,8 @@ def _tick() -> int:
             if not c:
                 continue
             health = telemetry_service.compute_health(db, c)
+            health_snapshot_service.upsert_from_health(db, c.id, health)
+            health_snapshot_service.invalidate_circuit(c)
             alarm_service.evaluate_circuit_health(db, c, health)
             alarm_service.evaluate_circuit_availability(db, c)
         link_monitor.sync_all_link_capacity(db)
