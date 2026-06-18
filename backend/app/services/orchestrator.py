@@ -44,6 +44,7 @@ from app.models.enums import (
 from app.models.site import Site
 from app.models.workorder import WorkOrder, WorkOrderEvent
 from app.services import (
+    alarm_service,
     controller_client,
     device_management,
     platform_settings as platform_cfg,
@@ -118,6 +119,14 @@ def _removed_config_items(rendered: str) -> list[str]:
         if low.startswith(("undo ", "no ", "delete ")):
             items.append(s)
     return items
+
+
+def _clear_circuit_alarms_on_decommission(
+    db: Session, wo: WorkOrder, circuit: Circuit, actor: str | None
+) -> None:
+    cleared = alarm_service.clear_active_for_circuit(db, circuit)
+    if cleared:
+        _log(db, wo, f"已自动清除 {cleared} 条活跃告警", actor=actor)
 
 
 def _log_teardown_details(
@@ -395,6 +404,7 @@ def execute(db: Session, wo: WorkOrder, actor: str | None = None) -> WorkOrder:
         wo.status = WorkOrderStatus.COMPLETED
         if wo.type == WorkOrderType.DECOMMISSION:
             circuit.status = CircuitStatus.DECOMMISSIONED
+            _clear_circuit_alarms_on_decommission(db, wo, circuit, actor)
             _log(
                 db,
                 wo,
@@ -556,6 +566,7 @@ def execute(db: Session, wo: WorkOrder, actor: str | None = None) -> WorkOrder:
         wo.status = WorkOrderStatus.COMPLETED
         if wo.type == WorkOrderType.DECOMMISSION:
             circuit.status = CircuitStatus.DECOMMISSIONED
+            _clear_circuit_alarms_on_decommission(db, wo, circuit, actor)
         else:
             circuit.status = CircuitStatus.ACTIVE
         _log(db, wo, "Execution completed successfully", actor=actor)

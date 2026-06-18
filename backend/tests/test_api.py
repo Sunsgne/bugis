@@ -198,6 +198,44 @@ def test_alarms_lifecycle(client, auth_headers):
     assert client.post(f"/api/v1/alarms/{aid}/clear", headers=auth_headers).status_code == 200
 
 
+def test_decommission_clears_active_alarms(client, auth_headers):
+    _, tenant, dev_a, _ = _bootstrap_topology(client, auth_headers)
+    circuit = client.post(
+        "/api/v1/circuits",
+        headers=auth_headers,
+        json={
+            "name": "Alarm teardown", "tenant_id": tenant["id"],
+            "service_type": "l2vpn_evpn", "bandwidth_mbps": 1000,
+            "endpoints": [
+                {"label": "A", "device_id": dev_a["id"], "interface_name": "GE1/0/10"},
+            ],
+        },
+    ).json()
+    client.post(f"/api/v1/work-orders/provision/{circuit['id']}", headers=auth_headers)
+
+    for _ in range(3):
+        client.post(
+            "/api/v1/telemetry/samples",
+            headers=auth_headers,
+            json={"circuit_id": circuit["id"], "packet_loss_pct": 5.0,
+                  "latency_ms": 99, "utilization_pct": 98},
+        )
+    client.post("/api/v1/alarms/evaluate", headers=auth_headers)
+    before = client.get(
+        "/api/v1/alarms?status=active", headers=auth_headers
+    ).json()
+    assert [a for a in before if a["circuit_id"] == circuit["id"]]
+
+    client.post(
+        f"/api/v1/work-orders/provision/{circuit['id']}?wo_type=decommission",
+        headers=auth_headers,
+    )
+    after = client.get(
+        "/api/v1/alarms?status=active", headers=auth_headers
+    ).json()
+    assert not [a for a in after if a["circuit_id"] == circuit["id"]]
+
+
 def test_capacity_and_topology(client, auth_headers):
     _, _, dev_a, dev_z = _bootstrap_topology(client, auth_headers)
     client.post(f"/api/v1/devices/{dev_a['id']}/discover-interfaces", headers=auth_headers)
