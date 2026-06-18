@@ -71,6 +71,7 @@ class SvidEntry:
     rate_limit_mbps: int | None = None
     vni: int | None = None
     vsi_name: str | None = None
+    bridge_domain: str | None = None
     tenant_name: str | None = None
     tenant_code: str | None = None
     circuit_name: str | None = None
@@ -88,6 +89,7 @@ class SvidEntry:
             "rate_limit_mbps": self.rate_limit_mbps,
             "vni": self.vni,
             "vsi_name": self.vsi_name,
+            "bridge_domain": self.bridge_domain,
             "tenant_name": self.tenant_name,
             "tenant_code": self.tenant_code,
             "circuit_name": self.circuit_name,
@@ -535,6 +537,28 @@ def _kbps_to_mbps(kbps: int | None) -> int | None:
     return max(1, kbps // 1000) if kbps >= 1000 else 1
 
 
+def _parse_huawei_bd_map(config: str) -> dict[str, dict]:
+    out: dict[str, dict] = {}
+    for m in re.finditer(
+        r"^bridge-domain\s+(\S+)\s*$(.+?)(?=^bridge-domain\s|\Z)",
+        config,
+        re.MULTILINE | re.DOTALL | re.IGNORECASE,
+    ):
+        bd = m.group(1)
+        body = m.group(2)
+        vni_m = re.search(r"vxlan\s+vni\s+(\d+)", body, re.I)
+        rd_m = re.search(r"route-distinguisher\s+(\S+)", body, re.I)
+        rt_m = re.search(r"vpn-target\s+(\S+)\s+import-extcommunity", body, re.I)
+        desc_m = re.search(r"^\s*description\s+(.+)$", body, re.MULTILINE | re.IGNORECASE)
+        out[bd] = {
+            "vni": int(vni_m.group(1)) if vni_m else None,
+            "rd": rd_m.group(1) if rd_m else None,
+            "rt": rt_m.group(1) if rt_m else None,
+            "description": desc_m.group(1).strip() if desc_m else None,
+        }
+    return out
+
+
 def _parse_h3c_vsi_map(config: str) -> dict[str, dict]:
     out: dict[str, dict] = {}
     for m in re.finditer(
@@ -600,9 +624,15 @@ def _enrich_svid_entry(
     *,
     catalog: _CircuitCatalog,
     vsi_map: dict[str, dict] | None = None,
+    bd_map: dict[str, dict] | None = None,
 ) -> None:
     if entry.vsi_name and vsi_map and entry.vsi_name in vsi_map:
         meta = vsi_map[entry.vsi_name]
+        entry.vni = entry.vni or meta.get("vni")
+        entry.description = entry.description or meta.get("description")
+
+    if entry.bridge_domain and bd_map and entry.bridge_domain in bd_map:
+        meta = bd_map[entry.bridge_domain]
         entry.vni = entry.vni or meta.get("vni")
         entry.description = entry.description or meta.get("description")
 
@@ -723,8 +753,18 @@ def _parse_huawei_block(iface: str, block: str, policy_map: dict[str, int] | Non
     entries: list[SvidEntry] = []
     rate_kbps = _parse_rate_limit_kbps(block, policy_map=policy_map)
     rate_mbps = _kbps_to_mbps(rate_kbps)
+    bd_m = re.search(r"bridge-domain\s+(\S+)", block, re.I)
+    bridge_domain = bd_m.group(1) if bd_m else None
     if re.search(r"encapsulation\s+untag", block, re.I):
-        entries.append(SvidEntry(s_vid=None, access_mode="access", source="device", rate_limit_mbps=rate_mbps))
+        entries.append(
+            SvidEntry(
+                s_vid=None,
+                access_mode="access",
+                source="device",
+                rate_limit_mbps=rate_mbps,
+                bridge_domain=bridge_domain,
+            )
+        )
     for m in re.finditer(
         r"encapsulation\s+qinq\s+vid\s+(\d+)\s+ce-vid\s+(\d+)", block, re.I
     ):
@@ -735,6 +775,7 @@ def _parse_huawei_block(iface: str, block: str, policy_map: dict[str, int] | Non
                 access_mode="qinq",
                 source="device",
                 rate_limit_mbps=rate_mbps,
+                bridge_domain=bridge_domain,
             )
         )
     for m in re.finditer(r"encapsulation\s+dot1q\s+vid\s+(\d+)", block, re.I):
@@ -744,6 +785,7 @@ def _parse_huawei_block(iface: str, block: str, policy_map: dict[str, int] | Non
                 access_mode="dot1q",
                 source="device",
                 rate_limit_mbps=rate_mbps,
+                bridge_domain=bridge_domain,
             )
         )
     return entries
@@ -847,12 +889,18 @@ def device_config_usage(db: Session, device: Device) -> dict[str, PortUsage]:
             for iface, usage in _rollup_huawei_subif_usage(port_map).items()
         }
     vsi_map = _parse_h3c_vsi_map(config) if device.vendor == Vendor.H3C else {}
+    bd_map = _parse_huawei_bd_map(config) if device.vendor == Vendor.HUAWEI else {}
     catalog = _build_circuit_catalog(db)
     by_iface: dict[str, PortUsage] = {}
     for iface, entries in parsed.items():
         usage = PortUsage(interface_name=iface)
         for entry in entries:
-            _enrich_svid_entry(entry, catalog=catalog, vsi_map=vsi_map or None)
+            _enrich_svid_entry(
+                entry,
+                catalog=catalog,
+                vsi_map=vsi_map or None,
+                bd_map=bd_map or None,
+            )
             _merge_entries(usage.entries, entry)
         by_iface[iface] = usage
     return by_iface
