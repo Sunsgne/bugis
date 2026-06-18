@@ -47,6 +47,15 @@ _HASH_COMMENT = re.compile(r"^\s*#\s+\S")
 # commands silently fail, leaving dirty config behind, so ``quit`` is kept.
 _HASH_VENDOR_EXIT = re.compile(r"^\s*return\s*$", re.IGNORECASE)
 
+# ``commit`` (VRP8 two-stage) and ``save`` / ``save force`` (persist to startup)
+# are rendered into the displayed config for operator visibility, but the live
+# push performs them through the transport layer (netmiko ``commit`` /
+# ``save_config`` with interactive ``Y`` handling, or the H3C NETCONF save RPC),
+# never as plain batched config commands — sending a bare ``save`` mid-batch
+# stalls on its "Are you sure? [Y/N]" prompt. So strip them from the command
+# list; the transport layer owns commit/save.
+_HASH_PERSIST = re.compile(r"^\s*(commit|save(\s+force)?)\s*$", re.IGNORECASE)
+
 # Cisco / Arista / FRR comment marker.
 _BANG_COMMENT = re.compile(r"^\s*!")
 # Junos annotation lines (## ... or # ...) emitted by templates.
@@ -69,6 +78,8 @@ def _clean_hash_vendor(config: str) -> list[str]:
         if _HASH_COMMENT.match(line):
             continue
         if _HASH_VENDOR_EXIT.match(line):
+            continue
+        if _HASH_PERSIST.match(line):
             continue
         commands.append(line)
     return commands
