@@ -120,7 +120,36 @@ def test_cli_push_auto_confirms_destructive_undo():
         "undo bridge-domain 30001",
         "Y",
     ]
-    assert conn.in_config is False  # config mode was exited cleanly
+    assert conn.in_config is True  # VRP8: stay in config mode until commit()
+
+
+class _HuaweiTeardownConn(_FakeConn):
+    """Track whether exit_config_mode runs before an external commit()."""
+
+    def __init__(self):
+        super().__init__(prompt_on=set())
+        self.exit_before_commit = False
+        self.committed = False
+
+    def exit_config_mode(self, *args, **kwargs):
+        if not self.committed:
+            self.exit_before_commit = True
+        self.in_config = False
+        return ""
+
+    def commit(self, **kwargs):
+        self.committed = True
+        return "commit complete"
+
+
+def test_huawei_teardown_defers_exit_until_commit():
+    """VRP8 teardown must not return to user view before commit()."""
+    driver = get_driver(Vendor.HUAWEI)
+    conn = _HuaweiTeardownConn()
+    driver._send_config_commands(conn, ["undo bridge-domain 30001"], 120)
+    assert conn.exit_before_commit is False
+    driver._commit_if_needed(conn)
+    assert conn.committed is True
 
 
 class _BatchConn:
