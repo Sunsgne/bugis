@@ -9,13 +9,19 @@ import {
   Space,
   Table,
   Tag,
+  Tooltip,
   Typography,
 } from "antd";
 import { BulbOutlined, PlusOutlined } from "@ant-design/icons";
 import { api } from "../api/client";
 import type { Device, LinkPlan, UplinkCandidate } from "../api/types";
 import InterfaceNameCell from "./InterfaceNameCell";
-import { formatInterfaceShort, isVlanInterface } from "../utils/networkDisplay";
+import {
+  formatInterfaceShort,
+  formatInterfaceTooltip,
+  formatOperStatus,
+  isVlanInterface,
+} from "../utils/networkDisplay";
 
 const LINK_TYPE_LABEL: Record<string, string> = {
   dci: "跨站点 DCI",
@@ -28,21 +34,64 @@ function fmtBw(mbps: number) {
   return mbps >= 1000 ? `${Math.round(mbps / 1000)} Gbps` : `${mbps} Mbps`;
 }
 
+function clipDescription(desc?: string | null, max = 56) {
+  const text = desc?.trim();
+  if (!text) return null;
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+}
+
 function portOptionLabel(c: UplinkCandidate) {
-  return `${formatInterfaceShort(c.name)} · ${fmtBw(c.speed_mbps)}`;
+  const short = formatInterfaceShort(c.name);
+  const desc = clipDescription(c.description);
+  if (!desc) return `${short} · ${fmtBw(c.speed_mbps)}`;
+  return `${short} — ${desc}`;
 }
 
 function PortCandidateOption({ candidate }: { candidate: UplinkCandidate }) {
+  const short = formatInterfaceShort(candidate.name);
+  const desc = candidate.description?.trim();
+  const unavailable = candidate.score <= 0;
   return (
-    <div className="backbone-port-option">
+    <div className={`backbone-port-option${unavailable ? " backbone-port-option-muted" : ""}`}>
       <div className="backbone-port-option-name">
-        <InterfaceNameCell name={candidate.name} />
+        <Tooltip title={short === candidate.name ? undefined : formatInterfaceTooltip(candidate.name)}>
+          <InterfaceNameCell name={candidate.name} />
+        </Tooltip>
+        {unavailable ? <Tag color="default">不推荐</Tag> : null}
       </div>
+      {desc ? (
+        <div className="backbone-port-option-desc" title={desc}>
+          {desc}
+        </div>
+      ) : null}
       <div className="backbone-port-option-meta">
         {fmtBw(candidate.speed_mbps)}
-        {candidate.oper_status === "up" ? " · 在线" : candidate.oper_status ? ` · ${candidate.oper_status}` : ""}
+        {candidate.oper_status ? ` · ${formatOperStatus(candidate.oper_status)}` : ""}
         {candidate.reason ? ` · ${candidate.reason}` : ""}
       </div>
+    </div>
+  );
+}
+
+function EndpointCell({
+  device,
+  iface,
+  description,
+}: {
+  device: string;
+  iface: string;
+  description?: string | null;
+}) {
+  const desc = description?.trim();
+  return (
+    <div>
+      <div>{device}</div>
+      <InterfaceNameCell name={iface} />
+      {desc ? (
+        <Typography.Text type="secondary" style={{ fontSize: 12 }} title={desc}>
+          {clipDescription(desc, 48)}
+        </Typography.Text>
+      ) : null}
     </div>
   );
 }
@@ -88,6 +137,7 @@ export default function BackboneLinkModal({ open, devices, onClose, onCreated }:
   async function loadCandidates(deviceId: number, side: "a" | "z") {
     const { data } = await api.get<UplinkCandidate[]>(
       `/capacity/devices/${deviceId}/uplink-candidates`,
+      { params: { all: true } },
     );
     if (side === "a") setCandidatesA(data);
     else setCandidatesZ(data);
@@ -233,22 +283,24 @@ export default function BackboneLinkModal({ open, devices, onClose, onCreated }:
           },
           {
             title: "A 端",
-            width: 180,
+            width: 200,
             render: (_: unknown, row) => (
-              <div>
-                <div>{row.device_a}</div>
-                <InterfaceNameCell name={row.interface_a} />
-              </div>
+              <EndpointCell
+                device={row.device_a}
+                iface={row.interface_a}
+                description={row.interface_a_description}
+              />
             ),
           },
           {
             title: "Z 端",
-            width: 180,
+            width: 200,
             render: (_: unknown, row) => (
-              <div>
-                <div>{row.device_z}</div>
-                <InterfaceNameCell name={row.interface_z} />
-              </div>
+              <EndpointCell
+                device={row.device_z}
+                iface={row.interface_z}
+                description={row.interface_z_description}
+              />
             ),
           },
           {
@@ -313,12 +365,22 @@ export default function BackboneLinkModal({ open, devices, onClose, onCreated }:
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-          <Form.Item name="interface_a" label="A 端端口" extra={vlanHintA ? "未发现 Vlanif / Vlan-interface，请在设备页执行 SNMP 发现或现网学习后刷新" : undefined}>
+          <Form.Item
+            name="interface_a"
+            label={`A 端端口${candidatesA.length ? ` (${candidatesA.length})` : ""}`}
+            extra={
+              vlanHintA
+                ? "未发现 Vlanif / Vlan-interface，请在设备页执行 SNMP 发现或现网学习后刷新"
+                : "展示设备全部已发现接口，含端口描述；评分高的排在前面"
+            }
+          >
             <Select
               showSearch
-              placeholder="优先 VLAN 子接口"
+              placeholder="选择接口"
+              optionFilterProp="label"
               popupMatchSelectWidth={false}
-              styles={{ popup: { root: { minWidth: 360 } } }}
+              styles={{ popup: { root: { minWidth: 420 } } }}
+              listHeight={400}
               options={candidatesA.map((c) => ({
                 value: c.name,
                 label: portOptionLabel(c),
@@ -334,12 +396,22 @@ export default function BackboneLinkModal({ open, devices, onClose, onCreated }:
               }}
             />
           </Form.Item>
-          <Form.Item name="interface_z" label="Z 端端口" extra={vlanHintZ ? "未发现 Vlanif / Vlan-interface，请在设备页执行 SNMP 发现或现网学习后刷新" : undefined}>
+          <Form.Item
+            name="interface_z"
+            label={`Z 端端口${candidatesZ.length ? ` (${candidatesZ.length})` : ""}`}
+            extra={
+              vlanHintZ
+                ? "未发现 Vlanif / Vlan-interface，请在设备页执行 SNMP 发现或现网学习后刷新"
+                : "展示设备全部已发现接口，含端口描述；评分高的排在前面"
+            }
+          >
             <Select
               showSearch
-              placeholder="优先 VLAN 子接口"
+              placeholder="选择接口"
+              optionFilterProp="label"
               popupMatchSelectWidth={false}
-              styles={{ popup: { root: { minWidth: 360 } } }}
+              styles={{ popup: { root: { minWidth: 420 } } }}
+              listHeight={400}
               options={candidatesZ.map((c) => ({
                 value: c.name,
                 label: portOptionLabel(c),
