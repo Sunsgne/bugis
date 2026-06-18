@@ -437,7 +437,7 @@ export default function ControlPlane() {
       </Card>
 
       <Card title="VXLAN / SR-MPLS Overlay">
-        <OverlayTopologyPanel topo={topo} />
+        <OverlayTopologyPanel topo={topo} overlayInventory={overlay} />
       </Card>
 
       <Card title="VTEP 邻居表">

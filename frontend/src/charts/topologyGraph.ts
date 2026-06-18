@@ -35,16 +35,22 @@ export type OverlayTopo = {
 export type OverlayTopoOptions = {
   /** When set, only members of this VNI and their tunnels are drawn. */
   selectedVni?: number | null;
+  /** Highlight a device on the overview graph (no VNI selected). */
+  highlightDeviceId?: number | null;
 };
 
 export type VniMemberSummary = {
   vni: number;
   deviceCount: number;
+  platformManaged: boolean;
   devices: { id: number; name: string; vtep_ip: string; status: string }[];
 };
 
 /** Build VNI → device membership index for search / filter panels. */
-export function buildVniMemberIndex(topo: OverlayTopo | null | undefined): VniMemberSummary[] {
+export function buildVniMemberIndex(
+  topo: OverlayTopo | null | undefined,
+  platformVnis?: Set<number>,
+): VniMemberSummary[] {
   if (!topo?.nodes?.length) return [];
   const byVni = new Map<number, VniMemberSummary["devices"]>();
   for (const node of topo.nodes) {
@@ -63,9 +69,23 @@ export function buildVniMemberIndex(topo: OverlayTopo | null | undefined): VniMe
     .map(([vni, devices]) => ({
       vni,
       deviceCount: devices.length,
+      platformManaged: platformVnis?.has(vni) ?? false,
       devices: devices.sort((a, b) => a.name.localeCompare(b.name)),
     }))
     .sort((a, b) => a.vni - b.vni);
+}
+
+/** Collect platform-managed VNI numbers from overlay inventory scan. */
+export function platformVniSetFromInventory(
+  overlay?: { items?: Array<{ vni?: number | null; source?: string }> } | null,
+): Set<number> {
+  const out = new Set<number>();
+  for (const item of overlay?.items ?? []) {
+    if (item.source === "platform" && item.vni != null) {
+      out.add(item.vni);
+    }
+  }
+  return out;
 }
 
 function fmtG(mbps: number): string {
@@ -217,6 +237,7 @@ export function overlayTopologyOption(
   if (!topo?.nodes?.length) return null;
 
   const selectedVni = options?.selectedVni ?? null;
+  const highlightDeviceId = options?.highlightDeviceId ?? null;
 
   const visibleNodes =
     selectedVni != null
@@ -249,19 +270,28 @@ export function overlayTopologyOption(
     const angle = (2 * Math.PI * i) / Math.max(n, 1) - Math.PI / 2;
     const up = node.status === "up";
     const vniCount = node.vnis?.length ?? 0;
+    const isFocused = highlightDeviceId != null && node.id === highlightDeviceId;
+    const isMuted =
+      highlightDeviceId != null && node.id !== highlightDeviceId && selectedVni == null;
+    const nodeAccent = isFocused ? "#ff6600" : accent;
     return {
       id: String(node.id),
       name: node.name,
       x: cx + r * Math.cos(angle),
       y: cy + r * Math.sin(angle),
       symbol: "circle",
-      symbolSize: selectedVni != null ? 62 : 54,
+      symbolSize: isFocused ? 68 : selectedVni != null ? 62 : 54,
       itemStyle: {
-        color: up ? (selectedVni != null ? `${accent}22` : "#d1fae5") : "#f1f5f9",
-        borderColor: up ? accent : "#94a3b8",
-        borderWidth: selectedVni != null ? 3 : 2,
-        shadowBlur: 12,
-        shadowColor: up ? `${accent}55` : "rgba(148, 163, 184, 0.2)",
+        color: up
+          ? selectedVni != null || isFocused
+            ? `${nodeAccent}22`
+            : "#d1fae5"
+          : "#f1f5f9",
+        borderColor: up ? nodeAccent : "#94a3b8",
+        borderWidth: isFocused ? 4 : selectedVni != null ? 3 : 2,
+        opacity: isMuted ? 0.38 : 1,
+        shadowBlur: isFocused ? 18 : 12,
+        shadowColor: up ? `${nodeAccent}55` : "rgba(148, 163, 184, 0.2)",
       },
       label: {
         show: true,
