@@ -73,6 +73,9 @@ class PlatformSettingsBase(BaseModel):
     mfa_allow_email: bool = True
     expose_openapi: bool = True
     protect_live_config: bool = True
+    snapshot_before_change: bool = True
+    async_provisioning: bool = False
+    provision_max_concurrency: int = Field(default=4, ge=1, le=64)
 
     notes: str | None = None
 
@@ -130,6 +133,9 @@ class PlatformSettingsUpdate(BaseModel):
     mfa_allow_email: bool | None = None
     expose_openapi: bool | None = None
     protect_live_config: bool | None = None
+    snapshot_before_change: bool | None = None
+    async_provisioning: bool | None = None
+    provision_max_concurrency: int | None = Field(default=None, ge=1, le=64)
 
     notes: str | None = None
 

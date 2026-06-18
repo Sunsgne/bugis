@@ -445,6 +445,12 @@ def execute(db: Session, wo: WorkOrder, actor: str | None = None) -> WorkOrder:
     service_type: ServiceType = circuit.service_type
     _log(db, wo, f"Execution started: {operation} {service_type.value}", actor=actor)
 
+    # Pre-change snapshot: save each target device's live running-config before
+    # touching it, so the change always has a "before" version for rollback /
+    # diff / audit. Best-effort — never blocks the change.
+    if getattr(settings, "snapshot_before_change", True):
+        _snapshot_before_change(db, wo, circuit, operation, actor)
+
     failed = False
     # Registered undo actions for targets that were successfully programmed, so a
     # partial failure can roll back already-applied config on the OTHER devices.
@@ -543,6 +549,78 @@ def execute(db: Session, wo: WorkOrder, actor: str | None = None) -> WorkOrder:
         # Auto-snapshot affected devices into configuration management.
         _snapshot_devices(db, circuit, actor)
     return wo
+
+
+def _change_target_devices(db: Session, circuit: Circuit) -> dict[int, Device]:
+    """Unique devices a circuit apply/teardown will touch (endpoints + gateways).
+
+    Mirrors the push targets in ``execute`` closely enough for snapshotting:
+    endpoint devices (any delivery mode), DCI/border gateways at endpoint sites,
+    and Remote-IPT egress borders.
+    """
+    devices: dict[int, Device] = {}
+    for ep in circuit.endpoints:
+        if ep.device:
+            devices.setdefault(ep.device_id, ep.device)
+    try:
+        for gw in _dci_gateways(db, circuit):
+            devices.setdefault(gw.id, gw)
+    except Exception:  # noqa: BLE001
+        pass
+    if circuit.service_type == ServiceType.REMOTE_IPT and circuit.egress_site_id:
+        for gw in db.execute(
+            select(Device).where(
+                Device.site_id == circuit.egress_site_id,
+                Device.role.in_([DeviceRole.DCI_GW, DeviceRole.BORDER_LEAF]),
+            )
+        ).scalars().all():
+            devices.setdefault(gw.id, gw)
+    return devices
+
+
+def _snapshot_before_change(
+    db: Session, wo: WorkOrder, circuit: Circuit, operation: str, actor: str | None
+) -> int:
+    """Capture each target device's LIVE running-config before the change.
+
+    Gives every apply/teardown a "before" version (source="pre_change") for
+    diff / rollback / audit. Best-effort and isolated per device: a fetch
+    failure is logged as a warning and never blocks the change.
+    """
+    from app.services import config_fetch, config_mgmt
+
+    devices = _change_target_devices(db, circuit)
+    if not devices:
+        return 0
+    op_label = "拆除" if operation == "remove" else "开通"
+    captured = 0
+    for dev in devices.values():
+        try:
+            ok, content, err = config_fetch.fetch_running_config(dev, db=db)
+            if ok and (content or "").strip():
+                config_mgmt.add_snapshot(
+                    db, dev, content, source="pre_change",
+                    note=f"{op_label}前-{circuit.code}"[:64], created_by=actor,
+                )
+                captured += 1
+            else:
+                _log(
+                    db, wo,
+                    f"变更前快照跳过 {dev.name}：{err or '无法获取现网配置'}",
+                    level="warning", actor=actor,
+                )
+        except Exception as exc:  # noqa: BLE001
+            _log(
+                db, wo, f"变更前快照失败 {dev.name}：{exc}",
+                level="warning", actor=actor,
+            )
+    if captured:
+        _log(
+            db, wo,
+            f"已保存 {captured} 台设备的变更前现网配置快照（变更对比 / 应急还原）",
+            actor=actor,
+        )
+    return captured
 
 
 def _snapshot_devices(db: Session, circuit: Circuit, actor: str | None) -> None:

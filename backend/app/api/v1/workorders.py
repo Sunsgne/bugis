@@ -26,6 +26,7 @@ from app.schemas.workorder import (
     WorkOrderUpdate,
 )
 from app.models.enums import WorkOrderStatus
+from app import worker
 from app.services import ansible_export, orchestrator
 
 router = APIRouter()
@@ -236,6 +237,19 @@ def provision_circuit(
     )
     orchestrator.submit(db, wo, actor=user.username)
     orchestrator.approve(db, wo, user.username, approve_it=True)
+    if getattr(settings, "async_provisioning", False):
+        # Queue for the background worker and return immediately so the request
+        # thread is never held by the (synchronous) device push. The frontend
+        # polls GET /work-orders/{id} for live progress.
+        wo.status = WorkOrderStatus.SCHEDULED
+        orchestrator._log(
+            db, wo, "已加入开通队列，后台异步执行（可在工单详情查看进度）",
+            actor=user.username,
+        )
+        db.commit()
+        db.refresh(wo)
+        worker.enqueue(wo.id)
+        return _provision_result(db, wo, circuit)
     orchestrator.execute(db, wo, actor=user.username)
     db.commit()
     db.refresh(wo)

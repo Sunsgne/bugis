@@ -62,6 +62,18 @@ class Settings(BaseSettings):
     scheduler_enabled: bool = True
     scheduler_interval_seconds: int = 30
 
+    # --- Provisioning concurrency / snapshots ---
+    # Capture each target device's live running-config before a circuit
+    # apply/teardown (source="pre_change") for diff / rollback / audit.
+    snapshot_before_change: bool = True
+    # Run provision/teardown work orders on a background worker (queue) instead
+    # of inline in the request, so concurrent operators do not block.
+    async_provisioning: bool = False
+    # Max device pushes the background worker runs in parallel.
+    provision_max_concurrency: int = 4
+    # How often the worker reconciles orphaned queued work orders (seconds).
+    worker_poll_seconds: int = 5
+
     # --- Container / HA bootstrap (production multi-node) ---
     run_migrations: bool = True
     run_seed: bool = True

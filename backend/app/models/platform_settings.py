@@ -76,6 +76,20 @@ class PlatformSettings(Base, TimestampMixin):
     # when a target device has no learned baseline to compare against.
     protect_live_config: Mapped[bool] = mapped_column(Boolean, default=True)
 
+    # Auto-snapshot a device's LIVE running-config right before any circuit
+    # apply/teardown is pushed, so every change has a "before" version for
+    # diff / rollback / audit (source="pre_change"). Best-effort: a fetch
+    # failure never blocks the change.
+    snapshot_before_change: Mapped[bool] = mapped_column(Boolean, default=True)
+
+    # Asynchronous provisioning: when enabled, one-shot provision/teardown
+    # requests are queued (status=scheduled) and executed by a background
+    # worker instead of running inline in the HTTP request, so a burst of
+    # concurrent operators never exhausts the request thread pool. The worker
+    # runs up to ``provision_max_concurrency`` device pushes in parallel.
+    async_provisioning: Mapped[bool] = mapped_column(Boolean, default=False)
+    provision_max_concurrency: Mapped[int] = mapped_column(Integer, default=4)
+
     notes: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
     product_name: Mapped[str] = mapped_column(String(128), default="Bugis Network")

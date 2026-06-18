@@ -65,10 +65,12 @@ async def lifespan(app: FastAPI):
         ensure_platform_settings(db)
     finally:
         db.close()
-    from app import scheduler
+    from app import scheduler, worker
 
     scheduler.start()
+    worker.start()
     yield
+    await worker.stop()
     await scheduler.stop()
 
 
