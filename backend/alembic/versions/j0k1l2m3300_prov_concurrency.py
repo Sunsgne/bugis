@@ -10,7 +10,7 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision = "j0k1l2m3300_provisioning_concurrency"
+revision = "j0k1l2m3300_prov_concurrency"
 down_revision = "i9j0k1l2200_protect_live_config"
 branch_labels = None
 depends_on = None
