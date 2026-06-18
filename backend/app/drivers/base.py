@@ -362,6 +362,7 @@ class BaseDriver:
         device = southbound_device(device)
         primary = effective_transport(device)
         tried: list[str] = []
+        errors: list[str] = []
         last_exc: Exception | None = None
         for candidate in self._fetch_transport_order(primary, allow_transport_fallback):
             if candidate in tried:
@@ -372,9 +373,10 @@ class BaseDriver:
                     return self._push_netconf(device, config)
                 return self._push_cli(device, config)
             except Exception as exc:
+                errors.append(f"{candidate}: {exc}")
                 last_exc = exc
         if last_exc is not None:
-            raise last_exc
+            raise RuntimeError("; ".join(errors)) from last_exc
         raise RuntimeError("no transport available for config push")
 
     def _push_netconf(self, device: Any, config: str) -> str:  # pragma: no cover
@@ -521,7 +523,12 @@ class BaseDriver:
                     out += conn.send_command_timing("Y", read_timeout=read_timeout)
                 outputs.append(out or "")
         finally:
-            conn.exit_config_mode()
+            # VRP8/CE is two-stage: _commit_if_needed() re-enters system-view,
+            # commits, then returns to user view. Exiting config mode here — before
+            # commit — makes VRP8 prompt for uncommitted changes or discard the
+            # candidate, which breaks Huawei teardown in production.
+            if self.vendor != Vendor.HUAWEI:
+                conn.exit_config_mode()
         return "".join(outputs)
 
     def _commit_if_needed(self, conn: Any) -> str:  # pragma: no cover
