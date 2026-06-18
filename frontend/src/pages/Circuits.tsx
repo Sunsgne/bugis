@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Button,
@@ -127,6 +127,7 @@ export default function Circuits() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const tenantFilter = searchParams.get("tenant");
+  const circuitDeepLink = searchParams.get("circuit");
   const selectedTenantId = tenantFilter ? Number(tenantFilter) : null;
 
   const [rows, setRows] = useState<Circuit[]>([]);
@@ -159,6 +160,8 @@ export default function Circuits() {
   const [provisionType, setProvisionType] = useState<string>("provision");
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [decommissionTarget, setDecommissionTarget] = useState<Circuit | null>(null);
+  const [expandedRowKeys, setExpandedRowKeys] = useState<React.Key[]>([]);
+  const handledCircuitLink = useRef<number | null>(null);
 
   async function loadCircuits(p = page, ps = pageSize, q = search) {
     setLoading(true);
@@ -230,14 +233,76 @@ export default function Circuits() {
     setDetailCache((prev) => ({ ...prev, [id]: data }));
     return data;
   }
+
+  useEffect(() => {
+    const id = Number(circuitDeepLink);
+    if (!circuitDeepLink || !id || Number.isNaN(id)) {
+      handledCircuitLink.current = null;
+      return;
+    }
+    if (handledCircuitLink.current === id) return;
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const { data: circuit } = await api.get<Circuit>(`/circuits/${id}`);
+        if (cancelled) return;
+
+        const tenantParam = searchParams.get("tenant");
+        if (tenantParam && Number(tenantParam) !== circuit.tenant_id) {
+          setSearchParams({ circuit: String(id) });
+          handledCircuitLink.current = null;
+          return;
+        }
+
+        if (!rows.some((r) => r.id === id)) {
+          const { data: pageData } = await api.get<Paginated<Circuit>>(
+            `/circuits${buildListQuery({
+              tenant_id: selectedTenantId ?? undefined,
+              page: 1,
+              page_size: pageSize,
+              q: circuit.code,
+            })}`,
+          );
+          if (cancelled) return;
+          setRows(pageData.items);
+          setTotal(pageData.total);
+          setPage(1);
+          setSearch(circuit.code);
+        }
+
+        await loadCircuitDetail(id);
+        if (cancelled) return;
+        setExpandedRowKeys([id]);
+        handledCircuitLink.current = id;
+
+        window.setTimeout(() => {
+          document
+            .querySelector(`tr[data-row-key="${id}"]`)
+            ?.scrollIntoView({ behavior: "smooth", block: "center" });
+        }, 150);
+      } catch {
+        if (!cancelled) {
+          message.warning("无法打开该专线，可能不存在或无权查看");
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [circuitDeepLink, selectedTenantId, pageSize, searchParams, setSearchParams, message]);
+
   useEffect(() => {
     setPage(1);
     setDetailCache({});
   }, [selectedTenantId]);
 
   useEffect(() => {
+    if (circuitDeepLink) return;
     loadCircuits(page, pageSize, search);
-  }, [selectedTenantId, page, pageSize]);
+  }, [selectedTenantId, page, pageSize, circuitDeepLink]);
 
   useEffect(() => {
     loadMeta();
@@ -868,6 +933,8 @@ export default function Circuits() {
           setPageSize(ps);
         })}
         expandable={{
+          expandedRowKeys,
+          onExpandedRowsChange: (keys) => setExpandedRowKeys([...keys]),
           onExpand: (expanded, r) => {
             if (expanded) loadCircuitDetail(r.id);
           },
