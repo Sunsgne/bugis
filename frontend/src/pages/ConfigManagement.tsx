@@ -35,6 +35,19 @@ type ConfigDeviceRow = {
   service_count?: number;
 };
 
+type AccessBindingRow = {
+  interface: string;
+  access_mode?: string;
+  s_vid?: number | null;
+  c_vid?: number | null;
+  service_instance?: number;
+  vsi_name?: string;
+  bridge_domain?: string;
+  vni?: number;
+  rd?: string;
+  rt?: string;
+};
+
 function ColoredDiff({ text }: { text: string }) {
   return (
     <pre className="config-pre config-pre-fill">
@@ -319,11 +332,13 @@ export default function ConfigManagement() {
                     {learned.inventory?.access_bindings?.length > 0 && (
                       <Table
                         size="small"
-                        rowKey={(row) => `${row.interface}-${row.s_vid ?? "na"}-${row.service_instance ?? row.bridge_domain ?? ""}`}
+                        rowKey={(row: AccessBindingRow) =>
+                          `${row.interface}-${row.s_vid ?? "na"}-${row.service_instance ?? row.bridge_domain ?? ""}`
+                        }
                         pagination={false}
                         className="config-binding-table"
                         style={{ marginBottom: 12 }}
-                        dataSource={learned.inventory.access_bindings}
+                        dataSource={learned.inventory.access_bindings as AccessBindingRow[]}
                         tableLayout="fixed"
                         scroll={{ x: 960 }}
                         columns={[
@@ -345,7 +360,7 @@ export default function ConfigManagement() {
                             title: "SI / BD",
                             width: 120,
                             ellipsis: true,
-                            render: (_: unknown, row: { service_instance?: number; bridge_domain?: string; vsi_name?: string }) =>
+                            render: (_: unknown, row: AccessBindingRow) =>
                               row.service_instance != null
                                 ? `SI ${row.service_instance}`
                                 : row.bridge_domain
