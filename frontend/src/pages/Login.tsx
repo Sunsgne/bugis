@@ -253,7 +253,7 @@ export default function Login() {
             <CardContent>
               {mfaToken ? (
                 <form onSubmit={onMfaSubmit} className="space-y-5">
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     <Label htmlFor="mfa-code" className="text-slate-300">
                       验证码
                     </Label>
@@ -297,7 +297,7 @@ export default function Login() {
                 </form>
               ) : (
                 <form onSubmit={onSubmit} className="space-y-5">
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     <Label htmlFor="username" className="text-slate-300">
                       用户名
                     </Label>
@@ -314,7 +314,7 @@ export default function Login() {
                       />
                     </div>
                   </div>
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     <Label htmlFor="password" className="text-slate-300">
                       密码
                     </Label>
