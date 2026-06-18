@@ -1130,6 +1130,29 @@ body {
   width: 100%;
 }
 
+.capacity-section-card > .ant-card-body {
+  background: hsl(28 45% 98%);
+  border-radius: 0 0 var(--radius, 0.625rem) var(--radius, 0.625rem);
+}
+
+.capacity-section-card .capacity-data-table .ant-table,
+.capacity-section-card .capacity-data-table .ant-table-container,
+.capacity-section-card .capacity-data-table .ant-table-content > table {
+  background: transparent !important;
+}
+
+.capacity-section-card .capacity-data-table .ant-table-thead > tr > th {
+  background: hsl(28 50% 96%) !important;
+}
+
+.capacity-section-card .capacity-data-table .ant-table-tbody > tr > td {
+  background: hsl(28 45% 98%) !important;
+}
+
+.capacity-section-card .capacity-data-table .ant-table-tbody > tr:hover > td {
+  background: hsl(28 55% 96%) !important;
+}
+
 .capacity-kpi-card > .ant-card-body {
   padding: 16px 20px;
 }

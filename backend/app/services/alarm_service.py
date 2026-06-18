@@ -188,10 +188,14 @@ def evaluate_circuit_availability(db: Session, circuit: Circuit) -> None:
 
 def evaluate_link_health(db: Session, link: Link, health) -> None:
     """Raise/clear backbone link utilization alarms from interface telemetry."""
+    from app.services import link_alarm_settings, platform_settings as platform_cfg
+
     key_util = f"link:{link.id}:utilization"
     if health.samples == 0:
         return
-    if health.peak_utilization_pct > settings.threshold_link_utilization_pct:
+    plat = platform_cfg.get_or_create(db)
+    threshold = link_alarm_settings.effective_utilization_threshold(link, plat)
+    if health.peak_utilization_pct > threshold:
         raise_alarm(
             db,
             "link_utilization",
@@ -199,7 +203,7 @@ def evaluate_link_health(db: Session, link: Link, health) -> None:
             f"骨干链路 {link.name} 利用率 {health.peak_utilization_pct}%",
             key_util,
             detail=(
-                f"阈值 {settings.threshold_link_utilization_pct}% · "
+                f"阈值 {threshold}% · "
                 f"容量 {health.capacity_mbps} Mbps · "
                 f"峰值流量 {health.traffic_mbps} Mbps"
             ),

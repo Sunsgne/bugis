@@ -18,15 +18,24 @@ from app.schemas.link import (
     LinkPlanOut,
     LinkUpdate,
 )
-from app.services import capacity_service, link_planner
+from app.services import capacity_service, link_alarm_settings, link_planner, platform_settings
 
 router = APIRouter()
+
+_ENDPOINT_FIELDS = frozenset({"device_a_id", "device_z_id", "interface_a", "interface_z"})
+
+
+def _to_link_out(db: Session, link: Link) -> LinkOut:
+    plat = platform_settings.get_or_create(db)
+    base = LinkOut.model_validate(link)
+    return base.model_copy(update=link_alarm_settings.thresholds_out(link, plat))
 
 
 # --- links -----------------------------------------------------------------
 @router.get("/links", response_model=list[LinkOut])
 def list_links(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
-    return db.execute(select(Link).order_by(Link.id)).scalars().all()
+    links = db.execute(select(Link).order_by(Link.id)).scalars().all()
+    return [_to_link_out(db, link) for link in links]
 
 
 @router.post("/links", response_model=LinkOut, status_code=201)
@@ -46,7 +55,7 @@ def create_link(
     db.add(link)
     db.commit()
     db.refresh(link)
-    return link
+    return _to_link_out(db, link)
 
 
 @router.post("/links/bulk", response_model=list[LinkOut], status_code=201)
@@ -70,7 +79,7 @@ def create_links_bulk(
     db.commit()
     for link in created:
         db.refresh(link)
-    return created
+    return [_to_link_out(db, link) for link in created]
 
 
 @router.get("/links/suggestions", response_model=list[LinkPlanOut])
@@ -135,11 +144,37 @@ def update_link(
     link = db.get(Link, link_id)
     if not link:
         raise HTTPException(status_code=404, detail="link not found")
-    for k, v in payload.model_dump(exclude_unset=True).items():
-        setattr(link, k, v)
+
+    data = payload.model_dump(exclude_unset=True)
+    if _ENDPOINT_FIELDS & data.keys():
+        merged = {
+            "device_a_id": data.get("device_a_id", link.device_a_id),
+            "device_z_id": data.get("device_z_id", link.device_z_id),
+            "interface_a": data.get("interface_a", link.interface_a),
+            "interface_z": data.get("interface_z", link.interface_z),
+            "name": data.get("name", link.name),
+            "type": data.get("type", link.type),
+            "capacity_mbps": data.get("capacity_mbps", link.capacity_mbps),
+        }
+        for did in (merged["device_a_id"], merged["device_z_id"]):
+            if not db.get(Device, did):
+                raise HTTPException(status_code=404, detail=f"device {did} not found")
+        try:
+            resolved = link_planner.resolve_link_payload(db, merged)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        for key in ("name", "type", "device_a_id", "device_z_id", "interface_a", "interface_z", "capacity_mbps"):
+            setattr(link, key, resolved[key])
+        for k, v in data.items():
+            if k not in resolved:
+                setattr(link, k, v)
+    else:
+        for k, v in data.items():
+            setattr(link, k, v)
+
     db.commit()
     db.refresh(link)
-    return link
+    return _to_link_out(db, link)
 
 
 @router.delete("/links/{link_id}", status_code=204)

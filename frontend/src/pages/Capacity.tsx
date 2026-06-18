@@ -14,7 +14,7 @@ import {
   Tooltip,
   Typography,
 } from "antd";
-import { DeleteOutlined, PlusOutlined, SearchOutlined, SyncOutlined } from "@ant-design/icons";
+import { DeleteOutlined, EditOutlined, PlusOutlined, SearchOutlined, SyncOutlined } from "@ant-design/icons";
 import { api } from "../api/client";
 import type { Device, LinkUsage, SiteCapacity } from "../api/types";
 import BackboneLinkModal from "../components/BackboneLinkModal";
@@ -52,6 +52,7 @@ export default function Capacity() {
   const [devices, setDevices] = useState<Device[]>([]);
   const [devicesLoaded, setDevicesLoaded] = useState(false);
   const [linkModalOpen, setLinkModalOpen] = useState(false);
+  const [editingLink, setEditingLink] = useState<LinkUsage | null>(null);
 
   async function load(showSpinner = false) {
     if (showSpinner) setLoading(true);
@@ -69,7 +70,8 @@ export default function Capacity() {
     }
   }
 
-  async function openLinkModal() {
+  async function openLinkModal(link?: LinkUsage) {
+    setEditingLink(link ?? null);
     setLinkModalOpen(true);
     if (!devicesLoaded) {
       try {
@@ -80,6 +82,11 @@ export default function Capacity() {
         message.error("设备列表加载失败");
       }
     }
+  }
+
+  function closeLinkModal() {
+    setLinkModalOpen(false);
+    setEditingLink(null);
   }
 
   async function syncBandwidth() {
@@ -177,6 +184,7 @@ export default function Capacity() {
       >
         <Table<SiteCapacity>
           size="small"
+          className="data-table capacity-data-table"
           rowKey="site_id"
           loading={loading}
           dataSource={filteredSites}
@@ -245,7 +253,7 @@ export default function Capacity() {
               onChange={(e) => setLinkSearch(e.target.value)}
               style={{ width: 220 }}
             />
-            <Button type="primary" icon={<PlusOutlined />} onClick={openLinkModal}>
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => openLinkModal()}>
               配置骨干链路
             </Button>
             <Tooltip title="从端口描述 bw(100Mbps) 同步链路合同带宽">
@@ -260,10 +268,11 @@ export default function Capacity() {
           type="info"
           showIcon
           className="capacity-link-hint"
-          message="选用 Vlan-interface / Vlanif 子接口；端口描述标注 bw(100Mbps) 可自动写入合同带宽，利用率超 85% 触发告警"
+          message="选用 Vlan-interface / Vlanif 子接口；端口描述标注 bw(100Mbps) 可自动写入合同带宽；利用率超链路或平台阈值触发告警"
         />
         <Table<LinkUsage>
           size="small"
+          className="data-table capacity-data-table capacity-link-table"
           rowKey="link_id"
           loading={loading}
           dataSource={filteredLinks}
@@ -340,7 +349,9 @@ export default function Capacity() {
               defaultSortOrder: "descend",
               sorter: (a, b) => a.utilization_pct - b.utilization_pct,
               render: (v: number, r) => (
-                <Tooltip title={`流量 ${fmtBw(r.traffic_mbps)} · 峰值 ${r.peak_utilization_pct ?? v}%`}>
+                <Tooltip
+                  title={`流量 ${fmtBw(r.traffic_mbps)} · 峰值 ${r.peak_utilization_pct ?? v}% · 告警阈值 ${r.effective_alarm_utilization_pct ?? "—"}%`}
+                >
                   <Progress percent={Math.round(v)} size="small" strokeColor={utilColor(v)} />
                 </Tooltip>
               ),
@@ -348,12 +359,23 @@ export default function Capacity() {
             {
               title: "操作",
               key: "op",
-              width: 80,
+              width: 96,
               fixed: "right",
+              className: "table-actions-col",
               render: (_: unknown, r) => (
-                <Popconfirm title="删除该骨干链路？" onConfirm={() => deleteLink(r.link_id)} okText="删除" cancelText="取消">
-                  <Button type="text" danger size="small" icon={<DeleteOutlined />} />
-                </Popconfirm>
+                <Space size={0}>
+                  <Tooltip title="编辑端点与告警阈值">
+                    <Button
+                      type="text"
+                      size="small"
+                      icon={<EditOutlined />}
+                      onClick={() => openLinkModal(r)}
+                    />
+                  </Tooltip>
+                  <Popconfirm title="删除该骨干链路？" onConfirm={() => deleteLink(r.link_id)} okText="删除" cancelText="取消">
+                    <Button type="text" danger size="small" icon={<DeleteOutlined />} />
+                  </Popconfirm>
+                </Space>
               ),
             },
           ]}
@@ -363,8 +385,9 @@ export default function Capacity() {
       <BackboneLinkModal
         open={linkModalOpen}
         devices={devices}
-        onClose={() => setLinkModalOpen(false)}
-        onCreated={load}
+        editLink={editingLink}
+        onClose={closeLinkModal}
+        onSaved={load}
       />
     </div>
   );

@@ -65,18 +65,22 @@ def site_capacity(db: Session) -> list[dict]:
 
 
 def link_capacity(db: Session) -> list[dict]:
-    from app.services import link_monitor, link_planner
+    from app.services import link_alarm_settings, link_monitor, link_planner, platform_settings
 
+    plat = platform_settings.get_or_create(db)
     links = db.execute(select(Link)).scalars().all()
     result = []
     for l in links:
         da = db.get(Device, l.device_a_id)
         dz = db.get(Device, l.device_z_id)
         health = link_monitor.compute_link_health(db, l)
+        alarm = link_alarm_settings.thresholds_out(l, plat)
         result.append({
             "link_id": l.id,
             "name": l.name,
             "type": l.type.value,
+            "device_a_id": l.device_a_id,
+            "device_z_id": l.device_z_id,
             "device_a": da.name if da else l.device_a_id,
             "device_z": dz.name if dz else l.device_z_id,
             "interface_a": l.interface_a,
@@ -89,6 +93,8 @@ def link_capacity(db: Session) -> list[dict]:
             ),
             "capacity_mbps": l.capacity_mbps,
             "reserved_mbps": l.reserved_mbps,
+            "alarm_utilization_pct": l.alarm_utilization_pct,
+            **alarm,
             "traffic_mbps": health.traffic_mbps,
             "peak_utilization_pct": health.peak_utilization_pct,
             "avg_utilization_pct": health.avg_utilization_pct,

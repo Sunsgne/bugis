@@ -1,7 +1,7 @@
 """Links between devices, used for capacity / topology."""
 from __future__ import annotations
 
-from sqlalchemy import ForeignKey, Integer, String
+from sqlalchemy import Float, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -27,3 +27,4 @@ class Link(Base, TimestampMixin):
     # Bandwidth administratively reserved for circuits riding this link.
     reserved_mbps: Mapped[int] = mapped_column(Integer, default=0)
     description: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    alarm_utilization_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
