@@ -4,6 +4,7 @@ import { Input, Select, Space, Table, Tag, Typography } from "antd";
 import { SearchOutlined } from "@ant-design/icons";
 import { api } from "../api/client";
 import PageCard from "../components/PageCard";
+import { useTc } from "@/i18n/useTc";
 
 const STATUS: Record<string, { label: string; color: string }> = {
   active: { label: "运行中", color: "green" },
@@ -37,6 +38,7 @@ interface Row {
 }
 
 export default function PortalCircuits() {
+  const { tc } = useTc();
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
@@ -60,11 +62,11 @@ export default function PortalCircuits() {
   }, [status]);
 
   return (
-    <PageCard title="我的专线" description="仅展示贵司租户下的专线资源">
+    <PageCard title={tc('我的专线')} description={tc('仅展示贵司租户下的专线资源')}>
       <Space wrap style={{ marginBottom: 16 }}>
         <Input.Search
           allowClear
-          placeholder="搜索编码 / 名称"
+          placeholder={tc('搜索编码 / 名称')}
           prefix={<SearchOutlined />}
           style={{ width: 260 }}
           onSearch={load}
@@ -72,7 +74,7 @@ export default function PortalCircuits() {
         />
         <Select
           allowClear
-          placeholder="状态筛选"
+          placeholder={tc('状态筛选')}
           style={{ width: 140 }}
           value={status}
           onChange={setStatus}
@@ -88,7 +90,7 @@ export default function PortalCircuits() {
         pagination={{ pageSize: 20, showTotal: (t) => `共 ${t} 条` }}
         columns={[
           {
-            title: "编码",
+            title: tc('编码'),
             dataIndex: "code",
             width: 120,
             render: (code: string, row) => (
@@ -99,13 +101,13 @@ export default function PortalCircuits() {
           },
           { title: "名称", dataIndex: "name", ellipsis: true },
           {
-            title: "业务类型",
+            title: tc('业务类型'),
             dataIndex: "service_type",
             width: 120,
             render: (t: string) => SERVICE[t] || t,
           },
           {
-            title: "签约带宽",
+            title: tc('签约带宽'),
             dataIndex: "bandwidth_mbps",
             width: 110,
             render: (v: number) => <Tag color="blue">{v} Mbps</Tag>,
@@ -118,12 +120,12 @@ export default function PortalCircuits() {
             render: (v?: string) => v || "—",
           },
           {
-            title: "端点",
+            title: tc('端点'),
             dataIndex: "endpoint_count",
             width: 64,
           },
           {
-            title: "状态",
+            title: tc('状态'),
             dataIndex: "status",
             width: 96,
             render: (st: string) => {
@@ -132,12 +134,12 @@ export default function PortalCircuits() {
             },
           },
           {
-            title: "操作",
+            title: tc('操作'),
             width: 120,
             render: (_: unknown, row) => (
               <Space>
-                <Link to={`/portal/circuits/${row.id}`}>详情</Link>
-                <Link to={`/portal/traffic?circuit=${row.id}`}>流量</Link>
+                <Link to={`/portal/circuits/${row.id}`}>{tc('详情')}</Link>
+                <Link to={`/portal/traffic?circuit=${row.id}`}>{tc('流量')}</Link>
               </Space>
             ),
           },

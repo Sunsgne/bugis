@@ -2,6 +2,7 @@ import { useState } from "react";
 import { App as AntApp, Form, Input, Modal } from "antd";
 import { api } from "../api/client";
 import { formModalProps } from "../utils/formModal";
+import { useTc } from "@/i18n/useTc";
 
 type Props = {
   open: boolean;
@@ -9,6 +10,7 @@ type Props = {
 };
 
 export default function ChangePasswordDialog({ open, onClose }: Props) {
+  const { tc } = useTc();
   const { message } = AntApp.useApp();
   const [form] = Form.useForm();
   const [saving, setSaving] = useState(false);
@@ -21,7 +23,7 @@ export default function ChangePasswordDialog({ open, onClose }: Props) {
         current_password: values.current_password,
         new_password: values.new_password,
       });
-      message.success("密码已更新");
+      message.success(tc('密码已更新'));
       form.resetFields();
       onClose();
     } catch (e: any) {
@@ -33,7 +35,7 @@ export default function ChangePasswordDialog({ open, onClose }: Props) {
 
   return (
     <Modal
-      title="修改密码"
+      title={tc('修改密码')}
       open={open}
       onOk={onOk}
       onCancel={() => {
@@ -41,22 +43,22 @@ export default function ChangePasswordDialog({ open, onClose }: Props) {
         onClose();
       }}
       confirmLoading={saving}
-      okText="保存"
-      cancelText="取消"
+      okText={tc('保存')}
+      cancelText={tc('取消')}
       destroyOnClose
       {...formModalProps}
     >
       <Form form={form} layout="vertical" className="app-form">
         <Form.Item
           name="current_password"
-          label="当前密码"
+          label={tc('当前密码')}
           rules={[{ required: true, message: "请输入当前密码" }]}
         >
           <Input.Password autoComplete="current-password" />
         </Form.Item>
         <Form.Item
           name="new_password"
-          label="新密码"
+          label={tc('新密码')}
           rules={[
             { required: true, message: "请输入新密码" },
             { min: 8, message: "至少 8 位" },
@@ -66,7 +68,7 @@ export default function ChangePasswordDialog({ open, onClose }: Props) {
         </Form.Item>
         <Form.Item
           name="confirm_password"
-          label="确认新密码"
+          label={tc('确认新密码')}
           dependencies={["new_password"]}
           rules={[
             { required: true, message: "请再次输入新密码" },

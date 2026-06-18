@@ -7,6 +7,7 @@ import type { AuditEntry } from "../api/types";
 import PageCard from "../components/PageCard";
 import { dataTableProps } from "../utils/table";
 import { empty, page } from "../constants/uiCopy";
+import { useTc } from "@/i18n/useTc";
 
 const METHOD_COLOR: Record<string, string> = {
   POST: "green",
@@ -16,6 +17,7 @@ const METHOD_COLOR: Record<string, string> = {
 };
 
 export default function Audit({ embedded }: { embedded?: boolean }) {
+  const { tc } = useTc();
   const [rows, setRows] = useState<AuditEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [actor, setActor] = useState("");
@@ -38,7 +40,7 @@ export default function Audit({ embedded }: { embedded?: boolean }) {
 
   const search = (
     <Input.Search
-      placeholder="按操作人筛选"
+      placeholder={tc('按操作人筛选')}
       allowClear
       style={{ width: 220 }}
       onSearch={setActor}
@@ -55,21 +57,21 @@ export default function Audit({ embedded }: { embedded?: boolean }) {
       locale={{ emptyText: empty.default }}
       columns={[
         {
-          title: "时间",
+          title: tc('时间'),
           dataIndex: "created_at",
           width: "14%",
           render: (t) => (t ? dayjs(t).format("MM-DD HH:mm:ss") : "—"),
         },
         { title: "操作人", dataIndex: "actor", width: "12%", render: (a) => <Tag>{a}</Tag> },
         {
-          title: "方法",
+          title: tc('方法'),
           dataIndex: "method",
           width: "8%",
           render: (m) => <Tag color={METHOD_COLOR[m]}>{m}</Tag>,
         },
         { title: "路径", dataIndex: "path", width: "32%", ellipsis: true },
         {
-          title: "状态码",
+          title: tc('状态码'),
           dataIndex: "status_code",
           width: "8%",
           render: (c) => (

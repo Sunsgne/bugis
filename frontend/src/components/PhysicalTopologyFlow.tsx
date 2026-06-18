@@ -13,6 +13,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { labelForOption, DEVICE_ROLE_OPTIONS } from "@/constants/formOptions";
 import { vendorColors } from "@/charts/theme";
 import type { Topology } from "@/api/types";
+import { useTc } from "@/i18n/useTc";
 
 const NO_SITE = -1;
 const LANE_GUTTER = 12;
@@ -189,6 +190,7 @@ type Props = {
 };
 
 export default function PhysicalTopologyFlow({ topo, className }: Props) {
+  const { tc } = useTc();
   const hostRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 960, h: 560 });
 
@@ -238,9 +240,7 @@ export default function PhysicalTopologyFlow({ topo, className }: Props) {
       </ReactFlow>
 
       {topo.edges.length === 0 && (
-        <div className="physical-topology-hint">
-          暂无 DCI / Fabric 链路 · 设备按站点分列展示 · 在容量规划中添加链路后可显示互联关系
-        </div>
+        <div className="physical-topology-hint">{tc('暂无 DCI / Fabric 链路 · 设备按站点分列展示 · 在容量规划中添加链路后可显示互联关系')}</div>
       )}
 
       <div className="physical-topology-legend">

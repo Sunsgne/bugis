@@ -22,6 +22,7 @@ import { action, page, toast } from "../constants/uiCopy";
 import PageCard from "../components/PageCard";
 import { dataTableProps } from "../utils/table";
 import { formModalProps } from "../utils/formModal";
+import { useTc } from "@/i18n/useTc";
 
 interface UserRow {
   id: number;
@@ -40,6 +41,7 @@ const ROLE_COLOR: Record<string, string> = {
 };
 
 export default function Users({ embedded }: { embedded?: boolean }) {
+  const { tc } = useTc();
   const { user } = useAuth();
   const { message } = AntApp.useApp();
   const [rows, setRows] = useState<UserRow[]>([]);
@@ -138,9 +140,7 @@ export default function Users({ embedded }: { embedded?: boolean }) {
   }
 
   const addBtn = (
-    <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>
-      新建用户
-    </Button>
+    <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>{tc('新建用户')}</Button>
   );
 
   const body = (
@@ -155,25 +155,25 @@ export default function Users({ embedded }: { embedded?: boolean }) {
           { title: "姓名", dataIndex: "full_name", width: "14%", ellipsis: true, render: (v) => v || "—" },
           { title: "邮箱", dataIndex: "email", width: "22%", ellipsis: true, render: (v) => v || "—" },
           {
-            title: "角色",
+            title: tc('角色'),
             dataIndex: "role",
             width: "10%",
             render: (r) => <Tag color={ROLE_COLOR[r]}>{r}</Tag>,
           },
           {
-            title: "状态",
+            title: tc('状态'),
             dataIndex: "is_active",
             width: "10%",
             render: (a) => <Tag color={a ? "green" : "default"}>{a ? "启用" : "禁用"}</Tag>,
           },
           {
-            title: "创建时间",
+            title: tc('创建时间'),
             dataIndex: "created_at",
             width: "16%",
             render: (t) => (t ? dayjs(t).format("YYYY-MM-DD HH:mm") : "—"),
           },
           {
-            title: "操作",
+            title: tc('操作'),
             key: "actions",
             width: "14%",
             render: (_: unknown, row: UserRow) => (
@@ -187,7 +187,7 @@ export default function Users({ embedded }: { embedded?: boolean }) {
                   {action.edit}
                 </Button>
                 <Popconfirm
-                  title="删除用户"
+                  title={tc('删除用户')}
                   description={`确认删除用户 ${row.username}？此操作不可恢复。`}
                   okText={action.confirm}
                   cancelText={action.cancel}
@@ -211,7 +211,7 @@ export default function Users({ embedded }: { embedded?: boolean }) {
         ]}
       />
       <Modal
-        title="编辑用户"
+        title={tc('编辑用户')}
         open={!!editing}
         onOk={onEdit}
         onCancel={() => {
@@ -222,16 +222,16 @@ export default function Users({ embedded }: { embedded?: boolean }) {
         {...formModalProps}
       >
         <Form form={editForm} layout="vertical" className="app-form">
-          <Form.Item label="用户名">
+          <Form.Item label={tc('用户名')}>
             <Input value={editing?.username} disabled />
           </Form.Item>
-          <Form.Item name="full_name" label="姓名">
+          <Form.Item name="full_name" label={tc('姓名')}>
             <Input />
           </Form.Item>
-          <Form.Item name="email" label="邮箱">
+          <Form.Item name="email" label={tc('邮箱')}>
             <Input />
           </Form.Item>
-          <Form.Item name="role" label="角色">
+          <Form.Item name="role" label={tc('角色')}>
             <Select
               options={[
                 { value: "admin", label: "Admin 管理员" },
@@ -240,21 +240,21 @@ export default function Users({ embedded }: { embedded?: boolean }) {
               ]}
             />
           </Form.Item>
-          <Form.Item name="is_active" label="状态" valuePropName="checked">
+          <Form.Item name="is_active" label={tc('状态')} valuePropName="checked">
             <Switch checkedChildren="启用" unCheckedChildren="禁用" />
           </Form.Item>
           <Form.Item
             name="password"
-            label="重置密码"
+            label={tc('重置密码')}
             extra="留空则不修改；如需重置请输入至少 8 位新密码"
             rules={[{ min: 8, message: "新密码至少 8 位" }]}
           >
-            <Input.Password autoComplete="new-password" placeholder="留空不修改" />
+            <Input.Password autoComplete="new-password" placeholder={tc('留空不修改')} />
           </Form.Item>
         </Form>
       </Modal>
       <Modal
-        title="新建用户"
+        title={tc('新建用户')}
         open={open}
         onOk={onCreate}
         onCancel={() => setOpen(false)}
@@ -262,19 +262,19 @@ export default function Users({ embedded }: { embedded?: boolean }) {
         {...formModalProps}
       >
         <Form form={form} layout="vertical" className="app-form" initialValues={{ role: "operator" }}>
-          <Form.Item name="username" label="用户名" rules={[{ required: true }]}>
+          <Form.Item name="username" label={tc('用户名')} rules={[{ required: true }]}>
             <Input />
           </Form.Item>
-          <Form.Item name="password" label="密码" rules={[{ required: true }]}>
+          <Form.Item name="password" label={tc('密码')} rules={[{ required: true }]}>
             <Input.Password />
           </Form.Item>
-          <Form.Item name="full_name" label="姓名">
+          <Form.Item name="full_name" label={tc('姓名')}>
             <Input />
           </Form.Item>
-          <Form.Item name="email" label="邮箱">
+          <Form.Item name="email" label={tc('邮箱')}>
             <Input />
           </Form.Item>
-          <Form.Item name="role" label="角色">
+          <Form.Item name="role" label={tc('角色')}>
             <Select
               options={[
                 { value: "admin", label: "Admin 管理员" },

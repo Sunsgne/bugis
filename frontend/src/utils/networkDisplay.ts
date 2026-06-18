@@ -1,6 +1,12 @@
-/** Compact Chinese-friendly labels for network interface names and port metadata. */
+/** Compact interface labels and port metadata — locale-aware via i18n. */
+import i18n from "../i18n";
+import { tcStatic } from "../i18n/useTc";
 
 const PORT_SUFFIX = /(\d+(?:\/\d+)+)\s*$/;
+
+function tc(zh: string): string {
+  return tcStatic(zh, i18n.language);
+}
 
 const PREFIX_SPEED: Array<[RegExp, string]> = [
   [/^Twenty-FiveGigE/i, "25G"],
@@ -14,7 +20,7 @@ const PREFIX_SPEED: Array<[RegExp, string]> = [
   [/^100GE/i, "100G"],
   [/^10GE/i, "10G"],
   [/^40GE/i, "40G"],
-  [/^GigabitEthernet/i, "千兆"],
+  [/^GigabitEthernet/i, "gigabit"],
   [/^GE/i, "GE"],
   [/^xe-/i, "10G"],
   [/^et-/i, "100G"],
@@ -26,7 +32,6 @@ export function interfacePortSuffix(name: string): string | null {
   return match ? match[1] : null;
 }
 
-/** Huawei L2 sub-interface e.g. 10GE1/0/2.1050 → parent 10GE1/0/2, vlan 1050 */
 export function parseHuaweiSubinterface(name: string): { parent: string; vlan: number } | null {
   const trimmed = name.trim();
   const match = trimmed.match(/^(.+)\.(\d+)$/);
@@ -48,7 +53,6 @@ export function isVlanInterface(name: string): boolean {
   return /^(?:Vlan-interface|Vlanif|Vlan)\d+$/i.test(name.trim());
 }
 
-/** Short display label, e.g. Twenty-FiveGigE1/0/1 → 25G·1/0/1 */
 export function formatInterfaceShort(name: string): string {
   const trimmed = name.trim();
   const vlanMatch = trimmed.match(/^(?:Vlan-interface|Vlanif|Vlan)(\d+)$/i);
@@ -64,7 +68,8 @@ export function formatInterfaceShort(name: string): string {
 
   for (const [pattern, label] of PREFIX_SPEED) {
     if (pattern.test(trimmed)) {
-      return `${label}·${suffix}`;
+      const display = label === "gigabit" ? tc("千兆") : label;
+      return `${display}·${suffix}`;
     }
   }
   return suffix.length + 3 < trimmed.length ? suffix : trimmed;
@@ -72,40 +77,29 @@ export function formatInterfaceShort(name: string): string {
 
 export function formatInterfaceTooltip(name: string): string {
   const short = formatInterfaceShort(name);
-  return short === name ? name : `接口全名：${name}`;
+  return short === name ? name : i18n.t("network.fullName", { name });
 }
-
-const OPER_STATUS_LABEL: Record<string, string> = {
-  up: "在线",
-  down: "离线",
-  unknown: "未知",
-};
 
 export function formatOperStatus(status?: string | null): string {
-  if (!status) return "—";
-  return OPER_STATUS_LABEL[status.toLowerCase()] || status;
+  if (!status) return tc("—");
+  const key = `status.port.${status.toLowerCase()}`;
+  return i18n.t(key, {
+    defaultValue: tc({ up: "在线", down: "离线", unknown: "未知" }[status.toLowerCase()] || status),
+  });
 }
-
-const DISCOVERED_VIA_LABEL: Record<string, string> = {
-  snmp: "SNMP",
-  "snmp-sim": "SNMP 模拟",
-  "running-config": "运行配置",
-};
 
 export function formatDiscoveredVia(via?: string | null): string {
-  if (!via) return "—";
-  return DISCOVERED_VIA_LABEL[via] || via;
+  if (!via) return tc("—");
+  return i18n.t(`status.discoveredVia.${via}`, {
+    defaultValue: tc({ snmp: "SNMP", "snmp-sim": "SNMP 模拟", "running-config": "运行配置" }[via] || via),
+  });
 }
 
-const ACCESS_MODE_LABEL: Record<string, string> = {
-  access: "无标签",
-  dot1q: "单标签",
-  qinq: "双标签",
-};
-
 export function formatAccessMode(mode?: string | null): string {
-  if (!mode) return "—";
-  return ACCESS_MODE_LABEL[mode] || mode;
+  if (!mode) return tc("—");
+  return i18n.t(`status.accessMode.${mode}`, {
+    defaultValue: tc({ access: "无标签", dot1q: "单标签", qinq: "双标签" }[mode] || mode),
+  });
 }
 
 export function formatVlanLabel(
@@ -113,8 +107,8 @@ export function formatVlanLabel(
   sVid?: number | null,
   cVid?: number | null,
 ): string {
-  if (accessMode === "access") return "无标签";
+  if (accessMode === "access") return tc("无标签");
   if (cVid != null && sVid != null) return `S:${sVid}/C:${cVid}`;
   if (sVid != null) return `S:${sVid}`;
-  return "—";
+  return tc("—");
 }

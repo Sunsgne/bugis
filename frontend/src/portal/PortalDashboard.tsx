@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Card, Col, Row, Spin, Statistic, Table, Tag, Typography } from "antd";
 import { api } from "../api/client";
 import type { PortalMe } from "./PortalApp";
+import { useTc } from "@/i18n/useTc";
 
 const STATUS: Record<string, { label: string; color: string }> = {
   active: { label: "运行中", color: "green" },
@@ -35,6 +36,7 @@ interface PortalCircuitRow {
 }
 
 export default function PortalDashboard({ me }: { me: PortalMe | null }) {
+  const { tc } = useTc();
   const [dash, setDash] = useState<DashboardData | null>(null);
   const [circuits, setCircuits] = useState<PortalCircuitRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -66,26 +68,24 @@ export default function PortalDashboard({ me }: { me: PortalMe | null }) {
         <Typography.Title level={4} style={{ marginBottom: 4 }}>
           欢迎，{me?.tenant_name || "客户"}
         </Typography.Title>
-        <Typography.Text type="secondary">
-          在此查看贵司专线运行状态、签约带宽与流量 95 计费数据
-        </Typography.Text>
+        <Typography.Text type="secondary">{tc('在此查看贵司专线运行状态、签约带宽与流量 95 计费数据')}</Typography.Text>
       </div>
 
       <Row gutter={[16, 16]}>
         <Col xs={24} sm={12} lg={6}>
           <Card>
-            <Statistic title="专线总数" value={s?.circuits_total ?? 0} suffix="条" />
+            <Statistic title={tc('专线总数')} value={s?.circuits_total ?? 0} suffix="条" />
           </Card>
         </Col>
         <Col xs={24} sm={12} lg={6}>
           <Card>
-            <Statistic title="运行中" value={s?.circuits_active ?? 0} suffix="条" valueStyle={{ color: "#52c41a" }} />
+            <Statistic title={tc('运行中')} value={s?.circuits_active ?? 0} suffix="条" valueStyle={{ color: "#52c41a" }} />
           </Card>
         </Col>
         <Col xs={24} sm={12} lg={6}>
           <Card>
             <Statistic
-              title="签约带宽"
+              title={tc('签约带宽')}
               value={s?.active_bandwidth_mbps ?? 0}
               suffix="Mbps"
               valueStyle={{ color: "#ff6600" }}
@@ -94,15 +94,15 @@ export default function PortalDashboard({ me }: { me: PortalMe | null }) {
         </Col>
         <Col xs={24} sm={12} lg={6}>
           <Card>
-            <Statistic title="健康指数" value={dash?.avg_health_score ?? 100} suffix="/ 100" />
+            <Statistic title={tc('健康指数')} value={dash?.avg_health_score ?? 100} suffix="/ 100" />
           </Card>
         </Col>
       </Row>
 
       <Card
-        title="我的专线"
+        title={tc('我的专线')}
         extra={
-          <Link to="/portal/circuits">查看全部</Link>
+          <Link to="/portal/circuits">{tc('查看全部')}</Link>
         }
       >
         <Table
@@ -113,7 +113,7 @@ export default function PortalDashboard({ me }: { me: PortalMe | null }) {
           locale={{ emptyText: "暂无专线，请联系运营商开通" }}
           columns={[
             {
-              title: "编码",
+              title: tc('编码'),
               dataIndex: "code",
               render: (code: string, row) => (
                 <Link to={`/portal/circuits/${row.id}`}>{code}</Link>
@@ -121,12 +121,12 @@ export default function PortalDashboard({ me }: { me: PortalMe | null }) {
             },
             { title: "名称", dataIndex: "name", ellipsis: true },
             {
-              title: "带宽",
+              title: tc('带宽'),
               dataIndex: "bandwidth_mbps",
               render: (v: number) => `${v} Mbps`,
             },
             {
-              title: "状态",
+              title: tc('状态'),
               dataIndex: "status",
               render: (st: string) => {
                 const m = STATUS[st] || { label: st, color: "default" };
@@ -137,7 +137,7 @@ export default function PortalDashboard({ me }: { me: PortalMe | null }) {
               title: "",
               width: 88,
               render: (_: unknown, row) => (
-                <Link to={`/portal/traffic?circuit=${row.id}`}>流量</Link>
+                <Link to={`/portal/traffic?circuit=${row.id}`}>{tc('流量')}</Link>
               ),
             },
           ]}

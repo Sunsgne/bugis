@@ -18,6 +18,7 @@ import type { FormInstance } from "antd";
 import { MinusCircleOutlined, PlusOutlined, RadarChartOutlined, WarningOutlined } from "@ant-design/icons";
 import { api } from "../api/client";
 import type { Device, DeviceInterface, SvidUsage } from "../api/types";
+import { useTc } from "@/i18n/useTc";
 import {
   formatInterfaceShort,
   formatInterfaceTooltip,
@@ -112,6 +113,7 @@ function interfaceOptionLabel(iface: DeviceInterface) {
 }
 
 function InterfaceOptionRow({ iface }: { iface: DeviceInterface }) {
+  const { tc } = useTc();
   const speed = formatPortSpeed(iface.speed_mbps);
   const used = (iface.used_s_vids?.length || 0) > 0;
   const short = formatInterfaceShort(iface.name);
@@ -126,7 +128,7 @@ function InterfaceOptionRow({ iface }: { iface: DeviceInterface }) {
         <Tag color={iface.oper_status === "up" ? "success" : "default"} bordered={false}>
           {formatOperStatus(iface.oper_status)}
         </Tag>
-        {!used && <Tag color="green" bordered={false}>空闲</Tag>}
+        {!used && <Tag color="green" bordered={false}>{tc('空闲')}</Tag>}
       </div>
       {desc && (
         <div className="iface-option-desc" title={desc}>
@@ -157,6 +159,7 @@ function PortDetailPanel({
   excludeCircuitCode?: string;
   adoptMode?: boolean;
 }) {
+  const { tc } = useTc();
   if (!iface) return null;
   const speed = formatPortSpeed(iface.speed_mbps);
   const conflict = vlanConflict(
@@ -182,12 +185,12 @@ function PortDetailPanel({
       </div>
       {desc && (
         <div className="port-detail-row">
-          <span className="port-detail-label">端口描述</span>
+          <span className="port-detail-label">{tc('端口描述')}</span>
           <span className="port-detail-value">{desc}</span>
         </div>
       )}
       <div className="port-detail-row">
-        <span className="port-detail-label">S-VID 占用</span>
+        <span className="port-detail-label">{tc('S-VID 占用')}</span>
         <SvidUsageTags list={iface.used_s_vids} emptyText="该端口暂无 VLAN 占用" />
       </div>
       {conflict && (
@@ -224,6 +227,7 @@ export default function CircuitEndpointsEditor({
   excludeCircuitCode,
   adoptMode = false,
 }: CircuitEndpointsEditorProps) {
+  const { tc } = useTc();
   const { message } = AntApp.useApp();
   const [ifaceByDevice, setIfaceByDevice] = useState<Record<number, DeviceInterface[]>>({});
 
@@ -238,7 +242,7 @@ export default function CircuitEndpointsEditor({
   }
 
   async function discover(deviceId: number) {
-    if (!deviceId) return message.warning("请先选择设备");
+    if (!deviceId) return message.warning(tc('请先选择设备'));
     const hide = message.loading("SNMP 发现 + S-VID 扫描...", 0);
     try {
       const { data } = await api.post<DeviceInterface[]>(`/devices/${deviceId}/discover-interfaces`);
@@ -272,12 +276,10 @@ export default function CircuitEndpointsEditor({
 
   return (
     <>
-      <div className="endpoint-legend">
-        图例：
-        <Tag color="green" bordered={false}>空闲</Tag>
-        <Tag color="blue" bordered={false}>S:VID (平台)</Tag>
-        <Tag color="orange" bordered={false}>S:VID (设备)</Tag>
-        <Tag color="red" bordered={false}>S:VID (手工)</Tag>
+      <div className="endpoint-legend">{tc('图例：')}<Tag color="green" bordered={false}>{tc('空闲')}</Tag>
+        <Tag color="blue" bordered={false}>{tc('S:VID (平台)')}</Tag>
+        <Tag color="orange" bordered={false}>{tc('S:VID (设备)')}</Tag>
+        <Tag color="red" bordered={false}>{tc('S:VID (手工)')}</Tag>
       </div>
       <Form.List name="endpoints">
         {(fields, { add, remove }) => (
@@ -321,7 +323,7 @@ export default function CircuitEndpointsEditor({
                           <Col xs={24} sm={8} md={6} lg={5}>
                             <Form.Item
                               name={[field.name, "label"]}
-                              label="标签"
+                              label={tc('标签')}
                               rules={[{ required: true }]}
                             >
                               <Input placeholder="A" />
@@ -330,11 +332,11 @@ export default function CircuitEndpointsEditor({
                           <Col xs={24} sm={16} md={18} lg={19}>
                             <Form.Item
                               name={[field.name, "device_id"]}
-                              label="接入设备"
+                              label={tc('接入设备')}
                               rules={[{ required: true, message: "请选择设备" }]}
                             >
                               <Select
-                                placeholder="选择 VTEP / PE / Leaf"
+                                placeholder={tc('选择 VTEP / PE / Leaf')}
                                 loading={formLoading}
                                 showSearch
                                 optionFilterProp="label"
@@ -351,7 +353,7 @@ export default function CircuitEndpointsEditor({
                           </Col>
                         </Row>
 
-                        <Form.Item label="物理端口" required style={{ marginBottom: 12 }}>
+                        <Form.Item label={tc('物理端口')} required style={{ marginBottom: 12 }}>
                           <div className="endpoint-port-row">
                             <Form.Item
                               name={[field.name, "interface_name"]}
@@ -367,9 +369,7 @@ export default function CircuitEndpointsEditor({
                                 listHeight={360}
                                 notFoundContent={
                                   did ? (
-                                    <span style={{ padding: 8, color: "#888" }}>
-                                      无接口记录，请点击右侧按钮 SNMP 发现
-                                    </span>
+                                    <span style={{ padding: 8, color: "#888" }}>{tc('无接口记录，请点击右侧按钮 SNMP 发现')}</span>
                                   ) : (
                                     "请先选择设备"
                                   )
@@ -381,9 +381,7 @@ export default function CircuitEndpointsEditor({
                                 }}
                               />
                             </Form.Item>
-                            <Button icon={<RadarChartOutlined />} disabled={!did} onClick={() => discover(did!)}>
-                              发现
-                            </Button>
+                            <Button icon={<RadarChartOutlined />} disabled={!did} onClick={() => discover(did!)}>{tc('发现')}</Button>
                           </div>
                         </Form.Item>
 
@@ -400,7 +398,7 @@ export default function CircuitEndpointsEditor({
 
                         <Row gutter={[16, 4]} style={{ marginTop: 16 }}>
                           <Col xs={24} sm={12} md={8}>
-                            <Form.Item name={[field.name, "access_mode"]} label="封装模式" initialValue="dot1q">
+                            <Form.Item name={[field.name, "access_mode"]} label={tc('封装模式')} initialValue="dot1q">
                               <Select
                                 options={[
                                   { value: "access", label: "Access · 不带标签" },
@@ -414,15 +412,15 @@ export default function CircuitEndpointsEditor({
                             <Form.Item
                               name={[field.name, "vlan_id"]}
                               label="S-VID"
-                              tooltip="Service VLAN，留空则自动分配"
+                              tooltip={tc('Service VLAN，留空则自动分配')}
                             >
-                              <InputNumber placeholder="自动分配" style={{ width: "100%" }} min={1} max={4094} />
+                              <InputNumber placeholder={tc('自动分配')} style={{ width: "100%" }} min={1} max={4094} />
                             </Form.Item>
                           </Col>
                           {ep.access_mode === "qinq" && (
                             <Col xs={24} sm={12} md={8}>
                               <Form.Item name={[field.name, "inner_vlan_id"]} label="C-VID">
-                                <InputNumber placeholder="内层 VLAN" style={{ width: "100%" }} min={1} max={4094} />
+                                <InputNumber placeholder={tc('内层 VLAN')} style={{ width: "100%" }} min={1} max={4094} />
                               </Form.Item>
                             </Col>
                           )}
@@ -433,9 +431,7 @@ export default function CircuitEndpointsEditor({
                 </Form.Item>
               ))}
             </div>
-            <Button type="dashed" block icon={<PlusOutlined />} onClick={() => add({ label: "", access_mode: "dot1q" })}>
-              添加端点
-            </Button>
+            <Button type="dashed" block icon={<PlusOutlined />} onClick={() => add({ label: "", access_mode: "dot1q" })}>{tc('添加端点')}</Button>
           </>
         )}
       </Form.List>

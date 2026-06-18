@@ -3,6 +3,7 @@ import { Select, Spin } from "antd";
 import type { SelectProps } from "antd";
 import { api } from "../api/client";
 import type { Paginated, Tenant } from "../api/types";
+import { useTc } from "@/i18n/useTc";
 
 export interface TenantOption {
   value: number;
@@ -94,12 +95,13 @@ export function TenantSearchSelect({
   loading?: boolean;
   onSearch: (q: string) => void;
 }) {
+  const { tc } = useTc();
   return (
     <Select
       showSearch
       allowClear
       filterOption={false}
-      placeholder="筛选客户（搜索名称或编码）"
+      placeholder={tc('筛选客户（搜索名称或编码）')}
       style={{ minWidth: 320, maxWidth: 420 }}
       notFoundContent={loading ? <Spin size="small" /> : "未找到客户"}
       onSearch={onSearch}

@@ -17,6 +17,7 @@ import { dataTableProps } from "../utils/table";
 import { formModalProps } from "../utils/formModal";
 import { action, empty, page, toast } from "../constants/uiCopy";
 import { WORK_ORDER_STATUS, statusMeta } from "../constants/statusLabels";
+import { useTc } from "@/i18n/useTc";
 
 const { RangePicker } = DatePicker;
 
@@ -49,6 +50,7 @@ function fmtTs(ts?: string | null) {
 }
 
 export default function WorkOrders() {
+  const { tc } = useTc();
   const { message } = AntApp.useApp();
   const [rows, setRows] = useState<WorkOrder[]>([]);
   const [loading, setLoading] = useState(false);
@@ -103,7 +105,7 @@ export default function WorkOrders() {
   async function cancelWo(id: number) {
     try {
       await api.post(`/work-orders/${id}/cancel`);
-      message.success("工单已撤销");
+      message.success(tc('工单已撤销'));
       load();
     } catch (e: any) {
       message.error(e?.response?.data?.detail || toast.failed);
@@ -170,7 +172,7 @@ export default function WorkOrders() {
           <Input
             allowClear
             prefix={<SearchOutlined />}
-            placeholder="搜索工单号 / 标题 / 申请人"
+            placeholder={tc('搜索工单号 / 标题 / 申请人')}
             value={keyword}
             onChange={(e) => setKeyword(e.target.value)}
             style={{ width: 240 }}
@@ -184,7 +186,7 @@ export default function WorkOrders() {
           />
           <Select
             allowClear
-            placeholder="状态"
+            placeholder={tc('状态')}
             value={statusFilter}
             onChange={setStatusFilter}
             style={{ width: 130 }}
@@ -195,7 +197,7 @@ export default function WorkOrders() {
           />
           <Select
             allowClear
-            placeholder="类型"
+            placeholder={tc('类型')}
             value={typeFilter}
             onChange={setTypeFilter}
             style={{ width: 120 }}
@@ -205,9 +207,7 @@ export default function WorkOrders() {
             }))}
           />
           {hasFilter && (
-            <Button icon={<ReloadOutlined />} onClick={resetFilters}>
-              重置
-            </Button>
+            <Button icon={<ReloadOutlined />} onClick={resetFilters}>{tc('重置')}</Button>
           )}
           <Typography.Text type="secondary">
             {hasFilter ? `筛选出 ${filtered.length} / ${rows.length} 条` : `共 ${rows.length} 条`}
@@ -231,13 +231,13 @@ export default function WorkOrders() {
           { title: "工单号", dataIndex: "code", width: "12%", ellipsis: true },
           { title: "标题", dataIndex: "title", width: "22%", ellipsis: true },
           {
-            title: "类型",
+            title: tc('类型'),
             dataIndex: "type",
             width: "8%",
             render: (t) => <Tag>{TYPE_LABEL[t] || t}</Tag>,
           },
           {
-            title: "状态",
+            title: tc('状态'),
             dataIndex: "status",
             width: "10%",
             render: (s) => {
@@ -253,13 +253,13 @@ export default function WorkOrders() {
           { title: "申请人", dataIndex: "requested_by", width: "10%", ellipsis: true, render: (v) => v || "—" },
           { title: "审批人", dataIndex: "approved_by", width: "10%", ellipsis: true, render: (v) => v || "—" },
           {
-            title: "配置作业",
+            title: tc('配置作业'),
             width: "8%",
             align: "center",
             render: (_, r) => <Tag color="geekblue">{r.config_jobs.length}</Tag>,
           },
           {
-            title: "操作",
+            title: tc('操作'),
             width: "20%",
             className: "table-actions",
             render: (_, r) => (
@@ -272,11 +272,9 @@ export default function WorkOrders() {
                     setEditTarget(r);
                     editForm.setFieldsValue({ title: r.title, notes: r.notes });
                   }}
-                >
-                  编辑
-                </Button>
+                >{tc('编辑')}</Button>
                 {!["running", "completed"].includes(r.status) && (
-                  <Popconfirm title="撤销该工单？" onConfirm={() => cancelWo(r.id)}>
+                  <Popconfirm title={tc('撤销该工单？')} onConfirm={() => cancelWo(r.id)}>
                     <Button type="link" size="small" icon={<StopOutlined />} />
                   </Popconfirm>
                 )}
@@ -290,7 +288,7 @@ export default function WorkOrders() {
       />
 
       <Modal
-        title="编辑工单"
+        title={tc('编辑工单')}
         open={!!editTarget}
         onOk={doEdit}
         onCancel={() => setEditTarget(null)}
@@ -298,10 +296,10 @@ export default function WorkOrders() {
         {...formModalProps}
       >
         <Form form={editForm} layout="vertical" className="app-form">
-          <Form.Item name="title" label="标题" rules={[{ required: true }]}>
+          <Form.Item name="title" label={tc('标题')} rules={[{ required: true }]}>
             <Input />
           </Form.Item>
-          <Form.Item name="notes" label="备注">
+          <Form.Item name="notes" label={tc('备注')}>
             <Input.TextArea rows={3} />
           </Form.Item>
         </Form>
@@ -322,7 +320,7 @@ export default function WorkOrders() {
               <Tag>{TYPE_LABEL[current.type]}</Tag>
             </div>
 
-            <h4>流转轨迹</h4>
+            <h4>{tc('流转轨迹')}</h4>
             <Timeline
               items={current.events.map((e) => ({
                 color: LEVEL_COLOR[e.level] || "blue",
@@ -335,7 +333,7 @@ export default function WorkOrders() {
               }))}
             />
 
-            <h4>配置作业 · Rendered Config</h4>
+            <h4>{tc('配置作业 · Rendered Config')}</h4>
             {current.config_jobs.length ? (
               <Collapse
                 items={current.config_jobs.map((j) => ({

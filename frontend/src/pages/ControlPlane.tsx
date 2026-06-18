@@ -26,10 +26,12 @@ import {
 import { api } from "../api/client";
 import OverlayTopologyPanel from "../components/OverlayTopologyPanel";
 import { empty, page } from "../constants/uiCopy";
+import { useTc } from "@/i18n/useTc";
 
 const { Text } = Typography;
 
 function OverlayScanSummary({ overlay }: { overlay: any }) {
+  const { tc } = useTc();
   const items: any[] = Array.isArray(overlay?.items) ? overlay.items : [];
   const platform = overlay?.platform_services ?? 0;
   const networkOnly = overlay?.network_only_services ?? 0;
@@ -62,26 +64,24 @@ function OverlayScanSummary({ overlay }: { overlay: any }) {
         height: "100%",
       }}
     >
-      <Text strong>扫描摘要</Text>
+      <Text strong>{tc('扫描摘要')}</Text>
       <Row gutter={[8, 8]} style={{ marginTop: 12 }}>
         <Col span={12}>
-          <Statistic title="平台纳管" value={platform} valueStyle={{ color: "#ff6600" }} />
+          <Statistic title={tc('平台纳管')} value={platform} valueStyle={{ color: "#ff6600" }} />
         </Col>
         <Col span={12}>
-          <Statistic title="现网未纳管" value={networkOnly} valueStyle={{ color: "#fa8c16" }} />
+          <Statistic title={tc('现网未纳管')} value={networkOnly} valueStyle={{ color: "#fa8c16" }} />
         </Col>
         <Col span={12}>
-          <Statistic title="已扫描设备" value={`${withInventory}/${scanned}`} />
+          <Statistic title={tc('已扫描设备')} value={`${withInventory}/${scanned}`} />
         </Col>
         <Col span={12}>
-          <Statistic title="保留 VNI" value={reserved} prefix={<CloudServerOutlined />} />
+          <Statistic title={tc('保留 VNI')} value={reserved} prefix={<CloudServerOutlined />} />
         </Col>
       </Row>
 
       <div style={{ marginTop: 16 }}>
-        <Text type="secondary" style={{ fontSize: 12 }}>
-          按设备占用分布 Top
-        </Text>
+        <Text type="secondary" style={{ fontSize: 12 }}>{tc('按设备占用分布 Top')}</Text>
         <div style={{ marginTop: 8, minHeight: 32 }}>
           {deviceDist.length ? (
             <Space direction="vertical" size={8} style={{ width: "100%" }}>
@@ -114,16 +114,12 @@ function OverlayScanSummary({ overlay }: { overlay: any }) {
               ))}
             </Space>
           ) : (
-            <Text type="secondary" style={{ fontSize: 12 }}>
-              暂无现网占用记录
-            </Text>
+            <Text type="secondary" style={{ fontSize: 12 }}>{tc('暂无现网占用记录')}</Text>
           )}
         </div>
       </div>
 
-      <Text type="secondary" style={{ fontSize: 12, display: "block", marginTop: 16 }}>
-        只读扫描 learned running-config，不会下发或修改设备配置；新建专线自动避开已占用 VNI/VSI。
-      </Text>
+      <Text type="secondary" style={{ fontSize: 12, display: "block", marginTop: 16 }}>{tc('只读扫描 learned running-config，不会下发或修改设备配置；新建专线自动避开已占用 VNI/VSI。')}</Text>
     </div>
   );
 }
@@ -155,6 +151,7 @@ const DP_COLOR: Record<string, string> = {
 };
 
 export default function ControlPlane() {
+  const { tc } = useTc();
   const [status, setStatus] = useState<any>(null);
   const [vteps, setVteps] = useState<any[]>([]);
   const [routes, setRoutes] = useState<any[]>([]);
@@ -201,7 +198,7 @@ export default function ControlPlane() {
     setSyncing(true);
     try {
       await api.post("/controller/bgp/sync");
-      message.success("BGP 会话已同步");
+      message.success(tc('BGP 会话已同步'));
       load();
     } finally {
       setSyncing(false);
@@ -254,22 +251,19 @@ export default function ControlPlane() {
             <span style={{ fontSize: 16, fontWeight: 600 }}>
               <ShareAltOutlined /> {status?.name || "Bugis SDN 控制器"}
             </span>
-            <Tag color="geekblue" style={{ marginLeft: 8 }}>内置 · 自研 SDN</Tag>
+            <Tag color="geekblue" style={{ marginLeft: 8 }}>{tc('内置 · 自研 SDN')}</Tag>
             {status?.version && <Tag style={{ marginLeft: 4 }}>v{status.version}</Tag>}
           </Col>
           <Col>
-            <Button loading={syncing} onClick={syncBgp}>
-              同步 BGP 会话
-            </Button>
+            <Button loading={syncing} onClick={syncBgp}>{tc('同步 BGP 会话')}</Button>
           </Col>
         </Row>
         <Descriptions size="small" style={{ marginTop: 16 }} column={{ xs: 1, sm: 2, md: 4 }}>
-          <Descriptions.Item label="RIB 版本">v{status?.rib_version ?? 0}</Descriptions.Item>
-          <Descriptions.Item label="BGP 会话在线">{status?.bgp_sessions_up ?? 0}</Descriptions.Item>
-          <Descriptions.Item label="集群模式">{cluster?.mode || "-"}</Descriptions.Item>
+          <Descriptions.Item label={tc('RIB 版本')}>v{status?.rib_version ?? 0}</Descriptions.Item>
+          <Descriptions.Item label={tc('BGP 会话在线')}>{status?.bgp_sessions_up ?? 0}</Descriptions.Item>
+          <Descriptions.Item label={tc('集群模式')}>{cluster?.mode || "-"}</Descriptions.Item>
           <Descriptions.Item label="Leader">{cluster?.leader || "-"}</Descriptions.Item>
-          <Descriptions.Item label="配置版本化">
-              设备配置见 <Link to="/config">{page.config}</Link>
+          <Descriptions.Item label={tc('配置版本化')}>{tc('设备配置见')}<Link to="/config">{page.config}</Link>
           </Descriptions.Item>
         </Descriptions>
       </Card>
@@ -277,18 +271,18 @@ export default function ControlPlane() {
       <Row gutter={16}>
         <Col xs={12} md={6}>
           <Card>
-            <Statistic title="VTEP 节点" value={status?.vtep_count || 0} prefix={<ClusterOutlined />} />
+            <Statistic title={tc('VTEP 节点')} value={status?.vtep_count || 0} prefix={<ClusterOutlined />} />
           </Card>
         </Col>
         <Col xs={12} md={6}>
           <Card>
-            <Statistic title="EVPN 路由" value={status?.route_count || 0} prefix={<NodeIndexOutlined />} />
+            <Statistic title={tc('EVPN 路由')} value={status?.route_count || 0} prefix={<NodeIndexOutlined />} />
           </Card>
         </Col>
         <Col xs={12} md={6}>
           <Card>
             <Statistic
-              title="BGP 会话"
+              title={tc('BGP 会话')}
               value={status?.bgp_sessions_up || 0}
               suffix={`/ ${bgp.length}`}
               prefix={<ApiOutlined />}
@@ -298,7 +292,7 @@ export default function ControlPlane() {
         <Col xs={12} md={6}>
           <Card>
             <Statistic
-              title="现网保留 VNI"
+              title={tc('现网保留 VNI')}
               value={overlay?.reserved_vni_count ?? 0}
               suffix={overlay?.smart_allocation_enabled ? "智能避让" : ""}
               prefix={<CloudServerOutlined />}
@@ -308,12 +302,10 @@ export default function ControlPlane() {
       </Row>
 
       <Card
-        title="现网 VNI / VSI 占用扫描"
+        title={tc('现网 VNI / VSI 占用扫描')}
         size="small"
         extra={
-          <Button loading={scanningOverlay} onClick={scanOverlay}>
-            扫描现网标识
-          </Button>
+          <Button loading={scanningOverlay} onClick={scanOverlay}>{tc('扫描现网标识')}</Button>
         }
       >
         <Row gutter={[16, 16]}>
@@ -326,14 +318,14 @@ export default function ControlPlane() {
               pagination={{ pageSize: 20, showSizeChanger: true }}
               size="small"
               scroll={{ x: "max-content" }}
-              locale={{ emptyText: <Empty description="暂无现网 Overlay 数据 · 请对设备执行现网学习后扫描" /> }}
+              locale={{ emptyText: <Empty description={tc('暂无现网 Overlay 数据 · 请对设备执行现网学习后扫描')} /> }}
               columns={[
                 { title: "设备", dataIndex: "device", ellipsis: true },
                 { title: "VSI / 服务", dataIndex: "service_name", ellipsis: true },
                 { title: "VNI", dataIndex: "vni", width: 90 },
                 { title: "RD", dataIndex: "rd", ellipsis: true },
                 {
-                  title: "来源",
+                  title: tc('来源'),
                   dataIndex: "source",
                   width: 110,
                   render: (s: string) => (
@@ -343,12 +335,12 @@ export default function ControlPlane() {
                   ),
                 },
                 {
-                  title: "专线",
+                  title: tc('专线'),
                   dataIndex: "circuit_code",
                   render: (code?: string) => code || "—",
                 },
                 {
-                  title: "接入接口",
+                  title: tc('接入接口'),
                   dataIndex: "interfaces",
                   render: (ifs: string[] | undefined) => (ifs?.length ? ifs.join(", ") : "—"),
                 },
@@ -361,7 +353,7 @@ export default function ControlPlane() {
         </Row>
       </Card>
 
-      <Card title="控制器集群 · HA" size="small">
+      <Card title={tc('控制器集群 · HA')} size="small">
         <Table
           rowKey="node_id"
           dataSource={cluster?.nodes || []}
@@ -372,7 +364,7 @@ export default function ControlPlane() {
             { title: "节点", dataIndex: "node_id" },
             { title: "主机", dataIndex: "hostname" },
             {
-              title: "角色",
+              title: tc('角色'),
               dataIndex: "role",
               render: (r) => (
                 <Tag color={r === "leader" ? "blue" : r === "standby" ? "purple" : "default"}>
@@ -382,29 +374,29 @@ export default function ControlPlane() {
             },
             { title: "RIB 版本", dataIndex: "rib_version" },
             {
-              title: "本机",
+              title: tc('本机'),
               dataIndex: "is_local",
-              render: (v) => (v ? <Tag color="green">是</Tag> : "-"),
+              render: (v) => (v ? <Tag color="green">{tc('是')}</Tag> : "-"),
             },
             { title: "最近心跳", dataIndex: "last_heartbeat" },
           ]}
         />
       </Card>
 
-      <Card title="BGP EVPN 对等会话" size="small">
+      <Card title={tc('BGP EVPN 对等会话')} size="small">
         <Table
           rowKey="id"
           dataSource={bgp}
           pagination={false}
           size="small"
-          locale={{ emptyText: <Empty description="托管专线开通后自动建立 BGP 对等" /> }}
+          locale={{ emptyText: <Empty description={tc('托管专线开通后自动建立 BGP 对等')} /> }}
           columns={[
             { title: "设备", dataIndex: "device_name" },
             { title: "对端 IP", dataIndex: "peer_ip" },
             { title: "本地 ASN", dataIndex: "local_asn" },
             { title: "对端 ASN", dataIndex: "remote_asn" },
             {
-              title: "状态",
+              title: tc('状态'),
               dataIndex: "state",
               render: (s) => <Tag color={BGP_COLOR[s] || "default"}>{s}</Tag>,
             },
@@ -414,20 +406,20 @@ export default function ControlPlane() {
         />
       </Card>
 
-      <Card title="数据面编排绑定" size="small">
+      <Card title={tc('数据面编排绑定')} size="small">
         <Table
           rowKey="id"
           dataSource={bindings.slice(0, 50)}
           pagination={false}
           size="small"
-          locale={{ emptyText: <Empty description="暂无数据面绑定记录" /> }}
+          locale={{ emptyText: <Empty description={tc('暂无数据面绑定记录')} /> }}
           columns={[
             { title: "专线 ID", dataIndex: "circuit_id", width: 90 },
             { title: "设备 ID", dataIndex: "device_id", width: 90 },
             { title: "操作", dataIndex: "operation", width: 80 },
             { title: "传输", dataIndex: "transport", width: 90 },
             {
-              title: "状态",
+              title: tc('状态'),
               dataIndex: "state",
               render: (s) => <Tag color={DP_COLOR[s] || "default"}>{s}</Tag>,
             },
@@ -440,18 +432,18 @@ export default function ControlPlane() {
         <OverlayTopologyPanel topo={topo} overlayInventory={overlay} />
       </Card>
 
-      <Card title="VTEP 邻居表">
+      <Card title={tc('VTEP 邻居表')}>
         <Table
           rowKey="id"
           dataSource={vteps}
           pagination={false}
-          locale={{ emptyText: <Empty description="暂无 VTEP 邻居" /> }}
+          locale={{ emptyText: <Empty description={tc('暂无 VTEP 邻居')} /> }}
           columns={[
             { title: "设备", dataIndex: "name" },
             { title: "VTEP IP", dataIndex: "vtep_ip" },
             { title: "ASN", dataIndex: "asn" },
             {
-              title: "状态",
+              title: tc('状态'),
               dataIndex: "status",
               render: (s) => <Tag color={s === "up" ? "green" : "red"}>{s}</Tag>,
             },
@@ -465,11 +457,11 @@ export default function ControlPlane() {
       </Card>
 
       <Card
-        title="EVPN 路由表 (RIB)"
+        title={tc('EVPN 路由表 (RIB)')}
         extra={
           <Select
             allowClear
-            placeholder="按 VNI 过滤"
+            placeholder={tc('按 VNI 过滤')}
             style={{ width: 160 }}
             value={vni}
             onChange={(v) => setVni(v)}
@@ -481,16 +473,16 @@ export default function ControlPlane() {
           rowKey="id"
           dataSource={routes}
           size="small"
-          locale={{ emptyText: <Empty description="RIB 为空 · 等待路由同步" /> }}
+          locale={{ emptyText: <Empty description={tc('RIB 为空 · 等待路由同步')} /> }}
           columns={[
             {
-              title: "类型",
+              title: tc('类型'),
               dataIndex: "type",
               render: (t) => <Tag color={RT_COLOR[t]}>{RT_LABEL[t] || t}</Tag>,
             },
             { title: "VNI", dataIndex: "vni", width: 70 },
             {
-              title: "封装",
+              title: tc('封装'),
               dataIndex: "encap",
               width: 80,
               render: (e) => <Tag>{e || "vxlan"}</Tag>,

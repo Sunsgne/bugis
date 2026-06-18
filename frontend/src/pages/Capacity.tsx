@@ -21,6 +21,7 @@ import BackboneLinkModal from "../components/BackboneLinkModal";
 import InterfaceNameCell from "../components/InterfaceNameCell";
 import { utilColor } from "../charts/options";
 import { fetchAllPages } from "../utils/pagination";
+import { useTc } from "@/i18n/useTc";
 
 const LINK_TYPE_LABEL: Record<string, string> = {
   dci: "跨站点 DCI",
@@ -39,6 +40,7 @@ function fmtBw(mbps?: number) {
 }
 
 export default function Capacity() {
+  const { tc } = useTc();
   const { message } = AntApp.useApp();
   const [sites, setSites] = useState<SiteCapacity[]>([]);
   const [links, setLinks] = useState<LinkUsage[]>([]);
@@ -64,7 +66,7 @@ export default function Capacity() {
       setSites(s.data);
       setLinks(l.data);
     } catch {
-      message.error("容量数据加载失败，请稍后重试");
+      message.error(tc('容量数据加载失败，请稍后重试'));
     } finally {
       if (showSpinner) setLoading(false);
     }
@@ -79,7 +81,7 @@ export default function Capacity() {
         setDevices(d);
         setDevicesLoaded(true);
       } catch {
-        message.error("设备列表加载失败");
+        message.error(tc('设备列表加载失败'));
       }
     }
   }
@@ -94,9 +96,9 @@ export default function Capacity() {
     try {
       await api.post("/capacity/links/sync-bandwidth");
       await load();
-      message.success("已从端口描述同步合同带宽");
+      message.success(tc('已从端口描述同步合同带宽'));
     } catch {
-      message.error("同步合同带宽失败");
+      message.error(tc('同步合同带宽失败'));
     } finally {
       setSyncing(false);
     }
@@ -105,10 +107,10 @@ export default function Capacity() {
   async function deleteLink(linkId: number) {
     try {
       await api.delete(`/capacity/links/${linkId}`);
-      message.success("骨干链路已删除");
+      message.success(tc('骨干链路已删除'));
       await load();
     } catch {
-      message.error("删除骨干链路失败");
+      message.error(tc('删除骨干链路失败'));
     }
   }
 
@@ -152,18 +154,18 @@ export default function Capacity() {
     <div className="capacity-page">
       <div className="capacity-kpi-row">
         <Card className="capacity-kpi-card">
-          <Statistic title="Fabric 总容量" value={gbps(totalCap)} suffix="Gbps" />
+          <Statistic title={tc('Fabric 总容量')} value={gbps(totalCap)} suffix="Gbps" />
         </Card>
         <Card className="capacity-kpi-card">
           <Statistic
-            title="已分配带宽"
+            title={tc('已分配带宽')}
             value={gbps(totalUsed)}
             suffix="Gbps"
             valueStyle={{ color: "#ff6600" }}
           />
         </Card>
         <Card className="capacity-kpi-card capacity-kpi-util">
-          <div className="capacity-kpi-util-label">全域带宽分配率</div>
+          <div className="capacity-kpi-util-label">{tc('全域带宽分配率')}</div>
           <Progress percent={utilPct} strokeColor={utilColor(utilPct)} strokeWidth={10} />
         </Card>
       </div>
@@ -175,7 +177,7 @@ export default function Capacity() {
           <Input
             allowClear
             prefix={<SearchOutlined />}
-            placeholder="搜索站点名称 / 编码"
+            placeholder={tc('搜索站点名称 / 编码')}
             value={siteSearch}
             onChange={(e) => setSiteSearch(e.target.value)}
             style={{ width: 240 }}
@@ -193,7 +195,7 @@ export default function Capacity() {
           locale={{ emptyText: siteSearch ? "无匹配站点" : "暂无站点容量数据" }}
           columns={[
             {
-              title: "站点",
+              title: tc('站点'),
               dataIndex: "site",
               fixed: "left",
               width: 260,
@@ -206,7 +208,7 @@ export default function Capacity() {
               ),
             },
             {
-              title: "设备",
+              title: tc('设备'),
               dataIndex: "devices",
               width: 90,
               align: "right",
@@ -214,7 +216,7 @@ export default function Capacity() {
               render: (v: number) => `${v} 台`,
             },
             {
-              title: "已分配 / 总容量",
+              title: tc('已分配 / 总容量'),
               key: "cap",
               width: 180,
               align: "right",
@@ -222,7 +224,7 @@ export default function Capacity() {
               render: (_: unknown, r) => `${gbps(r.used_mbps)} / ${gbps(r.capacity_mbps)} Gbps`,
             },
             {
-              title: "带宽分配率",
+              title: tc('带宽分配率'),
               dataIndex: "utilization_pct",
               width: 260,
               defaultSortOrder: "descend",
@@ -248,18 +250,14 @@ export default function Capacity() {
             <Input
               allowClear
               prefix={<SearchOutlined />}
-              placeholder="搜索链路 / 设备"
+              placeholder={tc('搜索链路 / 设备')}
               value={linkSearch}
               onChange={(e) => setLinkSearch(e.target.value)}
               style={{ width: 220 }}
             />
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => openLinkModal()}>
-              配置骨干链路
-            </Button>
-            <Tooltip title="从端口描述 bw(100Mbps) 同步链路合同带宽">
-              <Button icon={<SyncOutlined />} loading={syncing} onClick={syncBandwidth}>
-                同步端口带宽
-              </Button>
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => openLinkModal()}>{tc('配置骨干链路')}</Button>
+            <Tooltip title={tc('从端口描述 bw(100Mbps) 同步链路合同带宽')}>
+              <Button icon={<SyncOutlined />} loading={syncing} onClick={syncBandwidth}>{tc('同步端口带宽')}</Button>
             </Tooltip>
           </Space>
         }
@@ -281,7 +279,7 @@ export default function Capacity() {
           locale={{ emptyText: linkSearch ? "无匹配链路" : "暂无骨干链路 · 点击「配置骨干链路」智能推荐或手动选配" }}
           columns={[
             {
-              title: "链路",
+              title: tc('链路'),
               dataIndex: "name",
               fixed: "left",
               width: 180,
@@ -289,7 +287,7 @@ export default function Capacity() {
               sorter: (a, b) => a.name.localeCompare(b.name),
             },
             {
-              title: "类型",
+              title: tc('类型'),
               dataIndex: "type",
               width: 110,
               filters: Object.entries(LINK_TYPE_LABEL).map(([value, text]) => ({ text, value })),
@@ -299,7 +297,7 @@ export default function Capacity() {
               ),
             },
             {
-              title: "A 端",
+              title: tc('A 端'),
               key: "a",
               width: 220,
               render: (_: unknown, r) => (
@@ -317,7 +315,7 @@ export default function Capacity() {
               ),
             },
             {
-              title: "Z 端",
+              title: tc('Z 端'),
               key: "z",
               width: 220,
               render: (_: unknown, r) => (
@@ -335,7 +333,7 @@ export default function Capacity() {
               ),
             },
             {
-              title: "合同带宽",
+              title: tc('合同带宽'),
               dataIndex: "capacity_mbps",
               width: 100,
               align: "right",
@@ -343,7 +341,7 @@ export default function Capacity() {
               render: (v: number) => fmtBw(v),
             },
             {
-              title: "利用率",
+              title: tc('利用率'),
               dataIndex: "utilization_pct",
               width: 220,
               defaultSortOrder: "descend",
@@ -357,14 +355,14 @@ export default function Capacity() {
               ),
             },
             {
-              title: "操作",
+              title: tc('操作'),
               key: "op",
               width: 96,
               fixed: "right",
               className: "table-actions-col",
               render: (_: unknown, r) => (
                 <Space size={0}>
-                  <Tooltip title="编辑端点与告警阈值">
+                  <Tooltip title={tc('编辑端点与告警阈值')}>
                     <Button
                       type="text"
                       size="small"
@@ -372,7 +370,7 @@ export default function Capacity() {
                       onClick={() => openLinkModal(r)}
                     />
                   </Tooltip>
-                  <Popconfirm title="删除该骨干链路？" onConfirm={() => deleteLink(r.link_id)} okText="删除" cancelText="取消">
+                  <Popconfirm title={tc('删除该骨干链路？')} onConfirm={() => deleteLink(r.link_id)} okText={tc('删除')} cancelText={tc('取消')}>
                     <Button type="text" danger size="small" icon={<DeleteOutlined />} />
                   </Popconfirm>
                 </Space>

@@ -14,6 +14,7 @@ import {
 import { CheckCircleOutlined, CloseCircleOutlined, LoadingOutlined } from "@ant-design/icons";
 import type { Circuit, ProvisionResult } from "../api/types";
 import { ConfigPreviewPre } from "../utils/configPreview";
+import { useTc } from "@/i18n/useTc";
 
 const WO_STATUS_LABEL: Record<string, string> = {
   completed: "已完成",
@@ -86,6 +87,7 @@ export default function ProvisionFeedbackModal({
   onClose,
   open: openProp,
 }: Props) {
+  const { tc } = useTc();
   const open = openProp ?? !!circuit;
   const isTeardown = woType === "decommission";
   const success = result?.status === "completed";
@@ -101,11 +103,11 @@ export default function ProvisionFeedbackModal({
     ? [
         { title: "安全校验", description: "依赖 / 资源占用确认" },
         {
-          title: "配置回收",
+          title: tc('配置回收'),
           description: inProgress ? "正在回收各端设备配置…" : "回收作业完毕",
         },
         {
-          title: "资源释放",
+          title: tc('资源释放'),
           description: result?.circuit_status
             ? `专线状态：${CIRCUIT_STATUS_LABEL[result.circuit_status] || result.circuit_status}`
             : "等待结果",
@@ -114,11 +116,11 @@ export default function ProvisionFeedbackModal({
     : [
         { title: "合规预检", description: "VLAN / 端口占用校验" },
         {
-          title: "编排下发",
+          title: tc('编排下发'),
           description: inProgress ? "正在创建工单并推送配置…" : "工单执行完毕",
         },
         {
-          title: "结果确认",
+          title: tc('结果确认'),
           description: result?.circuit_status
             ? `专线状态：${CIRCUIT_STATUS_LABEL[result.circuit_status] || result.circuit_status}`
             : "等待结果",
@@ -176,7 +178,7 @@ export default function ProvisionFeedbackModal({
             <Tag color={result.circuit_status === "active" ? "green" : "default"}>
               专线 {CIRCUIT_STATUS_LABEL[result.circuit_status] || result.circuit_status}
             </Tag>
-            {result.dry_run ? <Tag color="gold">Dry-run 模拟下发</Tag> : <Tag color="blue">现网下发</Tag>}
+            {result.dry_run ? <Tag color="gold">{tc('Dry-run 模拟下发')}</Tag> : <Tag color="blue">{tc('现网下发')}</Tag>}
           </Space>
 
           {result.status === "completed" ? (
@@ -196,14 +198,12 @@ export default function ProvisionFeedbackModal({
               showIcon
               icon={<CloseCircleOutlined />}
               message="工单执行失败"
-              description="请查看下方设备作业与流转轨迹中的错误信息"
+              description={tc('请查看下方设备作业与流转轨迹中的错误信息')}
               style={{ marginBottom: 16 }}
             />
           ) : null}
 
-          <Typography.Title level={5} style={{ marginTop: 0 }}>
-            设备下发作业
-          </Typography.Title>
+          <Typography.Title level={5} style={{ marginTop: 0 }}>{tc('设备下发作业')}</Typography.Title>
           <Table
             size="small"
             rowKey="id"
@@ -212,13 +212,13 @@ export default function ProvisionFeedbackModal({
             locale={{ emptyText: "无配置作业（可能被预检阻断）" }}
             columns={[
               {
-                title: "设备",
+                title: tc('设备'),
                 render: (_, row) => row.device_name || `#${row.device_id}`,
               },
               { title: "操作", dataIndex: "operation", width: 64 },
               { title: "传输", dataIndex: "transport", width: 80 },
               {
-                title: "状态",
+                title: tc('状态'),
                 dataIndex: "status",
                 width: 90,
                 render: (s: string) => (
@@ -226,7 +226,7 @@ export default function ProvisionFeedbackModal({
                 ),
               },
               {
-                title: "时间",
+                title: tc('时间'),
                 dataIndex: "created_at",
                 width: 150,
                 render: (v?: string) => (
@@ -234,7 +234,7 @@ export default function ProvisionFeedbackModal({
                 ),
               },
               {
-                title: "回显",
+                title: tc('回显'),
                 dataIndex: "output",
                 ellipsis: true,
                 render: (v?: string) => summarizeOutput(v),
@@ -254,7 +254,7 @@ export default function ProvisionFeedbackModal({
                       items={[
                         {
                           key: "cfg",
-                          label: "渲染配置片段",
+                          label: tc('渲染配置片段'),
                           children: <ConfigPreviewPre>{row.rendered_config}</ConfigPreviewPre>,
                         },
                       ]}
@@ -266,7 +266,7 @@ export default function ProvisionFeedbackModal({
             }}
           />
 
-          <Typography.Title level={5}>流转轨迹</Typography.Title>
+          <Typography.Title level={5}>{tc('流转轨迹')}</Typography.Title>
           <Timeline
             items={(result.events || []).map((e) => ({
               color: e.level === "error" ? "red" : e.level === "warning" ? "orange" : "blue",
@@ -281,7 +281,7 @@ export default function ProvisionFeedbackModal({
 
           {result.config_jobs.length > 0 ? (
             <div style={{ marginTop: 8 }}>
-              <Typography.Text type="secondary">作业成功率</Typography.Text>
+              <Typography.Text type="secondary">{tc('作业成功率')}</Typography.Text>
               <Progress
                 percent={Math.round(
                   (result.config_jobs.filter((j) => j.status === "succeeded" || j.status === "dry_run")

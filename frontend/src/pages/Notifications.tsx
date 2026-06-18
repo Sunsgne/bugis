@@ -20,6 +20,7 @@ import { action, page, toast } from "../constants/uiCopy";
 import PageCard from "../components/PageCard";
 import { dataTableProps } from "../utils/table";
 import { formModalProps } from "../utils/formModal";
+import { useTc } from "@/i18n/useTc";
 
 interface Channel {
   id: number;
@@ -66,6 +67,7 @@ const SEV_COLOR: Record<string, string> = {
 };
 
 export default function Notifications({ embedded }: { embedded?: boolean }) {
+  const { tc } = useTc();
   const { message } = AntApp.useApp();
   const [rows, setRows] = useState<Channel[]>([]);
   const [loading, setLoading] = useState(false);
@@ -101,7 +103,7 @@ export default function Notifications({ embedded }: { embedded?: boolean }) {
 
   async function testSend(id: number) {
     const { data } = await api.post(`/notifications/${id}/test`);
-    if (data.success) message.success("测试通知已发送");
+    if (data.success) message.success(tc('测试通知已发送'));
     else message.error(`发送失败 · ${data.detail}`);
     load();
   }
@@ -113,16 +115,12 @@ export default function Notifications({ embedded }: { embedded?: boolean }) {
   }
 
   const addBtn = (
-    <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>
-      新建渠道
-    </Button>
+    <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>{tc('新建渠道')}</Button>
   );
 
   const body = (
     <>
-      <Typography.Paragraph type="secondary">
-        告警级别达到渠道阈值时，平台自动外发通知（Webhook · Slack · 钉钉 · 企业微信 · 飞书）。
-      </Typography.Paragraph>
+      <Typography.Paragraph type="secondary">{tc('告警级别达到渠道阈值时，平台自动外发通知（Webhook · Slack · 钉钉 · 企业微信 · 飞书）。')}</Typography.Paragraph>
       <Table
         rowKey="id"
         loading={loading}
@@ -131,39 +129,37 @@ export default function Notifications({ embedded }: { embedded?: boolean }) {
         columns={[
           { title: "名称", dataIndex: "name", width: "14%", ellipsis: true },
           {
-            title: "类型",
+            title: tc('类型'),
             dataIndex: "type",
             width: "14%",
             render: (t) => <Tag color="blue">{TYPE_LABEL[t] || t}</Tag>,
           },
           {
-            title: "触发阈值",
+            title: tc('触发阈值'),
             dataIndex: "min_severity",
             width: "10%",
             render: (s) => <Tag color={SEV_COLOR[s]}>{SEV_LABEL[s] || s}</Tag>,
           },
           {
-            title: "状态",
+            title: tc('状态'),
             dataIndex: "active",
             width: "8%",
             render: (a) => <Tag color={a ? "green" : "default"}>{a ? "启用" : "停用"}</Tag>,
           },
           { title: "最近结果", dataIndex: "last_status", width: "18%", ellipsis: true, render: (v) => v || "—" },
           {
-            title: "最近发送",
+            title: tc('最近发送'),
             dataIndex: "last_dispatch_at",
             width: "14%",
             render: (t) => (t ? dayjs(t).format("MM-DD HH:mm:ss") : "—"),
           },
           {
-            title: "操作",
+            title: tc('操作'),
             width: "14%",
             className: "table-actions",
             render: (_, r) => (
               <Space size={4}>
-                <Button type="link" size="small" icon={<SendOutlined />} onClick={() => testSend(r.id)}>
-                  测试
-                </Button>
+                <Button type="link" size="small" icon={<SendOutlined />} onClick={() => testSend(r.id)}>{tc('测试')}</Button>
                 <Popconfirm title={`${action.confirm}${action.delete}？`} onConfirm={() => remove(r.id)}>
                   <Button type="link" size="small" danger>
                     {action.delete}
@@ -175,7 +171,7 @@ export default function Notifications({ embedded }: { embedded?: boolean }) {
         ]}
       />
       <Modal
-        title="新建通知渠道"
+        title={tc('新建通知渠道')}
         open={open}
         onOk={onCreate}
         onCancel={() => setOpen(false)}
@@ -183,10 +179,10 @@ export default function Notifications({ embedded }: { embedded?: boolean }) {
         {...formModalProps}
       >
         <Form form={form} layout="vertical" className="app-form" initialValues={{ type: "dingtalk", min_severity: "major" }}>
-          <Form.Item name="name" label="名称" rules={[{ required: true }]}>
-            <Input placeholder="例如 NOC 运维群" />
+          <Form.Item name="name" label={tc('名称')} rules={[{ required: true }]}>
+            <Input placeholder={tc('例如 NOC 运维群')} />
           </Form.Item>
-          <Form.Item name="type" label="类型">
+          <Form.Item name="type" label={tc('类型')}>
             <Select options={Object.entries(TYPE_LABEL).map(([value, label]) => ({ value, label }))} />
           </Form.Item>
           <Form.Item
@@ -196,7 +192,7 @@ export default function Notifications({ embedded }: { embedded?: boolean }) {
           >
             <Input placeholder={URL_HINT[watchType] || "https://..."} />
           </Form.Item>
-          <Form.Item name="min_severity" label="触发阈值 (达到该级别及以上发送)">
+          <Form.Item name="min_severity" label={tc('触发阈值 (达到该级别及以上发送)')}>
             <Select
               options={Object.entries(SEV_LABEL).map(([value, label]) => ({
                 value,

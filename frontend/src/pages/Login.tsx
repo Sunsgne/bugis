@@ -30,6 +30,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { useTc } from "@/i18n/useTc";
 
 declare global {
   interface Window {
@@ -74,6 +75,7 @@ function loadTurnstileScript(): Promise<void> {
 }
 
 export default function Login() {
+  const { tc } = useTc();
   const { loginWithToken } = useAuth();
   const { brand } = useBrand();
   const [loading, setLoading] = useState(false);
@@ -119,7 +121,7 @@ export default function Login() {
           "expired-callback": () => setTurnstileToken(null),
         });
       })
-      .catch(() => toast.error("人机验证组件加载失败"));
+      .catch(() => toast.error(tc('人机验证组件加载失败')));
     return () => {
       cancelled = true;
     };
@@ -134,11 +136,11 @@ export default function Login() {
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!username.trim() || !password) {
-      toast.error("请输入用户名和密码");
+      toast.error(tc('请输入用户名和密码'));
       return;
     }
     if (showTurnstile && security?.turnstile_site_key && !turnstileToken) {
-      toast.error("请先完成人机验证");
+      toast.error(tc('请先完成人机验证'));
       return;
     }
 
@@ -150,7 +152,7 @@ export default function Login() {
         setMfaMethods(result.mfa_methods || ["totp"]);
         setMfaMethod(result.mfa_methods?.[0] || "totp");
         setMode("mfa");
-        toast.message("请输入双因素验证码");
+        toast.message(tc('请输入双因素验证码'));
         return;
       }
       if (!result.access_token) throw new Error("login failed");
@@ -159,7 +161,7 @@ export default function Login() {
       const status = err?.response?.status;
       if (status === 428) {
         setCaptchaForced(true);
-        toast.error("需要完成人机验证后重试");
+        toast.error(tc('需要完成人机验证后重试'));
       } else {
         toast.error(err?.response?.data?.detail || toastCopy.loginFail);
       }
@@ -171,7 +173,7 @@ export default function Login() {
   async function onMfaSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!mfaToken || !mfaCode.trim()) {
-      toast.error("请输入验证码");
+      toast.error(tc('请输入验证码'));
       return;
     }
     setLoading(true);
@@ -190,7 +192,7 @@ export default function Login() {
     setLoading(true);
     try {
       await sendMfaEmail(mfaToken);
-      toast.success("验证码已发送至邮箱");
+      toast.success(tc('验证码已发送至邮箱'));
       setMfaMethod("email");
     } catch (err: any) {
       toast.error(err?.response?.data?.detail || "邮件发送失败");
@@ -219,11 +221,11 @@ export default function Login() {
   async function onForgotSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!resetIdentifier.trim()) {
-      toast.error("请输入用户名或邮箱");
+      toast.error(tc('请输入用户名或邮箱'));
       return;
     }
     if (showTurnstile && security?.turnstile_site_key && !turnstileToken) {
-      toast.error("请先完成人机验证");
+      toast.error(tc('请先完成人机验证'));
       return;
     }
     setLoading(true);
@@ -235,7 +237,7 @@ export default function Login() {
       const status = err?.response?.status;
       if (status === 428) {
         setCaptchaForced(true);
-        toast.error("需要完成人机验证后重试");
+        toast.error(tc('需要完成人机验证后重试'));
       } else {
         toast.error(err?.response?.data?.detail || "发送失败，请稍后再试");
       }
@@ -246,13 +248,13 @@ export default function Login() {
 
   async function onResetSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!resetCode.trim()) return toast.error("请输入验证码");
-    if (resetPwd.length < 8) return toast.error("新密码至少 8 位");
-    if (resetPwd !== resetPwd2) return toast.error("两次输入的密码不一致");
+    if (!resetCode.trim()) return toast.error(tc('请输入验证码'));
+    if (resetPwd.length < 8) return toast.error(tc('新密码至少 8 位'));
+    if (resetPwd !== resetPwd2) return toast.error(tc('两次输入的密码不一致'));
     setLoading(true);
     try {
       await resetPassword(resetIdentifier.trim(), resetCode.trim(), resetPwd);
-      toast.success("密码已重置，请使用新密码登录");
+      toast.success(tc('密码已重置，请使用新密码登录'));
       setUsername(resetIdentifier.trim());
       setPassword("");
       backToLogin();
@@ -388,14 +390,12 @@ export default function Login() {
               {mode === "mfa" ? (
                 <form onSubmit={onMfaSubmit} className="space-y-6">
                   <div className="space-y-4">
-                    <Label htmlFor="mfa-code" className="text-[13px] font-medium tracking-wide text-stone-300">
-                      验证码
-                    </Label>
+                    <Label htmlFor="mfa-code" className="text-[13px] font-medium tracking-wide text-stone-300">{tc('验证码')}</Label>
                     <Input
                       id="mfa-code"
                       value={mfaCode}
                       onChange={(e) => setMfaCode(e.target.value)}
-                      placeholder="6 位数字"
+                      placeholder={tc('6 位数字')}
                       inputMode="numeric"
                       autoComplete="one-time-code"
                       maxLength={6}
@@ -411,9 +411,7 @@ export default function Login() {
                       disabled={loading}
                       onClick={onSendEmailCode}
                     >
-                      <Mail className="mr-2 h-4 w-4" />
-                      发送邮件验证码
-                    </Button>
+                      <Mail className="mr-2 h-4 w-4" />{tc('发送邮件验证码')}</Button>
                   )}
                   <Button
                     type="submit"
@@ -429,23 +427,19 @@ export default function Login() {
                     className="w-full text-stone-400 hover:text-orange-400"
                     onClick={backToLogin}
                   >
-                    <ArrowLeft className="mr-1 h-4 w-4" />
-                    返回登录
-                  </Button>
+                    <ArrowLeft className="mr-1 h-4 w-4" />{tc('返回登录')}</Button>
                 </form>
               ) : mode === "forgot" ? (
                 <form onSubmit={onForgotSubmit} className="space-y-6">
                   <div className="space-y-4">
-                    <Label htmlFor="forgot-id" className="text-[13px] font-medium tracking-wide text-stone-300">
-                      用户名或邮箱
-                    </Label>
+                    <Label htmlFor="forgot-id" className="text-[13px] font-medium tracking-wide text-stone-300">{tc('用户名或邮箱')}</Label>
                     <div className="relative">
                       <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-500" />
                       <Input
                         id="forgot-id"
                         value={resetIdentifier}
                         onChange={(e) => setResetIdentifier(e.target.value)}
-                        placeholder="请输入用户名或绑定邮箱"
+                        placeholder={tc('请输入用户名或绑定邮箱')}
                         autoComplete="username"
                         required
                         className="h-12 rounded-xl border-stone-700/70 bg-stone-900/60 pl-10 text-stone-100 placeholder:text-stone-500 focus-visible:border-orange-500/60 focus-visible:ring-orange-500/30"
@@ -465,9 +459,7 @@ export default function Login() {
                       <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
                       <>
-                        <Mail className="h-4 w-4" />
-                        发送验证码
-                      </>
+                        <Mail className="h-4 w-4" />{tc('发送验证码')}</>
                     )}
                   </Button>
                   <div className="flex items-center justify-between text-sm">
@@ -476,29 +468,23 @@ export default function Login() {
                       className="text-stone-400 transition-colors hover:text-orange-400"
                       onClick={backToLogin}
                     >
-                      <ArrowLeft className="mr-1 inline h-4 w-4" />
-                      返回登录
-                    </button>
+                      <ArrowLeft className="mr-1 inline h-4 w-4" />{tc('返回登录')}</button>
                     <button
                       type="button"
                       className="text-stone-400 transition-colors hover:text-orange-400"
                       onClick={() => setMode("reset")}
-                    >
-                      已有验证码？
-                    </button>
+                    >{tc('已有验证码？')}</button>
                   </div>
                 </form>
               ) : mode === "reset" ? (
                 <form onSubmit={onResetSubmit} className="space-y-6">
                   <div className="space-y-4">
-                    <Label htmlFor="reset-code" className="text-[13px] font-medium tracking-wide text-stone-300">
-                      邮件验证码
-                    </Label>
+                    <Label htmlFor="reset-code" className="text-[13px] font-medium tracking-wide text-stone-300">{tc('邮件验证码')}</Label>
                     <Input
                       id="reset-code"
                       value={resetCode}
                       onChange={(e) => setResetCode(e.target.value)}
-                      placeholder="6 位数字"
+                      placeholder={tc('6 位数字')}
                       inputMode="numeric"
                       maxLength={6}
                       required
@@ -506,9 +492,7 @@ export default function Login() {
                     />
                   </div>
                   <div className="space-y-4">
-                    <Label htmlFor="reset-pwd" className="text-[13px] font-medium tracking-wide text-stone-300">
-                      新密码
-                    </Label>
+                    <Label htmlFor="reset-pwd" className="text-[13px] font-medium tracking-wide text-stone-300">{tc('新密码')}</Label>
                     <div className="relative">
                       <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-500" />
                       <Input
@@ -516,7 +500,7 @@ export default function Login() {
                         type="password"
                         value={resetPwd}
                         onChange={(e) => setResetPwd(e.target.value)}
-                        placeholder="至少 8 位"
+                        placeholder={tc('至少 8 位')}
                         autoComplete="new-password"
                         required
                         className="h-12 rounded-xl border-stone-700/70 bg-stone-900/60 pl-10 text-stone-100 placeholder:text-stone-500 focus-visible:border-orange-500/60 focus-visible:ring-orange-500/30"
@@ -524,9 +508,7 @@ export default function Login() {
                     </div>
                   </div>
                   <div className="space-y-4">
-                    <Label htmlFor="reset-pwd2" className="text-[13px] font-medium tracking-wide text-stone-300">
-                      确认新密码
-                    </Label>
+                    <Label htmlFor="reset-pwd2" className="text-[13px] font-medium tracking-wide text-stone-300">{tc('确认新密码')}</Label>
                     <div className="relative">
                       <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-500" />
                       <Input
@@ -534,7 +516,7 @@ export default function Login() {
                         type="password"
                         value={resetPwd2}
                         onChange={(e) => setResetPwd2(e.target.value)}
-                        placeholder="请再次输入新密码"
+                        placeholder={tc('请再次输入新密码')}
                         autoComplete="new-password"
                         required
                         className="h-12 rounded-xl border-stone-700/70 bg-stone-900/60 pl-10 text-stone-100 placeholder:text-stone-500 focus-visible:border-orange-500/60 focus-visible:ring-orange-500/30"
@@ -555,31 +537,25 @@ export default function Login() {
                       className="text-stone-400 transition-colors hover:text-orange-400"
                       onClick={() => setMode("forgot")}
                     >
-                      <ArrowLeft className="mr-1 inline h-4 w-4" />
-                      重新获取验证码
-                    </button>
+                      <ArrowLeft className="mr-1 inline h-4 w-4" />{tc('重新获取验证码')}</button>
                     <button
                       type="button"
                       className="text-stone-400 transition-colors hover:text-orange-400"
                       onClick={backToLogin}
-                    >
-                      返回登录
-                    </button>
+                    >{tc('返回登录')}</button>
                   </div>
                 </form>
               ) : (
                 <form onSubmit={onSubmit} className="space-y-6">
                   <div className="space-y-4">
-                    <Label htmlFor="username" className="text-[13px] font-medium tracking-wide text-stone-300">
-                      用户名
-                    </Label>
+                    <Label htmlFor="username" className="text-[13px] font-medium tracking-wide text-stone-300">{tc('用户名')}</Label>
                     <div className="relative">
                       <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-500" />
                       <Input
                         id="username"
                         value={username}
                         onChange={(e) => setUsername(e.target.value)}
-                        placeholder="请输入用户名"
+                        placeholder={tc('请输入用户名')}
                         autoComplete="username"
                         required
                         className="h-12 rounded-xl border-stone-700/70 bg-stone-900/60 pl-10 text-stone-100 placeholder:text-stone-500 focus-visible:border-orange-500/60 focus-visible:ring-orange-500/30"
@@ -588,17 +564,13 @@ export default function Login() {
                   </div>
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
-                      <Label htmlFor="password" className="text-[13px] font-medium tracking-wide text-stone-300">
-                        密码
-                      </Label>
+                      <Label htmlFor="password" className="text-[13px] font-medium tracking-wide text-stone-300">{tc('密码')}</Label>
                       {security?.password_reset_enabled ? (
                         <button
                           type="button"
                           className="text-xs font-medium text-stone-400 transition-colors hover:text-orange-400"
                           onClick={openForgot}
-                        >
-                          忘记密码？
-                        </button>
+                        >{tc('忘记密码？')}</button>
                       ) : null}
                     </div>
                     <div className="relative">
@@ -608,7 +580,7 @@ export default function Login() {
                         type="password"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
-                        placeholder="请输入密码"
+                        placeholder={tc('请输入密码')}
                         autoComplete="current-password"
                         required
                         className="h-12 rounded-xl border-stone-700/70 bg-stone-900/60 pl-10 text-stone-100 placeholder:text-stone-500 focus-visible:border-orange-500/60 focus-visible:ring-orange-500/30"
@@ -618,9 +590,7 @@ export default function Login() {
                   {captchaVisible && security?.turnstile_site_key ? (
                     <div ref={turnstileRef} className="flex justify-center" />
                   ) : captchaVisible ? (
-                    <p className="text-center text-xs text-amber-400">
-                      已要求人机验证，请在系统设置中配置 Turnstile Site Key
-                    </p>
+                    <p className="text-center text-xs text-amber-400">{tc('已要求人机验证，请在系统设置中配置 Turnstile Site Key')}</p>
                   ) : null}
                   <Button
                     type="submit"
@@ -632,9 +602,7 @@ export default function Login() {
                   >
                     {loading ? (
                       <>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        登录中…
-                      </>
+                        <Loader2 className="h-4 w-4 animate-spin" />{tc('登录中…')}</>
                     ) : (
                       <>
                         {action.login}

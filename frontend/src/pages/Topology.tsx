@@ -6,8 +6,10 @@ import PageCard from "@/components/PageCard";
 import PhysicalTopologyFlow from "@/components/PhysicalTopologyFlow";
 import { Badge } from "@/components/ui/badge";
 import { empty, page } from "../constants/uiCopy";
+import { useTc } from "@/i18n/useTc";
 
 export default function Topology() {
+  const { tc } = useTc();
   const [topo, setTopo] = useState<Topo | null>(null);
   const [error, setError] = useState(false);
 
@@ -29,9 +31,7 @@ export default function Topology() {
 
   if (error && !topo) {
     return (
-      <div className="py-16 text-center text-sm text-muted-foreground">
-        拓扑数据加载失败，将自动重试…
-      </div>
+      <div className="py-16 text-center text-sm text-muted-foreground">{tc('拓扑数据加载失败，将自动重试…')}</div>
     );
   }
 
@@ -56,7 +56,7 @@ export default function Topology() {
         <>
           <Badge variant="destructive">DCI {linkStats.dci}</Badge>
           <Badge variant="info">Fabric {linkStats.fabric}</Badge>
-          <span className="text-xs text-muted-foreground">滚轮缩放 · 拖拽平移</span>
+          <span className="text-xs text-muted-foreground">{tc('滚轮缩放 · 拖拽平移')}</span>
         </>
       }
     >
@@ -66,7 +66,7 @@ export default function Topology() {
           showIcon
           style={{ marginBottom: 12 }}
           message="尚未配置站点间链路"
-          description="当前按站点泳道展示纳管设备。在「容量规划」中添加 DCI / Fabric 链路后，拓扑图将自动绘制互联关系与带宽利用率。"
+          description={tc('当前按站点泳道展示纳管设备。在「容量规划」中添加 DCI / Fabric 链路后，拓扑图将自动绘制互联关系与带宽利用率。')}
         />
       )}
       <div className="topology-page-body">

@@ -18,6 +18,7 @@ import CircuitMonitorPanel from "../components/CircuitMonitorPanel";
 import PageCard from "../components/PageCard";
 import { action, empty, page } from "../constants/uiCopy";
 import { fetchAllPages } from "../utils/pagination";
+import { useTc } from "@/i18n/useTc";
 
 const STATUS_LABEL: Record<string, string> = {
   active: "运行中",
@@ -44,6 +45,7 @@ const STATUS_COLOR: Record<string, string> = {
 const MONITORABLE = new Set(["active", "degraded", "provisioning", "pending", "draft", "failed"]);
 
 export default function Monitoring() {
+  const { tc } = useTc();
   const { message } = AntApp.useApp();
   const [params, setParams] = useSearchParams();
   const [circuits, setCircuits] = useState<Circuit[]>([]);
@@ -70,7 +72,7 @@ export default function Monitoring() {
         setSelected(null);
       }
     } catch {
-      message.error("专线列表加载失败");
+      message.error(tc('专线列表加载失败'));
       setCircuits([]);
       setSelected(null);
     } finally {
@@ -121,7 +123,7 @@ export default function Monitoring() {
                   style={{ width: "100%" }}
                   value={selected ?? undefined}
                   onChange={selectCircuit}
-                  placeholder="选择专线"
+                  placeholder={tc('选择专线')}
                   showSearch
                   optionFilterProp="label"
                   popupClassName="app-select-dropdown"
@@ -149,20 +151,14 @@ export default function Monitoring() {
                   showIcon
                   message="暂无可监控专线"
                   description={
-                    <>
-                      当前没有已激活（active）的专线。请先在
-                      <Link to="/circuits"> 专线管理 </Link>
-                      创建并开通专线，或点击刷新重试。
-                    </>
+                    <>{tc('当前没有已激活（active）的专线。请先在')}<Link to="/circuits">{tc('专线管理')}</Link>{tc('创建并开通专线，或点击刷新重试。')}</>
                   }
                 />
               )}
             </div>
             <div className="monitoring-toolbar-actions">
               <Space wrap>
-                <Button icon={<ExperimentOutlined />} onClick={collectNow} type="primary" ghost>
-                  SNMP 采集
-                </Button>
+                <Button icon={<ExperimentOutlined />} onClick={collectNow} type="primary" ghost>{tc('SNMP 采集')}</Button>
                 <Button icon={<ReloadOutlined />} onClick={() => loadCircuits()}>
                   {action.refresh}
                 </Button>
@@ -177,7 +173,7 @@ export default function Monitoring() {
           type="warning"
           showIcon
           message={`专线 ${current.code} 当前状态为「${STATUS_LABEL[current.status] || current.status}」`}
-          description="SNMP 流量与可用性数据在专线激活（active）后通过 SNMP 与拨测采集；草稿/失败状态仅展示历史数据。"
+          description={tc('SNMP 流量与可用性数据在专线激活（active）后通过 SNMP 与拨测采集；草稿/失败状态仅展示历史数据。')}
         />
       )}
 
@@ -197,9 +193,7 @@ export default function Monitoring() {
             >
               {!circuits.length && (
                 <Link to="/circuits">
-                  <Button type="primary" icon={<PlusOutlined />}>
-                    前往专线管理
-                  </Button>
+                  <Button type="primary" icon={<PlusOutlined />}>{tc('前往专线管理')}</Button>
                 </Link>
               )}
             </Empty>

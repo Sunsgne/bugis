@@ -2,8 +2,10 @@ import { Alert, Button, Form, Input, Space, App as AntApp, Typography } from "an
 import { SaveOutlined } from "@ant-design/icons";
 import { useEffect } from "react";
 import { usePlatformSettings } from "../../hooks/usePlatformSettings";
+import { useTc } from "@/i18n/useTc";
 
 export default function BaselineSettings() {
+  const { tc } = useTc();
   const { message } = AntApp.useApp();
   const [form] = Form.useForm();
   const { platform, loading, saving, save } = usePlatformSettings();
@@ -21,7 +23,7 @@ export default function BaselineSettings() {
     const v = await form.validateFields();
     try {
       await save(v);
-      message.success("设备基线参数已保存");
+      message.success(tc('设备基线参数已保存'));
     } catch (e: any) {
       message.error(e?.response?.data?.detail || "保存失败");
     }
@@ -31,14 +33,10 @@ export default function BaselineSettings() {
     <div className="settings-panel">
       <Space style={{ marginBottom: 16, width: "100%", justifyContent: "space-between" }}>
         <div>
-          <Typography.Title level={5} style={{ margin: 0 }}>
-            设备基线
-          </Typography.Title>
-          <Typography.Text type="secondary">写入设备初始化模板的 NTP / Syslog</Typography.Text>
+          <Typography.Title level={5} style={{ margin: 0 }}>{tc('设备基线')}</Typography.Title>
+          <Typography.Text type="secondary">{tc('写入设备初始化模板的 NTP / Syslog')}</Typography.Text>
         </div>
-        <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={onSave}>
-          保存
-        </Button>
+        <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={onSave}>{tc('保存')}</Button>
       </Space>
       <Alert
         type="info"
@@ -47,10 +45,10 @@ export default function BaselineSettings() {
         message="SNMP community 请在「SNMP 采集」页配置 baseline_community。"
       />
       <Form form={form} layout="vertical" className="app-form" disabled={loading} style={{ maxWidth: 520 }}>
-        <Form.Item name="baseline_ntp_server" label="NTP 服务器">
+        <Form.Item name="baseline_ntp_server" label={tc('NTP 服务器')}>
           <Input placeholder="10.0.0.1" />
         </Form.Item>
-        <Form.Item name="baseline_syslog_server" label="Syslog 服务器">
+        <Form.Item name="baseline_syslog_server" label={tc('Syslog 服务器')}>
           <Input placeholder="10.0.0.2" />
         </Form.Item>
       </Form>
