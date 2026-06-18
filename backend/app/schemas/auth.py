@@ -52,6 +52,7 @@ class LoginSecurityOut(BaseModel):
     turnstile_enabled: bool = False
     turnstile_site_key: str = ""
     captcha_required_default: bool = False
+    password_reset_enabled: bool = False
 
 
 class StreamTicketOut(BaseModel):
@@ -120,3 +121,28 @@ class UserOut(TimestampedSchema):
 class PasswordChangeRequest(BaseModel):
     current_password: str
     new_password: str
+
+
+class ProfileUpdateRequest(BaseModel):
+    """Self-service profile update available to any authenticated account."""
+
+    full_name: str | None = Field(default=None, max_length=128)
+    email: str | None = Field(default=None, max_length=255)
+
+
+class ForgotPasswordRequest(BaseModel):
+    """Initiate a password reset; accepts a username or e-mail address."""
+
+    identifier: str = Field(min_length=1, max_length=255)
+    turnstile_token: str | None = None
+
+
+class ForgotPasswordOut(BaseModel):
+    sent: bool = True
+    detail: str = "若该账号存在且已绑定邮箱，验证码已发送至邮箱。"
+
+
+class ResetPasswordRequest(BaseModel):
+    identifier: str = Field(min_length=1, max_length=255)
+    code: str = Field(min_length=4, max_length=12)
+    new_password: str = Field(min_length=8, max_length=128)
