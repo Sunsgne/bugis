@@ -44,6 +44,11 @@ export default function AlarmSettings() {
         </Button>
       </Space>
       <Form form={form} layout="vertical" className="app-form" disabled={loading}>
+        <Typography.Paragraph type="secondary" style={{ marginBottom: 16, fontSize: 13 }}>
+          推荐探测与愈合策略：调度周期 30s · 每条专线轮询探针 · 丢包 ≥0.5% · 时延 ≥50ms ·
+          峰值利用率 ≥90% · 健康分低于 70 · 骨干链路 ≥85% · 闪断 15 分钟内 ≥3 次。
+          P1/P2 告警需人工确认；P3 告警通知投递成功后自动确认。
+        </Typography.Paragraph>
         <Row gutter={16}>
           <Col xs={12} md={8}>
             <Form.Item name="threshold_packet_loss_pct" label="丢包率阈值 (%)">

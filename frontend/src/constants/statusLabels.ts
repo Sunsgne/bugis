@@ -29,6 +29,26 @@ export const TENANT_STATUS: Record<string, { label: string; color: string }> = {
   terminated: { label: "已终止", color: "default" },
 };
 
+export const ALARM_KIND: Record<string, string> = {
+  tunnel_down: "隧道异常",
+  circuit_interruption: "业务中断",
+  sla_loss: "丢包超标",
+  sla_latency: "时延超标",
+  utilization: "带宽拥塞",
+  health: "健康劣化",
+  circuit_flap: "闪断频繁",
+  link_utilization: "骨干拥塞",
+  test: "测试通知",
+};
+
+export const ALARM_SEVERITY: Record<string, { label: string; color: string }> = {
+  critical: { label: "紧急 P1", color: "red" },
+  major: { label: "重要 P2", color: "volcano" },
+  minor: { label: "一般 P3", color: "orange" },
+  warning: { label: "提示", color: "gold" },
+  info: { label: "信息", color: "blue" },
+};
+
 export const ALARM_STATUS: Record<string, { label: string; color: string }> = {
   active: { label: "活跃", color: "red" },
   acknowledged: { label: "已确认", color: "gold" },
