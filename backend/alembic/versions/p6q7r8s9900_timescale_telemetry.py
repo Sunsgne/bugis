@@ -12,7 +12,7 @@ from __future__ import annotations
 from alembic import op
 
 revision = "p6q7r8s9900"
-down_revision = "o5p6q7r8800"
+down_revision = "o5p6q7r8800_telemetry_idx"
 branch_labels = None
 depends_on = None
 
