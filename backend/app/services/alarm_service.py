@@ -15,6 +15,8 @@ from app.models.circuit import Circuit
 from app.models.enums import AlarmSeverity, AlarmStatus, CircuitStatus
 from app.models.link import Link
 from app.schemas.telemetry import CircuitHealth
+from app.services import platform_settings as platform_cfg
+from app.services.circuit_alarm_settings import effective_thresholds
 
 
 def _active_by_key(db: Session, dedup_key: str) -> Alarm | None:
@@ -77,6 +79,8 @@ def clear_by_key(db: Session, dedup_key: str) -> int:
 def evaluate_circuit_health(db: Session, circuit: Circuit, health: CircuitHealth) -> None:
     """Raise/clear alarms for one circuit based on its computed health."""
     cid = circuit.id
+    plat = platform_cfg.get_or_create(db)
+    th = effective_thresholds(circuit, plat)
 
     # Tunnel / status down — also check latest telemetry tunnel_state
     key_down = f"circuit:{cid}:down"
@@ -95,11 +99,11 @@ def evaluate_circuit_health(db: Session, circuit: Circuit, health: CircuitHealth
 
     # Packet loss
     key_loss = f"circuit:{cid}:loss"
-    if health.avg_packet_loss_pct > settings.threshold_packet_loss_pct:
+    if health.avg_packet_loss_pct > th.packet_loss_pct:
         raise_alarm(
             db, "sla_loss", AlarmSeverity.MAJOR,
             f"专线 {circuit.code} 丢包率超阈值 {health.avg_packet_loss_pct}%",
-            key_loss, detail=f"threshold={settings.threshold_packet_loss_pct}%",
+            key_loss, detail=f"threshold={th.packet_loss_pct}%",
             circuit_id=cid,
         )
     else:
@@ -107,33 +111,35 @@ def evaluate_circuit_health(db: Session, circuit: Circuit, health: CircuitHealth
 
     # Latency
     key_lat = f"circuit:{cid}:latency"
-    if health.avg_latency_ms > settings.threshold_latency_ms:
+    if health.avg_latency_ms > th.latency_ms:
         raise_alarm(
             db, "sla_latency", AlarmSeverity.MINOR,
             f"专线 {circuit.code} 时延超阈值 {health.avg_latency_ms}ms",
-            key_lat, circuit_id=cid,
+            key_lat, detail=f"threshold={th.latency_ms}ms",
+            circuit_id=cid,
         )
     else:
         clear_by_key(db, key_lat)
 
     # Utilization
     key_util = f"circuit:{cid}:utilization"
-    if health.peak_utilization_pct > settings.threshold_utilization_pct:
+    if health.peak_utilization_pct > th.utilization_pct:
         raise_alarm(
             db, "utilization", AlarmSeverity.MINOR,
             f"专线 {circuit.code} 带宽利用率峰值 {health.peak_utilization_pct}%",
-            key_util, detail="考虑扩容带宽", circuit_id=cid,
+            key_util, detail=f"阈值 {th.utilization_pct}% · 考虑扩容带宽", circuit_id=cid,
         )
     else:
         clear_by_key(db, key_util)
 
     # Composite health score
     key_health = f"circuit:{cid}:health"
-    if health.health_score < settings.threshold_health_score:
+    if health.health_score < th.health_score_min:
         raise_alarm(
             db, "health", AlarmSeverity.MAJOR,
             f"专线 {circuit.code} 健康评分偏低 ({health.health_score})",
-            key_health, circuit_id=cid,
+            key_health, detail=f"threshold={th.health_score_min}",
+            circuit_id=cid,
         )
     else:
         clear_by_key(db, key_health)

@@ -31,6 +31,8 @@ from app.schemas.circuit import (
 from app.schemas.pagination import PaginatedResponse, paginate_query, paginated
 from app.schemas.path import PathPreviewRequest, PathPreviewResponse
 from app.services import allocation, circuit_adopt, path_service, port_inventory, probe, validation
+from app.services import platform_settings as platform_cfg
+from app.services.circuit_alarm_settings import thresholds_out
 
 router = APIRouter()
 
@@ -51,8 +53,10 @@ def _site_asn_for_endpoints(db: Session, endpoints: list[CircuitEndpoint]) -> in
     return None
 
 
-def _to_circuit_list_out(circuit: Circuit) -> CircuitListOut:
-    return CircuitListOut.model_validate(circuit, from_attributes=True)
+def _to_circuit_list_out(db: Session, circuit: Circuit) -> CircuitListOut:
+    base = CircuitListOut.model_validate(circuit, from_attributes=True)
+    plat = platform_cfg.get_or_create(db)
+    return base.model_copy(update=thresholds_out(circuit, plat))
 
 
 def _to_circuit_out(db: Session, circuit: Circuit) -> CircuitOut:
@@ -70,8 +74,10 @@ def _to_circuit_out(db: Session, circuit: Circuit) -> CircuitOut:
             )
         )
     base = CircuitOut.model_validate(circuit, from_attributes=True)
+    plat = platform_cfg.get_or_create(db)
     return base.model_copy(
         update={
+            **thresholds_out(circuit, plat),
             "path_hops": hop_schemas,
             "segment_list": path_service.segment_list(path_devices),
         }
@@ -113,7 +119,7 @@ def list_circuits(
         stmt = stmt.where(or_(Circuit.code.ilike(like), Circuit.name.ilike(like)))
     circuits, total = paginate_query(db, stmt, page=page, page_size=page_size)
     return paginated(
-        [_to_circuit_list_out(c) for c in circuits],
+        [_to_circuit_list_out(db, c) for c in circuits],
         total=total,
         page=page,
         page_size=page_size,

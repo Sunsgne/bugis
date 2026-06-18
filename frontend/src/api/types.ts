@@ -203,6 +203,15 @@ export interface Circuit {
   mtu: number;
   sla_target?: string;
   cos?: string;
+  alarm_latency_ms?: number | null;
+  alarm_packet_loss_pct?: number | null;
+  alarm_utilization_pct?: number | null;
+  alarm_health_score_min?: number | null;
+  effective_alarm_latency_ms?: number;
+  effective_alarm_packet_loss_pct?: number;
+  effective_alarm_utilization_pct?: number;
+  effective_alarm_health_score_min?: number;
+  alarm_thresholds_customized?: boolean;
   description?: string;
   egress_country?: string;
   egress_site_id?: number;

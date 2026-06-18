@@ -1,7 +1,7 @@
 """Circuit & endpoint schemas."""
 from __future__ import annotations
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.models.enums import AccessMode, CircuitStatus, PathMode, ServiceType
 from app.schemas.common import TimestampedSchema
@@ -51,6 +51,10 @@ class CircuitBase(BaseModel):
     mtu: int = 9000
     sla_target: str | None = None
     cos: str | None = None
+    alarm_latency_ms: float | None = Field(default=None, ge=0, le=10000)
+    alarm_packet_loss_pct: float | None = Field(default=None, ge=0, le=100)
+    alarm_utilization_pct: float | None = Field(default=None, ge=0, le=100)
+    alarm_health_score_min: float | None = Field(default=None, ge=0, le=100)
     description: str | None = None
     egress_country: str | None = None
     egress_site_id: int | None = None
@@ -93,6 +97,10 @@ class CircuitUpdate(BaseModel):
     mtu: int | None = None
     sla_target: str | None = None
     cos: str | None = None
+    alarm_latency_ms: float | None = Field(default=None, ge=0, le=10000)
+    alarm_packet_loss_pct: float | None = Field(default=None, ge=0, le=100)
+    alarm_utilization_pct: float | None = Field(default=None, ge=0, le=100)
+    alarm_health_score_min: float | None = Field(default=None, ge=0, le=100)
     description: str | None = None
     egress_country: str | None = None
     egress_site_id: int | None = None
@@ -121,6 +129,11 @@ class CircuitListOut(CircuitBase, TimestampedSchema):
     status: CircuitStatus
     adopted: bool = False
     endpoints: list[CircuitEndpointOut] = []
+    effective_alarm_latency_ms: float | None = None
+    effective_alarm_packet_loss_pct: float | None = None
+    effective_alarm_utilization_pct: float | None = None
+    effective_alarm_health_score_min: float | None = None
+    alarm_thresholds_customized: bool = False
 
 
 class CircuitOut(CircuitListOut):

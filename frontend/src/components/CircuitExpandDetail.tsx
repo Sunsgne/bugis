@@ -66,6 +66,39 @@ export default function CircuitExpandDetail({
     <div className="circuit-expand-detail" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div>
         <Typography.Text type="secondary" style={{ display: "block", marginBottom: 10, fontSize: 12 }}>
+          SLA 告警阈值
+          {detail.alarm_thresholds_customized ? (
+            <Typography.Text type="warning" style={{ marginLeft: 8 }}>
+              已自定义
+            </Typography.Text>
+          ) : (
+            <Typography.Text style={{ marginLeft: 8 }}>继承平台默认</Typography.Text>
+          )}
+        </Typography.Text>
+        <Descriptions size="small" column={{ xs: 1, sm: 2, lg: 4 }} bordered>
+          <Descriptions.Item label="时延">
+            {detail.effective_alarm_latency_ms != null ? `${detail.effective_alarm_latency_ms} ms` : "—"}
+          </Descriptions.Item>
+          <Descriptions.Item label="丢包">
+            {detail.effective_alarm_packet_loss_pct != null
+              ? `${detail.effective_alarm_packet_loss_pct}%`
+              : "—"}
+          </Descriptions.Item>
+          <Descriptions.Item label="峰值利用率">
+            {detail.effective_alarm_utilization_pct != null
+              ? `${detail.effective_alarm_utilization_pct}%`
+              : "—"}
+          </Descriptions.Item>
+          <Descriptions.Item label="健康分下限">
+            {detail.effective_alarm_health_score_min != null
+              ? `${detail.effective_alarm_health_score_min}`
+              : "—"}
+          </Descriptions.Item>
+        </Descriptions>
+      </div>
+
+      <div>
+        <Typography.Text type="secondary" style={{ display: "block", marginBottom: 10, fontSize: 12 }}>
           EVPN 业务标识（两端共享）
         </Typography.Text>
         <Descriptions size="small" column={{ xs: 1, sm: 2, lg: 3 }} bordered>

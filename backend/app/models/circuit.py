@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, ForeignKey, Integer, String
+from sqlalchemy import Boolean, Float, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -51,6 +51,11 @@ class Circuit(Base, TimestampMixin):
     # SLA target (e.g. "99.99") and class of service
     sla_target: Mapped[str | None] = mapped_column(String(16), nullable=True)
     cos: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    # Optional per-circuit alarm overrides (null → platform defaults).
+    alarm_latency_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+    alarm_packet_loss_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    alarm_utilization_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    alarm_health_score_min: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     description: Mapped[str | None] = mapped_column(String(255), nullable=True)
 

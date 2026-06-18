@@ -53,6 +53,7 @@ import { fetchAllPages } from "../utils/pagination";
 import PageCard from "../components/PageCard";
 import ListToolbar from "../components/ListToolbar";
 import CircuitExpandDetail from "../components/CircuitExpandDetail";
+import CircuitAlarmThresholdFields from "../components/CircuitAlarmThresholdFields";
 import { formatOperStatus } from "../utils/networkDisplay";
 import CircuitMonitorPanel from "../components/CircuitMonitorPanel";
 import CircuitEndpointsEditor from "../components/CircuitEndpointsEditor";
@@ -305,6 +306,16 @@ export default function Circuits() {
     } else {
       payload.vsi_name = String(payload.vsi_name).trim();
     }
+    for (const key of [
+      "alarm_latency_ms",
+      "alarm_packet_loss_pct",
+      "alarm_utilization_pct",
+      "alarm_health_score_min",
+    ] as const) {
+      if (payload[key] === undefined || payload[key] === null || payload[key] === "") {
+        delete payload[key];
+      }
+    }
     if (typeof payload.ipt_nat_enabled === "boolean") {
       payload.ipt_nat_enabled = payload.ipt_nat_enabled ? 1 : 0;
     }
@@ -475,11 +486,25 @@ export default function Circuits() {
     if (!modifyTarget) return;
     const v = await modifyForm.validateFields();
     try {
-      await api.patch(`/circuits/${modifyTarget.id}`, { bandwidth_mbps: v.bandwidth_mbps });
-      const { data } = await api.post(
-        `/work-orders/provision/${modifyTarget.id}?wo_type=modify`
-      );
-      message.success(`变更工单 ${data.code}: ${data.status}`);
+      const patch: Record<string, unknown> = {
+        alarm_latency_ms: v.alarm_latency_ms ?? null,
+        alarm_packet_loss_pct: v.alarm_packet_loss_pct ?? null,
+        alarm_utilization_pct: v.alarm_utilization_pct ?? null,
+        alarm_health_score_min: v.alarm_health_score_min ?? null,
+      };
+      const bwChanged = v.bandwidth_mbps !== modifyTarget.bandwidth_mbps;
+      if (bwChanged) {
+        patch.bandwidth_mbps = v.bandwidth_mbps;
+      }
+      await api.patch(`/circuits/${modifyTarget.id}`, patch);
+      if (bwChanged) {
+        const { data } = await api.post(
+          `/work-orders/provision/${modifyTarget.id}?wo_type=modify`
+        );
+        message.success(`变更工单 ${data.code}: ${data.status}`);
+      } else {
+        message.success("告警参数已保存");
+      }
       setModifyTarget(null);
       loadCircuits();
     } catch (e: any) {
@@ -932,10 +957,17 @@ export default function Circuits() {
                 r.status === "active" && {
                   key: "modify",
                   icon: <EditOutlined />,
-                  label: "变更带宽",
-                  onClick: () => {
-                    setModifyTarget(r);
-                    modifyForm.setFieldsValue({ bandwidth_mbps: r.bandwidth_mbps });
+                  label: "变更参数 / 告警",
+                  onClick: async () => {
+                    const detail = await loadCircuitDetail(r.id);
+                    setModifyTarget(detail);
+                    modifyForm.setFieldsValue({
+                      bandwidth_mbps: detail.bandwidth_mbps,
+                      alarm_latency_ms: detail.alarm_latency_ms,
+                      alarm_packet_loss_pct: detail.alarm_packet_loss_pct,
+                      alarm_utilization_pct: detail.alarm_utilization_pct,
+                      alarm_health_score_min: detail.alarm_health_score_min,
+                    });
                   },
                 },
                 r.status !== "decommissioned" && {
@@ -1039,25 +1071,26 @@ export default function Circuits() {
         message={message}
       />
       <Modal
-        title={`变更带宽 · ${modifyTarget?.code || ""}`}
+        title={`变更参数 · ${modifyTarget?.code || ""}`}
         open={!!modifyTarget}
         onOk={doModify}
         onCancel={() => setModifyTarget(null)}
-        okText="提交变更并下发"
+        okText="保存"
         {...formModalProps}
-        width={480}
+        width={640}
       >
         <Form form={modifyForm} layout="vertical" className="app-form">
           <Form.Item
             name="bandwidth_mbps"
-            label="新带宽 (Mbps)"
+            label="带宽 (Mbps)"
             rules={[{ required: true }]}
           >
             <InputNumber min={1} style={{ width: "100%" }} />
           </Form.Item>
-          <div className="form-hint-block">
-            变更将创建 MODIFY 工单并重新下发各厂商 QoS / 限速配置。
+          <div className="form-hint-block" style={{ marginBottom: 16 }}>
+            仅当带宽发生变化时会创建 MODIFY 工单并重新下发 QoS / 限速配置；仅修改告警参数不会触发下发。
           </div>
+          <CircuitAlarmThresholdFields />
         </Form>
       </Modal>
 
@@ -1392,6 +1425,11 @@ function CreateModal({
                   </Col>
                 </Row>
               ),
+            },
+            {
+              key: "alarm",
+              label: "SLA 告警阈值（可选 · 留空继承平台默认）",
+              children: <CircuitAlarmThresholdFields />,
             },
           ]}
         />
