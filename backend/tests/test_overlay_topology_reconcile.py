@@ -145,3 +145,38 @@ def test_delete_circuit_purges_controller_state(client, auth_headers):
         assert db.query(EvpnRoute).filter(EvpnRoute.circuit_id == cid).count() == 0
     finally:
         db.close()
+
+
+def test_topology_lists_all_overlay_devices_without_vtep(client, auth_headers):
+    """Overlay graph must show every vxlan/sr-mpls device, not only VTEP registry rows."""
+    _, _, dev_a, dev_z = _bootstrap_topology(client, auth_headers)
+    n = next(_seq)
+    ip_suffix = n % 200 + 1
+    extra = client.post(
+        f"/api/v1/devices?learn=false",
+        headers=auth_headers,
+        json={
+            "name": f"overlay-extra-{n}",
+            "vendor": "h3c",
+            "role": "leaf",
+            "overlay_tech": "vxlan_evpn",
+            "status": "online",
+            "mgmt_ip": f"10.20.{ip_suffix}.10",
+            "loopback_ip": f"10.20.{ip_suffix}.1",
+            "username": "admin",
+            "password": "secret",
+        },
+    ).json()
+
+    topo = client.get("/api/v1/controller/topology", headers=auth_headers).json()
+    node_ids = {node["id"] for node in topo["nodes"]}
+    assert dev_a["id"] in node_ids
+    assert dev_z["id"] in node_ids
+    assert extra["id"] in node_ids
+
+    scan = client.post("/api/v1/controller/overlay-inventory/scan", headers=auth_headers)
+    assert scan.status_code == 200, scan.text
+    assert scan.json().get("peers_created", 0) >= 1
+
+    vteps = client.get("/api/v1/controller/vteps", headers=auth_headers).json()
+    assert any(v["device_id"] == extra["id"] for v in vteps)
