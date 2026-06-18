@@ -224,3 +224,77 @@ def test_link_suggestions_api(client, auth_headers):
     assert len(created) == 1
     usage = client.get("/api/v1/capacity/links/usage", headers=auth_headers).json()
     assert any(u["name"] == row["name"] for u in usage)
+
+
+def test_link_patch_endpoints_and_alarm_threshold(client, auth_headers):
+    n = next(_seq)
+    site_a = client.post(
+        "/api/v1/sites",
+        headers=auth_headers,
+        json={"name": f"DC-A2-{n}", "code": f"DCA2{n}", "bgp_asn": 65001},
+    ).json()
+    site_z = client.post(
+        "/api/v1/sites",
+        headers=auth_headers,
+        json={"name": f"DC-Z2-{n}", "code": f"DCZ2{n}", "bgp_asn": 65001},
+    ).json()
+    dev_a = client.post(
+        "/api/v1/devices",
+        headers=auth_headers,
+        json={
+            "name": f"GW-A2-{n}",
+            "vendor": "h3c",
+            "role": "dci_gw",
+            "mgmt_ip": f"10.9.{n}.1",
+            "site_id": site_a["id"],
+        },
+        params={"learn": False},
+    ).json()
+    dev_z = client.post(
+        "/api/v1/devices",
+        headers=auth_headers,
+        json={
+            "name": f"GW-Z2-{n}",
+            "vendor": "h3c",
+            "role": "dci_gw",
+            "mgmt_ip": f"10.9.{n}.2",
+            "site_id": site_z["id"],
+        },
+        params={"learn": False},
+    ).json()
+    client.post(f"/api/v1/devices/{dev_a['id']}/discover-interfaces", headers=auth_headers)
+    client.post(f"/api/v1/devices/{dev_z['id']}/discover-interfaces", headers=auth_headers)
+
+    created = client.post(
+        "/api/v1/capacity/links",
+        headers=auth_headers,
+        json={
+            "name": f"DCI-{n}",
+            "type": "dci",
+            "device_a_id": dev_a["id"],
+            "device_z_id": dev_z["id"],
+            "capacity_mbps": 10000,
+        },
+    )
+    assert created.status_code == 201
+    link_id = created.json()["id"]
+    assert created.json()["effective_alarm_utilization_pct"] == 85.0
+    assert created.json()["alarm_thresholds_customized"] is False
+
+    updated = client.patch(
+        f"/api/v1/capacity/links/{link_id}",
+        headers=auth_headers,
+        json={"alarm_utilization_pct": 72.5, "capacity_mbps": 20000},
+    )
+    assert updated.status_code == 200
+    body = updated.json()
+    assert body["alarm_utilization_pct"] == 72.5
+    assert body["effective_alarm_utilization_pct"] == 72.5
+    assert body["alarm_thresholds_customized"] is True
+    assert body["capacity_mbps"] == 20000
+
+    usage = client.get("/api/v1/capacity/links/usage", headers=auth_headers).json()
+    row = next(u for u in usage if u["link_id"] == link_id)
+    assert row["device_a_id"] == dev_a["id"]
+    assert row["device_z_id"] == dev_z["id"]
+    assert row["effective_alarm_utilization_pct"] == 72.5

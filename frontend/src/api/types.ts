@@ -403,6 +403,8 @@ export interface LinkUsage {
   link_id: number;
   name: string;
   type: string;
+  device_a_id: number;
+  device_z_id: number;
   device_a: string;
   device_z: string;
   interface_a?: string;
@@ -411,6 +413,9 @@ export interface LinkUsage {
   interface_z_description?: string | null;
   capacity_mbps: number;
   reserved_mbps: number;
+  alarm_utilization_pct?: number | null;
+  effective_alarm_utilization_pct?: number;
+  alarm_thresholds_customized?: boolean;
   traffic_mbps?: number;
   peak_utilization_pct?: number;
   avg_utilization_pct?: number;

@@ -1,7 +1,7 @@
 """Link schemas."""
 from __future__ import annotations
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.models.enums import LinkType
 from app.schemas.common import TimestampedSchema
@@ -17,6 +17,7 @@ class LinkBase(BaseModel):
     capacity_mbps: int = 10000
     reserved_mbps: int = 0
     description: str | None = None
+    alarm_utilization_pct: float | None = Field(default=None, ge=0, le=100)
 
 
 class LinkCreate(LinkBase):
@@ -26,15 +27,20 @@ class LinkCreate(LinkBase):
 class LinkUpdate(BaseModel):
     name: str | None = None
     type: LinkType | None = None
+    device_a_id: int | None = None
+    device_z_id: int | None = None
     interface_a: str | None = None
     interface_z: str | None = None
     capacity_mbps: int | None = None
     reserved_mbps: int | None = None
     description: str | None = None
+    alarm_utilization_pct: float | None = Field(default=None, ge=0, le=100)
 
 
 class LinkOut(LinkBase, TimestampedSchema):
     id: int
+    effective_alarm_utilization_pct: float | None = None
+    alarm_thresholds_customized: bool = False
 
 
 class LinkPlanOut(BaseModel):

@@ -5,6 +5,7 @@ import {
   Drawer,
   Form,
   Input,
+  InputNumber,
   Select,
   Space,
   Table,
@@ -12,9 +13,10 @@ import {
   Tooltip,
   Typography,
 } from "antd";
-import { BulbOutlined, PlusOutlined } from "@ant-design/icons";
+import { BulbOutlined, EditOutlined, PlusOutlined } from "@ant-design/icons";
 import { api } from "../api/client";
-import type { Device, LinkPlan, UplinkCandidate } from "../api/types";
+import type { Device, LinkPlan, LinkUsage, UplinkCandidate } from "../api/types";
+import { usePlatformSettings } from "../hooks/usePlatformSettings";
 import InterfaceNameCell from "./InterfaceNameCell";
 import {
   formatInterfaceShort,
@@ -99,12 +101,15 @@ function EndpointCell({
 type Props = {
   open: boolean;
   devices: Device[];
+  editLink?: LinkUsage | null;
   onClose: () => void;
-  onCreated: () => void;
+  onSaved: () => void;
 };
 
-export default function BackboneLinkModal({ open, devices, onClose, onCreated }: Props) {
+export default function BackboneLinkModal({ open, devices, editLink, onClose, onSaved }: Props) {
   const { message } = AntApp.useApp();
+  const { platform } = usePlatformSettings();
+  const isEdit = Boolean(editLink);
   const [suggestions, setSuggestions] = useState<LinkPlan[]>([]);
   const [selectedKeys, setSelectedKeys] = useState<number[]>([]);
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
@@ -122,6 +127,11 @@ export default function BackboneLinkModal({ open, devices, onClose, onCreated }:
       })),
     [devices],
   );
+
+  const alarmHint =
+    platform != null
+      ? `留空使用平台默认 ${platform.threshold_link_utilization_pct}%`
+      : "留空使用平台默认";
 
   async function loadSuggestions() {
     setLoadingSuggestions(true);
@@ -164,23 +174,51 @@ export default function BackboneLinkModal({ open, devices, onClose, onCreated }:
       },
     });
     setManualPlan(data);
-    form.setFieldsValue({
-      name: data.name,
-      type: data.type,
-      interface_a: data.interface_a,
-      interface_z: data.interface_z,
-      capacity_mbps: data.capacity_mbps,
-    });
+    if (!isEdit) {
+      form.setFieldsValue({
+        name: data.name,
+        type: data.type,
+        interface_a: data.interface_a,
+        interface_z: data.interface_z,
+        capacity_mbps: data.capacity_mbps,
+      });
+    }
   }
 
   useEffect(() => {
     if (!open) return;
-    loadSuggestions();
-    form.resetFields();
-    setManualPlan(null);
-    setCandidatesA([]);
-    setCandidatesZ([]);
-  }, [open]);
+
+    async function init() {
+      if (editLink) {
+        form.setFieldsValue({
+          device_a_id: editLink.device_a_id,
+          device_z_id: editLink.device_z_id,
+          interface_a: editLink.interface_a,
+          interface_z: editLink.interface_z,
+          name: editLink.name,
+          type: editLink.type,
+          capacity_mbps: editLink.capacity_mbps,
+          alarm_utilization_pct: editLink.alarm_utilization_pct,
+        });
+        setManualPlan(null);
+        setSuggestions([]);
+        setSelectedKeys([]);
+        await Promise.all([
+          loadCandidates(editLink.device_a_id, "a"),
+          loadCandidates(editLink.device_z_id, "z"),
+        ]);
+        return;
+      }
+
+      loadSuggestions();
+      form.resetFields();
+      setManualPlan(null);
+      setCandidatesA([]);
+      setCandidatesZ([]);
+    }
+
+    void init();
+  }, [open, editLink]);
 
   async function applySuggestions() {
     const picks = suggestions.filter((_, idx) => selectedKeys.includes(idx));
@@ -202,7 +240,7 @@ export default function BackboneLinkModal({ open, devices, onClose, onCreated }:
         })),
       });
       message.success(`已创建 ${picks.length} 条骨干链路`);
-      onCreated();
+      onSaved();
       onClose();
     } catch (e: any) {
       message.error(e?.response?.data?.detail || "创建失败");
@@ -217,10 +255,26 @@ export default function BackboneLinkModal({ open, devices, onClose, onCreated }:
     try {
       await api.post("/capacity/links", values);
       message.success("骨干链路已创建");
-      onCreated();
+      onSaved();
       onClose();
     } catch (e: any) {
       message.error(e?.response?.data?.detail || "创建失败");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveEdit() {
+    if (!editLink) return;
+    const values = await form.validateFields();
+    setSaving(true);
+    try {
+      await api.patch(`/capacity/links/${editLink.link_id}`, values);
+      message.success("骨干链路已更新");
+      onSaved();
+      onClose();
+    } catch (e: any) {
+      message.error(e?.response?.data?.detail || "更新失败");
     } finally {
       setSaving(false);
     }
@@ -231,102 +285,109 @@ export default function BackboneLinkModal({ open, devices, onClose, onCreated }:
 
   return (
     <Drawer
-      title="配置骨干链路"
+      title={isEdit ? "编辑骨干链路" : "配置骨干链路"}
       width="min(96vw, 1080px)"
       open={open}
       onClose={onClose}
       destroyOnClose
       extra={
-        <Space>
-          <Button onClick={loadSuggestions} loading={loadingSuggestions}>
-            刷新推荐
-          </Button>
-          <Button
-            type="primary"
-            loading={saving}
-            disabled={!selectedKeys.length}
-            onClick={applySuggestions}
-          >
-            应用选中推荐 ({selectedKeys.length})
-          </Button>
-        </Space>
+        isEdit ? null : (
+          <Space>
+            <Button onClick={loadSuggestions} loading={loadingSuggestions}>
+              刷新推荐
+            </Button>
+            <Button
+              type="primary"
+              loading={saving}
+              disabled={!selectedKeys.length}
+              onClick={applySuggestions}
+            >
+              应用选中推荐 ({selectedKeys.length})
+            </Button>
+          </Space>
+        )
       }
     >
       <Typography.Paragraph type="secondary">
         骨干 / DCI 链路优先选用 VLAN 子接口（H3C Vlan-interface、华为 Vlanif），其次聚合口与物理上联口。请确保已 SNMP 发现或现网学习。
       </Typography.Paragraph>
 
-      <Table<LinkPlan>
-        size="small"
-        rowKey={(_, idx) => String(idx)}
-        loading={loadingSuggestions}
-        dataSource={suggestions}
-        pagination={false}
-        rowSelection={{
-          selectedRowKeys: selectedKeys,
-          onChange: (keys) => setSelectedKeys(keys as number[]),
-        }}
-        style={{ marginBottom: 24 }}
-        locale={{ emptyText: "暂无推荐 · 请确认设备已 SNMP 发现且跨站点存在未建链路" }}
-        columns={[
-          {
-            title: "链路",
-            dataIndex: "name",
-            width: 160,
-            ellipsis: true,
-          },
-          {
-            title: "类型",
-            dataIndex: "type",
-            width: 100,
-            render: (t: string) => <Tag color={t === "dci" ? "blue" : "green"}>{LINK_TYPE_LABEL[t] || t}</Tag>,
-          },
-          {
-            title: "A 端",
-            width: 200,
-            render: (_: unknown, row) => (
-              <EndpointCell
-                device={row.device_a}
-                iface={row.interface_a}
-                description={row.interface_a_description}
-              />
-            ),
-          },
-          {
-            title: "Z 端",
-            width: 200,
-            render: (_: unknown, row) => (
-              <EndpointCell
-                device={row.device_z}
-                iface={row.interface_z}
-                description={row.interface_z_description}
-              />
-            ),
-          },
-          {
-            title: "带宽",
-            dataIndex: "capacity_mbps",
-            width: 90,
-            render: (v: number) => fmtBw(v),
-          },
-          {
-            title: "评分",
-            dataIndex: "score",
-            width: 72,
-            render: (v: number) => <Tag color={v >= 80 ? "green" : "gold"}>{v}</Tag>,
-          },
-          {
-            title: "依据",
-            dataIndex: "reason",
-            ellipsis: true,
-          },
-        ]}
-      />
+      {!isEdit ? (
+        <Table<LinkPlan>
+          size="small"
+          className="data-table"
+          rowKey={(_, idx) => String(idx)}
+          loading={loadingSuggestions}
+          dataSource={suggestions}
+          pagination={false}
+          rowSelection={{
+            selectedRowKeys: selectedKeys,
+            onChange: (keys) => setSelectedKeys(keys as number[]),
+          }}
+          style={{ marginBottom: 24 }}
+          locale={{ emptyText: "暂无推荐 · 请确认设备已 SNMP 发现且跨站点存在未建链路" }}
+          columns={[
+            {
+              title: "链路",
+              dataIndex: "name",
+              width: 160,
+              ellipsis: true,
+            },
+            {
+              title: "类型",
+              dataIndex: "type",
+              width: 100,
+              render: (t: string) => (
+                <Tag color={t === "dci" ? "blue" : "green"}>{LINK_TYPE_LABEL[t] || t}</Tag>
+              ),
+            },
+            {
+              title: "A 端",
+              width: 200,
+              render: (_: unknown, row) => (
+                <EndpointCell
+                  device={row.device_a}
+                  iface={row.interface_a}
+                  description={row.interface_a_description}
+                />
+              ),
+            },
+            {
+              title: "Z 端",
+              width: 200,
+              render: (_: unknown, row) => (
+                <EndpointCell
+                  device={row.device_z}
+                  iface={row.interface_z}
+                  description={row.interface_z_description}
+                />
+              ),
+            },
+            {
+              title: "带宽",
+              dataIndex: "capacity_mbps",
+              width: 90,
+              render: (v: number) => fmtBw(v),
+            },
+            {
+              title: "评分",
+              dataIndex: "score",
+              width: 72,
+              render: (v: number) => <Tag color={v >= 80 ? "green" : "gold"}>{v}</Tag>,
+            },
+            {
+              title: "依据",
+              dataIndex: "reason",
+              ellipsis: true,
+            },
+          ]}
+        />
+      ) : null}
 
       <Typography.Title level={5}>
-        <BulbOutlined /> 手动选配
+        <BulbOutlined /> {isEdit ? "链路配置" : "手动选配"}
       </Typography.Title>
-      <Form form={form} layout="vertical" onFinish={createManual}>
+      <Form form={form} layout="vertical" onFinish={isEdit ? saveEdit : createManual}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
           <Form.Item
             name="device_a_id"
@@ -446,14 +507,23 @@ export default function BackboneLinkModal({ open, devices, onClose, onCreated }:
           </Form.Item>
         </div>
 
+        <Form.Item name="alarm_utilization_pct" label="利用率告警阈值 (%)" extra={alarmHint}>
+          <InputNumber min={0} max={100} style={{ width: "100%" }} placeholder="平台默认" />
+        </Form.Item>
+
         {manualPlan ? (
           <Typography.Text type="secondary" style={{ display: "block", marginBottom: 12 }}>
             推荐评分 {manualPlan.score} · {manualPlan.reason}
           </Typography.Text>
         ) : null}
 
-        <Button type="primary" htmlType="submit" icon={<PlusOutlined />} loading={saving}>
-          创建此链路
+        <Button
+          type="primary"
+          htmlType="submit"
+          icon={isEdit ? <EditOutlined /> : <PlusOutlined />}
+          loading={saving}
+        >
+          {isEdit ? "保存修改" : "创建此链路"}
         </Button>
       </Form>
     </Drawer>
