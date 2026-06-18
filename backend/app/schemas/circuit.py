@@ -55,6 +55,7 @@ class CircuitBase(BaseModel):
     alarm_packet_loss_pct: float | None = Field(default=None, ge=0, le=100)
     alarm_utilization_pct: float | None = Field(default=None, ge=0, le=100)
     alarm_health_score_min: float | None = Field(default=None, ge=0, le=100)
+    latency_probe_enabled: bool = True
     description: str | None = None
     egress_country: str | None = None
     egress_site_id: int | None = None
@@ -102,6 +103,7 @@ class CircuitUpdate(BaseModel):
     alarm_packet_loss_pct: float | None = Field(default=None, ge=0, le=100)
     alarm_utilization_pct: float | None = Field(default=None, ge=0, le=100)
     alarm_health_score_min: float | None = Field(default=None, ge=0, le=100)
+    latency_probe_enabled: bool | None = None
     description: str | None = None
     egress_country: str | None = None
     egress_site_id: int | None = None

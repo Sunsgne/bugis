@@ -11,6 +11,7 @@ interface Row {
   name: string;
   status: string;
   bandwidth_mbps: number;
+  latency_probe_enabled?: boolean;
 }
 
 const MONITORABLE = new Set(["active", "degraded", "provisioning"]);
@@ -49,6 +50,8 @@ export default function PortalTraffic() {
 
   if (loading) return <Spin style={{ display: "block", margin: "80px auto" }} />;
 
+  const current = circuits.find((c) => c.id === selected);
+
   return (
     <PageCard title="流量洞察" description="5 分钟粒度采样 · 95 计费 · 历史数据永久保留">
       {circuits.length === 0 ? (
@@ -74,7 +77,13 @@ export default function PortalTraffic() {
             description="系统按采样点聚合流量，取所选时间窗口内第 95 百分位作为计费带宽（入向/出向取较大值）。切换快捷时间范围会自动刷新图表；自选时间需点击「查询」。"
             style={{ marginBottom: 16 }}
           />
-          {selected ? <PortalCircuitMonitorPanel circuitId={selected} pollSec={30} /> : null}
+          {selected ? (
+            <PortalCircuitMonitorPanel
+              circuitId={selected}
+              pollSec={30}
+              latencyProbeEnabled={current?.latency_probe_enabled !== false}
+            />
+          ) : null}
         </>
       )}
     </PageCard>

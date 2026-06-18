@@ -99,30 +99,33 @@ def evaluate_circuit_health(db: Session, circuit: Circuit, health: CircuitHealth
     if health.samples == 0:
         return
 
-    # Packet loss
+    # Packet loss / latency — only when path probes are enabled for this circuit.
     key_loss = f"circuit:{cid}:loss"
-    if health.avg_packet_loss_pct > th.packet_loss_pct:
-        copy = msg.build_circuit_loss(circuit.code, health.avg_packet_loss_pct, th.packet_loss_pct)
-        raise_alarm(
-            db, "sla_loss", AlarmSeverity.MAJOR,
-            copy.title,
-            key_loss, detail=copy.detail,
-            circuit_id=cid,
-        )
+    key_lat = f"circuit:{cid}:latency"
+    if circuit.latency_probe_enabled:
+        if health.avg_packet_loss_pct > th.packet_loss_pct:
+            copy = msg.build_circuit_loss(circuit.code, health.avg_packet_loss_pct, th.packet_loss_pct)
+            raise_alarm(
+                db, "sla_loss", AlarmSeverity.MAJOR,
+                copy.title,
+                key_loss, detail=copy.detail,
+                circuit_id=cid,
+            )
+        else:
+            clear_by_key(db, key_loss)
+
+        if health.avg_latency_ms > th.latency_ms:
+            copy = msg.build_circuit_latency(circuit.code, health.avg_latency_ms, th.latency_ms)
+            raise_alarm(
+                db, "sla_latency", AlarmSeverity.MINOR,
+                copy.title,
+                key_lat, detail=copy.detail,
+                circuit_id=cid,
+            )
+        else:
+            clear_by_key(db, key_lat)
     else:
         clear_by_key(db, key_loss)
-
-    # Latency
-    key_lat = f"circuit:{cid}:latency"
-    if health.avg_latency_ms > th.latency_ms:
-        copy = msg.build_circuit_latency(circuit.code, health.avg_latency_ms, th.latency_ms)
-        raise_alarm(
-            db, "sla_latency", AlarmSeverity.MINOR,
-            copy.title,
-            key_lat, detail=copy.detail,
-            circuit_id=cid,
-        )
-    else:
         clear_by_key(db, key_lat)
 
     # Utilization

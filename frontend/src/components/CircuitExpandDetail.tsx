@@ -74,16 +74,23 @@ export default function CircuitExpandDetail({
           ) : (
             <Typography.Text style={{ marginLeft: 8 }}>继承平台默认</Typography.Text>
           )}
+          <Typography.Text style={{ marginLeft: 8 }}>
+            · 延迟探测 {detail.latency_probe_enabled !== false ? "开启" : "关闭"}
+          </Typography.Text>
         </Typography.Text>
         <Descriptions size="small" column={{ xs: 1, sm: 2, lg: 4 }} bordered>
-          <Descriptions.Item label="时延">
-            {detail.effective_alarm_latency_ms != null ? `${detail.effective_alarm_latency_ms} ms` : "—"}
-          </Descriptions.Item>
-          <Descriptions.Item label="丢包">
-            {detail.effective_alarm_packet_loss_pct != null
-              ? `${detail.effective_alarm_packet_loss_pct}%`
-              : "—"}
-          </Descriptions.Item>
+          {detail.latency_probe_enabled !== false && (
+            <>
+              <Descriptions.Item label="时延">
+                {detail.effective_alarm_latency_ms != null ? `${detail.effective_alarm_latency_ms} ms` : "—"}
+              </Descriptions.Item>
+              <Descriptions.Item label="丢包">
+                {detail.effective_alarm_packet_loss_pct != null
+                  ? `${detail.effective_alarm_packet_loss_pct}%`
+                  : "—"}
+              </Descriptions.Item>
+            </>
+          )}
           <Descriptions.Item label="峰值利用率">
             {detail.effective_alarm_utilization_pct != null
               ? `${detail.effective_alarm_utilization_pct}%`

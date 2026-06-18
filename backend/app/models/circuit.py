@@ -56,6 +56,8 @@ class Circuit(Base, TimestampMixin):
     alarm_packet_loss_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
     alarm_utilization_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
     alarm_health_score_min: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # When false, skip scheduled/on-demand path probes and hide QoS metrics in UI.
+    latency_probe_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
 
     description: Mapped[str | None] = mapped_column(String(255), nullable=True)
 

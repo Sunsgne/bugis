@@ -44,6 +44,7 @@ def _to_portal_list(circuit: Circuit) -> PortalCircuitListOut:
         vni=circuit.vni,
         vsi_name=circuit.vsi_name,
         sla_target=circuit.sla_target,
+        latency_probe_enabled=circuit.latency_probe_enabled,
         endpoint_count=len(circuit.endpoints or []),
         created_at=circuit.created_at,
         updated_at=circuit.updated_at,

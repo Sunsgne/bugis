@@ -182,7 +182,12 @@ export default function Monitoring() {
       )}
 
       {selected ? (
-        <CircuitMonitorPanel key={`${selected}-${refreshKey}`} circuitId={selected} pollSec={15} />
+        <CircuitMonitorPanel
+          key={`${selected}-${refreshKey}`}
+          circuitId={selected}
+          pollSec={15}
+          latencyProbeEnabled={current?.latency_probe_enabled !== false}
+        />
       ) : (
         !loading && (
           <PageCard className="monitoring-empty-card">

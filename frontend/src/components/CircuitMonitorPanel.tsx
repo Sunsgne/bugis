@@ -47,9 +47,16 @@ type Props = {
   circuitId: number;
   compact?: boolean;
   pollSec?: number;
+  /** When false, hide latency/jitter/loss KPIs and charts. */
+  latencyProbeEnabled?: boolean;
 };
 
-export default function CircuitMonitorPanel({ circuitId, compact = false, pollSec = 15 }: Props) {
+export default function CircuitMonitorPanel({
+  circuitId,
+  compact = false,
+  pollSec = 15,
+  latencyProbeEnabled = true,
+}: Props) {
   const [rangeMode, setRangeMode] = useState<RangeMode>("preset");
   const [hours, setHours] = useState(compact ? 6 : 24);
   const [customRange, setCustomRange] = useState<[Dayjs, Dayjs] | null>(null);
@@ -178,7 +185,10 @@ export default function CircuitMonitorPanel({ circuitId, compact = false, pollSe
             </>
           )}
           {health?.tunnel_down && <Tag color="error">链路中断</Tag>}
-          {health && health.qos_samples === 0 && <Tag color="default">QoS 待拨测</Tag>}
+          {latencyProbeEnabled && health && health.qos_samples === 0 && (
+            <Tag color="default">QoS 待拨测</Tag>
+          )}
+          {!latencyProbeEnabled && <Tag color="default">延迟探测已关闭</Tag>}
         </Space>
         {!compact && billing?.billable_95_mbps != null && (
           <Text type="secondary">
@@ -208,12 +218,16 @@ export default function CircuitMonitorPanel({ circuitId, compact = false, pollSe
               </div>
             </Card>
           )}
-          <Card size="small" className="chart-card">
-            <Statistic title="平均时延" value={health.avg_latency_ms} suffix="ms" />
-          </Card>
-          <Card size="small" className="chart-card">
-            <Statistic title="抖动" value={health.avg_jitter_ms} suffix="ms" />
-          </Card>
+          {latencyProbeEnabled && (
+            <>
+              <Card size="small" className="chart-card">
+                <Statistic title="平均时延" value={health.avg_latency_ms} suffix="ms" />
+              </Card>
+              <Card size="small" className="chart-card">
+                <Statistic title="抖动" value={health.avg_jitter_ms} suffix="ms" />
+              </Card>
+            </>
+          )}
           <Card size="small" className="chart-card">
             <Statistic
               title="可用率"
@@ -267,18 +281,20 @@ export default function CircuitMonitorPanel({ circuitId, compact = false, pollSe
           )}
         </Card>
 
-        <Card
-          size="small"
-          className="chart-card"
-          title={`时延 · 抖动 · 丢包（${windowLabel}）`}
-          loading={loading}
-        >
-          {chartData.length ? (
-            <EChart key={`latency-${chartKey}`} option={latencyOpt} height={chartHeight} />
-          ) : (
-            <Empty description={empty.traffic} />
-          )}
-        </Card>
+        {latencyProbeEnabled && (
+          <Card
+            size="small"
+            className="chart-card"
+            title={`时延 · 抖动 · 丢包（${windowLabel}）`}
+            loading={loading}
+          >
+            {chartData.length ? (
+              <EChart key={`latency-${chartKey}`} option={latencyOpt} height={chartHeight} />
+            ) : (
+              <Empty description={empty.traffic} />
+            )}
+          </Card>
+        )}
       </div>
 
       {availability && availability.events.length > 0 && (

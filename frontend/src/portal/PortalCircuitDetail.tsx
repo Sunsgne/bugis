@@ -16,6 +16,7 @@ interface Detail {
   vni?: number;
   vsi_name?: string;
   sla_target?: string;
+  latency_probe_enabled?: boolean;
   endpoints: {
     label: string;
     interface_name: string;
@@ -122,7 +123,10 @@ export default function PortalCircuitDetail() {
 
       {(detail.status === "active" || detail.status === "degraded") && (
         <Card title="流量 · 带宽 · 95 计费">
-          <PortalCircuitMonitorPanel circuitId={circuitId} />
+          <PortalCircuitMonitorPanel
+            circuitId={circuitId}
+            latencyProbeEnabled={detail.latency_probe_enabled !== false}
+          />
         </Card>
       )}
     </div>

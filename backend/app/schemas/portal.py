@@ -37,6 +37,7 @@ class PortalCircuitListOut(TimestampedSchema):
     vni: int | None = None
     vsi_name: str | None = None
     sla_target: str | None = None
+    latency_probe_enabled: bool = True
     endpoint_count: int = 0
 
 

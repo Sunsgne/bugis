@@ -487,6 +487,7 @@ export default function Circuits() {
     const v = await modifyForm.validateFields();
     try {
       const patch: Record<string, unknown> = {
+        latency_probe_enabled: v.latency_probe_enabled !== false,
         alarm_latency_ms: v.alarm_latency_ms ?? null,
         alarm_packet_loss_pct: v.alarm_packet_loss_pct ?? null,
         alarm_utilization_pct: v.alarm_utilization_pct ?? null,
@@ -894,7 +895,12 @@ export default function Circuits() {
                     label: "流量监控",
                     children: (
                       r.status === "active" ? (
-                        <CircuitMonitorPanel circuitId={r.id} compact pollSec={0} />
+                        <CircuitMonitorPanel
+                          circuitId={r.id}
+                          compact
+                          pollSec={0}
+                          latencyProbeEnabled={detail.latency_probe_enabled !== false}
+                        />
                       ) : (
                         <Alert type="info" showIcon message="专线激活后可查看 SNMP 流量、95 值、时延与中断记录" />
                       )
@@ -969,6 +975,7 @@ export default function Circuits() {
                     setModifyTarget(detail);
                     modifyForm.setFieldsValue({
                       bandwidth_mbps: detail.bandwidth_mbps,
+                      latency_probe_enabled: detail.latency_probe_enabled !== false,
                       alarm_latency_ms: detail.alarm_latency_ms,
                       alarm_packet_loss_pct: detail.alarm_packet_loss_pct,
                       alarm_utilization_pct: detail.alarm_utilization_pct,
@@ -992,7 +999,8 @@ export default function Circuits() {
                   label: "流量 / 95 / 监控",
                   onClick: () => navigate(`/monitoring?circuit=${r.id}`),
                 },
-                r.status === "active" && {
+                r.status === "active" &&
+                  r.latency_probe_enabled !== false && {
                   key: "probe",
                   icon: <RadarChartOutlined />,
                   label: "端到端拨测",
@@ -1348,6 +1356,7 @@ function CreateModal({
           mtu: 9000,
           ipt_nat_enabled: true,
           path_mode: "auto",
+          latency_probe_enabled: true,
           via_hops: [],
           endpoints: [{ label: "A" }, { label: "Z" }],
         }}

@@ -43,7 +43,10 @@ def _probe_one_circuit(db, circuits: list[Circuit]) -> bool:
     global _probe_cursor
     if settings.dry_run or not circuits:
         return False
-    circuit = circuits[_probe_cursor % len(circuits)]
+    probeable = [c for c in circuits if c.latency_probe_enabled]
+    if not probeable:
+        return False
+    circuit = probeable[_probe_cursor % len(probeable)]
     _probe_cursor += 1
     try:
         from app.services.circuit_probe.runner import probe_circuit

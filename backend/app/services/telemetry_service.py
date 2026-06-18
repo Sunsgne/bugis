@@ -70,10 +70,12 @@ def collect_circuit_sample(
     if traffic.source == "unavailable":
         return None
 
-    probe = _latest_probe_qos(db, circuit.id)
-    latency = probe.latency_ms if probe else 0.0
-    jitter = probe.jitter_ms if probe else 0.0
-    loss = probe.packet_loss_pct if probe else 0.0
+    latency = jitter = loss = 0.0
+    if circuit.latency_probe_enabled:
+        probe = _latest_probe_qos(db, circuit.id)
+        latency = probe.latency_ms if probe else 0.0
+        jitter = probe.jitter_ms if probe else 0.0
+        loss = probe.packet_loss_pct if probe else 0.0
     state = "up" if traffic.tunnel_up else "down"
 
     sample = record_sample(
@@ -289,7 +291,11 @@ def compute_health(
         latest = samples[0] if samples else None
 
     n = len(samples)
-    qos_samples = [s for s in samples if s.source == "probe"]
+    qos_samples = (
+        [s for s in samples if s.source == "probe"]
+        if circuit.latency_probe_enabled
+        else []
+    )
     traffic_rows = traffic_samples(samples)
     sources = sorted({s.source for s in samples if s.source})
 

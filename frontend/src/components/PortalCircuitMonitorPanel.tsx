@@ -36,12 +36,14 @@ type Props = {
   circuitId: number;
   compact?: boolean;
   pollSec?: number;
+  latencyProbeEnabled?: boolean;
 };
 
 export default function PortalCircuitMonitorPanel({
   circuitId,
   compact = false,
   pollSec = 30,
+  latencyProbeEnabled = true,
 }: Props) {
   const [rangeMode, setRangeMode] = useState<RangeMode>("preset");
   const [hours, setHours] = useState(compact ? 6 : 24);
@@ -197,9 +199,11 @@ export default function PortalCircuitMonitorPanel({
         <Card size="small">
           <Statistic title="健康指数" value={health?.health_score ?? 0} suffix="/ 100" />
         </Card>
-        <Card size="small">
-          <Statistic title="平均时延" value={health?.avg_latency_ms ?? 0} suffix="ms" />
-        </Card>
+        {latencyProbeEnabled && (
+          <Card size="small">
+            <Statistic title="平均时延" value={health?.avg_latency_ms ?? 0} suffix="ms" />
+          </Card>
+        )}
         <Card size="small">
           <Statistic title="可用率" value={availability?.uptime_pct ?? 100} suffix="%" />
         </Card>
@@ -221,13 +225,15 @@ export default function PortalCircuitMonitorPanel({
         )}
       </Card>
 
-      <Card size="small" title={`时延 · 抖动 · 丢包（${windowLabel}）`} loading={loading}>
-        {chartData.length ? (
-          <EChart key={`latency-${chartKey}`} option={latencyOpt} height={compact ? 180 : 220} />
-        ) : (
-          <Empty description={empty.traffic} />
-        )}
-      </Card>
+      {latencyProbeEnabled && (
+        <Card size="small" title={`时延 · 抖动 · 丢包（${windowLabel}）`} loading={loading}>
+          {chartData.length ? (
+            <EChart key={`latency-${chartKey}`} option={latencyOpt} height={compact ? 180 : 220} />
+          ) : (
+            <Empty description={empty.traffic} />
+          )}
+        </Card>
+      )}
 
       {availability && availability.events.length > 0 && (
         <Card size="small" title="中断 / 闪断事件">

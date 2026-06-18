@@ -207,6 +207,7 @@ export interface Circuit {
   alarm_packet_loss_pct?: number | null;
   alarm_utilization_pct?: number | null;
   alarm_health_score_min?: number | null;
+  latency_probe_enabled?: boolean;
   effective_alarm_latency_ms?: number;
   effective_alarm_packet_loss_pct?: number;
   effective_alarm_utilization_pct?: number;

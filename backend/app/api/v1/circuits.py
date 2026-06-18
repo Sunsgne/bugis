@@ -281,6 +281,8 @@ def probe_circuit(
     circuit = db.get(Circuit, circuit_id)
     if not circuit:
         raise HTTPException(status_code=404, detail="circuit not found")
+    if not circuit.latency_probe_enabled:
+        raise HTTPException(status_code=400, detail="该专线已关闭延迟探测")
     result = probe.probe_circuit(db, circuit)
     from app.services import probe_log_service
 
