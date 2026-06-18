@@ -14,13 +14,14 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.models.circuit import Circuit
 from app.models.device import Device, DeviceInterface
-from app.models.enums import CircuitStatus
+from app.models.enums import CircuitStatus, Vendor
 from app.models.snmp_settings import SnmpSettings
 from app.services import snmp_device, snmp_settings as snmp_cfg
-from app.services.mib_registry import IF_MIB
+from app.services.mib_registry import HH3C_EVC, IF_MIB
 
-# (device_id, ifindex) -> (in_octets, out_octets, monotonic_ts)
-_counter_cache: dict[tuple[int, int], tuple[int, int, float]] = {}
+# cache key -> (in_octets, out_octets, monotonic_ts)
+# key = (device_id, kind, ifindex, srv_inst_id) where kind is "if" | "evc"
+_counter_cache: dict[tuple[int, str, int, int], tuple[int, int, float]] = {}
 
 
 @dataclass
@@ -90,9 +91,10 @@ def poll_iface_counters(
     device: Device,
     iface: DeviceInterface,
     interval_sec: float,
+    srv_inst_id: int | None = None,
 ) -> tuple[float, float, int, bool] | None:
-    """Public wrapper for interface counter polling."""
-    return _poll_iface_counters(db, device, iface, interval_sec)
+    """Public wrapper for interface / service-instance counter polling."""
+    return _poll_iface_counters(db, device, iface, interval_sec, srv_inst_id)
 
 
 def _poll_iface_counters(
@@ -100,6 +102,7 @@ def _poll_iface_counters(
     device: Device,
     iface: DeviceInterface,
     interval_sec: float,
+    srv_inst_id: int | None = None,
 ) -> tuple[float, float, int, bool] | None:
     cfg = snmp_cfg.get_or_create(db)
     device_snmp = snmp_device.effective_snmp(device)
@@ -112,8 +115,21 @@ def _poll_iface_counters(
 
     community = snmp_cfg.effective_community(db, device)
     port = device_snmp["port"]
-    in_oid = IF_MIB.ifHCInOctets.column(ifindex)
-    out_oid = IF_MIB.ifHCOutOctets.column(ifindex)
+    # H3C only aggregates traffic at the physical port via standard IF-MIB; the
+    # per-circuit (per Ethernet service-instance / AC) bytes must be read from
+    # the H3C private HH3C-EVC-MIB, indexed by (ifIndex, serviceInstanceId).
+    # Huawei (and others) expose per-AC traffic on the sub-interface's own
+    # ifIndex, so the standard IF-MIB HC counters are correct for them.
+    use_evc = device.vendor == Vendor.H3C and srv_inst_id is not None
+    if use_evc:
+        idx = HH3C_EVC.stat_index(ifindex, srv_inst_id)
+        in_oid = HH3C_EVC.srvInstInBytes.column(idx)
+        out_oid = HH3C_EVC.srvInstOutBytes.column(idx)
+        cache_key = (device.id, "evc", ifindex, srv_inst_id)
+    else:
+        in_oid = IF_MIB.ifHCInOctets.column(ifindex)
+        out_oid = IF_MIB.ifHCOutOctets.column(ifindex)
+        cache_key = (device.id, "if", ifindex, 0)
     oper_oid = IF_MIB.ifOperStatus.column(ifindex)
 
     try:
@@ -123,14 +139,28 @@ def _poll_iface_counters(
     except RuntimeError:
         return None
 
+    # If the H3C private MIB has no data (statistics not enabled / unsupported
+    # on this platform), fall back to the standard port-level IF-MIB counters so
+    # the circuit still reports *something* rather than nothing.
+    if use_evc and (in_oct is None or out_oct is None):
+        try:
+            in_oct = _get_oid(
+                device, IF_MIB.ifHCInOctets.column(ifindex), cfg, community, port=port
+            )
+            out_oct = _get_oid(
+                device, IF_MIB.ifHCOutOctets.column(ifindex), cfg, community, port=port
+            )
+        except RuntimeError:
+            return None
+        cache_key = (device.id, "if", ifindex, 0)
+
     if in_oct is None or out_oct is None:
         return None
 
     oper_up = oper_raw == 1 if oper_raw is not None else True
-    key = (device.id, ifindex)
     now = time.monotonic()
-    prev = _counter_cache.get(key)
-    _counter_cache[key] = (in_oct, out_oct, now)
+    prev = _counter_cache.get(cache_key)
+    _counter_cache[cache_key] = (in_oct, out_oct, now)
 
     if prev is None:
         return 0.0, 0.0, 0, oper_up
@@ -204,7 +234,12 @@ def poll_circuit_traffic(
         iface = _resolve_iface(db, ep.device_id, ep.interface_name)
         if iface is None:
             continue
-        polled = _poll_iface_counters(db, device, iface, interval_sec)
+        # H3C service-instance id == the AC's S-VID (service-instance N where
+        # N = svid), matching the L2VPN apply template.
+        srv_inst_id = ep.vlan_id or circuit.vlan_id
+        polled = _poll_iface_counters(
+            db, device, iface, interval_sec, srv_inst_id=srv_inst_id
+        )
         if polled is None:
             continue
         any_poll = True
