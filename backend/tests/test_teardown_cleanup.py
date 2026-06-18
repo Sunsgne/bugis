@@ -78,7 +78,9 @@ def test_huawei_remove_scrubs_qos_and_bridge_domain(service):
     cmds = to_command_list(Vendor.HUAWEI, cfg)
     assert any(c.startswith("undo traffic policy") for c in cmds), cmds
     assert any(c.startswith("undo traffic behavior") for c in cmds), cmds
-    assert any(c.startswith("undo traffic classifier") for c in cmds), cmds
+    # The shared 'ANY' classifier is reused by every circuit's traffic-policy, so
+    # a single circuit teardown must NOT remove it.
+    assert not any(c.startswith("undo traffic classifier") for c in cmds), cmds
     assert any(c.startswith("undo bridge-domain") for c in cmds), cmds
 
 
