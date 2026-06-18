@@ -169,3 +169,25 @@ def test_live_probe_uses_service_plane_metrics(
     assert result["probe_method"] == "h3c_vsi_mac"
     assert result["rtt_ms"] == 3.1
     assert result["jitter_ms"] == jitter_from_rtts([3.0, 3.2, 3.1])
+
+
+@patch("netmiko.ConnectHandler")
+def test_run_cli_decrypts_device_password(mock_connect, db_session, sample_circuit):
+    from app.models.device import Device
+    from app.services.circuit_probe.cli import run_cli
+    from app.services.credential_store import encrypt_value
+
+    dev = db_session.get(Device, sample_circuit.endpoints[0].device_id)
+    dev.password = encrypt_value("secret")
+    dev.enable_password = encrypt_value("enable")
+    db_session.flush()
+
+    mock_conn = MagicMock()
+    mock_conn.send_command.return_value = "ok"
+    mock_connect.return_value = mock_conn
+
+    assert run_cli(dev, "display clock") == "ok"
+    params = mock_connect.call_args.kwargs
+    assert params["password"] == "secret"
+    assert params["secret"] == "enable"
+    assert not str(params["password"]).startswith("enc$")
