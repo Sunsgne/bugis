@@ -386,9 +386,9 @@ export default function Login() {
 
             <CardContent className="px-8 pb-10 sm:px-10">
               {mode === "mfa" ? (
-                <form onSubmit={onMfaSubmit} className="space-y-7">
-                  <div className="space-y-3">
-                    <Label htmlFor="mfa-code" className="text-stone-300">
+                <form onSubmit={onMfaSubmit} className="space-y-6">
+                  <div className="space-y-4">
+                    <Label htmlFor="mfa-code" className="text-[13px] font-medium tracking-wide text-stone-300">
                       验证码
                     </Label>
                     <Input
@@ -434,9 +434,9 @@ export default function Login() {
                   </Button>
                 </form>
               ) : mode === "forgot" ? (
-                <form onSubmit={onForgotSubmit} className="space-y-7">
-                  <div className="space-y-3">
-                    <Label htmlFor="forgot-id" className="text-stone-300">
+                <form onSubmit={onForgotSubmit} className="space-y-6">
+                  <div className="space-y-4">
+                    <Label htmlFor="forgot-id" className="text-[13px] font-medium tracking-wide text-stone-300">
                       用户名或邮箱
                     </Label>
                     <div className="relative">
@@ -490,8 +490,8 @@ export default function Login() {
                 </form>
               ) : mode === "reset" ? (
                 <form onSubmit={onResetSubmit} className="space-y-6">
-                  <div className="space-y-3">
-                    <Label htmlFor="reset-code" className="text-stone-300">
+                  <div className="space-y-4">
+                    <Label htmlFor="reset-code" className="text-[13px] font-medium tracking-wide text-stone-300">
                       邮件验证码
                     </Label>
                     <Input
@@ -505,8 +505,8 @@ export default function Login() {
                       className="h-12 rounded-xl border-stone-700/70 bg-stone-900/60 text-center text-lg tracking-[0.4em] text-stone-100 placeholder:text-stone-500 focus-visible:border-orange-500/60 focus-visible:ring-orange-500/30"
                     />
                   </div>
-                  <div className="space-y-3">
-                    <Label htmlFor="reset-pwd" className="text-stone-300">
+                  <div className="space-y-4">
+                    <Label htmlFor="reset-pwd" className="text-[13px] font-medium tracking-wide text-stone-300">
                       新密码
                     </Label>
                     <div className="relative">
@@ -523,8 +523,8 @@ export default function Login() {
                       />
                     </div>
                   </div>
-                  <div className="space-y-3">
-                    <Label htmlFor="reset-pwd2" className="text-stone-300">
+                  <div className="space-y-4">
+                    <Label htmlFor="reset-pwd2" className="text-[13px] font-medium tracking-wide text-stone-300">
                       确认新密码
                     </Label>
                     <div className="relative">
@@ -568,9 +568,9 @@ export default function Login() {
                   </div>
                 </form>
               ) : (
-                <form onSubmit={onSubmit} className="space-y-7">
-                  <div className="space-y-3">
-                    <Label htmlFor="username" className="text-stone-300">
+                <form onSubmit={onSubmit} className="space-y-6">
+                  <div className="space-y-4">
+                    <Label htmlFor="username" className="text-[13px] font-medium tracking-wide text-stone-300">
                       用户名
                     </Label>
                     <div className="relative">
@@ -586,9 +586,9 @@ export default function Login() {
                       />
                     </div>
                   </div>
-                  <div className="space-y-3">
+                  <div className="space-y-4">
                     <div className="flex items-center justify-between">
-                      <Label htmlFor="password" className="text-stone-300">
+                      <Label htmlFor="password" className="text-[13px] font-medium tracking-wide text-stone-300">
                         密码
                       </Label>
                       {security?.password_reset_enabled ? (

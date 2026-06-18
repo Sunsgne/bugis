@@ -77,7 +77,8 @@ def render_email(
           <td style="padding:8px 0 4px;">
             <div style="font-size:13px;color:#64748b;letter-spacing:.04em;margin-bottom:10px;">{caption}</div>
             <div style="display:inline-block;padding:16px 28px;border-radius:14px;
-                        background:linear-gradient(135deg,{accent} 0%,{accent_dark} 100%);
+                        background-color:{accent};
+                        background-image:linear-gradient(135deg,{accent} 0%,{accent_dark} 100%);
                         box-shadow:0 10px 24px -10px {accent};">
               <span style="font-family:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace;
                            font-size:34px;font-weight:700;letter-spacing:.42em;color:#ffffff;
@@ -128,13 +129,13 @@ def render_email(
                style="max-width:560px;width:100%;background:#ffffff;border-radius:18px;overflow:hidden;
                       box-shadow:0 24px 60px -28px rgba(15,23,42,.45);">
           <tr>
-            <td style="padding:26px 36px;background:linear-gradient(125deg,#0f172a 0%,{accent_dark} 130%);">
+            <td style="padding:26px 36px;background-color:#0f172a;background-image:linear-gradient(125deg,#0f172a 0%,{accent_dark} 130%);">
               {_logo_block(plat, accent)}
               {tagline_html}
             </td>
           </tr>
           <tr>
-            <td style="height:4px;background:linear-gradient(90deg,{accent} 0%,{accent_dark} 100%);"></td>
+            <td style="height:4px;background-color:{accent};background-image:linear-gradient(90deg,{accent} 0%,{accent_dark} 100%);"></td>
           </tr>
           <tr>
             <td style="padding:36px 36px 30px;">

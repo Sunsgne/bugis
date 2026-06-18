@@ -128,3 +128,8 @@ def test_branded_email_renders_code_and_brand(client):
     assert "246810" in html
     assert plat.product_name in html
     assert "<!DOCTYPE html>" in html
+    # White text sits on colored areas (header + code chip); those MUST carry a
+    # solid background-color fallback so the code stays visible even when an
+    # e-mail client strips CSS gradients (otherwise it renders white-on-white).
+    assert "background-color:#0f172a" in html  # header fallback
+    assert html.count("background-color:") >= 3  # header + divider + code chip

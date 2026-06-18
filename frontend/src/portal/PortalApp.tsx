@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link, Navigate, Route, Routes, useNavigate, useLocation } from "react-router-dom";
-import { Button, Dropdown, Layout, Menu, Space, Tag, Typography } from "antd";
+import { Avatar, Dropdown, Layout, Menu, Space, Tag, Typography } from "antd";
 import {
   Cable,
+  ChevronDown,
   LayoutDashboard,
   LineChart,
   LogOut,
@@ -45,6 +46,12 @@ export default function PortalApp() {
   const loc = useLocation();
   const [me, setMe] = useState<PortalMe | null>(null);
   const accent = brand.accent_color || "#ff6600";
+  const roleLabel =
+    user?.role === "tenant_admin"
+      ? "租户管理员"
+      : user?.role === "tenant_viewer"
+        ? "租户只读"
+        : me?.tenant_code || "客户门户";
 
   useEffect(() => {
     if (!isTenantUser) return;
@@ -120,29 +127,42 @@ export default function PortalApp() {
           <Typography.Title level={5} style={{ margin: 0 }}>
             {me?.tenant_name ? `${me.tenant_name} · 专线自助服务` : "专线自助服务"}
           </Typography.Title>
-          <Space>
-            <Typography.Text type="secondary">{user.full_name || user.username}</Typography.Text>
-            <Dropdown
-              menu={{
-                items: [
-                  {
-                    key: "account",
-                    label: "账号与安全",
-                    icon: <UserCog size={14} />,
-                    onClick: () => nav("/portal/account"),
-                  },
-                  {
-                    key: "logout",
-                    label: "退出登录",
-                    icon: <LogOut size={14} />,
-                    onClick: logout,
-                  },
-                ],
-              }}
-            >
-              <Button type="text">{user.username}</Button>
-            </Dropdown>
-          </Space>
+          <Dropdown
+            trigger={["click"]}
+            placement="bottomRight"
+            menu={{
+              items: [
+                {
+                  key: "account",
+                  label: "账号与安全",
+                  icon: <UserCog size={14} />,
+                  onClick: () => nav("/portal/account"),
+                },
+                { type: "divider" },
+                {
+                  key: "logout",
+                  label: "退出登录",
+                  icon: <LogOut size={14} />,
+                  danger: true,
+                  onClick: logout,
+                },
+              ],
+            }}
+          >
+            <button className="portal-user-trigger">
+              <Avatar
+                size={34}
+                style={{ background: accent, color: "#fff", fontWeight: 600, flexShrink: 0 }}
+              >
+                {(user.full_name || user.username || "U").charAt(0).toUpperCase()}
+              </Avatar>
+              <span className="portal-user-meta">
+                <span className="portal-user-name">{user.full_name || user.username}</span>
+                <span className="portal-user-role">{roleLabel}</span>
+              </span>
+              <ChevronDown size={15} className="portal-user-caret" />
+            </button>
+          </Dropdown>
         </Header>
         <Content style={{ padding: 24, background: "#f5f7fa", minHeight: 280 }}>
           <Routes>
