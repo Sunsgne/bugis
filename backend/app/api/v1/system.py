@@ -4,7 +4,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from app import __version__, scheduler
+from app import __version__, scheduler, worker
 from app.api.deps import get_current_user, require_operator, require_platform_user
 from app.core.config import settings
 from app.core.database import get_db
@@ -61,3 +61,16 @@ def scheduler_tick(_: User = Depends(require_operator)):
     """Force one scheduler tick (telemetry + alarm evaluation)."""
     count = scheduler.run_once()
     return {"generated": count, "status": scheduler.status()}
+
+
+@router.get("/worker")
+def worker_status(_: User = Depends(require_platform_user)):
+    """Background provisioning worker status (queue depth, in-flight, totals)."""
+    return worker.status()
+
+
+@router.post("/worker/drain")
+def worker_drain(_: User = Depends(require_operator)):
+    """Synchronously execute any queued (scheduled) work orders now."""
+    processed = worker.process_pending()
+    return {"processed": processed, "status": worker.status()}

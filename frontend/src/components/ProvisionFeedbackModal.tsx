@@ -19,10 +19,12 @@ const WO_STATUS_LABEL: Record<string, string> = {
   completed: "已完成",
   failed: "失败",
   running: "执行中",
+  scheduled: "排队中",
   draft: "草稿",
   submitted: "已提交",
   approved: "已审批",
   cancelled: "已取消",
+  rolled_back: "已回滚",
 };
 
 const CIRCUIT_STATUS_LABEL: Record<string, string> = {
@@ -54,6 +56,7 @@ const JOB_STATUS_COLOR: Record<string, string> = {
 
 type Props = {
   circuit: Circuit | null;
+  woType?: string;
   loading: boolean;
   result: ProvisionResult | null;
   error: string | null;
@@ -68,20 +71,60 @@ function summarizeOutput(output?: string | null) {
 
 export default function ProvisionFeedbackModal({
   circuit,
+  woType = "provision",
   loading,
   result,
   error,
   onClose,
 }: Props) {
   const open = !!circuit;
+  const isTeardown = woType === "decommission";
   const success = result?.status === "completed";
   const failed = !!error || result?.status === "failed";
+  const inProgress =
+    loading || result?.status === "running" || result?.status === "scheduled";
+  const queued = result?.status === "scheduled";
 
-  const currentStep = loading ? 1 : failed ? 2 : success ? 3 : 2;
+  const currentStep = inProgress ? 1 : failed ? 2 : success ? 3 : 2;
+
+  const title = isTeardown ? "拆除回收" : "开通下发";
+  const stepItems = isTeardown
+    ? [
+        { title: "安全校验", description: "依赖 / 资源占用确认" },
+        {
+          title: "配置回收",
+          description: inProgress ? "正在回收各端设备配置…" : "回收作业完毕",
+        },
+        {
+          title: "资源释放",
+          description: result?.circuit_status
+            ? `专线状态：${CIRCUIT_STATUS_LABEL[result.circuit_status] || result.circuit_status}`
+            : "等待结果",
+        },
+      ]
+    : [
+        { title: "合规预检", description: "VLAN / 端口占用校验" },
+        {
+          title: "编排下发",
+          description: inProgress ? "正在创建工单并推送配置…" : "工单执行完毕",
+        },
+        {
+          title: "结果确认",
+          description: result?.circuit_status
+            ? `专线状态：${CIRCUIT_STATUS_LABEL[result.circuit_status] || result.circuit_status}`
+            : "等待结果",
+        },
+      ];
+
+  const spinnerText = queued
+    ? "已加入后台队列，正在等待工作线程执行…"
+    : isTeardown
+      ? "正在回收各端设备配置并释放资源，请稍候…"
+      : "正在向各端设备渲染并下发配置，请稍候…";
 
   return (
     <Modal
-      title={circuit ? `开通下发 · ${circuit.code}` : "开通下发"}
+      title={circuit ? `${title} · ${circuit.code}` : title}
       open={open}
       onCancel={onClose}
       footer={null}
@@ -97,34 +140,22 @@ export default function ProvisionFeedbackModal({
       <Steps
         size="small"
         current={currentStep}
-        status={failed ? "error" : loading ? "process" : success ? "finish" : "process"}
+        status={failed ? "error" : inProgress ? "process" : success ? "finish" : "process"}
         style={{ marginBottom: 20 }}
-        items={[
-          { title: "合规预检", description: "VLAN / 端口占用校验" },
-          {
-            title: "编排下发",
-            description: loading ? "正在创建工单并推送配置…" : "工单执行完毕",
-          },
-          {
-            title: "结果确认",
-            description: result?.circuit_status
-              ? `专线状态：${CIRCUIT_STATUS_LABEL[result.circuit_status] || result.circuit_status}`
-              : "等待结果",
-          },
-        ]}
+        items={stepItems}
       />
 
-      {loading ? (
+      {inProgress ? (
         <div style={{ textAlign: "center", padding: "32px 0" }}>
           <Spin indicator={<LoadingOutlined style={{ fontSize: 36 }} spin />} />
           <Typography.Paragraph style={{ marginTop: 16 }}>
-            正在向各端设备渲染并下发配置，请稍候…
+            {spinnerText}
           </Typography.Paragraph>
         </div>
       ) : null}
 
       {error ? (
-        <Alert type="error" showIcon message="开通失败" description={error} style={{ marginBottom: 16 }} />
+        <Alert type="error" showIcon message={isTeardown ? "拆除失败" : "开通失败"} description={error} style={{ marginBottom: 16 }} />
       ) : null}
 
       {result ? (
@@ -144,7 +175,7 @@ export default function ProvisionFeedbackModal({
               type="success"
               showIcon
               icon={<CheckCircleOutlined />}
-              message="配置已下发完成"
+              message={isTeardown ? "配置已回收完成" : "配置已下发完成"}
               description={`${result.config_jobs.filter((j) => j.status === "succeeded" || j.status === "dry_run").length} / ${result.config_jobs.length} 个设备作业成功`}
               style={{ marginBottom: 16 }}
             />

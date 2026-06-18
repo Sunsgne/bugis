@@ -25,6 +25,9 @@ def _defaults_from_env() -> dict:
         "baseline_syslog_server": settings.baseline_syslog_server,
         "scheduler_enabled": settings.scheduler_enabled,
         "scheduler_interval_seconds": settings.scheduler_interval_seconds,
+        "snapshot_before_change": settings.snapshot_before_change,
+        "async_provisioning": settings.async_provisioning,
+        "provision_max_concurrency": settings.provision_max_concurrency,
         "threshold_packet_loss_pct": settings.threshold_packet_loss_pct,
         "threshold_latency_ms": settings.threshold_latency_ms,
         "threshold_utilization_pct": settings.threshold_utilization_pct,
@@ -71,6 +74,11 @@ def sync_to_runtime(row: PlatformSettings) -> None:
     settings.baseline_syslog_server = row.baseline_syslog_server
     settings.scheduler_enabled = row.scheduler_enabled
     settings.scheduler_interval_seconds = row.scheduler_interval_seconds
+    settings.snapshot_before_change = getattr(row, "snapshot_before_change", True)
+    settings.async_provisioning = getattr(row, "async_provisioning", False)
+    settings.provision_max_concurrency = (
+        getattr(row, "provision_max_concurrency", 4) or 4
+    )
     settings.threshold_packet_loss_pct = row.threshold_packet_loss_pct
     settings.threshold_latency_ms = row.threshold_latency_ms
     settings.threshold_utilization_pct = row.threshold_utilization_pct

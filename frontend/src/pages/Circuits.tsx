@@ -44,7 +44,7 @@ import {
   MoreOutlined,
 } from "@ant-design/icons";
 import { api } from "../api/client";
-import type { Circuit, Device, Paginated, ProvisionResult, Site, Tenant } from "../api/types";
+import type { Circuit, Device, Paginated, ProvisionResult, Site, Tenant, WorkOrder } from "../api/types";
 import { configPreviewModalProps, ConfigPreviewPre, createCircuitModalProps } from "../utils/configPreview";
 import { formModalProps } from "../utils/formModal";
 import { TenantSearchSelect, useTenantSearch } from "../components/TenantSearchSelect";
@@ -154,6 +154,7 @@ export default function Circuits() {
   const [provisionResult, setProvisionResult] = useState<ProvisionResult | null>(null);
   const [provisionError, setProvisionError] = useState<string | null>(null);
   const [provisioningId, setProvisioningId] = useState<number | null>(null);
+  const [provisionType, setProvisionType] = useState<string>("provision");
 
   async function loadCircuits(p = page, ps = pageSize, q = search) {
     setLoading(true);
@@ -339,10 +340,12 @@ export default function Circuits() {
     body?: { previous_endpoints?: Array<Record<string, unknown>> },
   ) {
     setProvisionCircuit(c);
+    setProvisionType(woType);
     setProvisionLoading(true);
     setProvisionResult(null);
     setProvisionError(null);
     setProvisioningId(c.id);
+    const failLabel = woType === "decommission" ? "拆除失败" : "下发失败";
     try {
       const url =
         woType === "provision"
@@ -350,7 +353,13 @@ export default function Circuits() {
           : `/work-orders/provision/${c.id}?wo_type=${woType}`;
       const { data } = await api.post<ProvisionResult>(url, body ?? undefined);
       setProvisionResult(data);
-      if (data.status === "failed") {
+      // Async mode: the work order is queued (scheduled) / running — poll the
+      // work order until it reaches a terminal state so the staged progress
+      // view animates through to completion.
+      const terminal = ["completed", "failed", "cancelled", "rolled_back"];
+      if (!terminal.includes(data.status)) {
+        await pollWorkOrderProgress(data, terminal);
+      } else if (data.status === "failed") {
         message.error(`工单 ${data.code} 执行失败，请查看下发详情`);
       }
       setDetailCache((prev) => {
@@ -360,10 +369,40 @@ export default function Circuits() {
       });
       loadCircuits();
     } catch (e: any) {
-      setProvisionError(e?.response?.data?.detail || "开通失败");
+      setProvisionError(e?.response?.data?.detail || failLabel);
     } finally {
       setProvisionLoading(false);
       setProvisioningId(null);
+    }
+  }
+
+  async function pollWorkOrderProgress(base: ProvisionResult, terminal: string[]) {
+    // Stop the full-screen spinner; the modal shows live work-order status.
+    setProvisionLoading(false);
+    for (let i = 0; i < 120; i++) {
+      await new Promise((r) => setTimeout(r, 1500));
+      let wo: WorkOrder;
+      try {
+        const { data } = await api.get<WorkOrder>(`/work-orders/${base.id}`);
+        wo = data;
+      } catch {
+        continue;
+      }
+      const merged: ProvisionResult = { ...base, ...wo };
+      setProvisionResult(merged);
+      if (terminal.includes(wo.status)) {
+        try {
+          const { data: circ } = await api.get<Circuit>(`/circuits/${base.circuit_id}`);
+          setProvisionResult({ ...merged, circuit_status: circ.status });
+        } catch {
+          /* keep merged */
+        }
+        if (wo.status === "failed") {
+          message.error(`工单 ${wo.code} 执行失败，请查看下发详情`);
+        }
+        loadCircuits();
+        return;
+      }
     }
   }
 
@@ -402,15 +441,9 @@ export default function Circuits() {
   }
 
   async function decommission(c: Circuit) {
-    try {
-      const { data } = await api.post(
-        `/work-orders/provision/${c.id}?wo_type=decommission`
-      );
-      message.success(`拆除工单 ${data.code}: ${data.status}`);
-      loadCircuits();
-    } catch (e: any) {
-      message.error(e?.response?.data?.detail || "拆除失败");
-    }
+    // Route teardown through the same staged feedback modal so operators get a
+    // visual, step-by-step view of the recovery (安全校验 → 配置回收 → 结果确认).
+    await executeProvision(c, "decommission");
   }
 
   async function doModify() {
@@ -1104,6 +1137,7 @@ export default function Circuits() {
 
       <ProvisionFeedbackModal
         circuit={provisionCircuit}
+        woType={provisionType}
         loading={provisionLoading}
         result={provisionResult}
         error={provisionError}
