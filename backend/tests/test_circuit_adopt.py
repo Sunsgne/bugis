@@ -162,6 +162,16 @@ def test_adopt_existing_svid_without_push(client, auth_headers):
     assert wo2["status"] == "completed"
     assert not wo2.get("config_jobs")
 
+    topo = client.get("/api/v1/controller/topology", headers=auth_headers).json()
+    node_ids = {n["id"] for n in topo["nodes"]}
+    assert dev["id"] in node_ids
+    assert dev2["id"] in node_ids
+    assert body.get("vni") in topo["vnis"]
+
+    inventory = client.get("/api/v1/controller/overlay-inventory", headers=auth_headers).json()
+    assert inventory["platform_services"] >= 1
+    assert any(item.get("circuit_code") == body["code"] for item in inventory["items"])
+
 
 def test_scheduled_learn_endpoint(client, auth_headers):
     from app import scheduler

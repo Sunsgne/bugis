@@ -11,7 +11,7 @@ from app.controller import bgp_peering, dataplane, ha, srmpls
 from app.models.circuit import Circuit, CircuitEndpoint
 from app.models.controlplane import BgpEvpnSession, EvpnRoute, VtepPeer
 from app.models.device import Device
-from app.models.enums import BgpSessionState, EvpnEncap, EvpnRouteType, ServiceType, VtepStatus
+from app.models.enums import BgpSessionState, CircuitStatus, EvpnEncap, EvpnRouteType, ServiceType, VtepStatus
 
 
 def _synth_mac(vni: int, device_id: int) -> str:
@@ -128,6 +128,41 @@ class BugisController:
             return
         vset = {v for v in peer.vnis.split(",") if v and v != str(vni)}
         peer.vnis = ",".join(sorted(vset, key=int))
+
+    def sync_circuit_overlay(
+        self,
+        db: Session,
+        circuit: Circuit,
+        *,
+        work_order_id: int | None = None,
+    ) -> dict | None:
+        """Register or refresh VTEP/EVPN state for inventory-managed circuits.
+
+        Used when a circuit is adopted from the network or endpoints change
+        without a southbound config push — the overlay graph should still update.
+        """
+        if circuit.vni is None or not circuit.endpoints:
+            return None
+        if circuit.status not in (
+            CircuitStatus.PENDING,
+            CircuitStatus.PROVISIONING,
+            CircuitStatus.ACTIVE,
+            CircuitStatus.DEGRADED,
+            CircuitStatus.SUSPENDED,
+        ):
+            return None
+
+        endpoints: list[CircuitEndpoint] = []
+        for ep in circuit.endpoints:
+            if not ep.device_id:
+                continue
+            if ep.device is None:
+                ep.device = db.get(Device, ep.device_id)
+            if ep.device:
+                endpoints.append(ep)
+        if not endpoints:
+            return None
+        return self.install_circuit(db, circuit, endpoints, work_order_id=work_order_id)
 
     def install_circuit(
         self,

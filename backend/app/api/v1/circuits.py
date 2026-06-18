@@ -605,11 +605,16 @@ def replace_endpoints(
             )
 
     db.commit()
+    db.refresh(circuit)
     if circuit.adopted:
         concurrent_scan.scan_devices_parallel(
             [ep.device_id for ep in new_endpoints],
             include_legacy=False,
         )
+    from app.controller import controller as bugis_controller
+
+    bugis_controller.sync_circuit_overlay(db, circuit)
+    db.commit()
     db.refresh(circuit)
     return _to_circuit_out(db, circuit)
 

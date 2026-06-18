@@ -10,6 +10,7 @@ from app.models.enums import AccessMode, CircuitStatus, ServiceType
 from app.models.tenant import Tenant
 from app.schemas.circuit import CircuitAdoptBinding, CircuitAdoptCreate, CircuitEndpointCreate
 from app.services import allocation, concurrent_scan, port_inventory
+from app.controller import controller as bugis_controller
 
 
 def _endpoint_tuple(
@@ -266,4 +267,5 @@ def adopt_circuit_from_inventory(
         port_inventory.scan_device(db, dev, include_legacy=False)
 
     db.flush()
+    bugis_controller.sync_circuit_overlay(db, circuit)
     return circuit
