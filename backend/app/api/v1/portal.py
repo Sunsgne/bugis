@@ -160,6 +160,7 @@ def portal_traffic_summary(
         hours=hours if not (start_at and end_at) else None,
         start_at=start_at,
         end_at=end_at,
+        traffic_only=True,
     )
     p95 = telemetry_service.chart_p95(samples) if samples else {
         "in_95_mbps": 0.0,

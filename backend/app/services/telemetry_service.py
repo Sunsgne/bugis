@@ -12,6 +12,19 @@ from app.models.telemetry import TelemetrySample
 from app.schemas.telemetry import CircuitHealth
 from app.services import availability_service, snmp_telemetry
 
+# Probe rows carry QoS only (latency/jitter/loss); rx/tx are always 0 and must not
+# appear in traffic charts or bandwidth billing.
+_TRAFFIC_EXCLUDED_SOURCES = frozenset({"probe"})
+
+
+def _is_traffic_sample(sample: TelemetrySample) -> bool:
+    return sample.source not in _TRAFFIC_EXCLUDED_SOURCES
+
+
+def traffic_samples(samples: list[TelemetrySample]) -> list[TelemetrySample]:
+    """Samples that carry SNMP (or manual) traffic counters."""
+    return [s for s in samples if _is_traffic_sample(s)]
+
 
 def record_sample(db: Session, **kwargs) -> TelemetrySample:
     if not kwargs.get("source"):
@@ -94,10 +107,13 @@ def list_circuit_samples(
     hours: int | None = None,
     start_at: datetime | None = None,
     end_at: datetime | None = None,
+    traffic_only: bool = False,
 ) -> list[TelemetrySample]:
     """Return samples oldest-first for charting."""
     limit = max(1, min(limit, 5000))
     stmt = select(TelemetrySample).where(TelemetrySample.circuit_id == circuit_id)
+    if traffic_only:
+        stmt = stmt.where(TelemetrySample.source.notin_(_TRAFFIC_EXCLUDED_SOURCES))
     if start_at and end_at:
         start = start_at.astimezone(timezone.utc) if start_at.tzinfo else start_at.replace(tzinfo=timezone.utc)
         end = end_at.astimezone(timezone.utc) if end_at.tzinfo else end_at.replace(tzinfo=timezone.utc)
@@ -116,8 +132,9 @@ def list_circuit_samples(
 
 
 def chart_p95(samples: list[TelemetrySample]) -> dict:
-    rx = [s.rx_mbps for s in samples]
-    tx = [s.tx_mbps for s in samples]
+    traffic = traffic_samples(samples)
+    rx = [s.rx_mbps for s in traffic]
+    tx = [s.tx_mbps for s in traffic]
     rx95 = _percentile(rx, 95)
     tx95 = _percentile(tx, 95)
     return {
@@ -136,28 +153,30 @@ def _aggregate_overview_traffic(rows: list[TelemetrySample]) -> list[dict]:
         minute = s.created_at.strftime("%Y-%m-%d %H:%M")
         key = (minute, s.circuit_id)
         b = per_circuit.setdefault(
-            key, {"rx": 0.0, "tx": 0.0, "lat": 0.0, "loss": 0.0, "n": 0}
+            key, {"rx": 0.0, "tx": 0.0, "lat": 0.0, "loss": 0.0, "n": 0, "lat_n": 0}
         )
-        b["rx"] += s.rx_mbps
-        b["tx"] += s.tx_mbps
-        if s.source == "probe":
+        if _is_traffic_sample(s):
+            b["rx"] += s.rx_mbps
+            b["tx"] += s.tx_mbps
+            b["n"] += 1
+        elif s.source == "probe":
             b["lat"] += s.latency_ms
             b["loss"] += s.packet_loss_pct
-        b["n"] += 1
+            b["lat_n"] += 1
 
     buckets: dict[str, dict] = {}
     for (minute, _), vals in per_circuit.items():
-        n = max(vals["n"], 1)
         b = buckets.setdefault(
             minute,
             {"rx": 0.0, "tx": 0.0, "lat": 0.0, "loss": 0.0, "n": 0, "lat_n": 0},
         )
-        b["rx"] += vals["rx"] / n
-        b["tx"] += vals["tx"] / n
-        if vals["lat"] > 0:
+        if vals["n"] > 0:
+            b["rx"] += vals["rx"] / vals["n"]
+            b["tx"] += vals["tx"] / vals["n"]
+        if vals["lat_n"] > 0:
             b["lat"] += vals["lat"]
             b["loss"] += vals["loss"]
-            b["lat_n"] += 1
+            b["lat_n"] += vals["lat_n"]
         b["n"] += vals["n"]
 
     out = []
@@ -215,9 +234,10 @@ def billing_95th(db: Session, circuit: Circuit, period: str | None = None) -> di
     months = sorted(by_month.keys(), reverse=True)
     sel = period if period in by_month else (months[0] if months else None)
     rows = by_month.get(sel, [])
+    traffic = traffic_samples(rows)
 
-    rx = [s.rx_mbps for s in rows]
-    tx = [s.tx_mbps for s in rows]
+    rx = [s.rx_mbps for s in traffic]
+    tx = [s.tx_mbps for s in traffic]
     rx95 = _percentile(rx, 95)
     tx95 = _percentile(tx, 95)
     return {
@@ -225,7 +245,7 @@ def billing_95th(db: Session, circuit: Circuit, period: str | None = None) -> di
         "circuit_code": circuit.code,
         "period": sel,
         "available_months": months,
-        "samples": len(rows),
+        "samples": len(traffic),
         "bandwidth_mbps": circuit.bandwidth_mbps,
         "in_95_mbps": rx95,
         "out_95_mbps": tx95,
@@ -270,6 +290,7 @@ def compute_health(
 
     n = len(samples)
     qos_samples = [s for s in samples if s.source == "probe"]
+    traffic_rows = traffic_samples(samples)
     sources = sorted({s.source for s in samples if s.source})
 
     if n == 0:
@@ -284,9 +305,13 @@ def compute_health(
             data_sources=[],
         )
 
-    avg_util = sum(s.utilization_pct for s in samples) / n
-    peak_util = max(s.utilization_pct for s in samples)
-    tunnel_down = bool(latest and latest.tunnel_state == "down")
+    avg_util = sum(s.utilization_pct for s in traffic_rows) / max(len(traffic_rows), 1)
+    peak_util = max((s.utilization_pct for s in traffic_rows), default=0.0)
+    latest_traffic = traffic_rows[-1] if traffic_rows else None
+    tunnel_down = bool(
+        (latest_traffic and latest_traffic.tunnel_state == "down")
+        or (not latest_traffic and latest and latest.tunnel_state == "down")
+    )
 
     avg_lat = avg_jit = avg_loss = 0.0
     if qos_samples:
