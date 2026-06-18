@@ -45,6 +45,9 @@ export interface PlatformSettings {
   expose_openapi?: boolean;
   protect_live_config?: boolean;
   snapshot_before_change?: boolean;
+  auto_learn_on_import?: boolean;
+  auto_learn_enabled?: boolean;
+  auto_learn_interval_seconds?: number;
   async_provisioning?: boolean;
   provision_max_concurrency?: number;
   notes?: string;

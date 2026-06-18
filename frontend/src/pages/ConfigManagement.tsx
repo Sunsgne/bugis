@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
-import { Button, Card, Table, Tag, Tabs, App as AntApp, Empty, Descriptions, Typography, Tooltip } from "antd";
-import { CloudUploadOutlined, DiffOutlined, ReloadOutlined, BookOutlined } from "@ant-design/icons";
+import { Link } from "react-router-dom";
+import { Button, Card, Table, Tag, Tabs, App as AntApp, Empty, Descriptions, Typography, Tooltip, Alert } from "antd";
+import { CloudUploadOutlined, DiffOutlined, ReloadOutlined, BookOutlined, SettingOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { api } from "../api/client";
 import { configPreviewModalProps, ConfigPreviewPre } from "../utils/configPreview";
+import { usePlatformSettings } from "../hooks/usePlatformSettings";
 
 const VENDOR_COLOR: Record<string, string> = {
   h3c: "blue", huawei: "red", juniper: "green", arista: "orange", cisco: "purple", frr: "cyan",
@@ -48,6 +50,7 @@ function ColoredDiff({ text }: { text: string }) {
 
 export default function ConfigManagement() {
   const { message, modal } = AntApp.useApp();
+  const { platform } = usePlatformSettings();
   const [devices, setDevices] = useState<ConfigDeviceRow[]>([]);
   const [sel, setSel] = useState<number | null>(null);
   const [running, setRunning] = useState<string>("");
@@ -149,6 +152,30 @@ export default function ConfigManagement() {
 
   return (
     <div className="config-management-page">
+      <Alert
+        type="info"
+        showIcon
+        style={{ marginBottom: 16 }}
+        message={
+          platform?.auto_learn_enabled !== false
+            ? `定时自动拉取已开启（间隔 ${platform?.auto_learn_interval_seconds ?? 60} 秒）`
+            : "定时自动拉取已关闭"
+        }
+        description={
+          <>
+            可在
+            <Link to="/settings/config-learn"> 平台设置 → 配置管理 </Link>
+            调整自动拉取、变更保护与快照策略。
+          </>
+        }
+        action={
+          <Link to="/settings/config-learn">
+            <Button size="small" icon={<SettingOutlined />}>
+              去设置
+            </Button>
+          </Link>
+        }
+      />
       <Card
         className="config-panel-card"
         title="设备配置"

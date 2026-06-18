@@ -42,6 +42,7 @@ import UsersPage from "./pages/Users";
 import Audit from "./pages/Audit";
 import SettingsLayout from "./pages/settings/SettingsLayout";
 import GeneralSettings from "./pages/settings/GeneralSettings";
+import ConfigLearnSettings from "./pages/settings/ConfigLearnSettings";
 import AlarmSettings from "./pages/settings/AlarmSettings";
 import BaselineSettings from "./pages/settings/BaselineSettings";
 import SmtpSettings from "./pages/settings/SmtpSettings";
@@ -313,6 +314,7 @@ function Shell() {
               <Route index element={<Navigate to="brand" replace />} />
               <Route path="brand" element={<BrandSettings />} />
               <Route path="general" element={<GeneralSettings />} />
+              <Route path="config-learn" element={<ConfigLearnSettings />} />
               <Route path="alarms" element={<AlarmSettings />} />
               <Route path="baseline" element={<BaselineSettings />} />
               <Route path="smtp" element={<SmtpSettings />} />
