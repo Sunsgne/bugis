@@ -24,10 +24,9 @@ export function sampleLimitForWindow(mode: RangeMode, hours: number, customRange
     mode === "custom" && customRange
       ? Math.max(1, Math.ceil(customRange[1].diff(customRange[0], "hour", true)))
       : hours;
-  if (spanHours <= 6) return 120;
-  if (spanHours <= 24) return 288;
-  if (spanHours <= 168) return 500;
-  return 2000;
+  // Scheduler ~30s/tick → ~120 samples/hour; include probe rows with headroom.
+  const estimated = Math.ceil(spanHours * 120 * 1.15);
+  return Math.min(Math.max(estimated, 60), 5000);
 }
 
 export function spanHoursFor(mode: RangeMode, hours: number, customRange: [Dayjs, Dayjs] | null) {
@@ -46,8 +45,8 @@ export function windowLabelFor(mode: RangeMode, hours: number, customRange: [Day
 
 export function timeLabel(iso: string | undefined, spanHours: number) {
   if (!iso) return "";
-  const fmt = spanHours > 24 ? "MM-DD HH:mm" : "HH:mm";
-  return dayjs(iso).format(fmt);
+  if (spanHours <= 1) return dayjs(iso).format("HH:mm");
+  return dayjs(iso).format("MM-DD HH:mm");
 }
 
 export function chartRangeKey(

@@ -98,10 +98,19 @@ function SvidUsageTags({ list, emptyText }: { list?: SvidUsage[] | null; emptyTe
   );
 }
 
+function interfaceOptionLabel(iface: DeviceInterface) {
+  const short = formatInterfaceShort(iface.name);
+  const desc = iface.description?.trim();
+  if (!desc) return short;
+  const clipped = desc.length > 56 ? `${desc.slice(0, 53)}…` : desc;
+  return `${short} — ${clipped}`;
+}
+
 function InterfaceOptionRow({ iface }: { iface: DeviceInterface }) {
   const speed = formatPortSpeed(iface.speed_mbps);
   const used = (iface.used_s_vids?.length || 0) > 0;
   const short = formatInterfaceShort(iface.name);
+  const desc = iface.description?.trim();
   return (
     <div className="iface-option">
       <div className="iface-option-head">
@@ -114,6 +123,11 @@ function InterfaceOptionRow({ iface }: { iface: DeviceInterface }) {
         </Tag>
         {!used && <Tag color="green" bordered={false}>空闲</Tag>}
       </div>
+      {desc && (
+        <div className="iface-option-desc" title={desc}>
+          {desc}
+        </div>
+      )}
       {used && (
         <div className="iface-option-svids">
           <SvidUsageTags list={iface.used_s_vids} />
@@ -146,6 +160,7 @@ function PortDetailPanel({
     excludeCircuitCode,
   );
   const short = formatInterfaceShort(iface.name);
+  const desc = iface.description?.trim();
   return (
     <div className="port-detail-panel">
       <div className="port-detail-title">
@@ -157,6 +172,12 @@ function PortDetailPanel({
           {formatOperStatus(iface.oper_status)}
         </Tag>
       </div>
+      {desc && (
+        <div className="port-detail-row">
+          <span className="port-detail-label">端口描述</span>
+          <span className="port-detail-value">{desc}</span>
+        </div>
+      )}
       <div className="port-detail-row">
         <span className="port-detail-label">S-VID 占用</span>
         <SvidUsageTags list={iface.used_s_vids} emptyText="该端口暂无 VLAN 占用" />
@@ -222,7 +243,7 @@ export default function CircuitEndpointsEditor({
   function ifaceSelectOptions(deviceId: number) {
     return (ifaceByDevice[deviceId] || []).map((iface) => ({
       value: iface.name,
-      label: iface.name,
+      label: interfaceOptionLabel(iface),
       iface,
     }));
   }

@@ -581,6 +581,20 @@ body {
   margin-top: 8px;
 }
 
+.iface-option-desc {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #64748b;
+  word-break: break-word;
+}
+
+.port-detail-value {
+  font-size: 13px;
+  color: #334155;
+  word-break: break-word;
+}
+
 .form-hint-block {
   margin-top: 4px;
   font-size: 12px;
