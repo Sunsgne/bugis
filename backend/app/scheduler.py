@@ -2,6 +2,10 @@
 
 Periodically collects SNMP telemetry, rotates on-demand circuit probes for QoS
 metrics, re-evaluates SLA/capacity alarms, and refreshes live-network inventory.
+
+At ~10k active circuits, SNMP and probe work is batched per tick (round-robin)
+so each tick stays bounded; alarm evaluation runs only for circuits touched
+in that tick.
 """
 from __future__ import annotations
 
@@ -24,6 +28,7 @@ logger = logging.getLogger("bugis.scheduler")
 
 _task: asyncio.Task | None = None
 _probe_cursor = 0
+_collect_cursor = 0
 _last_learn_monotonic = 0.0
 _state: dict = {
     "running": False,
@@ -35,19 +40,21 @@ _state: dict = {
     "last_learn_devices": 0,
     "last_learn_conflicts": 0,
     "interval": settings.scheduler_interval_seconds,
+    "collect_batch_size": settings.telemetry_collect_batch_size,
+    "probe_batch_size": settings.telemetry_probe_batch_size,
 }
 
 
-def _probe_one_circuit(db, circuits: list[Circuit]) -> int:
+def _probe_one_circuit(db, circuits: list[Circuit]) -> tuple[int, set[int]]:
     """Rotate through active circuits and run live path probes (QoS metrics)."""
     global _probe_cursor
+    touched: set[int] = set()
     if settings.dry_run or not circuits:
-        return 0
+        return 0, touched
     probeable = [c for c in circuits if c.latency_probe_enabled]
     if not probeable:
-        return 0
-    # Probe multiple circuits per tick so each enabled line is refreshed within ~15 min.
-    batch = max(1, min(3, (len(probeable) + 4) // 5))
+        return 0, touched
+    batch = max(1, min(settings.telemetry_probe_batch_size, len(probeable)))
     probed = 0
     from app.services.circuit_probe.runner import probe_circuit
 
@@ -57,9 +64,34 @@ def _probe_one_circuit(db, circuits: list[Circuit]) -> int:
         try:
             probe_circuit(db, circuit)
             probed += 1
+            touched.add(circuit.id)
         except Exception as exc:  # noqa: BLE001
             logger.warning("scheduled probe failed for %s: %s", circuit.code, exc)
-    return probed
+    return probed, touched
+
+
+def _collect_circuit_batch(
+    db,
+    circuits: list[Circuit],
+    *,
+    interval_sec: float,
+) -> tuple[int, set[int]]:
+    """SNMP telemetry for a round-robin batch of active circuits."""
+    global _collect_cursor
+    touched: set[int] = set()
+    if not circuits:
+        return 0, touched
+    batch = max(1, min(settings.telemetry_collect_batch_size, len(circuits)))
+    collected = 0
+    for _ in range(batch):
+        circuit = circuits[_collect_cursor % len(circuits)]
+        _collect_cursor += 1
+        if telemetry_service.collect_circuit_sample(
+            db, circuit, interval_sec=interval_sec
+        ):
+            collected += 1
+        touched.add(circuit.id)
+    return collected, touched
 
 
 def _maybe_learn_inventory(db) -> dict | None:
@@ -94,20 +126,24 @@ def _tick() -> int:
         circuits = db.execute(
             select(Circuit).where(Circuit.status == CircuitStatus.ACTIVE)
         ).scalars().all()
-        collected = 0
-        for c in circuits:
-            if telemetry_service.collect_circuit_sample(
-                db, c, interval_sec=float(_state["interval"])
-            ):
-                collected += 1
-        probed = _probe_one_circuit(db, circuits)
+        collected, collect_touched = _collect_circuit_batch(
+            db,
+            circuits,
+            interval_sec=float(_state["interval"]),
+        )
+        probed, probe_touched = _probe_one_circuit(db, circuits)
+        touched_ids = collect_touched | probe_touched
         db.flush()
-        for c in circuits:
+        circuit_by_id = {c.id: c for c in circuits}
+        for cid in touched_ids:
+            c = circuit_by_id.get(cid)
+            if not c:
+                continue
             health = telemetry_service.compute_health(db, c)
             alarm_service.evaluate_circuit_health(db, c, health)
             alarm_service.evaluate_circuit_availability(db, c)
         link_monitor.sync_all_link_capacity(db)
-        link_samples = link_monitor.sample_all_links(
+        link_monitor.sample_all_links(
             db, interval_sec=float(_state["interval"])
         )
         links = db.execute(select(Link)).scalars().all()
@@ -150,6 +186,8 @@ def start() -> None:
     if _task and not _task.done():
         return
     _state["interval"] = settings.scheduler_interval_seconds
+    _state["collect_batch_size"] = settings.telemetry_collect_batch_size
+    _state["probe_batch_size"] = settings.telemetry_probe_batch_size
     _task = asyncio.create_task(_run())
 
 

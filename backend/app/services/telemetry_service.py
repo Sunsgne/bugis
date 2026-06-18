@@ -10,7 +10,7 @@ from app.models.circuit import Circuit
 from app.models.enums import CircuitStatus
 from app.models.telemetry import TelemetrySample
 from app.schemas.telemetry import CircuitHealth
-from app.services import availability_service, snmp_telemetry
+from app.services import availability_service, snmp_telemetry, telemetry_timescale
 
 # Probe rows carry QoS only (latency/jitter/loss); rx/tx are always 0 and must not
 # appear in traffic charts or bandwidth billing.
@@ -125,10 +125,72 @@ def list_circuit_samples(
     return rows
 
 
-def chart_p95(samples: list[TelemetrySample]) -> dict:
-    traffic = traffic_samples(samples)
-    rx = [s.rx_mbps for s in traffic]
-    tx = [s.tx_mbps for s in traffic]
+def _window_hours(
+    *,
+    hours: int | None,
+    start_at: datetime | None,
+    end_at: datetime | None,
+) -> int:
+    if start_at and end_at:
+        start = start_at.astimezone(timezone.utc) if start_at.tzinfo else start_at.replace(tzinfo=timezone.utc)
+        end = end_at.astimezone(timezone.utc) if end_at.tzinfo else end_at.replace(tzinfo=timezone.utc)
+        return max(1, int((end - start).total_seconds() // 3600))
+    return max(1, hours or 24)
+
+
+def _bucket_traffic_sample(circuit_id: int, bucket: dict) -> dict:
+    ts = bucket["bucket"]
+    if ts.tzinfo is None:
+        ts = ts.replace(tzinfo=timezone.utc)
+    return {
+        "id": 0,
+        "circuit_id": circuit_id,
+        "rx_mbps": bucket["rx_mbps"],
+        "tx_mbps": bucket["tx_mbps"],
+        "utilization_pct": 0.0,
+        "latency_ms": 0.0,
+        "jitter_ms": 0.0,
+        "packet_loss_pct": 0.0,
+        "errors": 0,
+        "tunnel_state": "up",
+        "source": "aggregate_5m",
+        "created_at": ts,
+    }
+
+
+def _bucket_qos_sample(circuit_id: int, bucket: dict) -> dict:
+    ts = bucket["bucket"]
+    if ts.tzinfo is None:
+        ts = ts.replace(tzinfo=timezone.utc)
+    return {
+        "id": 0,
+        "circuit_id": circuit_id,
+        "rx_mbps": 0.0,
+        "tx_mbps": 0.0,
+        "utilization_pct": 0.0,
+        "latency_ms": bucket["latency_ms"],
+        "jitter_ms": 0.0,
+        "packet_loss_pct": 0.0,
+        "errors": 0,
+        "tunnel_state": "up",
+        "source": "probe",
+        "created_at": ts,
+    }
+
+
+def _sample_field(sample: TelemetrySample | dict, field: str, default: float = 0.0) -> float:
+    if isinstance(sample, dict):
+        return float(sample.get(field, default) or default)
+    return float(getattr(sample, field, default) or default)
+
+
+def chart_p95(samples: list[TelemetrySample] | list[dict]) -> dict:
+    traffic = [
+        s for s in samples
+        if (s.get("source") if isinstance(s, dict) else s.source) not in _TRAFFIC_EXCLUDED_SOURCES
+    ]
+    rx = [_sample_field(s, "rx_mbps") for s in traffic]
+    tx = [_sample_field(s, "tx_mbps") for s in traffic]
     rx95 = _percentile(rx, 95)
     tx95 = _percentile(tx, 95)
     return {
@@ -148,20 +210,45 @@ def traffic_summary_payload(
     end_at: datetime | None = None,
 ) -> dict:
     """SNMP traffic series for Rx/Tx charts plus probe QoS series for latency charts."""
-    kwargs = {
-        "limit": limit,
-        "hours": hours if not (start_at and end_at) else None,
-        "start_at": start_at,
-        "end_at": end_at,
-    }
-    traffic_rows = list_circuit_samples(db, circuit.id, traffic_only=True, **kwargs)
-    qos_rows: list[TelemetrySample] = []
-    if circuit.latency_probe_enabled:
-        qos_rows = [
-            s
-            for s in list_circuit_samples(db, circuit.id, traffic_only=False, **kwargs)
-            if s.source == "probe"
+    eff_hours = _window_hours(hours=hours, start_at=start_at, end_at=end_at)
+    use_ca = (
+        telemetry_timescale.continuous_aggregate_available(db)
+        and telemetry_timescale.should_use_continuous_aggregate(eff_hours)
+    )
+
+    if use_ca:
+        traffic_rows = [
+            _bucket_traffic_sample(circuit.id, b)
+            for b in telemetry_timescale.fetch_traffic_buckets(
+                db, circuit_id=circuit.id, hours=eff_hours
+            )
         ]
+        qos_rows: list = []
+        if circuit.latency_probe_enabled:
+            qos_rows = [
+                _bucket_qos_sample(circuit.id, b)
+                for b in telemetry_timescale.fetch_latency_buckets(
+                    db, circuit_id=circuit.id, hours=eff_hours
+                )
+            ]
+        resolution = "5m_aggregate"
+    else:
+        kwargs = {
+            "limit": limit,
+            "hours": hours if not (start_at and end_at) else None,
+            "start_at": start_at,
+            "end_at": end_at,
+        }
+        traffic_rows = list_circuit_samples(db, circuit.id, traffic_only=True, **kwargs)
+        qos_rows = []
+        if circuit.latency_probe_enabled:
+            qos_rows = [
+                s
+                for s in list_circuit_samples(db, circuit.id, traffic_only=False, **kwargs)
+                if s.source == "probe"
+            ]
+        resolution = "raw"
+
     p95 = chart_p95(traffic_rows) if traffic_rows else {
         "in_95_mbps": 0.0,
         "out_95_mbps": 0.0,
@@ -173,6 +260,7 @@ def traffic_summary_payload(
         "qos_samples": qos_rows,
         "p95": p95,
         "bandwidth_mbps": circuit.bandwidth_mbps,
+        "resolution": resolution,
     }
 
 
@@ -270,6 +358,9 @@ def billing_95th(db: Session, circuit: Circuit, period: str | None = None) -> di
         )
     ).scalars().all()
     months = sorted({ts.strftime("%Y-%m") for ts in timestamps}, reverse=True)
+    if telemetry_timescale.continuous_aggregate_available(db):
+        ca_months = telemetry_timescale.fetch_billing_months(db, circuit_id=circuit.id)
+        months = sorted(set(months) | set(ca_months), reverse=True)
     sel = period if period in months else (months[0] if months else None)
     if not sel:
         return {
@@ -288,32 +379,46 @@ def billing_95th(db: Session, circuit: Circuit, period: str | None = None) -> di
         }
 
     start, end = _month_bounds(sel)
-    rows = db.execute(
-        select(TelemetrySample).where(
-            TelemetrySample.circuit_id == circuit.id,
-            TelemetrySample.created_at >= start,
-            TelemetrySample.created_at < end,
+    if telemetry_timescale.continuous_aggregate_available(db):
+        agg = telemetry_timescale.fetch_billing_95th_from_aggregate(
+            db, circuit_id=circuit.id, month_start=start, month_end=end
         )
-    ).scalars().all()
-    traffic = traffic_samples(rows)
+        rx95 = agg["in_95_mbps"]
+        tx95 = agg["out_95_mbps"]
+        sample_count = agg["samples"]
+        peak = agg["peak_mbps"]
+        avg = agg["avg_mbps"]
+    else:
+        rows = db.execute(
+            select(TelemetrySample).where(
+                TelemetrySample.circuit_id == circuit.id,
+                TelemetrySample.created_at >= start,
+                TelemetrySample.created_at < end,
+            )
+        ).scalars().all()
+        traffic = traffic_samples(rows)
+        rx = [s.rx_mbps for s in traffic]
+        tx = [s.tx_mbps for s in traffic]
+        rx95 = _percentile(rx, 95)
+        tx95 = _percentile(tx, 95)
+        sample_count = len(traffic)
+        peak = round(max([*rx, *tx], default=0.0), 2)
+        avg = round((sum(rx) + sum(tx)) / (2 * len(rows)), 2) if rows else 0.0
 
-    rx = [s.rx_mbps for s in traffic]
-    tx = [s.tx_mbps for s in traffic]
-    rx95 = _percentile(rx, 95)
-    tx95 = _percentile(tx, 95)
+    billable = max(rx95, tx95)
     return {
         "circuit_id": circuit.id,
         "circuit_code": circuit.code,
         "period": sel,
         "available_months": months,
-        "samples": len(traffic),
+        "samples": sample_count,
         "bandwidth_mbps": circuit.bandwidth_mbps,
         "in_95_mbps": rx95,
         "out_95_mbps": tx95,
-        "billable_95_mbps": max(rx95, tx95),
-        "peak_mbps": round(max([*rx, *tx], default=0.0), 2),
-        "avg_mbps": round((sum(rx) + sum(tx)) / (2 * len(rows)), 2) if rows else 0.0,
-        "utilization_pct": round(max(rx95, tx95) / circuit.bandwidth_mbps * 100, 1)
+        "billable_95_mbps": billable,
+        "peak_mbps": peak,
+        "avg_mbps": avg,
+        "utilization_pct": round(billable / circuit.bandwidth_mbps * 100, 1)
         if circuit.bandwidth_mbps else 0.0,
     }
 

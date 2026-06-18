@@ -77,8 +77,9 @@ def test_scheduler_skips_disabled_circuit(db_session, active_circuit):
     with patch("app.services.circuit_probe.runner.probe_circuit") as mock_probe, patch.object(
         settings, "dry_run", False
     ):
-        result = _probe_one_circuit(db_session, [active_circuit, enabled])
+        result, touched = _probe_one_circuit(db_session, [active_circuit, enabled])
         assert result >= 1
+        assert enabled.id in touched
         mock_probe.assert_called()
         assert mock_probe.call_args[0][1].id == enabled.id
 
