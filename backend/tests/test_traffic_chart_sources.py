@@ -104,6 +104,49 @@ def test_traffic_summary_excludes_probe_zeros(db_session):
     assert health.qos_samples == 6
 
 
+def test_traffic_summary_includes_qos_samples(db_session):
+    circuit = _make_circuit(db_session)
+    base = datetime.now(timezone.utc) - timedelta(minutes=10)
+
+    for i in range(3):
+        ts = base + timedelta(seconds=30 * i)
+        db_session.add(
+            TelemetrySample(
+                circuit_id=circuit.id,
+                rx_mbps=80.0,
+                tx_mbps=60.0,
+                latency_ms=0.0,
+                utilization_pct=8.0,
+                tunnel_state="up",
+                source="snmp",
+                created_at=ts,
+            )
+        )
+        db_session.add(
+            TelemetrySample(
+                circuit_id=circuit.id,
+                rx_mbps=0.0,
+                tx_mbps=0.0,
+                latency_ms=12.0 + i,
+                jitter_ms=0.5,
+                packet_loss_pct=0.1,
+                utilization_pct=0.0,
+                tunnel_state="up",
+                source="probe",
+                created_at=ts + timedelta(seconds=5),
+            )
+        )
+    db_session.commit()
+
+    payload = telemetry_service.traffic_summary_payload(
+        db_session, circuit, hours=24, limit=20
+    )
+    assert len(payload["samples"]) == 3
+    assert all(s.source == "snmp" for s in payload["samples"])
+    assert len(payload["qos_samples"]) == 3
+    assert payload["qos_samples"][0].latency_ms == 12.0
+
+
 def test_overview_aggregation_ignores_probe_traffic(db_session):
     circuit = _make_circuit(db_session)
     minute = datetime.now(timezone.utc).replace(second=0, microsecond=0)

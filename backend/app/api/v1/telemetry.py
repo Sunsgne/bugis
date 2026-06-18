@@ -73,26 +73,14 @@ def circuit_traffic_summary(
         raise HTTPException(status_code=400, detail="start_at and end_at must be provided together")
     if start_at and end_at and start_at >= end_at:
         raise HTTPException(status_code=400, detail="start_at must be before end_at")
-    samples = telemetry_service.list_circuit_samples(
+    return telemetry_service.traffic_summary_payload(
         db,
-        circuit_id,
+        circuit,
         limit=limit,
-        hours=hours if not (start_at and end_at) else None,
+        hours=hours,
         start_at=start_at,
         end_at=end_at,
-        traffic_only=True,
     )
-    p95 = telemetry_service.chart_p95(samples) if samples else {
-        "in_95_mbps": 0.0,
-        "out_95_mbps": 0.0,
-        "billable_95_mbps": 0.0,
-    }
-    return {
-        "circuit_id": circuit_id,
-        "samples": samples,
-        "p95": p95,
-        "bandwidth_mbps": circuit.bandwidth_mbps,
-    }
 
 
 @router.get("/circuits/{circuit_id}/availability", response_model=CircuitAvailabilityOut)

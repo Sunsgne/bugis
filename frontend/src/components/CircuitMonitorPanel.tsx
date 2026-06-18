@@ -120,6 +120,14 @@ export default function CircuitMonitorPanel({
         t: timeLabel(s.created_at, spanHours),
         rx: s.rx_mbps,
         tx: s.tx_mbps,
+      })),
+    [traffic, spanHours],
+  );
+
+  const qosChartData = useMemo(
+    () =>
+      (traffic?.qos_samples || []).map((s) => ({
+        t: timeLabel(s.created_at, spanHours),
         latency: s.latency_ms,
         jitter: s.jitter_ms,
         loss: s.packet_loss_pct,
@@ -131,8 +139,9 @@ export default function CircuitMonitorPanel({
     () => trafficWithP95Option(chartData, "t", traffic?.p95),
     [chartData, traffic?.p95],
   );
-  const latencyOpt = useMemo(() => latencyJitterOption(chartData, "t"), [chartData]);
+  const latencyOpt = useMemo(() => latencyJitterOption(qosChartData, "t"), [qosChartData]);
   const chartKey = chartRangeKey(circuitId, rangeMode, hours, customRange, chartData.length);
+  const qosChartKey = chartRangeKey(circuitId, rangeMode, hours, customRange, qosChartData.length);
 
   const scoreColor = (v: number) => (v >= 90 ? "#52c41a" : v >= 70 ? "#fa8c16" : "#cf1322");
   const chartHeight = compact ? 220 : 280;
@@ -288,10 +297,10 @@ export default function CircuitMonitorPanel({
             title={`时延 · 抖动 · 丢包（${windowLabel}）`}
             loading={loading}
           >
-            {chartData.length ? (
-              <EChart key={`latency-${chartKey}`} option={latencyOpt} height={chartHeight} />
+            {qosChartData.length ? (
+              <EChart key={`latency-${qosChartKey}`} option={latencyOpt} height={chartHeight} />
             ) : (
-              <Empty description={empty.traffic} />
+              <Empty description="暂无拨测数据 · 调度器轮询或手动「端到端拨测」后显示" />
             )}
           </Card>
         )}

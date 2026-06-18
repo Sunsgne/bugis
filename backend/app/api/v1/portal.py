@@ -154,26 +154,14 @@ def portal_traffic_summary(
     db: Session = Depends(get_db),
 ):
     circuit = get_tenant_circuit(db, user, circuit_id)
-    samples = telemetry_service.list_circuit_samples(
+    return telemetry_service.traffic_summary_payload(
         db,
-        circuit.id,
+        circuit,
         limit=limit,
-        hours=hours if not (start_at and end_at) else None,
+        hours=hours,
         start_at=start_at,
         end_at=end_at,
-        traffic_only=True,
     )
-    p95 = telemetry_service.chart_p95(samples) if samples else {
-        "in_95_mbps": 0.0,
-        "out_95_mbps": 0.0,
-        "billable_95_mbps": 0.0,
-    }
-    return {
-        "circuit_id": circuit.id,
-        "samples": samples,
-        "p95": p95,
-        "bandwidth_mbps": circuit.bandwidth_mbps,
-    }
 
 
 @router.get("/circuits/{circuit_id}/billing")

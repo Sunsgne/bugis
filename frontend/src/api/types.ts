@@ -319,6 +319,7 @@ export interface TrafficP95 {
 export interface TrafficSummary {
   circuit_id: number;
   samples: TelemetrySample[];
+  qos_samples?: TelemetrySample[];
   p95: TrafficP95;
   bandwidth_mbps: number;
 }

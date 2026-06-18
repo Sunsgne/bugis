@@ -38,24 +38,28 @@ _state: dict = {
 }
 
 
-def _probe_one_circuit(db, circuits: list[Circuit]) -> bool:
-    """Rotate through active circuits and run a live path probe (QoS metrics)."""
+def _probe_one_circuit(db, circuits: list[Circuit]) -> int:
+    """Rotate through active circuits and run live path probes (QoS metrics)."""
     global _probe_cursor
     if settings.dry_run or not circuits:
-        return False
+        return 0
     probeable = [c for c in circuits if c.latency_probe_enabled]
     if not probeable:
-        return False
-    circuit = probeable[_probe_cursor % len(probeable)]
-    _probe_cursor += 1
-    try:
-        from app.services.circuit_probe.runner import probe_circuit
+        return 0
+    # Probe multiple circuits per tick so each enabled line is refreshed within ~15 min.
+    batch = max(1, min(3, (len(probeable) + 4) // 5))
+    probed = 0
+    from app.services.circuit_probe.runner import probe_circuit
 
-        probe_circuit(db, circuit)
-        return True
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("scheduled probe failed for %s: %s", circuit.code, exc)
-        return False
+    for _ in range(batch):
+        circuit = probeable[_probe_cursor % len(probeable)]
+        _probe_cursor += 1
+        try:
+            probe_circuit(db, circuit)
+            probed += 1
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("scheduled probe failed for %s: %s", circuit.code, exc)
+    return probed
 
 
 def _maybe_learn_inventory(db) -> dict | None:
@@ -113,7 +117,7 @@ def _tick() -> int:
         bgp_peering.sync_sessions(db)
         ha.heartbeat(db)
         db.commit()
-        _state["last_probes"] = 1 if probed else 0
+        _state["last_probes"] = probed
         return collected
     finally:
         db.close()

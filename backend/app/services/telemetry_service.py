@@ -146,6 +146,44 @@ def chart_p95(samples: list[TelemetrySample]) -> dict:
     }
 
 
+def traffic_summary_payload(
+    db: Session,
+    circuit: Circuit,
+    *,
+    limit: int = 120,
+    hours: int | None = 24,
+    start_at: datetime | None = None,
+    end_at: datetime | None = None,
+) -> dict:
+    """SNMP traffic series for Rx/Tx charts plus probe QoS series for latency charts."""
+    kwargs = {
+        "limit": limit,
+        "hours": hours if not (start_at and end_at) else None,
+        "start_at": start_at,
+        "end_at": end_at,
+    }
+    traffic_rows = list_circuit_samples(db, circuit.id, traffic_only=True, **kwargs)
+    qos_rows: list[TelemetrySample] = []
+    if circuit.latency_probe_enabled:
+        qos_rows = [
+            s
+            for s in list_circuit_samples(db, circuit.id, traffic_only=False, **kwargs)
+            if s.source == "probe"
+        ]
+    p95 = chart_p95(traffic_rows) if traffic_rows else {
+        "in_95_mbps": 0.0,
+        "out_95_mbps": 0.0,
+        "billable_95_mbps": 0.0,
+    }
+    return {
+        "circuit_id": circuit.id,
+        "samples": traffic_rows,
+        "qos_samples": qos_rows,
+        "p95": p95,
+        "bandwidth_mbps": circuit.bandwidth_mbps,
+    }
+
+
 def _aggregate_overview_traffic(rows: list[TelemetrySample]) -> list[dict]:
     """Bucket samples by minute and circuit, then sum per-circuit averages."""
     per_circuit: dict[tuple[str, int], dict] = {}
