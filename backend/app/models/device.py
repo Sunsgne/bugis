@@ -63,7 +63,7 @@ class Device(Base, TimestampMixin):
     # SNMP (optional per device; empty community falls back to platform default)
     snmp_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     snmp_port: Mapped[int] = mapped_column(Integer, default=161)
-    snmp_community: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    snmp_community: Mapped[str | None] = mapped_column(String(512), nullable=True)
     snmp_version: Mapped[str] = mapped_column(String(8), default="2c")
     snmp_v3_username: Mapped[str | None] = mapped_column(String(64), nullable=True)
     snmp_v3_auth_password: Mapped[str | None] = mapped_column(String(255), nullable=True)
