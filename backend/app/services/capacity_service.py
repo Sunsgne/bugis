@@ -1,14 +1,46 @@
 """Bandwidth capacity computation across devices, sites and links."""
 from __future__ import annotations
 
+import re
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.circuit import Circuit, CircuitEndpoint
-from app.models.device import Device
+from app.models.device import Device, DeviceInterface
 from app.models.enums import CircuitStatus
 from app.models.link import Link
 from app.models.site import Site
+from app.services.link_planner import is_bridge_aggregation, is_vlan_interface
+from app.services.port_inventory import is_huawei_subinterface
+
+_SYSTEM_IFACE = re.compile(
+    r"loop(?:back)?|null0|inloop|console|register|meth\d|management|mgmt|vbdif",
+    re.IGNORECASE,
+)
+_SUBIF_SUFFIX = re.compile(r"\.\d+$")
+
+
+def is_physical_capacity_interface(name: str) -> bool:
+    """True for fabric physical ports; excludes VLAN/SVI, sub-interfaces and system ifaces."""
+    stripped = (name or "").strip()
+    if not stripped or _SYSTEM_IFACE.search(stripped):
+        return False
+    if is_vlan_interface(stripped) or is_bridge_aggregation(stripped):
+        return False
+    if is_huawei_subinterface(stripped):
+        return False
+    if _SUBIF_SUFFIX.search(stripped) and re.search(r"\d+/\d+", stripped):
+        return False
+    return True
+
+
+def _physical_capacity_mbps(interfaces: list[DeviceInterface]) -> int:
+    return sum(
+        (iface.speed_mbps or 0)
+        for iface in interfaces
+        if is_physical_capacity_interface(iface.name)
+    )
 
 
 def _active_circuit_load_by_device(db: Session) -> dict[int, int]:
@@ -29,8 +61,8 @@ def device_capacity(db: Session) -> list[dict]:
     devices = db.execute(select(Device)).scalars().all()
     result = []
     for d in devices:
-        # Total device capacity approximated from sum of interface speeds.
-        total = sum((i.speed_mbps or 0) for i in d.interfaces) or 40000
+        # Fabric capacity counts physical port speeds only (no VLAN/SVI/sub-if).
+        total = _physical_capacity_mbps(d.interfaces) or 40000
         used = load.get(d.id, 0)
         result.append({
             "device_id": d.id,
