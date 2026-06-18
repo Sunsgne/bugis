@@ -19,8 +19,8 @@ class SnmpSettings(Base, TimestampMixin):
     version: Mapped[str] = mapped_column(String(8), default="2c")  # 2c | 3
 
     # SNMPv2c
-    community: Mapped[str] = mapped_column(String(128), default="bugis-ro")
-    write_community: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    community: Mapped[str] = mapped_column(String(512), default="bugis-ro")
+    write_community: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
     # Transport
     port: Mapped[int] = mapped_column(Integer, default=161)
@@ -57,6 +57,6 @@ class SnmpSettings(Base, TimestampMixin):
     v3_context_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     # Pushed into device baseline template (init config)
-    baseline_community: Mapped[str] = mapped_column(String(128), default="bugis-ro")
+    baseline_community: Mapped[str] = mapped_column(String(512), default="bugis-ro")
 
     notes: Mapped[str | None] = mapped_column(String(512), nullable=True)
