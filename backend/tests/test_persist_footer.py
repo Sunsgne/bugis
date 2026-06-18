@@ -38,10 +38,11 @@ def _ctx():
 def test_huawei_render_shows_commit_and_save(op):
     cfg = get_driver(Vendor.HUAWEI).render("l2vpn_evpn", op, _ctx())
     stripped = [ln.strip() for ln in cfg.splitlines()]
-    # Displayed config shows the two-stage persistence: commit -> return -> save.
+    # Displayed config shows the two-stage persistence: commit -> return -> save -> Y.
     assert "commit" in stripped, cfg
     assert "return" in stripped, cfg
     assert "save" in stripped, cfg
+    assert any("confirm save" in ln.lower() and "y" in ln.lower() for ln in stripped), cfg
     assert stripped.index("commit") < stripped.index("return") < stripped.index("save")
     # ...but they are NOT pushed as plain config commands (transport owns them).
     cmds = [c.strip().lower() for c in to_command_list(Vendor.HUAWEI, cfg)]
