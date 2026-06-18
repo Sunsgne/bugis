@@ -147,6 +147,42 @@ def test_traffic_summary_includes_qos_samples(db_session):
     assert payload["qos_samples"][0].latency_ms == 12.0
 
 
+def test_billing_95th_scopes_to_selected_month(db_session):
+    circuit = _make_circuit(db_session)
+    old = datetime(2026, 5, 15, 12, 0, tzinfo=timezone.utc)
+    new = datetime(2026, 6, 15, 12, 0, tzinfo=timezone.utc)
+    db_session.add(
+        TelemetrySample(
+            circuit_id=circuit.id,
+            rx_mbps=900.0,
+            tx_mbps=900.0,
+            utilization_pct=90.0,
+            tunnel_state="up",
+            source="snmp",
+            created_at=old,
+        )
+    )
+    db_session.add(
+        TelemetrySample(
+            circuit_id=circuit.id,
+            rx_mbps=50.0,
+            tx_mbps=50.0,
+            utilization_pct=5.0,
+            tunnel_state="up",
+            source="snmp",
+            created_at=new,
+        )
+    )
+    db_session.commit()
+
+    june = telemetry_service.billing_95th(db_session, circuit, period="2026-06")
+    assert june["period"] == "2026-06"
+    assert june["samples"] == 1
+    assert june["billable_95_mbps"] == 50.0
+    assert "2026-05" in june["available_months"]
+    assert "2026-06" in june["available_months"]
+
+
 def test_overview_aggregation_ignores_probe_traffic(db_session):
     circuit = _make_circuit(db_session)
     minute = datetime.now(timezone.utc).replace(second=0, microsecond=0)

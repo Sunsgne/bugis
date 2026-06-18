@@ -1,7 +1,7 @@
 """Telemetry samples for SLA / bandwidth visualization."""
 from __future__ import annotations
 
-from sqlalchemy import Float, ForeignKey, Integer, String
+from sqlalchemy import Float, ForeignKey, Index, Integer, String, desc
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -12,10 +12,15 @@ class TelemetrySample(Base, TimestampMixin):
     """A point-in-time measurement for a circuit or device interface."""
 
     __tablename__ = "telemetry_samples"
+    __table_args__ = (
+        Index("ix_ts_circuit_created", "circuit_id", desc("created_at")),
+        Index("ix_ts_circuit_source_created", "circuit_id", "source", desc("created_at")),
+        Index("ix_ts_created_id", desc("created_at"), desc("id")),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     circuit_id: Mapped[int | None] = mapped_column(
-        ForeignKey("circuits.id", ondelete="CASCADE"), nullable=True, index=True
+        ForeignKey("circuits.id", ondelete="CASCADE"), nullable=True
     )
     device_id: Mapped[int | None] = mapped_column(
         ForeignKey("devices.id", ondelete="CASCADE"), nullable=True, index=True

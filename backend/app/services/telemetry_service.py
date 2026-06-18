@@ -37,24 +37,16 @@ def record_sample(db: Session, **kwargs) -> TelemetrySample:
 
 def _latest_probe_qos(db: Session, circuit_id: int, *, max_age_sec: int = 3600) -> TelemetrySample | None:
     since = datetime.now(timezone.utc) - timedelta(seconds=max_age_sec)
-    row = db.execute(
+    return db.execute(
         select(TelemetrySample)
         .where(
             TelemetrySample.circuit_id == circuit_id,
             TelemetrySample.source == "probe",
+            TelemetrySample.created_at >= since,
         )
-        .order_by(TelemetrySample.id.desc())
+        .order_by(TelemetrySample.created_at.desc(), TelemetrySample.id.desc())
         .limit(1)
     ).scalar_one_or_none()
-    if row and row.created_at:
-        created = (
-            row.created_at.replace(tzinfo=timezone.utc)
-            if row.created_at.tzinfo is None
-            else row.created_at.astimezone(timezone.utc)
-        )
-        if created >= since:
-            return row
-    return None
 
 
 def collect_circuit_sample(
@@ -244,7 +236,7 @@ def overview_traffic(
     rows = db.execute(
         select(TelemetrySample)
         .where(TelemetrySample.created_at >= since)
-        .order_by(TelemetrySample.id.desc())
+        .order_by(TelemetrySample.created_at.desc(), TelemetrySample.id.desc())
         .limit(sample_limit)
     ).scalars().all()
     return _aggregate_overview_traffic(rows)[-40:]
@@ -259,21 +251,50 @@ def _percentile(values: list[float], pct: float) -> float:
     return round(s[idx], 2)
 
 
+def _month_bounds(period: str) -> tuple[datetime, datetime]:
+    year, month = (int(p) for p in period.split("-", 1))
+    start = datetime(year, month, 1, tzinfo=timezone.utc)
+    if month == 12:
+        end = datetime(year + 1, 1, 1, tzinfo=timezone.utc)
+    else:
+        end = datetime(year, month + 1, 1, tzinfo=timezone.utc)
+    return start, end
+
+
 def billing_95th(db: Session, circuit: Circuit, period: str | None = None) -> dict:
     """95th-percentile (月95) bandwidth billing for a circuit."""
-    samples = db.execute(
-        select(TelemetrySample).where(TelemetrySample.circuit_id == circuit.id)
+    timestamps = db.execute(
+        select(TelemetrySample.created_at).where(
+            TelemetrySample.circuit_id == circuit.id,
+            TelemetrySample.created_at.is_not(None),
+        )
     ).scalars().all()
+    months = sorted({ts.strftime("%Y-%m") for ts in timestamps}, reverse=True)
+    sel = period if period in months else (months[0] if months else None)
+    if not sel:
+        return {
+            "circuit_id": circuit.id,
+            "circuit_code": circuit.code,
+            "period": None,
+            "available_months": [],
+            "samples": 0,
+            "bandwidth_mbps": circuit.bandwidth_mbps,
+            "in_95_mbps": 0.0,
+            "out_95_mbps": 0.0,
+            "billable_95_mbps": 0.0,
+            "peak_mbps": 0.0,
+            "avg_mbps": 0.0,
+            "utilization_pct": 0.0,
+        }
 
-    by_month: dict[str, list[TelemetrySample]] = {}
-    for s in samples:
-        if not s.created_at:
-            continue
-        by_month.setdefault(s.created_at.strftime("%Y-%m"), []).append(s)
-
-    months = sorted(by_month.keys(), reverse=True)
-    sel = period if period in by_month else (months[0] if months else None)
-    rows = by_month.get(sel, [])
+    start, end = _month_bounds(sel)
+    rows = db.execute(
+        select(TelemetrySample).where(
+            TelemetrySample.circuit_id == circuit.id,
+            TelemetrySample.created_at >= start,
+            TelemetrySample.created_at < end,
+        )
+    ).scalars().all()
     traffic = traffic_samples(rows)
 
     rx = [s.rx_mbps for s in traffic]
