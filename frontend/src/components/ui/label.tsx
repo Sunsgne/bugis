@@ -4,7 +4,11 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 
 const labelVariants = cva(
-  "text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70",
+  // `block` is important: a native <label> is display:inline by default, and
+  // inline elements ignore vertical margins — which silently breaks `space-y-*`
+  // label→input spacing (the username field looked cramped while a label wrapped
+  // in a block element did not). Making the label block-level fixes it uniformly.
+  "block text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70",
 );
 
 const Label = React.forwardRef<
