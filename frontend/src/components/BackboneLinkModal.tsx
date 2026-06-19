@@ -202,6 +202,7 @@ export default function BackboneLinkModal({ open, devices, editLink, onClose, on
           type: editLink.type,
           capacity_mbps: editLink.capacity_mbps,
           alarm_utilization_pct: editLink.alarm_utilization_pct,
+          supplier: editLink.supplier,
         });
         setManualPlan(null);
         setSuggestions([]);
@@ -505,6 +506,10 @@ export default function BackboneLinkModal({ open, devices, editLink, onClose, on
             <Input type="number" min={1} />
           </Form.Item>
         </div>
+
+        <Form.Item name="supplier" label={tc('供应商')} extra={tc('运营商 / 传输供应商，便于按供应商筛选利用率')}>
+          <Input placeholder={tc('例如 中国电信、Cogent、Equinix')} allowClear />
+        </Form.Item>
 
         <Form.Item name="alarm_utilization_pct" label={tc('利用率告警阈值 (%)')} extra={alarmHint}>
           <InputNumber min={0} max={100} style={{ width: "100%" }} placeholder={tc('平台默认')} />

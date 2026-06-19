@@ -104,6 +104,33 @@ export const SERVICE_TYPE: Record<string, string> = new Proxy({} as Record<strin
   },
 });
 
+export const TENANT_TYPE: Record<string, string> = new Proxy({} as Record<string, string>, {
+  get(_t, value: string) {
+    if (value === "toJSON") return undefined;
+    return tKey(`status.tenantType.${value}`, tc({
+      enterprise: "企业专线", hybrid_cloud: "混合云接入", public_cloud: "公有云接入", internal: "内部业务",
+    }[value] || String(value)));
+  },
+});
+
+export const WORK_ORDER_TYPE: Record<string, string> = new Proxy({} as Record<string, string>, {
+  get(_t, value: string) {
+    if (value === "toJSON") return undefined;
+    return tKey(`status.workOrderType.${value}`, tc({
+      provision: "开通", modify: "变更", decommission: "拆除", migrate: "迁移",
+    }[value] || String(value)));
+  },
+});
+
+export const OVERLAY_SOURCE: Record<string, string> = new Proxy({} as Record<string, string>, {
+  get(_t, value: string) {
+    if (value === "toJSON") return undefined;
+    return tKey(`status.overlaySource.${value}`, tc({
+      platform: "平台纳管", network_only: "现网占用",
+    }[value] || String(value)));
+  },
+});
+
 export function statusMeta(
   map: Record<string, { label: string; color: string }>,
   value: string | undefined | null,

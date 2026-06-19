@@ -47,6 +47,7 @@ import SettingsLayout from "./pages/settings/SettingsLayout";
 import GeneralSettings from "./pages/settings/GeneralSettings";
 import ConfigLearnSettings from "./pages/settings/ConfigLearnSettings";
 import AlarmSettings from "./pages/settings/AlarmSettings";
+import AlarmTemplateSettings from "./pages/settings/AlarmTemplateSettings";
 import BaselineSettings from "./pages/settings/BaselineSettings";
 import SmtpSettings from "./pages/settings/SmtpSettings";
 import SnmpSettingsTab from "./pages/settings/SnmpSettingsTab";
@@ -330,6 +331,7 @@ function Shell() {
               <Route path="general" element={<GeneralSettings />} />
               <Route path="config-learn" element={<ConfigLearnSettings />} />
               <Route path="alarms" element={<AlarmSettings />} />
+              <Route path="alarm-templates" element={<AlarmTemplateSettings />} />
               <Route path="baseline" element={<BaselineSettings />} />
               <Route path="smtp" element={<SmtpSettings />} />
               <Route path="management" element={<ManagementSettings />} />

@@ -7,6 +7,7 @@ import { api } from "../api/client";
 import { configPreviewModalProps, ConfigPreviewPre } from "../utils/configPreview";
 import { usePlatformSettings } from "../hooks/usePlatformSettings";
 import { useTc } from "@/i18n/useTc";
+import { dataTableProps, TABLE_SCROLL } from "../utils/table";
 
 const VENDOR_COLOR: Record<string, string> = {
   h3c: "blue", huawei: "red", juniper: "green", arista: "orange", cisco: "purple", frr: "cyan",
@@ -192,6 +193,7 @@ export default function ConfigManagement() {
         extra={<Button size="small" icon={<ReloadOutlined />} onClick={loadDevices} />}
       >
         <Table<ConfigDeviceRow>
+          {...dataTableProps(TABLE_SCROLL.lg)}
           rowKey="device_id"
           size="small"
           className="config-device-table"
@@ -297,6 +299,7 @@ export default function ConfigManagement() {
                     </Descriptions>
                     {learned.inventory?.l2_services?.length > 0 && (
                       <Table
+                        {...dataTableProps(TABLE_SCROLL.md)}
                         size="small"
                         rowKey="name"
                         pagination={false}
@@ -322,6 +325,7 @@ export default function ConfigManagement() {
                     )}
                     {learned.inventory?.access_bindings?.length > 0 && (
                       <Table
+                        {...dataTableProps(TABLE_SCROLL.md)}
                         size="small"
                         rowKey={(row: AccessBindingRow) =>
                           `${row.interface}-${row.s_vid ?? "na"}-${row.service_instance ?? row.bridge_domain ?? ""}`
@@ -382,6 +386,7 @@ export default function ConfigManagement() {
                     <Button size="small" icon={<DiffOutlined />} onClick={loadDiff} style={{ marginBottom: 8 }}>{tc('对比最近两版')}</Button>
                     {diff && <ColoredDiff text={diff} />}
                     <Table
+                      {...dataTableProps(TABLE_SCROLL.lg)}
                       size="small"
                       rowKey="id"
                       className="config-history-table"

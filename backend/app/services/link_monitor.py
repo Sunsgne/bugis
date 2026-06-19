@@ -100,6 +100,10 @@ class LinkHealth:
     peak_utilization_pct: float
     avg_utilization_pct: float
     samples: int
+    peak_rx_mbps: float = 0.0
+    peak_tx_mbps: float = 0.0
+    peak_traffic_mbps: float = 0.0
+    peak_at: str | None = None
 
 
 def _recent_interface_samples(
@@ -121,6 +125,8 @@ def _recent_interface_samples(
 def compute_link_health(db: Session, link: Link, limit: int = 20) -> LinkHealth:
     utils: list[float] = []
     traffic = 0.0
+    peak_sample = None
+    peak_util = -1.0
     for device_id, ifname in (
         (link.device_a_id, link.interface_a),
         (link.device_z_id, link.interface_z),
@@ -131,6 +137,9 @@ def compute_link_health(db: Session, link: Link, limit: int = 20) -> LinkHealth:
             if s.source in ("snmp-link", "simulated"):
                 utils.append(s.utilization_pct)
                 traffic = max(traffic, s.rx_mbps + s.tx_mbps)
+                if s.utilization_pct >= peak_util:
+                    peak_util = s.utilization_pct
+                    peak_sample = s
     cap = max(link.capacity_mbps, 1)
     if not utils:
         return LinkHealth(
@@ -144,6 +153,10 @@ def compute_link_health(db: Session, link: Link, limit: int = 20) -> LinkHealth:
         )
     peak = max(utils)
     avg = sum(utils) / len(utils)
+    peak_rx = peak_sample.rx_mbps if peak_sample else 0.0
+    peak_tx = peak_sample.tx_mbps if peak_sample else 0.0
+    peak_traffic = round(peak_rx + peak_tx, 2) if peak_sample else 0.0
+    peak_at = peak_sample.created_at.isoformat() if peak_sample and peak_sample.created_at else None
     return LinkHealth(
         link_id=link.id,
         link_name=link.name,
@@ -152,6 +165,10 @@ def compute_link_health(db: Session, link: Link, limit: int = 20) -> LinkHealth:
         peak_utilization_pct=round(peak, 2),
         avg_utilization_pct=round(avg, 2),
         samples=len(utils),
+        peak_rx_mbps=round(peak_rx, 2),
+        peak_tx_mbps=round(peak_tx, 2),
+        peak_traffic_mbps=peak_traffic,
+        peak_at=peak_at,
     )
 
 

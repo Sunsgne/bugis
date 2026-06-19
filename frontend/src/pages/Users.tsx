@@ -20,7 +20,7 @@ import { api } from "../api/client";
 import { useAuth } from "../auth";
 import { action, page, toast } from "../constants/uiCopy";
 import PageCard from "../components/PageCard";
-import { dataTableProps } from "../utils/table";
+import { dataTableProps, TABLE_SCROLL, withMobileHide } from "../utils/table";
 import { formModalProps } from "../utils/formModal";
 import { useTc } from "@/i18n/useTc";
 
@@ -149,8 +149,9 @@ export default function Users({ embedded }: { embedded?: boolean }) {
         rowKey="id"
         loading={loading}
         dataSource={rows}
-        {...dataTableProps()}
-        columns={[
+        {...dataTableProps(TABLE_SCROLL.md)}
+        columns={withMobileHide(
+          [
           { title: "用户名", dataIndex: "username", width: "14%", ellipsis: true },
           { title: "姓名", dataIndex: "full_name", width: "14%", ellipsis: true, render: (v) => v || "—" },
           { title: "邮箱", dataIndex: "email", width: "22%", ellipsis: true, render: (v) => v || "—" },
@@ -208,10 +209,11 @@ export default function Users({ embedded }: { embedded?: boolean }) {
               </Space>
             ),
           },
-        ]}
+        ],
+          ["email", "role", "created_at"],
+        )}
       />
       <Modal
-        title={tc('编辑用户')}
         open={!!editing}
         onOk={onEdit}
         onCancel={() => {

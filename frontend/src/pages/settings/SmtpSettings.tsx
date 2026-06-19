@@ -13,6 +13,7 @@ import {
 } from "antd";
 import { SaveOutlined } from "@ant-design/icons";
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { usePlatformSettings } from "../../hooks/usePlatformSettings";
 import { useTc } from "@/i18n/useTc";
 import {
@@ -25,12 +26,20 @@ import {
 
 export default function SmtpSettings() {
   const { tc } = useTc();
+  const { t } = useTranslation();
   const { message } = AntApp.useApp();
   const [form] = Form.useForm();
   const { platform, loading, saving, save } = usePlatformSettings();
   const [providerId, setProviderId] = useState("custom");
 
   const preset = useMemo(() => getSmtpPreset(providerId), [providerId]);
+
+  const presetText = (field: "name" | "userHint" | "fromHint" | "doc") => {
+    const key = `smtp.presets.${providerId}.${field}`;
+    const fallback = preset?.[field];
+    const val = t(key, { defaultValue: fallback ?? "" });
+    return val || undefined;
+  };
 
   useEffect(() => {
     if (!platform) return;
@@ -70,94 +79,110 @@ export default function SmtpSettings() {
         smtp_from: v.smtp_from,
         ...(v.smtp_password ? { smtp_password: v.smtp_password } : {}),
       });
-      message.success(tc('SMTP 参数已保存'));
+      message.success(tc("SMTP 参数已保存"));
     } catch (e: any) {
-      message.error(e?.response?.data?.detail || "保存失败");
+      message.error(e?.response?.data?.detail || tc("保存失败"));
     }
   }
 
   const groupedOptions = SMTP_CATEGORIES.map((cat) => ({
-    label: cat,
+    label: t(`smtp.categories.${cat}`, { defaultValue: cat }),
     options: SMTP_PRESETS.filter((p) => p.category === cat).map((p) => ({
       value: p.id,
-      label: p.name,
+      label: t(`smtp.presets.${p.id}.name`, { defaultValue: p.name }),
     })),
   }));
+
+  const securityOptions = SMTP_SECURITY_OPTIONS.map((o) => ({
+    value: o.value,
+    label: t(`smtp.security.${o.value}`, { defaultValue: o.label }),
+  }));
+
+  const userHint = presetText("userHint");
+  const fromHint = presetText("fromHint");
+  const doc = presetText("doc");
 
   return (
     <div className="settings-panel">
       <Space style={{ marginBottom: 16, width: "100%", justifyContent: "space-between" }}>
         <div>
-          <Typography.Title level={5} style={{ margin: 0 }}>{tc('邮件 SMTP')}</Typography.Title>
-          <Typography.Text type="secondary">{tc('告警「邮件」通知渠道使用；选择主流平台自动填充服务器参数')}</Typography.Text>
+          <Typography.Title level={5} style={{ margin: 0 }}>
+            {tc("邮件 SMTP")}
+          </Typography.Title>
+          <Typography.Text type="secondary">
+            {tc("告警「邮件」通知渠道使用；选择主流平台自动填充服务器参数")}
+          </Typography.Text>
         </div>
-        <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={onSave}>{tc('保存')}</Button>
+        <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={onSave}>
+          {tc("保存")}
+        </Button>
       </Space>
 
       <Alert
         type="info"
         showIcon
         style={{ marginBottom: 16 }}
-        message="支持主流邮件平台"
-        description={tc('涵盖 QQ / 163 / 企业邮、Gmail / Outlook、SendGrid / Mailgun / AWS SES 等，选择后自动填入 SMTP 主机、端口与加密方式，仅需填写账号与授权码。')}
+        message={tc("支持主流邮件平台")}
+        description={tc(
+          "涵盖 QQ / 163 / 企业邮、Gmail / Outlook、SendGrid / Mailgun / AWS SES 等，选择后自动填入 SMTP 主机、端口与加密方式，仅需填写账号与授权码。",
+        )}
       />
 
       <Form form={form} layout="vertical" className="app-form" disabled={loading}>
-        <Form.Item name="smtp_provider" label={tc('邮件平台')}>
+        <Form.Item name="smtp_provider" label={tc("邮件平台")}>
           <Select
             showSearch
             optionFilterProp="label"
             options={groupedOptions}
             value={providerId}
             onChange={applyPreset}
-            placeholder={tc('选择邮件服务商')}
+            placeholder={tc("选择邮件服务商")}
           />
         </Form.Item>
 
-        {preset?.doc && (
-          <Alert type="warning" showIcon style={{ marginBottom: 16 }} message={preset.doc} />
-        )}
+        {doc && <Alert type="warning" showIcon style={{ marginBottom: 16 }} message={doc} />}
 
         <Row gutter={16}>
           <Col xs={24} md={10}>
-            <Form.Item name="smtp_host" label={tc('SMTP 主机')} rules={[{ required: true, message: "请输入 SMTP 主机" }]}>
+            <Form.Item
+              name="smtp_host"
+              label={tc("SMTP 主机")}
+              rules={[{ required: true, message: tc("请输入 SMTP 主机") }]}
+            >
               <Input placeholder="smtp.example.com" />
             </Form.Item>
           </Col>
           <Col xs={12} md={4}>
-            <Form.Item name="smtp_port" label={tc('端口')} rules={[{ required: true }]}>
+            <Form.Item name="smtp_port" label={tc("端口")} rules={[{ required: true }]}>
               <InputNumber min={1} max={65535} style={{ width: "100%" }} />
             </Form.Item>
           </Col>
           <Col xs={12} md={10}>
-            <Form.Item name="smtp_security" label={tc('加密方式')}>
-              <Select
-                options={SMTP_SECURITY_OPTIONS}
-                onChange={() => setProviderId("custom")}
-              />
+            <Form.Item name="smtp_security" label={tc("加密方式")}>
+              <Select options={securityOptions} onChange={() => setProviderId("custom")} />
             </Form.Item>
           </Col>
           <Col xs={24} md={12}>
-            <Form.Item
-              name="smtp_user"
-              label={tc('用户名 / 账号')}
-              extra={preset?.userHint}
-            >
-              <Input placeholder={preset?.userHint || "SMTP 登录账号"} />
+            <Form.Item name="smtp_user" label={tc("用户名 / 账号")} extra={userHint}>
+              <Input placeholder={userHint || tc("SMTP 登录账号")} />
             </Form.Item>
           </Col>
           <Col xs={24} md={12}>
             <Form.Item
               name="smtp_password"
-              label={tc('密码 / 授权码')}
-              extra={platform?.smtp_password_set ? "已设置，留空则不修改" : "多数平台需使用授权码而非登录密码"}
+              label={tc("密码 / 授权码")}
+              extra={
+                platform?.smtp_password_set
+                  ? tc("已设置，留空则不修改")
+                  : tc("多数平台需使用授权码而非登录密码")
+              }
             >
-              <Input.Password placeholder={tc('留空保持原值')} autoComplete="new-password" />
+              <Input.Password placeholder={tc("留空保持原值")} autoComplete="new-password" />
             </Form.Item>
           </Col>
           <Col xs={24} md={12}>
-            <Form.Item name="smtp_from" label={tc('发件人地址')} extra={preset?.fromHint}>
-              <Input placeholder={preset?.fromHint || "noc@example.com"} />
+            <Form.Item name="smtp_from" label={tc("发件人地址")} extra={fromHint}>
+              <Input placeholder={fromHint || "noc@example.com"} />
             </Form.Item>
           </Col>
         </Row>

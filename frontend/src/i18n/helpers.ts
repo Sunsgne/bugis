@@ -155,3 +155,25 @@ export function tablePaginationTotal(
   }
   return t("table.totalOnly", { total: total.toLocaleString() });
 }
+
+export function pageSizeSelectOptions(t: TFunction, sizes: readonly number[]) {
+  return sizes.map((n) => ({
+    value: n,
+    label: t("table.pageSize", { n }),
+  }));
+}
+
+export function tenantTypeLabel(t: TFunction, value?: string | null): string {
+  if (!value) return t("common.dash");
+  return t(`status.tenantType.${value}`, { defaultValue: value });
+}
+
+export function workOrderTypeLabel(t: TFunction, value?: string | null): string {
+  if (!value) return t("common.dash");
+  return t(`status.workOrderType.${value}`, { defaultValue: value });
+}
+
+export function overlaySourceLabel(t: TFunction, value?: string | null): string {
+  if (!value) return t("common.dash");
+  return t(`status.overlaySource.${value}`, { defaultValue: value });
+}

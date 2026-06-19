@@ -1,6 +1,16 @@
+import type { ColumnType } from "antd/es/table";
+import type { Breakpoint } from "antd/es/_util/responsiveObserver";
 import type { TablePaginationConfig, TableProps } from "antd";
 import i18n from "../i18n";
 import { tablePaginationTotal } from "../i18n/helpers";
+
+export const TABLE_SCROLL = {
+  sm: 720,
+  md: 960,
+  lg: 1200,
+  xl: 1400,
+  max: "max-content",
+} as const;
 
 export function buildListQuery(params: Record<string, string | number | boolean | undefined | null>) {
   const sp = new URLSearchParams();
@@ -25,15 +35,34 @@ export function pageRangeLabel(total: number, page: number, pageSize: number): s
   });
 }
 
+/** Hide column below breakpoint (visible on md+ when bp is md). */
+export function hideBelow(col: ColumnType<any>, bp: Breakpoint = "md"): ColumnType<any> {
+  if (col.responsive) return col;
+  return { ...col, responsive: [bp] };
+}
+
+/** Mark secondary columns hidden on small screens. Match by dataIndex, key, or column index. */
+export function withMobileHide(
+  columns: ColumnType<any>[],
+  hideKeys: (string | number)[],
+  bp: Breakpoint = "md",
+): ColumnType<any>[] {
+  const hide = new Set(hideKeys.map(String));
+  return columns.map((col, idx) => {
+    const id = String(col.key ?? col.dataIndex ?? idx);
+    return hide.has(id) ? hideBelow(col, bp) : col;
+  });
+}
+
 export function dataTableProps(
-  scrollX?: number,
+  scrollX: number | string = TABLE_SCROLL.md,
   enableScroll = true,
 ): Pick<TableProps<unknown>, "size" | "tableLayout" | "className" | "scroll"> {
   return {
     size: "middle",
     tableLayout: "fixed",
     className: "data-table",
-    ...(scrollX && enableScroll ? { scroll: { x: scrollX } } : {}),
+    ...(enableScroll ? { scroll: { x: scrollX } } : {}),
   };
 }
 

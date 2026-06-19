@@ -1123,6 +1123,17 @@
     "ff17b9f9": "企业微信",
     "ff775a06": "Overlay 尚未建立 · 开通控制器托管专线后自动呈现"
   },
+  "circuits": {
+    "allTenants": "全部客户 ({{count}})",
+    "paginatedSuffix": " · 已分页",
+    "platformStats": "平台 {{tenants}} 客户 · {{circuits}} 专线",
+    "summary": "当前 {{total}} 条专线{{suffix}}"
+  },
+  "devices": {
+    "inUse": "当前使用 {{label}} · {{ip}}",
+    "summary": "共 {{total}} 台 · {{online}} 在线 · {{offline}} 离线",
+    "unitSuffix": "台"
+  },
   "brand": {
     "header": "DCI / EVPN 全域网络运营中枢",
     "heroSubtitle": "多厂商异构 · VXLAN / SR-MPLS EVPN · 自研 SDN · 跨域 DCI",
@@ -1186,7 +1197,12 @@
     "last30d": "近 30 天",
     "last6h": "近 6 小时",
     "last7d": "近 7 天",
-    "lastNh": "近 {{hours}} 小时"
+    "lastNh": "近 {{hours}} 小时",
+    "trafficChart": "流量 · Rx / Tx（{{window}}，{{points}} 点）",
+    "latencyChart": "时延 · 抖动 · 丢包（{{window}}）",
+    "interruptionAlert": "{{window}} 发生 {{count}} 次中断，累计 {{minutes}} 分钟",
+    "flashAlert": "{{window}} 发生 {{count}} 次闪断",
+    "flapWarning": "15 分钟内闪断 {{count}} 次，请关注链路稳定性"
   },
   "nav": {
     "groups": {
@@ -1257,6 +1273,7 @@
     "intro": "集中管理品牌外观、平台运行参数、告警策略、SNMP/邮件、北向集成与用户权限。修改后即时生效。",
     "nav": {
       "alarms": "告警阈值",
+      "alarmTemplates": "告警模板",
       "audit": "操作审计",
       "baseline": "设备基线",
       "brand": "品牌外观",
@@ -1270,13 +1287,30 @@
       "snmp": "SNMP 采集",
       "users": "用户权限"
     },
-    "title": "平台设置"
+    "title": "平台设置",
+    "alarmTemplates": {
+      "title": "告警通知模板",
+      "subtitle": "自定义外发至邮件、钉钉、飞书、Webhook 等渠道的告警文案与版式",
+      "globalLayout": "全局版式",
+      "globalHint": "页眉、页脚、邮件主题、章节标题",
+      "save": "保存模板",
+      "reset": "恢复默认",
+      "preview": "实时预览",
+      "refresh": "刷新",
+      "plainText": "纯文本",
+      "subject": "主题",
+      "restoreKind": "恢复此类型默认",
+      "restoreKindHint": "已载入该类型默认文案（需保存后生效）",
+      "saved": "告警模板已保存",
+      "resetOk": "已恢复默认模板",
+      "previewFail": "预览失败"
+    }
   },
   "status": {
     "accessMode": {
-      "access": "无标签",
-      "dot1q": "单标签",
-      "qinq": "双标签"
+      "access": "无标签接入",
+      "dot1q": "单标签 Dot1Q",
+      "qinq": "双标签 QinQ"
     },
     "alarm": {
       "acknowledged": "已确认",
@@ -1339,6 +1373,22 @@
       "suspended": "已暂停",
       "terminated": "已终止"
     },
+    "tenantType": {
+      "enterprise": "企业专线",
+      "hybrid_cloud": "混合云接入",
+      "internal": "内部业务",
+      "public_cloud": "公有云接入"
+    },
+    "workOrderType": {
+      "decommission": "拆除",
+      "migrate": "迁移",
+      "modify": "变更",
+      "provision": "开通"
+    },
+    "overlaySource": {
+      "network_only": "现网占用",
+      "platform": "平台纳管"
+    },
     "workOrder": {
       "approved": "已审批",
       "cancelled": "已取消",
@@ -1353,8 +1403,13 @@
   },
   "table": {
     "noData": "暂无数据",
+    "pageSize": "{{n}} 条/页",
     "range": "第 {{start}}–{{end}} 条，共 {{total}} 条",
-    "totalOnly": "共 {{total}} 条"
+    "totalOnly": "共 {{total}} 条",
+    "totalSites": "共 {{total}} 个站点",
+    "totalWorkOrders": "共 {{total}} 张工单",
+    "filterCount": "筛选出 {{filtered}} / {{total}} 条",
+    "totalCount": "共 {{total}} 条"
   },
   "toast": {
     "created": "创建成功",
@@ -1363,5 +1418,350 @@
     "loginFail": "凭证无效，请检查后重试",
     "loginOk": "欢迎回来",
     "saved": "已保存"
+  },
+  "smtp": {
+    "categories": {
+      "国内邮箱": "国内邮箱",
+      "国内企业邮": "国内企业邮",
+      "云邮件服务": "云邮件服务",
+      "国际邮箱": "国际邮箱",
+      "事务邮件 ESP": "事务邮件 ESP",
+      "其他": "其他"
+    },
+    "security": {
+      "starttls": "STARTTLS (推荐，端口 587)",
+      "ssl": "SSL/TLS (端口 465)",
+      "none": "无加密 (端口 25，内网)"
+    },
+    "presets": {
+      "qq": {
+        "name": "QQ 邮箱",
+        "userHint": "完整 QQ 邮箱地址",
+        "fromHint": "与 QQ 邮箱相同",
+        "doc": "需在 QQ 邮箱设置中开启 SMTP 并使用授权码（非 QQ 密码）。"
+      },
+      "foxmail": {
+        "name": "Foxmail",
+        "userHint": "Foxmail 邮箱地址",
+        "doc": "与 QQ 邮箱共用 SMTP，使用授权码登录。"
+      },
+      "163": {
+        "name": "网易 163",
+        "userHint": "163 邮箱地址",
+        "doc": "需在网易邮箱 → 设置 → POP3/SMTP 中开启并获取授权码。"
+      },
+      "126": {
+        "name": "网易 126",
+        "userHint": "126 邮箱地址",
+        "doc": "需开启 SMTP 并使用客户端授权码。"
+      },
+      "yeah": {
+        "name": "网易 Yeah.net",
+        "userHint": "Yeah.net 邮箱地址"
+      },
+      "sina": {
+        "name": "新浪邮箱",
+        "userHint": "新浪邮箱地址",
+        "doc": "需开启 SMTP 并使用授权码。"
+      },
+      "sohu": {
+        "name": "搜狐邮箱",
+        "userHint": "搜狐邮箱地址"
+      },
+      "aliyun_personal": {
+        "name": "阿里个人邮箱",
+        "userHint": "阿里邮箱地址"
+      },
+      "exmail": {
+        "name": "腾讯企业邮",
+        "userHint": "企业邮箱账号",
+        "fromHint": "已验证的发件地址",
+        "doc": "腾讯企业邮 / 微信企业邮箱管理后台可查看 SMTP 参数。"
+      },
+      "aliyun_enterprise": {
+        "name": "阿里企业邮",
+        "userHint": "企业邮箱账号",
+        "doc": "阿里云企业邮箱（万网邮）SMTP 服务器。"
+      },
+      "netease_enterprise": {
+        "name": "网易企业邮",
+        "userHint": "企业邮箱账号"
+      },
+      "feishu": {
+        "name": "飞书企业邮箱",
+        "userHint": "飞书邮箱账号",
+        "doc": "需在飞书管理后台开启第三方客户端 / SMTP。"
+      },
+      "aliyun_dm": {
+        "name": "阿里云邮件推送",
+        "userHint": "控制台发信地址",
+        "fromHint": "已验证发信域名地址",
+        "doc": "阿里云 DirectMail 控制台获取 SMTP 账号与密码。"
+      },
+      "tencent_ses": {
+        "name": "腾讯云邮件推送",
+        "userHint": "控制台 SMTP 账号",
+        "doc": "腾讯云 SES 控制台 → 发信地址 → SMTP 设置。"
+      },
+      "huawei_dm": {
+        "name": "华为云邮件",
+        "userHint": "华为云邮件账号"
+      },
+      "gmail": {
+        "name": "Gmail / Google Workspace",
+        "userHint": "Gmail 地址",
+        "doc": "需开启两步验证并使用应用专用密码（App Password）。"
+      },
+      "outlook365": {
+        "name": "Microsoft 365 / Exchange Online",
+        "userHint": "Microsoft 365 邮箱",
+        "doc": "组织需允许 SMTP AUTH；部分租户需开启基本身份验证例外。"
+      },
+      "outlook": {
+        "name": "Outlook.com / Hotmail",
+        "userHint": "Outlook 邮箱地址"
+      },
+      "icloud": {
+        "name": "Apple iCloud",
+        "userHint": "iCloud 邮箱",
+        "doc": "需生成应用专用密码。"
+      },
+      "yahoo": {
+        "name": "Yahoo Mail",
+        "userHint": "Yahoo 邮箱",
+        "doc": "需使用应用密码。"
+      },
+      "zoho": {
+        "name": "Zoho Mail",
+        "userHint": "Zoho 邮箱",
+        "doc": "企业版可用 smtppro.zoho.com。"
+      },
+      "zoho_pro": {
+        "name": "Zoho Mail (企业)",
+        "userHint": "Zoho 企业邮箱"
+      },
+      "fastmail": {
+        "name": "Fastmail",
+        "userHint": "Fastmail 账号"
+      },
+      "proton": {
+        "name": "Proton Mail (Bridge)",
+        "userHint": "Proton Bridge 本地账号",
+        "doc": "需在本机运行 Proton Mail Bridge。"
+      },
+      "sendgrid": {
+        "name": "SendGrid",
+        "userHint": "apikey",
+        "doc": "用户名固定为 apikey，密码为 SendGrid API Key。"
+      },
+      "mailgun": {
+        "name": "Mailgun",
+        "userHint": "postmaster@your-domain",
+        "doc": "Mailgun 控制台 → Sending → SMTP credentials。"
+      },
+      "ses_us_east_1": {
+        "name": "Amazon SES (us-east-1)",
+        "userHint": "SMTP 用户名 (IAM)",
+        "doc": "AWS SES 控制台创建 SMTP 凭证；发件人需在 SES 验证。"
+      },
+      "ses_ap_southeast_1": {
+        "name": "Amazon SES (ap-southeast-1)",
+        "userHint": "SMTP 用户名 (IAM)"
+      },
+      "ses_eu_west_1": {
+        "name": "Amazon SES (eu-west-1)",
+        "userHint": "SMTP 用户名 (IAM)"
+      },
+      "postmark": {
+        "name": "Postmark",
+        "userHint": "Server API Token"
+      },
+      "sparkpost": {
+        "name": "SparkPost",
+        "userHint": "SMTP 用户名"
+      },
+      "mailjet": {
+        "name": "Mailjet",
+        "userHint": "API Key",
+        "doc": "密码为 Mailjet Secret Key。"
+      },
+      "brevo": {
+        "name": "Brevo (Sendinblue)",
+        "userHint": "登录邮箱",
+        "doc": "SMTP 密钥在 Brevo → SMTP & API 获取。"
+      },
+      "mailchimp": {
+        "name": "Mailchimp Transactional (Mandrill)",
+        "userHint": "任意用户名",
+        "doc": "密码为 Mandrill API Key。"
+      },
+      "custom": {
+        "name": "自定义 / 其他",
+        "doc": "手动填写 SMTP 主机、端口与加密方式。"
+      }
+    }
+  },
+  "copy": {
+    "3a231f81": "95 计费带宽",
+    "ffc62542": "Dry-run 模拟下发",
+    "d727d5f1": "EVPN 业务标识（两端共享）",
+    "eb7d6d82": "Logo 与主题色",
+    "23589b4c": "NETCONF / SSH 默认端口、账号与超时；纳管新设备时自动填充",
+    "1aa4dbe2": "QoS 待拨测",
+    "0e1365c8": "Remote IPT 出口",
+    "655b4eb2": "S:VID (平台)",
+    "0a705162": "S:VID (手工)",
+    "63204f15": "S:VID (设备)",
+    "3f78d1ba": "Underlay 路径",
+    "5c9d45c0": "VNI 列表",
+    "fbef5569": "上传 Mark",
+    "b53087b1": "上传主 Logo",
+    "ed318d48": "下发模式、调度器、控制器与认证相关参数",
+    "ae1e77ec": "不会向设备下发任何配置",
+    "888df7a8": "不推荐",
+    "3b04598b": "与",
+    "b7e84583": "主/备管理 IP 互为主备：主地址不可达时自动切换至备地址进行 SSH/SNMP/拨测。",
+    "98581739": "产品名称、Logo、登录页与驾驶舱横幅",
+    "09420735": "作业成功率",
+    "b5484b2c": "使用 NETCONF 或 SSH CLI。",
+    "0974c071": "例如 中国电信、Cogent、Equinix",
+    "bab268d5": "供应商",
+    "469622bb": "全域分配率",
+    "630b1c95": "全域带宽分配率",
+    "75c65777": "全局品牌",
+    "103cc9f0": "内置 · 自研 SDN",
+    "e575dd98": "写入设备初始化模板的 NTP / Syslog",
+    "21059001": "创建并开通专线，或点击刷新重试。",
+    "821945d1": "刷新推荐",
+    "f08b0897": "前往专线管理",
+    "9b69e2df": "单点 VNI，无设备间隧道。",
+    "4c75fd93": "南向登录凭证",
+    "24114160": "去设置",
+    "fc4d75f6": "发现",
+    "8c70b738": "发送邮件验证码",
+    "c5c3583b": "发送验证码",
+    "86edf0ae": "只读扫描 learned running-config，不会下发或修改设备配置；新建专线自动避开已占用 VNI/VSI。",
+    "03966f10": "可在",
+    "4b0c1816": "合同带宽 {{bw}}",
+    "ca0219cb": "同步 BGP 会话",
+    "f41214fa": "同步端口带宽",
+    "dbd54fd8": "告警「邮件」通知渠道使用；选择主流平台自动填充服务器参数",
+    "c20647ea": "告警级别达到渠道阈值时，平台自动外发通知（Webhook · Slack · 钉钉 · 企业微信 · 飞书）。",
+    "5cf80861": "告警阈值 {{pct}}%",
+    "7b3847fc": "周期 {{sec}}s",
+    "1c541ff7": "品牌与外观",
+    "2a127359": "图例：",
+    "d3469e56": "在此查看贵司专线运行状态、签约带宽与流量 95 计费数据",
+    "6ea1fe6b": "基础信息",
+    "c25db6b0": "备份现网配置",
+    "8a89823e": "定时拉取 running-config、导入后学习、变更快照等请在",
+    "d8215d8b": "定时自动拉取依赖后台调度器。请前往",
+    "de7cf715": "客户使用此账号登录",
+    "49534bf4": "对比最近两版",
+    "266ea1dc": "导入即学习",
+    "b6707856": "将设备上已运行的 S-VID 业务登记到平台，",
+    "c2955fa1": "峰值利用率 {{pct}}%",
+    "bb2ad50a": "峰值带宽 Rx {{rx}} / Tx {{tx}} · 合计 {{total}}",
+    "76e02bf0": "已执行 {{count}} 次",
+    "f0a9ee1d": "已有验证码？",
+    "2933b747": "已要求人机验证，请在系统设置中配置 Turnstile Site Key",
+    "5037faa5": "平台 vs 现网 配置漂移",
+    "bc26ba68": "平台设置 → 配置管理",
+    "28cc0017": "延迟探测已关闭",
+    "d83d972c": "延迟探测已关闭，时延与丢包阈值不生效",
+    "7de11d5b": "开启「后台调度器」。",
+    "6395155f": "当前没有已激活（active）的专线。请先在",
+    "845d5af9": "当前流量 {{traffic}}",
+    "e11d6682": "当月 95 计费带宽",
+    "8048909f": "忘记密码？",
+    "7468f3e5": "恢复默认",
+    "694695bf": "扫描摘要",
+    "a3b5f408": "扫描现网标识",
+    "2c20c602": "拓扑数据加载失败，将自动重试…",
+    "026c8d08": "按设备占用分布 Top",
+    "1c4e3300": "接入端点（A / Z 独立配置，VLAN 与封装可不同）",
+    "3838bc29": "控制配置管理页的自动现网学习（running-config 拉取与解析），与「平台运行 → 后台调度器」配合使用",
+    "a4da7e8d": "搜索链路 / 设备 / 供应商 / 站点",
+    "82bd472e": "新建渠道",
+    "8d54ec01": "新建站点",
+    "df7fafc9": "无接口记录，请点击右侧按钮 SNMP 发现",
+    "cd649f76": "时间范围",
+    "f82e511c": "明细",
+    "0a60ac8f": "是",
+    "10b5ca33": "暂无 DCI / Fabric 链路 · 设备按站点分列展示 · 在容量规划中添加链路后可显示互联关系",
+    "c1bf3c0f": "暂无现网占用记录",
+    "7b47ab42": "月95 账期",
+    "8ef948da": "未学习",
+    "607e7a4f": "查看",
+    "6555f8ae": "查看专线",
+    "0467cc92": "查看全部",
+    "5b48dbb8": "查看详情",
+    "bee912d7": "查询",
+    "94e4de0b": "标准基线预览（管理 / Loopback / Underlay / EVPN Overlay）· 确认后 dry-run 下发并归档初始化快照",
+    "8bedce4e": "检索",
+    "236bf03c": "流转轨迹",
+    "c6e3373a": "流量",
+    "db06c78d": "测试",
+    "eb38453a": "添加端点",
+    "4403fca0": "清除",
+    "a95500ef": "清除筛选",
+    "ff3200cc": "清除选择",
+    "78208b78": "滚轮缩放 · 拖拽平移",
+    "21920cfa": "现网下发",
+    "3bbed09e": "用户名或邮箱",
+    "14cc17a3": "由平台纳管专线拼装的目标配置；与设备现网配置可能不同。备份请使用右上角「备份现网配置」。",
+    "f931ba0e": "登录中…",
+    "7de2898d": "登录页",
+    "3f88449c": "直连下发",
+    "87bb5bbc": "空闲",
+    "198835c4": "站点路由",
+    "5212ee93": "端口描述",
+    "56e8188b": "继承平台默认",
+    "e53b1ea3": "自学习 {{count}} 台",
+    "57ffd6fa": "触发评估",
+    "54368a1c": "设备下发作业",
+    "dfb3d95c": "设备配置见",
+    "e366ccf1": "设置",
+    "70c03e52": "调整自动拉取、变更保护与快照策略。",
+    "bb9e2f51": "运营商 / 传输供应商，便于按供应商筛选利用率",
+    "5b216612": "返回我的专线",
+    "977deb3c": "返回登录",
+    "fc97c258": "邮件验证码",
+    "4e5cbcb5": "配置下发 / 初始化",
+    "edd0cf9c": "配置作业 · Rendered Config",
+    "f803de9a": "配置管理 · 现网拉取",
+    "a3eabed6": "采样时间 {{at}}",
+    "64ca9bab": "重新加载",
+    "f3db08a9": "重新获取验证码",
+    "b69a65a4": "重算",
+    "4b9c3271": "重置",
+    "2b32064d": "链路中断",
+    "036ba69f": "门户账号",
+    "f1e3499d": "页配置。",
+    "4815776c": "页面配置；单台设备可在「设备管理 → 凭证」中覆盖。",
+    "66ac84e7": "骨干 / DCI 链路优先选用 VLAN 子接口（H3C Vlan-interface、华为 Vlanif），其次聚合口与物理上联口。请确保已 SNMP 发现或现网学习。",
+    "0eaac067": "默认 Community",
+    "9b20caa0": "，仅可查看本租户专线、流量与 95 计费数据。",
+    "c214f5fa": "，现网流量不受影响。建议开启「定时现网自学习」以持续同步线下变更。",
+    "42ac9be9": "采样",
+    "8115e576": "SLA 告警阈值",
+    "281830ce": "下方「纳管外部控制器」用于对接",
+    "66241851": "为平台内嵌自研 EVPN 控制平面，启动时自动注册，",
+    "ca5e0887": "内置 · 推荐",
+    "046ce021": "华为 NCE-Fabric、华三 SeerEngine 等厂商 / 开源控制器。",
+    "9264f4d9": "在 Fabric 站点将下发模式设为「控制器托管」并选择内置实例；控制面状态与 EVPN RIB 请前往",
+    "1add12ff": "导出 CSV",
+    "ac341bea": "控制器",
+    "8a5a0d14": "控制器托管模式下，平台将业务意图经北向 RESTful 下发至外部控制器，由后者完成底层设备编排。",
+    "1b597722": "无需手动纳管",
+    "0ec9eaf9": "更多",
+    "f83619b3": "查看全部客户",
+    "9f10a2b2": "编辑设备",
+    "4ac578a0": "进入控制面"
+  },
+  "dashboard": {
+    "ticksExecuted": "已执行 {{count}} 次",
+    "intervalSec": "周期 {{sec}}s",
+    "selfLearnDevices": "自学习 {{count}} 台"
   }
 }

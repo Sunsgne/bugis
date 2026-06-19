@@ -17,6 +17,7 @@ class LinkBase(BaseModel):
     capacity_mbps: int = 10000
     reserved_mbps: int = 0
     description: str | None = None
+    supplier: str | None = Field(default=None, max_length=128)
     alarm_utilization_pct: float | None = Field(default=None, ge=0, le=100)
 
 
@@ -34,6 +35,7 @@ class LinkUpdate(BaseModel):
     capacity_mbps: int | None = None
     reserved_mbps: int | None = None
     description: str | None = None
+    supplier: str | None = Field(default=None, max_length=128)
     alarm_utilization_pct: float | None = Field(default=None, ge=0, le=100)
 
 

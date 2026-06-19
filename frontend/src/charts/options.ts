@@ -1,5 +1,6 @@
 import type { EChartsOption } from "echarts";
 import type { CallbackDataParams } from "echarts/types/dist/shared";
+import { tcStatic } from "../i18n/useTc";
 import {
   baseGrid,
   baseLegend,
@@ -19,6 +20,10 @@ import {
 
 type Point = { name: string; value: number };
 type SeriesPoint = Record<string, string | number>;
+
+function tr(zh: string) {
+  return tcStatic(zh);
+}
 
 function fmtTrafficAxis(v: number): string {
   if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}T`;
@@ -45,14 +50,14 @@ export function trafficWithP95Option(
 
   const markLines: { name: string; yAxis: number; color: string }[] = [];
   if (p95.in_95_mbps) {
-    markLines.push({ name: "入向 95", yAxis: p95.in_95_mbps, color: chartGradients.rx.from });
+    markLines.push({ name: tr("入向 95"), yAxis: p95.in_95_mbps, color: chartGradients.rx.from });
   }
   if (p95.out_95_mbps) {
-    markLines.push({ name: "出向 95", yAxis: p95.out_95_mbps, color: chartGradients.tx.from });
+    markLines.push({ name: tr("出向 95"), yAxis: p95.out_95_mbps, color: chartGradients.tx.from });
   }
   if (p95.billable_95_mbps) {
     markLines.push({
-      name: "计费 95",
+      name: tr("计费 95"),
       yAxis: p95.billable_95_mbps,
       color: "#ff6600",
     });
@@ -99,25 +104,25 @@ export function latencyJitterOption(data: SeriesPoint[], xKey = "t"): EChartsOpt
         const list = (Array.isArray(params) ? params : [params]) as CallbackDataParams[];
         const rows = list
           .map((p) => {
-            const unit = p.seriesName?.includes("丢包") ? "%" : " ms";
+            const unit = p.seriesName?.includes(tr("丢包")) ? "%" : " ms";
             return `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color};margin-right:6px"></span>${p.seriesName}: <b>${p.value}${unit}</b>`;
           })
           .join("<br/>");
         return `<div style="font-weight:600;margin-bottom:6px">${list[0]?.name ?? ""}</div>${rows}`;
       },
     },
-    legend: { ...baseLegend(), data: ["时延 (ms)", "抖动 (ms)", "丢包 (%)"] },
+    legend: { ...baseLegend(), data: [tr("时延 (ms)"), tr("抖动 (ms)"), tr("丢包 (%)")] },
     xAxis: categoryAxis(categories),
     yAxis: [
       {
         ...valueAxis(),
-        name: "时延/抖动",
+        name: tr("时延/抖动"),
         nameTextStyle: { color: chartGradients.warn.from, fontSize: 11 },
         axisLabel: { color: chartText.muted, formatter: "{value}" },
       },
       {
         ...valueAxis(),
-        name: "丢包",
+        name: tr("丢包"),
         nameTextStyle: { color: severityColors.critical, fontSize: 11 },
         splitLine: { show: false },
         axisLabel: { color: chartText.muted, formatter: "{value}%" },
@@ -125,7 +130,7 @@ export function latencyJitterOption(data: SeriesPoint[], xKey = "t"): EChartsOpt
     ],
     series: [
       {
-        name: "时延 (ms)",
+        name: tr("时延 (ms)"),
         type: "line",
         smooth: 0.35,
         showSymbol: false,
@@ -138,7 +143,7 @@ export function latencyJitterOption(data: SeriesPoint[], xKey = "t"): EChartsOpt
         data: data.map((d) => Number(d.latency ?? 0)),
       },
       {
-        name: "抖动 (ms)",
+        name: tr("抖动 (ms)"),
         type: "line",
         smooth: 0.35,
         showSymbol: false,
@@ -147,7 +152,7 @@ export function latencyJitterOption(data: SeriesPoint[], xKey = "t"): EChartsOpt
         data: data.map((d) => Number(d.jitter ?? 0)),
       },
       {
-        name: "丢包 (%)",
+        name: tr("丢包 (%)"),
         type: "line",
         smooth: 0.35,
         showSymbol: false,
@@ -223,7 +228,7 @@ export function trafficAreaOption(
 export function donutOption(
   data: Point[],
   colorMap: Record<string, string>,
-  centerLabel = "总计",
+  centerLabel = tr("总计"),
 ): EChartsOption {
   const total = data.reduce((s, d) => s + d.value, 0);
   const colored = data.map((d) => ({
@@ -249,7 +254,7 @@ export function donutOption(
       formatter: (params) => {
         const p = params as CallbackDataParams;
         const pct = total ? ((Number(p.value) / total) * 100).toFixed(1) : "0";
-        return `<b>${p.name}</b><br/>${p.value} 条 · ${pct}%`;
+        return `<b>${p.name}</b><br/>${p.value} ${tr("条")} · ${pct}%`;
       },
     },
     legend: {
@@ -306,7 +311,7 @@ export function rosePieOption(data: Point[], colorMap: Record<string, string>): 
       ...itemTooltip(),
       formatter: (params) => {
         const p = params as CallbackDataParams;
-        return `<b>${p.name}</b><br/>${p.value} 台`;
+        return `<b>${p.name}</b><br/>${p.value} ${tr("台")}`;
       },
     },
     legend: { ...baseLegend(), type: "scroll" as const },
@@ -413,7 +418,7 @@ export function linkUtilBarOption(data: { name: string; util: number }[]): EChar
       axisPointer: { type: "shadow" as const },
       formatter: (params) => {
         const p = (Array.isArray(params) ? params[0] : params) as CallbackDataParams;
-        return `<b>${p.name}</b><br/>峰值利用率 <b>${p.value}%</b>`;
+        return `<b>${p.name}</b><br/>${tr("峰值利用率")} <b>${p.value}%</b>`;
       },
     },
     xAxis: {
@@ -459,25 +464,25 @@ export function latencyLossOption(data: SeriesPoint[]): EChartsOption {
         const list = (Array.isArray(params) ? params : [params]) as CallbackDataParams[];
         const rows = list
           .map((p) => {
-            const unit = p.seriesName?.includes("丢包") ? "%" : " ms";
+            const unit = p.seriesName?.includes(tr("丢包")) ? "%" : " ms";
             return `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color};margin-right:6px"></span>${p.seriesName}: <b>${p.value}${unit}</b>`;
           })
           .join("<br/>");
-        return `<div style="font-weight:600;margin-bottom:6px">采样 #${list[0]?.name ?? ""}</div>${rows}`;
+        return `<div style="font-weight:600;margin-bottom:6px">${tr("采样")} #${list[0]?.name ?? ""}</div>${rows}`;
       },
     },
-    legend: { ...baseLegend(), data: ["时延 (ms)", "丢包 (%)"] },
+    legend: { ...baseLegend(), data: [tr("时延 (ms)"), tr("丢包 (%)")] },
     xAxis: categoryAxis(categories),
     yAxis: [
       {
         ...valueAxis(),
-        name: "时延",
+        name: tr("时延"),
         nameTextStyle: { color: chartGradients.warn.from, fontSize: 11 },
         axisLabel: { color: chartText.muted, formatter: "{value}" },
       },
       {
         ...valueAxis(),
-        name: "丢包",
+        name: tr("丢包"),
         nameTextStyle: { color: severityColors.critical, fontSize: 11 },
         splitLine: { show: false },
         axisLabel: { color: chartText.muted, formatter: "{value}%" },
@@ -485,7 +490,7 @@ export function latencyLossOption(data: SeriesPoint[]): EChartsOption {
     ],
     series: [
       {
-        name: "时延 (ms)",
+        name: tr("时延 (ms)"),
         type: "line",
         smooth: 0.35,
         showSymbol: false,
@@ -498,7 +503,7 @@ export function latencyLossOption(data: SeriesPoint[]): EChartsOption {
         data: data.map((d) => Number(d.latency ?? 0)),
       },
       {
-        name: "丢包 (%)",
+        name: tr("丢包 (%)"),
         type: "line",
         smooth: 0.35,
         showSymbol: false,

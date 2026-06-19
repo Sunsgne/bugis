@@ -181,20 +181,20 @@ export default function DeviceFormDialog({
 
   return (
     <Modal
-      title={isEdit && device ? `编辑设备 · ${device.name}` : "纳管设备"}
+      title={isEdit && device ? `${tc("编辑设备")} · ${device.name}` : tc("纳管设备")}
       open={open}
       onOk={handleOk}
       onCancel={() => onOpenChange(false)}
       confirmLoading={submitting}
-      okText={isEdit ? "保存" : "创建"}
+      okText={isEdit ? tc("保存") : tc("创建")}
       cancelText={tc('取消')}
       {...formModalProps}
       width={760}
     >
       <Typography.Paragraph type="secondary" className="app-form-intro" style={{ marginTop: 0 }}>
         {isEdit
-          ? "修改设备基础信息、南向凭证与 SNMP 配置。密码类字段留空则保持原值。"
-          : "填写设备基础信息与南向凭证，SNMP 与登录密码相互独立。"}
+          ? tc("修改设备基础信息、南向凭证与 SNMP 配置。密码类字段留空则保持原值。")
+          : tc("填写设备基础信息与南向凭证，SNMP 与登录密码相互独立。")}
       </Typography.Paragraph>
 
       <Form form={form} layout="vertical" className="app-form" requiredMark="optional">
@@ -202,7 +202,7 @@ export default function DeviceFormDialog({
           <Alert
             type="warning"
             showIcon
-            message="敏感字段不会回显"
+            message={tc("敏感字段不会回显")}
             description={tc('登录密码、Enable 密码与 SNMP 密钥留空则不修改。厂商纳管后不可变更。')}
             style={{ marginBottom: 16 }}
           />
@@ -210,7 +210,7 @@ export default function DeviceFormDialog({
           <Alert
             type="info"
             showIcon
-            message="远程登录凭证说明"
+            message={tc("远程登录凭证说明")}
             description={
               <>
                 <strong>{tc('配置下发 / 初始化')}</strong>{tc('使用 NETCONF 或 SSH CLI。')}<strong>{tc('SNMP 发现')}</strong> 独立配置 Community / v3。全局默认见{" "}
@@ -224,12 +224,12 @@ export default function DeviceFormDialog({
         <Typography.Text strong>{tc('基础信息')}</Typography.Text>
         <Row gutter={16} style={{ marginTop: 12 }}>
           <Col xs={24} sm={12}>
-            <Form.Item name="name" label={tc('名称')} rules={[{ required: true, message: "请输入设备名称" }]}>
+            <Form.Item name="name" label={tc('名称')} rules={[{ required: true, message: tc("请输入设备名称") }]}>
               <Input placeholder="BJ-LEAF-01" />
             </Form.Item>
           </Col>
           <Col xs={24} sm={12}>
-            <Form.Item name="vendor" label={tc('厂商')} extra={isEdit ? "纳管后不可修改" : undefined}>
+            <Form.Item name="vendor" label={tc('厂商')} extra={isEdit ? tc("纳管后不可修改") : undefined}>
               <Select options={VENDOR_OPTIONS} disabled={isEdit} />
             </Form.Item>
           </Col>
@@ -257,7 +257,7 @@ export default function DeviceFormDialog({
             </Form.Item>
           </Col>
           <Col xs={24} sm={16}>
-            <Form.Item name="mgmt_ip" label={tc('主管理 IP')} rules={[{ required: true, message: "请输入主管理 IP" }]}>
+            <Form.Item name="mgmt_ip" label={tc('主管理 IP')} rules={[{ required: true, message: tc("请输入主管理 IP") }]}>
               <Input placeholder={tc('10.1.0.11 或内网地址')} />
             </Form.Item>
           </Col>
@@ -325,7 +325,7 @@ export default function DeviceFormDialog({
             <Form.Item name="password" label={tc('登录密码')}>
               <Input.Password
                 autoComplete="new-password"
-                placeholder={isEdit ? (device?.password_set ? "已配置 · 留空不修改" : "NETCONF / SSH") : "NETCONF / SSH"}
+                placeholder={isEdit ? (device?.password_set ? tc("已配置 · 留空不修改") : "NETCONF / SSH") : "NETCONF / SSH"}
               />
             </Form.Item>
           </Col>
@@ -333,7 +333,7 @@ export default function DeviceFormDialog({
             <Form.Item name="enable_password" label={tc('Enable 密码')}>
               <Input.Password
                 autoComplete="new-password"
-                placeholder={isEdit ? (device?.enable_password_set ? "已配置 · 留空不修改" : "可选") : "可选"}
+                placeholder={isEdit ? (device?.enable_password_set ? tc("已配置 · 留空不修改") : tc("可选")) : tc("可选")}
               />
             </Form.Item>
           </Col>
@@ -371,7 +371,7 @@ export default function DeviceFormDialog({
             </Typography.Paragraph>
           </div>
           <Form.Item name="snmp_enabled" valuePropName="checked" style={{ marginBottom: 0 }}>
-            <Switch checkedChildren="启用" unCheckedChildren="关闭" />
+            <Switch checkedChildren={tc("启用")} unCheckedChildren={tc("关闭")} />
           </Form.Item>
         </div>
 

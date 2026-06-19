@@ -18,6 +18,7 @@ import { DownloadOutlined, EyeOutlined } from "@ant-design/icons";
 import { api } from "../api/client";
 import type { WorkOrder } from "../api/types";
 import { usePlatformSettings } from "../hooks/usePlatformSettings";
+import { dataTableProps, TABLE_SCROLL } from "../utils/table";
 
 const { Paragraph, Text } = Typography;
 
@@ -240,6 +241,7 @@ export default function Integrations({ embedded }: { embedded?: boolean }) {
 
       <Card title="南向驱动目录">
         <Table
+          {...dataTableProps(TABLE_SCROLL.lg)}
           rowKey="vendor"
           pagination={false}
           loading={loading}

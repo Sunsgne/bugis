@@ -7,6 +7,7 @@ import {
   Input,
   Popconfirm,
   Progress,
+  Select,
   Space,
   Statistic,
   Table,
@@ -15,6 +16,7 @@ import {
   Typography,
 } from "antd";
 import { DeleteOutlined, EditOutlined, PlusOutlined, SearchOutlined, SyncOutlined } from "@ant-design/icons";
+import dayjs from "dayjs";
 import { api } from "../api/client";
 import type { Device, LinkUsage, SiteCapacity } from "../api/types";
 import BackboneLinkModal from "../components/BackboneLinkModal";
@@ -22,6 +24,7 @@ import InterfaceNameCell from "../components/InterfaceNameCell";
 import { utilColor } from "../charts/options";
 import { fetchAllPages } from "../utils/pagination";
 import { useTc } from "@/i18n/useTc";
+import { dataTableProps, TABLE_SCROLL } from "../utils/table";
 
 const LINK_TYPE_LABEL: Record<string, string> = {
   dci: "跨站点 DCI",
@@ -39,6 +42,46 @@ function fmtBw(mbps?: number) {
   return mbps >= 1000 ? `${Math.round(mbps / 1000)} Gbps` : `${mbps} Mbps`;
 }
 
+function siteRouteLabel(r: LinkUsage) {
+  const a = r.site_a_code || r.site_a || "—";
+  const z = r.site_z_code || r.site_z || "—";
+  return `${a} → ${z}`;
+}
+
+function siteRouteKey(r: LinkUsage) {
+  return `${r.site_a_id ?? ""}:${r.site_z_id ?? ""}`;
+}
+
+function formatPeakAt(iso?: string | null) {
+  if (!iso) return "—";
+  return dayjs(iso).format("YYYY-MM-DD HH:mm:ss");
+}
+
+function utilizationTooltip(r: LinkUsage, pct: number) {
+  const peakRx = r.peak_rx_mbps ?? 0;
+  const peakTx = r.peak_tx_mbps ?? 0;
+  const peakTotal = r.peak_traffic_mbps ?? peakRx + peakTx;
+  const lines = [
+    `峰值利用率 ${Math.round(pct)}%`,
+    `峰值带宽 Rx ${fmtBw(peakRx)} / Tx ${fmtBw(peakTx)} · 合计 ${fmtBw(peakTotal)}`,
+    `合同带宽 ${fmtBw(r.capacity_mbps)}`,
+    `采样时间 ${formatPeakAt(r.peak_at)}`,
+  ];
+  if (r.traffic_mbps != null && r.traffic_mbps > 0) {
+    lines.push(`当前流量 ${fmtBw(r.traffic_mbps)}`);
+  }
+  if (r.effective_alarm_utilization_pct != null) {
+    lines.push(`告警阈值 ${r.effective_alarm_utilization_pct}%`);
+  }
+  return (
+    <div style={{ lineHeight: 1.6 }}>
+      {lines.map((line) => (
+        <div key={line}>{line}</div>
+      ))}
+    </div>
+  );
+}
+
 export default function Capacity() {
   const { tc } = useTc();
   const { message } = AntApp.useApp();
@@ -48,6 +91,8 @@ export default function Capacity() {
   const [syncing, setSyncing] = useState(false);
   const [siteSearch, setSiteSearch] = useState("");
   const [linkSearch, setLinkSearch] = useState("");
+  const [supplierFilter, setSupplierFilter] = useState<string | undefined>();
+  const [siteRouteFilter, setSiteRouteFilter] = useState<string | undefined>();
 
   // Devices are only needed by the "配置骨干链路" drawer — load lazily on open,
   // never on the 10s capacity poll (which would refetch the whole fleet).
@@ -134,14 +179,43 @@ export default function Capacity() {
 
   const filteredLinks = useMemo(() => {
     const q = linkSearch.trim().toLowerCase();
-    if (!q) return links;
-    return links.filter(
-      (l) =>
+    return links.filter((l) => {
+      if (supplierFilter && (l.supplier || "") !== supplierFilter) return false;
+      if (siteRouteFilter && siteRouteKey(l) !== siteRouteFilter) return false;
+      if (!q) return true;
+      const route = siteRouteLabel(l).toLowerCase();
+      return (
         l.name.toLowerCase().includes(q) ||
         l.device_a.toLowerCase().includes(q) ||
-        l.device_z.toLowerCase().includes(q),
-    );
-  }, [links, linkSearch]);
+        l.device_z.toLowerCase().includes(q) ||
+        (l.supplier || "").toLowerCase().includes(q) ||
+        route.includes(q) ||
+        (l.site_a || "").toLowerCase().includes(q) ||
+        (l.site_z || "").toLowerCase().includes(q)
+      );
+    });
+  }, [links, linkSearch, supplierFilter, siteRouteFilter]);
+
+  const supplierOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const l of links) {
+      const s = l.supplier?.trim();
+      if (s) set.add(s);
+    }
+    return Array.from(set).sort().map((v) => ({ value: v, label: v }));
+  }, [links]);
+
+  const siteRouteOptions = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const l of links) {
+      const key = siteRouteKey(l);
+      if (!l.site_a_id && !l.site_z_id) continue;
+      if (!seen.has(key)) seen.set(key, siteRouteLabel(l));
+    }
+    return Array.from(seen.entries())
+      .sort((a, b) => a[1].localeCompare(b[1], "zh"))
+      .map(([value, label]) => ({ value, label }));
+  }, [links]);
 
   const pagination = {
     defaultPageSize: 20,
@@ -185,6 +259,7 @@ export default function Capacity() {
         }
       >
         <Table<SiteCapacity>
+          {...dataTableProps(TABLE_SCROLL.lg)}
           size="small"
           className="data-table capacity-data-table"
           rowKey="site_id"
@@ -250,10 +325,28 @@ export default function Capacity() {
             <Input
               allowClear
               prefix={<SearchOutlined />}
-              placeholder={tc('搜索链路 / 设备')}
+              placeholder={tc('搜索链路 / 设备 / 供应商 / 站点')}
               value={linkSearch}
               onChange={(e) => setLinkSearch(e.target.value)}
               style={{ width: 220 }}
+            />
+            <Select
+              allowClear
+              placeholder={tc('供应商')}
+              value={supplierFilter}
+              onChange={setSupplierFilter}
+              options={supplierOptions}
+              style={{ width: 140 }}
+            />
+            <Select
+              allowClear
+              placeholder={tc('站点路由')}
+              value={siteRouteFilter}
+              onChange={setSiteRouteFilter}
+              options={siteRouteOptions}
+              style={{ width: 180 }}
+              showSearch
+              optionFilterProp="label"
             />
             <Button type="primary" icon={<PlusOutlined />} onClick={() => openLinkModal()}>{tc('配置骨干链路')}</Button>
             <Tooltip title={tc('从端口描述 bw(100Mbps) 同步链路合同带宽')}>
@@ -269,22 +362,45 @@ export default function Capacity() {
           message="选用 Vlan-interface / Vlanif 子接口；端口描述标注 bw(100Mbps) 可自动写入合同带宽；利用率超链路或平台阈值触发告警"
         />
         <Table<LinkUsage>
+          {...dataTableProps(TABLE_SCROLL.xl)}
           size="small"
           className="data-table capacity-data-table capacity-link-table"
           rowKey="link_id"
           loading={loading}
           dataSource={filteredLinks}
           pagination={pagination}
-          scroll={{ x: 900 }}
-          locale={{ emptyText: linkSearch ? "无匹配链路" : "暂无骨干链路 · 点击「配置骨干链路」智能推荐或手动选配" }}
+          scroll={{ x: 1100 }}
+          locale={{ emptyText: linkSearch || supplierFilter || siteRouteFilter ? "无匹配链路" : "暂无骨干链路 · 点击「配置骨干链路」智能推荐或手动选配" }}
           columns={[
             {
               title: tc('链路'),
               dataIndex: "name",
               fixed: "left",
-              width: 180,
+              width: 160,
               ellipsis: true,
               sorter: (a, b) => a.name.localeCompare(b.name),
+            },
+            {
+              title: tc('供应商'),
+              dataIndex: "supplier",
+              width: 120,
+              ellipsis: true,
+              filters: supplierOptions.map((o) => ({ text: o.label, value: o.value })),
+              onFilter: (val, r) => (r.supplier || "") === val,
+              render: (v?: string | null) => v || "—",
+            },
+            {
+              title: tc('站点路由'),
+              key: "site_route",
+              width: 140,
+              ellipsis: true,
+              filters: siteRouteOptions.map((o) => ({ text: o.label, value: o.value })),
+              onFilter: (val, r) => siteRouteKey(r) === val,
+              render: (_: unknown, r) => (
+                <Tooltip title={[r.site_a, r.site_z].filter(Boolean).join(" → ") || undefined}>
+                  <span>{siteRouteLabel(r)}</span>
+                </Tooltip>
+              ),
             },
             {
               title: tc('类型'),
@@ -347,10 +463,13 @@ export default function Capacity() {
               defaultSortOrder: "descend",
               sorter: (a, b) => a.utilization_pct - b.utilization_pct,
               render: (v: number, r) => (
-                <Tooltip
-                  title={`流量 ${fmtBw(r.traffic_mbps)} · 峰值 ${r.peak_utilization_pct ?? v}% · 告警阈值 ${r.effective_alarm_utilization_pct ?? "—"}%`}
-                >
-                  <Progress percent={Math.round(v)} size="small" strokeColor={utilColor(v)} />
+                <Tooltip title={utilizationTooltip(r, v)}>
+                  <Progress
+                    percent={Math.round(v)}
+                    size="small"
+                    strokeColor={utilColor(v)}
+                    format={(p) => `${p}%`}
+                  />
                 </Tooltip>
               ),
             },

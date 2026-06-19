@@ -17,6 +17,7 @@ import {
   BgColorsOutlined,
   CloudUploadOutlined,
   FileTextOutlined,
+  FormOutlined,
 } from "@ant-design/icons";
 
 const { Sider, Content } = Layout;
@@ -33,6 +34,7 @@ export default function SettingsLayout() {
       { key: "/settings/general", icon: <ThunderboltOutlined />, label: t("settings.nav.general") },
       { key: "/settings/config-learn", icon: <FileTextOutlined />, label: t("settings.nav.configLearn") },
       { key: "/settings/alarms", icon: <AlertOutlined />, label: t("settings.nav.alarms") },
+      { key: "/settings/alarm-templates", icon: <FormOutlined />, label: t("settings.nav.alarmTemplates") },
       { key: "/settings/baseline", icon: <CloudServerOutlined />, label: t("settings.nav.baseline") },
       { key: "/settings/smtp", icon: <MailOutlined />, label: t("settings.nav.smtp") },
       { key: "/settings/management", icon: <CloudUploadOutlined />, label: t("settings.nav.management") },

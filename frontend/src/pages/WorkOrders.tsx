@@ -13,27 +13,16 @@ import dayjs, { type Dayjs } from "dayjs";
 import { api } from "../api/client";
 import type { WorkOrder } from "../api/types";
 import PageCard from "../components/PageCard";
-import { dataTableProps } from "../utils/table";
+import { dataTableProps, TABLE_SCROLL, withMobileHide } from "../utils/table";
 import { formModalProps } from "../utils/formModal";
 import { action, empty, page, toast } from "../constants/uiCopy";
-import { WORK_ORDER_STATUS, statusMeta } from "../constants/statusLabels";
+import { WORK_ORDER_STATUS, WORK_ORDER_TYPE, statusMeta } from "../constants/statusLabels";
 import { useTc } from "@/i18n/useTc";
+import { useTranslation } from "react-i18next";
 
 const { RangePicker } = DatePicker;
 
-const RANGE_PRESETS: { label: string; value: [Dayjs, Dayjs] }[] = [
-  { label: "今天", value: [dayjs().startOf("day"), dayjs().endOf("day")] },
-  { label: "近 7 天", value: [dayjs().subtract(6, "day").startOf("day"), dayjs().endOf("day")] },
-  { label: "近 30 天", value: [dayjs().subtract(29, "day").startOf("day"), dayjs().endOf("day")] },
-  { label: "本月", value: [dayjs().startOf("month"), dayjs().endOf("month")] },
-  { label: "本年", value: [dayjs().startOf("year"), dayjs().endOf("year")] },
-];
-const TYPE_LABEL: Record<string, string> = {
-  provision: "开通",
-  modify: "变更",
-  decommission: "拆除",
-  migrate: "迁移",
-};
+const WORK_ORDER_TYPE_KEYS = ["provision", "modify", "decommission", "migrate"] as const;
 const LEVEL_COLOR: Record<string, string> = {
   info: "blue",
   warning: "orange",
@@ -51,6 +40,7 @@ function fmtTs(ts?: string | null) {
 
 export default function WorkOrders() {
   const { tc } = useTc();
+  const { t } = useTranslation();
   const { message } = AntApp.useApp();
   const [rows, setRows] = useState<WorkOrder[]>([]);
   const [loading, setLoading] = useState(false);
@@ -63,6 +53,17 @@ export default function WorkOrders() {
   const [range, setRange] = useState<[Dayjs, Dayjs] | null>(null);
   const [statusFilter, setStatusFilter] = useState<string | undefined>();
   const [typeFilter, setTypeFilter] = useState<string | undefined>();
+
+  const rangePresets = useMemo(
+    () => [
+      { label: tc("今天"), value: [dayjs().startOf("day"), dayjs().endOf("day")] as [Dayjs, Dayjs] },
+      { label: tc("近 7 天"), value: [dayjs().subtract(6, "day").startOf("day"), dayjs().endOf("day")] as [Dayjs, Dayjs] },
+      { label: tc("近 30 天"), value: [dayjs().subtract(29, "day").startOf("day"), dayjs().endOf("day")] as [Dayjs, Dayjs] },
+      { label: tc("本月"), value: [dayjs().startOf("month"), dayjs().endOf("month")] as [Dayjs, Dayjs] },
+      { label: tc("本年"), value: [dayjs().startOf("year"), dayjs().endOf("year")] as [Dayjs, Dayjs] },
+    ],
+    [tc],
+  );
 
   const filtered = useMemo(() => {
     const kw = keyword.trim().toLowerCase();
@@ -180,9 +181,9 @@ export default function WorkOrders() {
           <RangePicker
             value={range as never}
             onChange={(v) => setRange((v as [Dayjs, Dayjs] | null) ?? null)}
-            presets={RANGE_PRESETS}
+            presets={rangePresets}
             allowClear
-            placeholder={["开始日期", "结束日期"]}
+            placeholder={[tc("开始日期"), tc("结束日期")]}
           />
           <Select
             allowClear
@@ -201,16 +202,18 @@ export default function WorkOrders() {
             value={typeFilter}
             onChange={setTypeFilter}
             style={{ width: 120 }}
-            options={Object.entries(TYPE_LABEL).map(([value, label]) => ({
+            options={WORK_ORDER_TYPE_KEYS.map((value) => ({
               value,
-              label,
+              label: WORK_ORDER_TYPE[value],
             }))}
           />
           {hasFilter && (
             <Button icon={<ReloadOutlined />} onClick={resetFilters}>{tc('重置')}</Button>
           )}
           <Typography.Text type="secondary">
-            {hasFilter ? `筛选出 ${filtered.length} / ${rows.length} 条` : `共 ${rows.length} 条`}
+            {hasFilter
+              ? t("table.filterCount", { filtered: filtered.length, total: rows.length })
+              : t("table.totalCount", { total: rows.length })}
           </Typography.Text>
         </Space>
       </div>
@@ -218,23 +221,24 @@ export default function WorkOrders() {
         rowKey="id"
         loading={loading}
         dataSource={filtered}
-        {...dataTableProps()}
-        locale={{ emptyText: hasFilter ? "无匹配工单 · 调整筛选条件" : empty.default }}
+        {...dataTableProps(TABLE_SCROLL.lg)}
+        locale={{ emptyText: hasFilter ? tc("无匹配工单 · 调整筛选条件") : empty.default }}
         pagination={{
           pageSize: 15,
           hideOnSinglePage: true,
           showSizeChanger: false,
-          showTotal: (t) => `共 ${t} 张工单`,
+          showTotal: (n) => t("table.totalWorkOrders", { total: n }),
         }}
         onRow={(r) => ({ onClick: () => openDetail(r.id), style: { cursor: "pointer" } })}
-        columns={[
-          { title: "工单号", dataIndex: "code", width: "12%", ellipsis: true },
-          { title: "标题", dataIndex: "title", width: "22%", ellipsis: true },
+        columns={withMobileHide(
+          [
+          { title: tc("工单号"), dataIndex: "code", width: "12%", ellipsis: true },
+          { title: tc("标题"), dataIndex: "title", width: "22%", ellipsis: true },
           {
             title: tc('类型'),
             dataIndex: "type",
             width: "8%",
-            render: (t) => <Tag>{TYPE_LABEL[t] || t}</Tag>,
+            render: (type) => <Tag>{WORK_ORDER_TYPE[type] || type}</Tag>,
           },
           {
             title: tc('状态'),
@@ -250,10 +254,11 @@ export default function WorkOrders() {
               );
             },
           },
-          { title: "申请人", dataIndex: "requested_by", width: "10%", ellipsis: true, render: (v) => v || "—" },
-          { title: "审批人", dataIndex: "approved_by", width: "10%", ellipsis: true, render: (v) => v || "—" },
+          { title: tc("申请人"), dataIndex: "requested_by", width: "10%", ellipsis: true, render: (v) => v || "—" },
+          { title: tc("审批人"), dataIndex: "approved_by", width: "10%", ellipsis: true, render: (v) => v || "—" },
           {
             title: tc('配置作业'),
+            key: "config_jobs",
             width: "8%",
             align: "center",
             render: (_, r) => <Tag color="geekblue">{r.config_jobs.length}</Tag>,
@@ -284,7 +289,9 @@ export default function WorkOrders() {
               </Space>
             ),
           },
-        ]}
+        ],
+          ["requested_by", "approved_by", "config_jobs"],
+        )}
       />
 
       <Modal
@@ -306,7 +313,7 @@ export default function WorkOrders() {
       </Modal>
 
       <Drawer
-        title={current ? `工单 ${current.code}` : ""}
+        title={current ? `${tc("工单")} ${current.code}` : ""}
         width={720}
         open={!!current}
         onClose={() => setCurrent(null)}
@@ -317,7 +324,7 @@ export default function WorkOrders() {
               <Tag color={statusMeta(WORK_ORDER_STATUS, current.status).color}>
                 {statusMeta(WORK_ORDER_STATUS, current.status).label}
               </Tag>
-              <Tag>{TYPE_LABEL[current.type]}</Tag>
+              <Tag>{WORK_ORDER_TYPE[current.type]}</Tag>
             </div>
 
             <h4>{tc('流转轨迹')}</h4>
@@ -340,14 +347,14 @@ export default function WorkOrders() {
                   key: j.id,
                   label: (
                     <span>
-                      {j.device_name || `设备 #${j.device_id}`} · {j.operation} ·{" "}
+                      {j.device_name || `${tc("设备")} #${j.device_id}`} · {j.operation} ·{" "}
                       <Tag color={j.status.includes("fail") ? "red" : "green"}>{j.status}</Tag>
                       <Tag>{j.transport}</Tag>
                       <Tag color="default">{fmtTs(j.created_at)}</Tag>
                     </span>
                   ),
                   children: (
-                    <pre className="config-pre">{j.rendered_config || "(空)"}</pre>
+                    <pre className="config-pre">{j.rendered_config || tc("(空)")}</pre>
                   ),
                 }))}
               />

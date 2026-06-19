@@ -18,21 +18,19 @@ import type { Paginated, Tenant } from "../api/types";
 import TenantPortalUsersModal from "../components/TenantPortalUsersModal";
 import ListToolbar from "../components/ListToolbar";
 import PageCard from "../components/PageCard";
-import { dataTableProps, PAGE_SIZE_OPTIONS, pageRangeLabel, tablePagination } from "../utils/table";
+import { dataTableProps, PAGE_SIZE_OPTIONS, pageRangeLabel, TABLE_SCROLL, tablePagination, withMobileHide } from "../utils/table";
 import { formModalProps } from "../utils/formModal";
-import { TENANT_STATUS, statusMeta } from "../constants/statusLabels";
+import { TENANT_STATUS, TENANT_TYPE, statusMeta } from "../constants/statusLabels";
 import { page as pageCopy } from "../constants/uiCopy";
 import { useTc } from "@/i18n/useTc";
+import { useTranslation } from "react-i18next";
+import { pageSizeSelectOptions } from "../i18n/helpers";
 
-const TYPE_LABEL: Record<string, string> = {
-  enterprise: "企业专线",
-  hybrid_cloud: "混合云接入",
-  public_cloud: "公有云接入",
-  internal: "内部业务",
-};
+const TENANT_TYPE_KEYS = ["enterprise", "hybrid_cloud", "public_cloud", "internal"] as const;
 
 export default function Tenants() {
   const { tc } = useTc();
+  const { t } = useTranslation();
   const { message } = AntApp.useApp();
   const [rows, setRows] = useState<Tenant[]>([]);
   const [total, setTotal] = useState(0);
@@ -112,7 +110,7 @@ export default function Tenants() {
           <Select
             value={pageSize}
             style={{ width: 96 }}
-            options={PAGE_SIZE_OPTIONS.map((n) => ({ value: n, label: `${n} 条/页` }))}
+            options={pageSizeSelectOptions(t, PAGE_SIZE_OPTIONS)}
             onChange={(ps) => {
               setPage(1);
               setPageSize(ps);
@@ -125,13 +123,14 @@ export default function Tenants() {
         rowKey="id"
         loading={loading}
         dataSource={rows}
-        {...dataTableProps()}
+        {...dataTableProps(TABLE_SCROLL.md)}
         pagination={tablePagination(total, page, pageSize, (p, ps) => {
           setPage(p);
           setPageSize(ps);
         })}
-        columns={[
-          { title: "名称", dataIndex: "name", width: "16%", ellipsis: true },
+        columns={withMobileHide(
+          [
+          { title: tc('名称'), dataIndex: "name", width: "16%", ellipsis: true },
           {
             title: tc('编码'),
             dataIndex: "code",
@@ -143,7 +142,7 @@ export default function Tenants() {
             dataIndex: "type",
             width: "12%",
             ellipsis: true,
-            render: (t) => TYPE_LABEL[t] || t,
+            render: (t) => TENANT_TYPE[t] || t,
           },
           {
             title: tc('状态'),
@@ -189,7 +188,9 @@ export default function Tenants() {
               </Space>
             ),
           },
-        ]}
+        ],
+          ["code", "type", "circuits_total", "contact_name", "contact_email"],
+        )}
       />
 
       <Modal
@@ -208,7 +209,7 @@ export default function Tenants() {
             <Input placeholder={tc('例如 BANK-BJ')} />
           </Form.Item>
           <Form.Item name="type" label={tc('类型')}>
-            <Select options={Object.entries(TYPE_LABEL).map(([value, label]) => ({ value, label }))} />
+            <Select options={TENANT_TYPE_KEYS.map((value) => ({ value, label: TENANT_TYPE[value] }))} />
           </Form.Item>
           <Form.Item name="contact_name" label={tc('联系人')}>
             <Input />
