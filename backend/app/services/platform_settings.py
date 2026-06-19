@@ -120,10 +120,12 @@ def to_branding(row: PlatformSettings) -> BrandingOut:
     return BrandingOut.model_validate(row, from_attributes=True)
 
 
-def to_out(row: PlatformSettings) -> PlatformSettingsOut:
+def to_out(row: PlatformSettings, *, mask_webhook_token: bool = False) -> PlatformSettingsOut:
     data = PlatformSettingsOut.model_validate(row, from_attributes=True)
+    webhook_token = "********" if mask_webhook_token else row.webhook_token
     return data.model_copy(
         update={
+            "webhook_token": webhook_token,
             "smtp_password_set": bool(row.smtp_password),
             "smtp_password": None,
             "turnstile_secret_key_set": bool(row.turnstile_secret_key),

@@ -55,6 +55,7 @@ BUGIS_PORTAL_USER="${BUGIS_PORTAL_USER:-portal}"
 ensure_secret BUGIS_PORTAL_PASS
 BUGIS_FIRST_SUPERUSER_PASSWORD="${BUGIS_FIRST_SUPERUSER_PASSWORD:-$BUGIS_ADMIN_PASS}"
 ensure_secret BUGIS_WEBHOOK_TOKEN
+ensure_secret BUGIS_METRICS_TOKEN
 
 SSH_OPTS=(-o StrictHostKeyChecking=accept-new -p "$PORT")
 SCP_OPTS=(-o StrictHostKeyChecking=accept-new -P "$PORT")
@@ -97,6 +98,7 @@ BUGIS_PORTAL_USER=${BUGIS_PORTAL_USER}
 BUGIS_PORTAL_PASS=${BUGIS_PORTAL_PASS}
 BUGIS_FIRST_SUPERUSER_PASSWORD=${BUGIS_FIRST_SUPERUSER_PASSWORD}
 BUGIS_WEBHOOK_TOKEN=${BUGIS_WEBHOOK_TOKEN}
+BUGIS_METRICS_TOKEN=${BUGIS_METRICS_TOKEN}
 EOF
 }
 
@@ -175,6 +177,12 @@ generate_tls_certs() {
   chmod 600 "$CERT_DIR/key.pem"
 }
 
+write_metrics_token_file() {
+  mkdir -p "${ROOT}/deploy/prod"
+  printf '%s' "$BUGIS_METRICS_TOKEN" > "${ROOT}/deploy/prod/metrics_token"
+  chmod 600 "${ROOT}/deploy/prod/metrics_token"
+}
+
 write_stack_env() {
   local dest="$1"
   cat >"$dest" <<EOF
@@ -197,6 +205,8 @@ BUGIS_PORTAL_USER=${BUGIS_PORTAL_USER}
 BUGIS_PORTAL_PASS=${BUGIS_PORTAL_PASS}
 BUGIS_FIRST_SUPERUSER_PASSWORD=${BUGIS_FIRST_SUPERUSER_PASSWORD}
 BUGIS_WEBHOOK_TOKEN=${BUGIS_WEBHOOK_TOKEN}
+BUGIS_METRICS_TOKEN=${BUGIS_METRICS_TOKEN}
+BUGIS_NETCONF_HOSTKEY_VERIFY=true
 EOF
 }
 
@@ -205,6 +215,7 @@ if [[ "$GENERATED_SECRETS" == "true" ]]; then
 fi
 write_local_env
 generate_tls_certs
+write_metrics_token_file
 
 # Pre-flight: never deploy a checkout whose migrations are BEHIND the live DB.
 # (A behind branch makes alembic fail with "Can't locate revision", crash-looping
@@ -242,11 +253,12 @@ STACK_ENV="$(mktemp)"
 write_stack_env "$STACK_ENV"
 
 echo "==> Uploading to $USER@$HOST:$REMOTE_DIR"
-run_ssh "mkdir -p '$REMOTE_DIR/deploy/prod/certs'"
+run_ssh "mkdir -p '$REMOTE_DIR/deploy/prod/certs' '$REMOTE_DIR/deploy/prod'"
 run_scp "$ARCHIVE" "$USER@$HOST:$REMOTE_DIR/bugis-prod-src.tar.gz"
 run_scp "$STACK_ENV" "$USER@$HOST:$REMOTE_DIR/.env"
 run_scp "$CERT_DIR/cert.pem" "$USER@$HOST:$REMOTE_DIR/deploy/prod/certs/cert.pem"
 run_scp "$CERT_DIR/key.pem" "$USER@$HOST:$REMOTE_DIR/deploy/prod/certs/key.pem"
+run_scp "${ROOT}/deploy/prod/metrics_token" "$USER@$HOST:$REMOTE_DIR/deploy/prod/metrics_token"
 rm -f "$STACK_ENV"
 
 echo "==> Building and starting production containers"

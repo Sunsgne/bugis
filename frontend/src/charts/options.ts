@@ -1,6 +1,7 @@
 import type { EChartsOption } from "echarts";
 import type { CallbackDataParams } from "echarts/types/dist/shared";
 import { tcStatic } from "../i18n/useTc";
+import i18n from "i18next";
 import {
   baseGrid,
   baseLegend,
@@ -22,7 +23,7 @@ type Point = { name: string; value: number };
 type SeriesPoint = Record<string, string | number>;
 
 function tr(zh: string) {
-  return tcStatic(zh);
+  return tcStatic(zh, i18n.language);
 }
 
 function fmtTrafficAxis(v: number): string {

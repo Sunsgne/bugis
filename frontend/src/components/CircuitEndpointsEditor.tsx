@@ -26,10 +26,10 @@ import {
   formatVlanLabel,
 } from "../utils/networkDisplay";
 
-const SVID_SOURCE: Record<string, { label: string; color: string }> = {
-  platform: { label: "平台", color: "blue" },
-  device: { label: "设备", color: "orange" },
-  legacy: { label: "手工", color: "red" },
+const SVID_SOURCE: Record<string, { labelKey: string; color: string }> = {
+  platform: { labelKey: "平台", color: "blue" },
+  device: { labelKey: "设备", color: "orange" },
+  legacy: { labelKey: "手工", color: "red" },
 };
 
 function formatPortSpeed(mbps?: number) {
@@ -41,10 +41,10 @@ function svidUsageLabel(u: SvidUsage) {
   return formatVlanLabel(u.access_mode, u.s_vid, u.c_vid);
 }
 
-function svidUsageTitle(u: SvidUsage) {
-  const src = SVID_SOURCE[u.source || "platform"]?.label || u.source;
-  const parts = [`来源: ${src}`];
-  if (u.circuit_code) parts.push(`专线 ${u.circuit_code}`);
+function svidUsageTitle(u: SvidUsage, tc: (s: string) => string) {
+  const src = tc(SVID_SOURCE[u.source || "platform"]?.labelKey || u.source || "platform");
+  const parts = [`${tc("来源")}: ${src}`];
+  if (u.circuit_code) parts.push(`${tc("专线")} ${u.circuit_code}`);
   if (u.note) parts.push(u.note);
   return parts.join(" · ");
 }
@@ -83,19 +83,31 @@ function vlanConflict(
   return null;
 }
 
-function SvidUsageTags({ list, emptyText }: { list?: SvidUsage[] | null; emptyText?: string }) {
+function SvidUsageTags({
+  list,
+  emptyText,
+  tc,
+}: {
+  list?: SvidUsage[] | null;
+  emptyText?: string;
+  tc: (s: string) => string;
+}) {
   if (!list?.length) {
-    return <span style={{ color: "#52c41a", fontSize: 12 }}>{emptyText || "无占用 · 可分配"}</span>;
+    return (
+      <span style={{ color: "#52c41a", fontSize: 12 }}>
+        {emptyText || tc("无占用 · 可分配")}
+      </span>
+    );
   }
   return (
     <Space size={[4, 4]} wrap>
       {list.map((u, idx) => {
         const src = SVID_SOURCE[u.source || "platform"] || SVID_SOURCE.platform;
         return (
-          <Tooltip key={idx} title={svidUsageTitle(u)}>
+          <Tooltip key={idx} title={svidUsageTitle(u, tc)}>
             <Tag color={src.color} style={{ margin: 0 }}>
               {svidUsageLabel(u)}
-              <span style={{ opacity: 0.75, marginLeft: 4 }}>({src.label})</span>
+              <span style={{ opacity: 0.75, marginLeft: 4 }}>({tc(src.labelKey)})</span>
             </Tag>
           </Tooltip>
         );
@@ -137,7 +149,7 @@ function InterfaceOptionRow({ iface }: { iface: DeviceInterface }) {
       )}
       {used && (
         <div className="iface-option-svids">
-          <SvidUsageTags list={iface.used_s_vids} />
+          <SvidUsageTags list={iface.used_s_vids} tc={tc} />
         </div>
       )}
     </div>
@@ -191,7 +203,7 @@ function PortDetailPanel({
       )}
       <div className="port-detail-row">
         <span className="port-detail-label">{tc('S-VID 占用')}</span>
-        <SvidUsageTags list={iface.used_s_vids} emptyText="该端口暂无 VLAN 占用" />
+        <SvidUsageTags list={iface.used_s_vids} emptyText={tc("该端口暂无 VLAN 占用")} tc={tc} />
       </div>
       {conflict && (
         <Alert type="warning" showIcon icon={<WarningOutlined />} message={conflict} style={{ marginTop: 8 }} />
@@ -243,13 +255,13 @@ export default function CircuitEndpointsEditor({
 
   async function discover(deviceId: number) {
     if (!deviceId) return message.warning(tc('请先选择设备'));
-    const hide = message.loading("SNMP 发现 + S-VID 扫描...", 0);
+    const hide = message.loading(tc("SNMP 发现 + S-VID 扫描..."), 0);
     try {
       const { data } = await api.post<DeviceInterface[]>(`/devices/${deviceId}/discover-interfaces`);
       setIfaceByDevice((p) => ({ ...p, [deviceId]: data }));
-      message.success(`已发现 ${data.length} 个接口，并更新 VLAN 占用`);
+      message.success(`${tc("已发现")} ${data.length} ${tc("个接口，并更新 VLAN 占用")}`);
     } catch (e: any) {
-      message.error(e?.response?.data?.detail || "发现失败");
+      message.error(e?.response?.data?.detail || tc("发现失败"));
     } finally {
       hide();
     }
@@ -303,7 +315,7 @@ export default function CircuitEndpointsEditor({
                         className="endpoint-card"
                         title={
                           <Tag color={label === "A" ? "blue" : label === "Z" ? "purple" : "default"}>
-                            端点 {label}
+                            {tc("端点")} {label}
                           </Tag>
                         }
                         extra={
@@ -333,7 +345,7 @@ export default function CircuitEndpointsEditor({
                             <Form.Item
                               name={[field.name, "device_id"]}
                               label={tc('接入设备')}
-                              rules={[{ required: true, message: "请选择设备" }]}
+                              rules={[{ required: true, message: tc("请选择设备") }]}
                             >
                               <Select
                                 placeholder={tc('选择 VTEP / PE / Leaf')}
@@ -357,11 +369,15 @@ export default function CircuitEndpointsEditor({
                           <div className="endpoint-port-row">
                             <Form.Item
                               name={[field.name, "interface_name"]}
-                              rules={[{ required: true, message: "请选择端口" }]}
+                              rules={[{ required: true, message: tc("请选择端口") }]}
                               noStyle
                             >
                               <Select
-                                placeholder={did ? "选择端口（下拉可查看占用详情）" : "请先选择设备"}
+                                placeholder={
+                                  did
+                                    ? tc("选择端口（下拉可查看占用详情）")
+                                    : tc("请先选择设备")
+                                }
                                 showSearch
                                 disabled={!did}
                                 optionLabelProp="label"
@@ -371,7 +387,7 @@ export default function CircuitEndpointsEditor({
                                   did ? (
                                     <span style={{ padding: 8, color: "#888" }}>{tc('无接口记录，请点击右侧按钮 SNMP 发现')}</span>
                                   ) : (
-                                    "请先选择设备"
+                                    tc("请先选择设备")
                                   )
                                 }
                                 options={ifaceSelectOptions(did || 0)}
@@ -401,9 +417,9 @@ export default function CircuitEndpointsEditor({
                             <Form.Item name={[field.name, "access_mode"]} label={tc('封装模式')} initialValue="dot1q">
                               <Select
                                 options={[
-                                  { value: "access", label: "Access · 不带标签" },
-                                  { value: "dot1q", label: "Dot1Q · 单标签" },
-                                  { value: "qinq", label: "QinQ · 双标签" },
+                                  { value: "access", label: tc("Access · 不带标签") },
+                                  { value: "dot1q", label: tc("Dot1Q · 单标签") },
+                                  { value: "qinq", label: tc("QinQ · 双标签") },
                                 ]}
                               />
                             </Form.Item>

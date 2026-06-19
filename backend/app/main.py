@@ -121,15 +121,16 @@ def root():
 
 @app.get("/health", tags=["system"])
 def health():
-    return {"status": "ok", "version": __version__, "dry_run": settings.dry_run}
+    return {"status": "ok"}
 
 
 @app.get("/metrics", include_in_schema=False)
 def metrics(request: Request):
     if not settings.enable_metrics:
         return Response(status_code=404)
-    if settings.metrics_token and not metrics_authorized(request):
-        return Response(status_code=401)
+    if settings.app_env == "production" or settings.metrics_token:
+        if not metrics_authorized(request):
+            return Response(status_code=401)
     db = SessionLocal()
     try:
         CIRCUITS_TOTAL.set(db.scalar(select(func.count(Circuit.id))) or 0)

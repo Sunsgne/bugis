@@ -72,9 +72,14 @@ def _send(channel: NotificationChannel, payload: dict) -> tuple[bool, str]:
     try:  # pragma: no cover - requires network
         import httpx
 
-        with httpx.Client(timeout=10) as client:
-            resp = client.post(channel.url, json=payload)
+        from app.core.url_validation import validate_outbound_http_url
+
+        safe_url = validate_outbound_http_url(channel.url, field="channel.url")
+        with httpx.Client(timeout=10, follow_redirects=False) as client:
+            resp = client.post(safe_url, json=payload)
             return resp.is_success, f"{resp.status_code}"
+    except ValueError as exc:
+        return False, f"blocked url: {exc}"
     except Exception as exc:  # pragma: no cover
         return False, f"error: {exc}"
 

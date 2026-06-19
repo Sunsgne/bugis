@@ -45,6 +45,12 @@ def validate_production_settings() -> None:
     if settings.webhook_token in _WEAK_WEBHOOK_TOKENS or len(settings.webhook_token) < 16:
         problems.append("BUGIS_WEBHOOK_TOKEN is missing or too weak")
 
+    if settings.enable_metrics and not settings.metrics_token:
+        problems.append("BUGIS_METRICS_TOKEN is required when metrics are enabled in production")
+
+    if not settings.netconf_hostkey_verify:
+        problems.append("BUGIS_NETCONF_HOSTKEY_VERIFY must be true in production")
+
     if "*" in settings.cors_origins:
         problems.append("BUGIS_CORS_ORIGINS must not include '*' in production")
 

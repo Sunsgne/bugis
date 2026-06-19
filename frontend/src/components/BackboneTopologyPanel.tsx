@@ -176,10 +176,11 @@ function buildLayout(
   topo: Topology,
   size: { w: number; h: number },
   linksById: Map<number, LinkUsage>,
+  unassignedLabel: string,
   highlightLinkId?: number | null,
   highlightDeviceId?: number | null,
 ): { nodes: Node[]; edges: Edge[] } {
-  const siteColumns = buildSiteColumns(topo);
+  const siteColumns = buildSiteColumns(topo, unassignedLabel);
   const laneCount = Math.max(siteColumns.length, 1);
   const canvasW = Math.max(size.w, 640);
   const canvasH = Math.max(size.h, 420);
@@ -365,9 +366,9 @@ export default function BackboneTopologyPanel({ topo, links, loading }: Props) {
   const { nodes, edges } = useMemo(
     () =>
       graphTopo
-        ? buildLayout(graphTopo, size, linksById, selectedLinkId, selectedDeviceId)
+        ? buildLayout(graphTopo, size, linksById, tc("未分配站点"), selectedLinkId, selectedDeviceId)
         : { nodes: [], edges: [] },
-    [graphTopo, size, linksById, selectedLinkId, selectedDeviceId],
+    [graphTopo, size, linksById, tc, selectedLinkId, selectedDeviceId],
   );
 
   const layoutKey = `${size.w}x${size.h}-${nodes.length}-${edges.length}-${selectedLinkId}-${selectedDeviceId}`;

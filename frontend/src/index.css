@@ -1254,6 +1254,22 @@ body {
   border-radius: 2px;
 }
 
+.physical-topology-edge-label {
+  position: absolute;
+  pointer-events: all;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: #334155;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  border-radius: 6px;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.08);
+  white-space: nowrap;
+  cursor: default;
+}
+
 /* Capacity planning */
 .capacity-page {
   width: 100%;

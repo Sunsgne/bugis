@@ -11,6 +11,7 @@ from starlette.responses import Response
 
 from app.api.deps import get_current_user, require_operator
 from app.core.database import get_db
+from app.core.ip_validation import validate_ip_address
 from app.models.circuit import Circuit
 from app.models.device import Device
 from app.models.enums import (
@@ -26,6 +27,9 @@ from app.services import config_learn
 from app.services import platform_settings as platform_cfg
 
 router = APIRouter()
+
+MAX_IMPORT_BYTES = 1_048_576  # 1 MiB
+MAX_IMPORT_ROWS = 5_000
 
 DEVICE_COLUMNS = [
     "name", "vendor", "model", "role", "overlay_tech", "status",
@@ -77,21 +81,37 @@ def import_devices(
     user: User = Depends(require_operator),
 ):
     try:
-        text = file.file.read().decode("utf-8-sig")
+        raw = file.file.read(MAX_IMPORT_BYTES + 1)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"cannot read file: {exc}")
+    if len(raw) > MAX_IMPORT_BYTES:
+        raise HTTPException(status_code=413, detail=f"file exceeds {MAX_IMPORT_BYTES // 1024} KiB limit")
+    try:
+        text = raw.decode("utf-8-sig")
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"cannot decode file: {exc}")
 
     plat = platform_cfg.get_or_create(db)
     do_learn = plat.auto_learn_on_import if learn is None else learn
 
     reader = csv.DictReader(io.StringIO(text))
+    if reader.fieldnames is None:
+        raise HTTPException(status_code=400, detail="empty or invalid CSV")
+
+    rows = list(reader)
+    if len(rows) > MAX_IMPORT_ROWS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"CSV exceeds {MAX_IMPORT_ROWS} row limit",
+        )
+
     sites = {s.code: s.id for s in db.execute(select(Site)).scalars().all()}
     existing = {
         d.name for d in db.execute(select(Device.name)).all()  # type: ignore
     }
     created, skipped, errors = 0, 0, []
     new_device_ids: list[int] = []
-    for i, row in enumerate(reader, start=2):
+    for i, row in enumerate(rows, start=2):
         name = (row.get("name") or "").strip()
         if not name:
             continue
@@ -99,6 +119,13 @@ def import_devices(
             skipped += 1
             continue
         try:
+            mgmt_raw = (row.get("mgmt_ip") or "").strip()
+            if not mgmt_raw:
+                raise ValueError("mgmt_ip is required")
+            mgmt_ip = validate_ip_address(mgmt_raw, field="mgmt_ip", required=True)
+            loopback_raw = (row.get("loopback_ip") or "").strip() or None
+            loopback_ip = validate_ip_address(loopback_raw, field="loopback_ip")
+
             device = Device(
                 name=name,
                 vendor=Vendor((row.get("vendor") or "h3c").strip().lower()),
@@ -110,8 +137,8 @@ def import_devices(
                 status=DeviceStatus(
                     (row.get("status") or "unknown").strip().lower()
                 ),
-                mgmt_ip=(row.get("mgmt_ip") or "").strip() or "0.0.0.0",
-                loopback_ip=(row.get("loopback_ip") or "").strip() or None,
+                mgmt_ip=mgmt_ip,
+                loopback_ip=loopback_ip,
                 bgp_asn=int(row["bgp_asn"]) if row.get("bgp_asn") else None,
                 sr_node_sid=int(row["sr_node_sid"]) if row.get("sr_node_sid") else None,
                 site_id=sites.get((row.get("site_code") or "").strip()),

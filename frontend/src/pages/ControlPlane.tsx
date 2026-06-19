@@ -267,10 +267,13 @@ export default function ControlPlane() {
           <Descriptions.Item label={tc('BGP 会话在线')}>{status?.bgp_sessions_up ?? 0}</Descriptions.Item>
           <Descriptions.Item label={tc('集群模式')}>{cluster?.mode || "-"}</Descriptions.Item>
           <Descriptions.Item label="Leader">{cluster?.leader || "-"}</Descriptions.Item>
-          <Descriptions.Item label={tc('配置版本化')}>
-            {tc('设备配置见')}{" "}
-            <Link to="/config">{page.config}</Link>
-            {"."}
+          <Descriptions.Item label={tc("配置版本化")}>
+            <span>
+              {tc("设备配置见")}
+              {"\u00a0"}
+              <Link to="/config">{page.config}</Link>
+              .
+            </span>
           </Descriptions.Item>
         </Descriptions>
       </Card>

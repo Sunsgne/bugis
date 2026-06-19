@@ -1,11 +1,15 @@
 import {
   Background,
+  BaseEdge,
   Controls,
+  EdgeLabelRenderer,
   MarkerType,
   MiniMap,
   ReactFlow,
+  getBezierPath,
   useReactFlow,
   type Edge,
+  type EdgeProps,
   type Node,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
@@ -14,16 +18,24 @@ import { labelForOption, DEVICE_ROLE_OPTIONS } from "@/constants/formOptions";
 import { vendorColors } from "@/charts/theme";
 import type { Topology } from "@/api/types";
 import { useTc } from "@/i18n/useTc";
+import { backboneUtilColor, fmtLinkBw } from "@/utils/linkUtilization";
 
 const NO_SITE = -1;
 const LANE_GUTTER = 12;
 const LANE_HEADER = 52;
 
-const EDGE_STYLE: Record<string, { color: string; strokeDasharray?: string }> = {
-  dci: { color: "#ef4444", strokeDasharray: "6 4" },
-  intra_dc: { color: "#ff6600" },
-  access: { color: "#10b981" },
-  uplink: { color: "#8b5cf6" },
+const EDGE_STYLE: Record<string, { dash?: string; weight: number }> = {
+  dci: { dash: "6 4", weight: 3 },
+  intra_dc: { weight: 2.5 },
+  access: { weight: 1.5 },
+  uplink: { weight: 2 },
+};
+
+type EdgeData = {
+  utilization_pct: number;
+  shortLabel: string;
+  title: string;
+  linkType: string;
 };
 
 function fmtG(mbps: number): string {
@@ -57,7 +69,63 @@ function DeviceNode({
   );
 }
 
+function UtilizationEdge({
+  id,
+  sourceX,
+  sourceY,
+  targetX,
+  targetY,
+  sourcePosition,
+  targetPosition,
+  data,
+  selected,
+  markerEnd,
+}: EdgeProps) {
+  const d = data as EdgeData | undefined;
+  const pct = d?.utilization_pct ?? 0;
+  const color = backboneUtilColor(pct);
+  const style = EDGE_STYLE[d?.linkType || "intra_dc"] || EDGE_STYLE.intra_dc;
+  const [edgePath, labelX, labelY] = getBezierPath({
+    sourceX,
+    sourceY,
+    targetX,
+    targetY,
+    sourcePosition,
+    targetPosition,
+  });
+
+  return (
+    <>
+      <BaseEdge
+        id={id}
+        path={edgePath}
+        markerEnd={markerEnd}
+        style={{
+          stroke: color,
+          strokeWidth: selected ? style.weight + 1 : style.weight,
+          strokeDasharray: style.dash,
+        }}
+      />
+      {d?.shortLabel && (
+        <EdgeLabelRenderer>
+          <div
+            className="physical-topology-edge-label"
+            style={{
+              transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
+              borderColor: color,
+            }}
+            title={d.title}
+          >
+            {d.shortLabel}
+          </div>
+        </EdgeLabelRenderer>
+      )}
+    </>
+  );
+}
+
 const nodeTypes = { device: DeviceNode };
+const edgeTypes = { utilization: UtilizationEdge };
 
 function FitViewOnLayout({ layoutKey }: { layoutKey: string }) {
   const { fitView } = useReactFlow();
@@ -70,18 +138,23 @@ function FitViewOnLayout({ layoutKey }: { layoutKey: string }) {
   return null;
 }
 
-function buildSiteColumns(topo: Topology) {
+function buildSiteColumns(topo: Topology, unassignedLabel: string) {
   const columns = topo.sites
     .filter((s) => topo.nodes.some((n) => n.site_id === s.id))
     .map((s) => ({ id: s.id, label: `${s.code} · ${s.name}` }));
   if (topo.nodes.some((n) => !n.site_id)) {
-    columns.push({ id: NO_SITE, label: "未分配站点" });
+    columns.push({ id: NO_SITE, label: unassignedLabel });
   }
   return columns;
 }
 
-function buildLayout(topo: Topology, size: { w: number; h: number }): { nodes: Node[]; edges: Edge[] } {
-  const siteColumns = buildSiteColumns(topo);
+function buildLayout(
+  topo: Topology,
+  size: { w: number; h: number },
+  unassignedLabel: string,
+  tc: (s: string) => string,
+): { nodes: Node[]; edges: Edge[] } {
+  const siteColumns = buildSiteColumns(topo, unassignedLabel);
   const laneCount = Math.max(siteColumns.length, 1);
   const canvasW = Math.max(size.w, 640);
   const canvasH = Math.max(size.h, 480);
@@ -89,6 +162,7 @@ function buildLayout(topo: Topology, size: { w: number; h: number }): { nodes: N
   const laneH = canvasH - LANE_GUTTER * 2;
 
   const nodes: Node[] = [];
+  const nodeById = new Map(topo.nodes.map((n) => [n.id, n]));
 
   siteColumns.forEach((site, col) => {
     const laneId = `lane-${site.id}`;
@@ -160,24 +234,32 @@ function buildLayout(topo: Topology, size: { w: number; h: number }): { nodes: N
   const edges: Edge[] = topo.edges
     .filter((e) => nodeIds.has(String(e.source)) && nodeIds.has(String(e.target)))
     .map((e, i) => {
-      const style = EDGE_STYLE[e.type] || EDGE_STYLE.intra_dc;
       const util = e.utilization_pct ?? (e.capacity_mbps ? (e.reserved_mbps / e.capacity_mbps) * 100 : 0);
+      const src = nodeById.get(Number(e.source));
+      const tgt = nodeById.get(Number(e.target));
+      const color = backboneUtilColor(util);
+      const title = [
+        src && tgt ? `${src.name} ↔ ${tgt.name}` : "",
+        `${tc("峰值利用率")} ${util.toFixed(1)}%`,
+        `${tc("合同带宽")} ${fmtLinkBw(e.capacity_mbps)}`,
+        e.type === "dci" ? tc("DCI 互联") : tc("Fabric 内链路"),
+      ]
+        .filter(Boolean)
+        .join("\n");
+
       return {
         id: `e-${i}`,
         source: String(e.source),
         target: String(e.target),
-        label: `${fmtG(e.capacity_mbps)} · ${util.toFixed(0)}%`,
-        labelStyle: { fontSize: 10, fill: util > 80 ? "#dc2626" : "#475569" },
-        labelBgStyle: { fill: "rgba(255,255,255,0.92)" },
-        labelBgPadding: [4, 6] as [number, number],
-        labelBgBorderRadius: 4,
+        type: "utilization",
         animated: e.type === "dci",
-        style: {
-          stroke: style.color,
-          strokeWidth: e.type === "dci" ? 2.5 : 2,
-          strokeDasharray: style.strokeDasharray,
-        },
-        markerEnd: { type: MarkerType.ArrowClosed, color: style.color },
+        data: {
+          utilization_pct: util,
+          shortLabel: `${fmtG(e.capacity_mbps)} · ${util.toFixed(0)}%`,
+          title,
+          linkType: e.type,
+        } satisfies EdgeData,
+        markerEnd: { type: MarkerType.ArrowClosed, color },
       };
     });
 
@@ -209,7 +291,11 @@ export default function PhysicalTopologyFlow({ topo, className }: Props) {
     return () => ro.disconnect();
   }, []);
 
-  const { nodes, edges } = useMemo(() => buildLayout(topo, size), [topo, size]);
+  const unassignedLabel = tc("未分配站点");
+  const { nodes, edges } = useMemo(
+    () => buildLayout(topo, size, unassignedLabel, tc),
+    [topo, size, unassignedLabel, tc],
+  );
   const layoutKey = `${size.w}x${size.h}-${topo.nodes.length}-${topo.edges.length}`;
 
   return (
@@ -218,9 +304,10 @@ export default function PhysicalTopologyFlow({ topo, className }: Props) {
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         nodesDraggable={false}
         nodesConnectable={false}
-        elementsSelectable={false}
+        elementsSelectable
         panOnDrag
         zoomOnScroll
         minZoom={0.5}
@@ -240,16 +327,28 @@ export default function PhysicalTopologyFlow({ topo, className }: Props) {
       </ReactFlow>
 
       {topo.edges.length === 0 && (
-        <div className="physical-topology-hint">{tc('暂无 DCI / Fabric 链路 · 设备按站点分列展示 · 在容量规划中添加链路后可显示互联关系')}</div>
+        <div className="physical-topology-hint">
+          {tc("暂无 DCI / Fabric 链路 · 设备按站点分列展示 · 在容量规划中添加链路后可显示互联关系")}
+        </div>
       )}
 
       <div className="physical-topology-legend">
-        {Object.entries(EDGE_STYLE).slice(0, 2).map(([k, v]) => (
-          <span key={k} className="physical-topology-legend-item">
-            <span className="physical-topology-legend-line" style={{ background: v.color }} />
-            {k === "dci" ? "DCI 互联" : "Fabric 内链路"}
-          </span>
-        ))}
+        <span className="physical-topology-legend-item">
+          <span className="physical-topology-legend-line" style={{ background: "#ef4444", opacity: 0.9 }} />
+          {tc("DCI 互联")}
+        </span>
+        <span className="physical-topology-legend-item">
+          <span className="physical-topology-legend-line" style={{ background: "#22c55e" }} />
+          {tc("Fabric 内链路")} · &lt;50%
+        </span>
+        <span className="physical-topology-legend-item">
+          <span className="physical-topology-legend-line" style={{ background: "#f59e0b" }} />
+          50–84%
+        </span>
+        <span className="physical-topology-legend-item">
+          <span className="physical-topology-legend-line" style={{ background: "#ef4444" }} />
+          ≥85%
+        </span>
       </div>
     </div>
   );

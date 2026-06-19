@@ -13,6 +13,7 @@ from dataclasses import dataclass
 
 from app.models.circuit import Circuit, CircuitEndpoint
 from app.models.controller import Controller
+from app.core.url_validation import is_internal_controller_url
 from app.models.enums import ControllerType, ServiceType
 
 
@@ -99,10 +100,24 @@ def deliver(controller: Controller, req: ControllerRequest, dry_run: bool = True
             "output": f"[DRY-RUN] controller={controller.type.value} "
             f"({controller.name})\n{req.render()}",
         }
+    if is_internal_controller_url(controller.base_url):
+        return {
+            "success": True,
+            "dry_run": False,
+            "output": f"[INTERNAL] controller={controller.type.value} ({controller.name})",
+        }
+
     try:  # pragma: no cover - requires live controller
         import httpx
 
-        with httpx.Client(verify=bool(controller.verify_tls), timeout=30) as client:
+        from app.core.url_validation import validate_outbound_http_url
+
+        validate_outbound_http_url(req.url, field="controller.url")
+        with httpx.Client(
+            verify=bool(controller.verify_tls),
+            timeout=30,
+            follow_redirects=False,
+        ) as client:
             auth = None
             if controller.username:
                 from app.services.credential_store import decrypt_value

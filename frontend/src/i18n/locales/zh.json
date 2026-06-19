@@ -1826,7 +1826,11 @@
     "z_running": "运行中",
     "z_custom_secret": "已自定义",
     "z_default_secret": "使用默认值（生产环境请修改）",
-    "z_snmp_snmp_desc": "SNMP Community、v3 认证与 IF-MIB 采集策略请在"
+    "z_snmp_snmp_desc": "SNMP Community、v3 认证与 IF-MIB 采集策略请在",
+    "f8a91e01": "告警评估使用以下阈值；留空则继承「设置 → 告警阈值」中的平台默认值。",
+    "f8a91e02": "分",
+    "f8a91e03": "个接口，并更新 VLAN 占用",
+    "f8a91e04": "已发现"
   },
   "dashboard": {
     "ticksExecuted": "已执行 {{count}} 次",

@@ -3,8 +3,9 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
+from app.core.ip_validation import validate_ip_address
 from app.models.enums import DeviceRole, DeviceStatus, ManagementTransport, OverlayTech, Vendor
 from app.schemas.common import TimestampedSchema
 
@@ -152,7 +153,15 @@ class DeviceBase(BaseModel):
 
 
 class DeviceCreate(DeviceBase):
-    pass
+    @field_validator("mgmt_ip")
+    @classmethod
+    def _validate_mgmt_ip(cls, v: str) -> str:
+        return validate_ip_address(v, field="mgmt_ip", required=True)  # type: ignore[return-value]
+
+    @field_validator("mgmt_ip_backup", "loopback_ip")
+    @classmethod
+    def _validate_optional_ip(cls, v: str | None) -> str | None:
+        return validate_ip_address(v, field="ip")
 
 
 class DeviceUpdate(BaseModel):
@@ -189,6 +198,11 @@ class DeviceUpdate(BaseModel):
     sr_node_sid: int | None = None
     is_route_reflector: bool | None = None
     site_id: int | None = None
+
+    @field_validator("mgmt_ip", "mgmt_ip_backup", "loopback_ip")
+    @classmethod
+    def _validate_optional_ip(cls, v: str | None) -> str | None:
+        return validate_ip_address(v, field="ip")
 
 
 class DeviceListOut(DeviceBase, TimestampedSchema):

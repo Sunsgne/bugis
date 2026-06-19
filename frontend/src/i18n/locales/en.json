@@ -1720,7 +1720,7 @@
     "e53b1ea3": "Self-learning {{count}} Units",
     "57ffd6fa": "Trigger Evaluation",
     "54368a1c": "Device Delivery Job",
-    "dfb3d95c": "For device config, see",
+    "dfb3d95c": "For device config, see ",
     "e366ccf1": "Set up",
     "70c03e52": "Adjust automatic pull, change protection and snapshot policies.",
     "bb9e2f51": "Carrier/Transport Provider for easy filtering of utilization by provider",
@@ -1826,7 +1826,11 @@
     "z_running": "Running",
     "z_custom_secret": "Customized",
     "z_default_secret": "Using Default (change In Production)",
-    "z_snmp_snmp_desc": "Configure SNMP community, v3 auth, and IF-MIB collection under"
+    "z_snmp_snmp_desc": "Configure SNMP community, v3 auth, and IF-MIB collection under",
+    "f8a91e01": "Alarm evaluation uses the thresholds below; leave blank to inherit platform defaults from Settings → Alarm Thresholds.",
+    "f8a91e02": "pts",
+    "f8a91e03": "interfaces · VLAN occupancy updated",
+    "f8a91e04": "Discovered"
   },
   "dashboard": {
     "ticksExecuted": "Executed {{count}} times",

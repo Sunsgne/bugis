@@ -23,6 +23,7 @@ deploy/demo.env
 deploy/prod.env
 deploy/prod/credentials.txt
 deploy/prod/certs/
+deploy/prod/metrics_token
 deploy/ha/inventory.env
 
 # Editor / OS

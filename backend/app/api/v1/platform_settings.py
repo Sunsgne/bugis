@@ -8,6 +8,7 @@ from app import __version__, scheduler
 from app.api.deps import get_current_user, require_operator
 from app.core.config import settings
 from app.core.database import get_db
+from app.models.enums import UserRole
 from app.models.user import User
 from app.schemas.platform_settings import (
     AllSettingsOut,
@@ -39,12 +40,13 @@ def _readonly_info() -> PlatformReadonlyInfo:
 @router.get("", response_model=AllSettingsOut)
 def get_all_settings(
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ):
     platform = platform_svc.get_or_create(db)
     snmp_svc.get_or_create(db)
+    mask_webhook = user.role == UserRole.VIEWER
     return AllSettingsOut(
-        platform=platform_svc.to_out(platform),
+        platform=platform_svc.to_out(platform, mask_webhook_token=mask_webhook),
         readonly=_readonly_info(),
     )
 
@@ -52,9 +54,13 @@ def get_all_settings(
 @router.get("/platform", response_model=PlatformSettingsOut)
 def get_platform_settings(
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ):
-    return platform_svc.to_out(platform_svc.get_or_create(db))
+    mask_webhook = user.role == UserRole.VIEWER
+    return platform_svc.to_out(
+        platform_svc.get_or_create(db),
+        mask_webhook_token=mask_webhook,
+    )
 
 
 @router.patch("/platform", response_model=PlatformSettingsOut)
