@@ -2,42 +2,42 @@
   "account": {
     "email": "Email",
     "emailPlaceholder": "name@example.com",
-    "emailTooltip": "Used for login codes and password recovery",
-    "fullName": "Display name",
-    "fullNamePlaceholder": "Your name",
+    "emailTooltip": "Used for Login Codes and Password Recovery",
+    "fullName": "Display Name",
+    "fullNamePlaceholder": "Your Name",
     "language": "Language",
     "languageEn": "English",
     "languageZh": "简体中文",
-    "preferences": "Language & timezone",
-    "preferencesSaved": "Preferences saved",
+    "preferences": "Language & Timezone",
+    "preferencesSaved": "Preferences Saved",
     "profile": "Profile",
-    "profileSaved": "Profile updated",
+    "profileSaved": "Profile Updated",
     "role": "Role",
-    "saveFailed": "Save failed",
-    "saveProfile": "Save profile",
+    "saveFailed": "Save Failed",
+    "saveProfile": "Save Profile",
     "timezone": "Timezone",
-    "timezoneHint": "Charts, alarms and audit timestamps use this timezone",
-    "title": "Account settings",
+    "timezoneHint": "Charts, Alarms and Audit Timestamps Use This Timezone",
+    "title": "Account Settings",
     "username": "Username"
   },
   "action": {
-    "accountSettings": "Account settings",
-    "ack": "Acknowledge alarm",
+    "accountSettings": "Account Settings",
+    "ack": "Acknowledge Alarm",
     "cancel": "Cancel",
-    "changePassword": "Change password",
+    "changePassword": "Change Password",
     "confirm": "Confirm",
     "create": "Create",
-    "createCircuit": "Provision circuit",
+    "createCircuit": "Provision Circuit",
     "delete": "Delete",
     "edit": "Edit",
     "export": "Export",
     "import": "Import",
-    "learnNow": "Learn now",
+    "learnNow": "Learn Now",
     "login": "Sign in",
-    "logout": "Sign out",
+    "logout": "Sign Out",
     "refresh": "Refresh",
     "save": "Save",
-    "viewAll": "Global view"
+    "viewAll": "Global View"
   },
   "auto": {
     "0020bc46": "RIB Version",
@@ -140,7 +140,7 @@
     "177c1f59": "SNMP is unreachable, ${data.length} physical ports have been resolved from running-config (${svidCount} are occupied by S-VID)",
     "1831706c": "Inactive · Simulation",
     "185c0503": "Select Tenant",
-    "188ffdf1": "ICloud Email",
+    "188ffdf1": "iCloud Email",
     "18b893d0": "Jitter (ms)",
     "191a20f3": "Utilization Alarm Threshold ( % )",
     "19582ddb": "Live Network VNI/VSI Occupancy Scan",
@@ -785,7 +785,7 @@
     "b7a51032": "6 Characters Verification Code",
     "b8015180": "Production data collection mode: indicators come from SNMP and southbound dial testing",
     "b878eab1": "Online Dedicated Line",
-    "b886c18e": "Only Up",
+    "b886c18e": "Only up",
     "b8a59061": "VXLAN dedicated lines cannot specify the passing device, and traffic is automatically forwarded based on the OSPF/IGP shortest path.",
     "b8c28925": "The AWS SES console creates SMTP credentials; the sender needs to be authenticated with SES.",
     "b95caaa0": "<b> ${p.name} </b> <br/> peak utilization <b> ${p.value} % </b>",
@@ -909,7 +909,7 @@
     "cfb75a72": "Platform default: ${platformDefault} ms",
     "d042427d": "Verify & Sign In",
     "d06999ca": "S-VID is not resolved, please confirm that the device running-config contains service-instance / dot1q configuration",
-    "d0a356d0": "SNMP collected ${data.collected} items${data.skipped ? `, ${data.skipped} skipped` : ''}",
+    "d0a356d0": "SNMP collected ${data.collected} items${data.skipped? `, ${data.skipped} skipped`: ''}",
     "d0c06a0d": "Enter Verification Code",
     "d0fe707a": "SNMPv3 Username",
     "d12c3e1a": "<b> ${p.name} </b> <br/> ${p.value} units",
@@ -1082,7 +1082,7 @@
     "f515fce4": "Tunnel",
     "f55f1736": "Device",
     "f59efcb7": "Dependency/Resource Usage Confirmation",
-    "f5c78954": "A-side",
+    "f5c78954": "A-Side",
     "f6c10202": "Detection",
     "f6ffeada": "Please select at least two endpoint devices first",
     "f71517b1": "Create A New Fabric Site",
@@ -1151,15 +1151,15 @@
     "optional": "Optional"
   },
   "empty": {
-    "alarms": "Network healthy · No active alarms",
-    "circuits": "No circuits · Create your first circuit",
-    "data": "Data will appear here once loaded",
-    "default": "No records",
-    "devices": "No devices · Import or onboard to start",
-    "noLearn": "No learned config · Pull running config",
-    "selectDevice": "← Select a device on the left",
-    "snapshots": "No config snapshots · Backup or learn from network",
-    "traffic": "Collecting traffic data · Telemetry pending"
+    "alarms": "Network Healthy · No active Alarms",
+    "circuits": "No Circuits · Create Your First Circuit",
+    "data": "Data Will Appear Here Once Loaded",
+    "default": "No Records",
+    "devices": "No Devices · Import or Onboard to Start",
+    "noLearn": "No Learned Config · Pull Running Config",
+    "selectDevice": "← Select a Device on the Left",
+    "snapshots": "No Config Snapshots · Backup or Learn from Network",
+    "traffic": "Collecting Traffic Data · Telemetry Pending"
   },
   "form": {
     "deviceRole": {
@@ -1192,14 +1192,14 @@
     }
   },
   "monitor": {
-    "last1h": "Last 1 hour",
-    "last24h": "Last 24 hours",
-    "last30d": "Last 30 days",
-    "last6h": "Last 6 hours",
-    "last7d": "Last 7 days",
+    "last1h": "Last 1 Hour",
+    "last24h": "Last 24 Hours",
+    "last30d": "Last 30 Days",
+    "last6h": "Last 6 Hours",
+    "last7d": "Last 7 Days",
     "lastNh": "Last {{hours}}h",
-    "trafficChart": "Traffic · Rx / Tx ({{window}}, {{points}} points)",
-    "latencyChart": "Latency · Jitter · Packet loss ({{window}})",
+    "trafficChart": "Traffic · Rx / Tx ({{window}}, {{points}} Points)",
+    "latencyChart": "Latency · Jitter · Packet Loss ({{window}})",
     "interruptionAlert": "{{window}}: {{count}} interruption(s), {{minutes}} min total downtime",
     "flashAlert": "{{window}}: {{count}} flash event(s)",
     "flapWarning": "{{count}} flaps within 15 minutes — check link stability"
@@ -1231,7 +1231,7 @@
     }
   },
   "network": {
-    "fullName": "Full name: {{name}}",
+    "fullName": "Full Name: {{name}}",
     "gigabit": "Gigabit"
   },
   "page": {
@@ -1256,18 +1256,18 @@
     "workOrders": "Work Orders"
   },
   "portal": {
-    "circuitService": "Circuit self-service",
+    "circuitService": "Circuit Self-Service",
     "loading": "Loading…",
     "menu": {
-      "account": "Account & security",
-      "circuits": "My circuits",
+      "account": "Account & Security",
+      "circuits": "My Circuits",
       "dashboard": "Overview",
       "traffic": "Traffic"
     },
-    "portalLabel": "Customer portal",
-    "roleTenantAdmin": "Tenant admin",
-    "roleTenantViewer": "Tenant viewer",
-    "selfService": "Customer self-service portal"
+    "portalLabel": "Customer Portal",
+    "roleTenantAdmin": "Tenant Admin",
+    "roleTenantViewer": "Tenant Viewer",
+    "selfService": "Customer Self-Service Portal"
   },
   "settings": {
     "intro": "Manage branding, runtime, alarms, SNMP/email, integrations and users. Changes apply immediately.",
@@ -1308,9 +1308,9 @@
   },
   "status": {
     "accessMode": {
-      "access": "Untagged access",
-      "dot1q": "Single tag Dot1Q",
-      "qinq": "Double tag QinQ"
+      "access": "Untagged Access",
+      "dot1q": "Single Tag Dot1Q",
+      "qinq": "Double Tag QinQ"
     },
     "alarm": {
       "acknowledged": "Acknowledged",
@@ -1318,15 +1318,15 @@
       "cleared": "Cleared"
     },
     "alarmKind": {
-      "circuit_flap": "Frequent flaps",
-      "circuit_interruption": "Service interruption",
-      "health": "Health degraded",
-      "link_utilization": "Backbone congestion",
-      "sla_latency": "Latency exceeded",
-      "sla_loss": "Packet loss exceeded",
+      "circuit_flap": "Frequent Flaps",
+      "circuit_interruption": "Service Interruption",
+      "health": "Health Degraded",
+      "link_utilization": "Backbone Congestion",
+      "sla_latency": "Latency Exceeded",
+      "sla_loss": "Packet Loss Exceeded",
       "test": "Test",
-      "tunnel_down": "Tunnel fault",
-      "utilization": "Bandwidth congestion"
+      "tunnel_down": "Tunnel Fault",
+      "utilization": "Bandwidth Congestion"
     },
     "alarmSeverity": {
       "critical": "Critical P1",
@@ -1352,9 +1352,9 @@
       "unknown": "Unknown"
     },
     "discoveredVia": {
-      "running-config": "Running config",
+      "running-config": "Running Config",
       "snmp": "SNMP",
-      "snmp-sim": "SNMP simulated"
+      "snmp-sim": "SNMP Simulated"
     },
     "port": {
       "down": "Down",
@@ -1362,7 +1362,7 @@
       "up": "up"
     },
     "serviceType": {
-      "dci": "DCI interconnect",
+      "dci": "DCI Interconnect",
       "evpn_vpws": "EVPN VPWS",
       "l2vpn_evpn": "L2 EVPN",
       "l3vpn_evpn": "L3 EVPN",
@@ -1374,10 +1374,10 @@
       "terminated": "Terminated"
     },
     "tenantType": {
-      "enterprise": "Enterprise dedicated line",
-      "hybrid_cloud": "Hybrid cloud access",
-      "internal": "Internal business",
-      "public_cloud": "Public cloud access"
+      "enterprise": "Enterprise Dedicated Line",
+      "hybrid_cloud": "Hybrid Cloud Access",
+      "internal": "Internal Business",
+      "public_cloud": "Public Cloud Access"
     },
     "workOrderType": {
       "decommission": "Decommission",
@@ -1386,8 +1386,8 @@
       "provision": "Provision"
     },
     "overlaySource": {
-      "network_only": "Live network occupied",
-      "platform": "Platform managed"
+      "network_only": "Live Network Occupied",
+      "platform": "Platform Managed"
     },
     "workOrder": {
       "approved": "Approved",
@@ -1402,8 +1402,8 @@
     }
   },
   "table": {
-    "noData": "No data",
-    "pageSize": "{{n}} / page",
+    "noData": "No Data",
+    "pageSize": "{{n}} / Page",
     "range": "{{start}}–{{end}} of {{total}}",
     "totalOnly": "{{total}} total",
     "totalSites": "{{total}} sites",
@@ -1414,9 +1414,9 @@
   "toast": {
     "created": "Created",
     "deleted": "Deleted",
-    "failed": "Operation failed, please retry",
-    "loginFail": "Invalid credentials",
-    "loginOk": "Welcome back",
+    "failed": "Operation Failed, Please Retry",
+    "loginFail": "Invalid Credentials",
+    "loginOk": "Welcome Back",
     "saved": "Saved"
   },
   "smtp": {
@@ -1523,7 +1523,7 @@
       },
       "icloud": {
         "name": "Apple iCloud",
-        "userHint": "iCloud mailbox",
+        "userHint": "iCloud Mailbox",
         "doc": "An application-specific password needs to be generated."
       },
       "yahoo": {
@@ -1592,7 +1592,7 @@
       },
       "mailchimp": {
         "name": "Mailchimp Transactional (Mandrill)",
-        "userHint": "any username",
+        "userHint": "Any Username",
         "doc": "The password is Mandrill API Key."
       },
       "custom": {
@@ -1653,7 +1653,7 @@
     "2a127359": "Legend:",
     "d3469e56": "Check your company's dedicated line operation status, contracted bandwidth and traffic 95 billing data here.",
     "6ea1fe6b": "Basic Information",
-    "c25db6b0": "Back Up Live Network Configuration",
+    "c25db6b0": "Back up Live Network Configuration",
     "8a89823e": "To regularly pull running-config, learn after importing, change snapshots, etc., please refer to",
     "d8215d8b": "Regular automatic pull depends on the background scheduler. Please go to",
     "de7cf715": "Customers use this account to log in",
@@ -1681,7 +1681,7 @@
     "026c8d08": "Distribution By Equipment Occupancy Top",
     "1c4e3300": "Access endpoint (A/Z independent configuration, VLAN and encapsulation can be different)",
     "3838bc29": "Control the automatic network learning of the configuration management page (running-config pulling and parsing), used in conjunction with \"Platform Operation → Background Scheduler\"",
-    "a4da7e8d": "Search link / equipment / supplier / site",
+    "a4da7e8d": "Search Link / Equipment / Supplier / Site",
     "82bd472e": "Create New Channel",
     "8d54ec01": "Create A New Site",
     "df7fafc9": "No SNMP data yet. Click SNMP Discovery on the right.",
@@ -1721,7 +1721,7 @@
     "57ffd6fa": "Trigger Evaluation",
     "54368a1c": "Device Delivery Job",
     "dfb3d95c": "For device config, see",
-    "e366ccf1": "Set Up",
+    "e366ccf1": "Set up",
     "70c03e52": "Adjust automatic pull, change protection and snapshot policies.",
     "bb9e2f51": "Carrier/Transport Provider for easy filtering of utilization by provider",
     "5b216612": "Return To My Line",
