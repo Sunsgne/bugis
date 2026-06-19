@@ -1123,6 +1123,17 @@
     "ff17b9f9": "企业微信",
     "ff775a06": "Overlay 尚未建立 · 开通控制器托管专线后自动呈现"
   },
+  "circuits": {
+    "allTenants": "全部客户 ({{count}})",
+    "paginatedSuffix": " · 已分页",
+    "platformStats": "平台 {{tenants}} 客户 · {{circuits}} 专线",
+    "summary": "当前 {{total}} 条专线{{suffix}}"
+  },
+  "devices": {
+    "inUse": "当前使用 {{label}} · {{ip}}",
+    "summary": "共 {{total}} 台 · {{online}} 在线 · {{offline}} 离线",
+    "unitSuffix": "台"
+  },
   "brand": {
     "header": "DCI / EVPN 全域网络运营中枢",
     "heroSubtitle": "多厂商异构 · VXLAN / SR-MPLS EVPN · 自研 SDN · 跨域 DCI",
@@ -1182,7 +1193,12 @@
     "last30d": "近 30 天",
     "last6h": "近 6 小时",
     "last7d": "近 7 天",
-    "lastNh": "近 {{hours}} 小时"
+    "lastNh": "近 {{hours}} 小时",
+    "trafficChart": "流量 · Rx / Tx（{{window}}，{{points}} 点）",
+    "latencyChart": "时延 · 抖动 · 丢包（{{window}}）",
+    "interruptionAlert": "{{window}} 发生 {{count}} 次中断，累计 {{minutes}} 分钟",
+    "flashAlert": "{{window}} 发生 {{count}} 次闪断",
+    "flapWarning": "15 分钟内闪断 {{count}} 次，请关注链路稳定性"
   },
   "nav": {
     "groups": {
@@ -1270,9 +1286,9 @@
   },
   "status": {
     "accessMode": {
-      "access": "无标签",
-      "dot1q": "单标签",
-      "qinq": "双标签"
+      "access": "无标签接入",
+      "dot1q": "单标签 Dot1Q",
+      "qinq": "双标签 QinQ"
     },
     "alarm": {
       "acknowledged": "已确认",
@@ -1335,6 +1351,22 @@
       "suspended": "已暂停",
       "terminated": "已终止"
     },
+    "tenantType": {
+      "enterprise": "企业专线",
+      "hybrid_cloud": "混合云接入",
+      "internal": "内部业务",
+      "public_cloud": "公有云接入"
+    },
+    "workOrderType": {
+      "decommission": "拆除",
+      "migrate": "迁移",
+      "modify": "变更",
+      "provision": "开通"
+    },
+    "overlaySource": {
+      "network_only": "现网占用",
+      "platform": "平台纳管"
+    },
     "workOrder": {
       "approved": "已审批",
       "cancelled": "已取消",
@@ -1349,8 +1381,13 @@
   },
   "table": {
     "noData": "暂无数据",
+    "pageSize": "{{n}} 条/页",
     "range": "第 {{start}}–{{end}} 条，共 {{total}} 条",
-    "totalOnly": "共 {{total}} 条"
+    "totalOnly": "共 {{total}} 条",
+    "totalSites": "共 {{total}} 个站点",
+    "totalWorkOrders": "共 {{total}} 张工单",
+    "filterCount": "筛选出 {{filtered}} / {{total}} 条",
+    "totalCount": "共 {{total}} 条"
   },
   "toast": {
     "created": "创建成功",
@@ -1684,7 +1721,21 @@
     "0eaac067": "默认 Community",
     "9b20caa0": "，仅可查看本租户专线、流量与 95 计费数据。",
     "c214f5fa": "，现网流量不受影响。建议开启「定时现网自学习」以持续同步线下变更。",
-    "42ac9be9": "采样"
+    "42ac9be9": "采样",
+    "8115e576": "SLA 告警阈值",
+    "281830ce": "下方「纳管外部控制器」用于对接",
+    "66241851": "为平台内嵌自研 EVPN 控制平面，启动时自动注册，",
+    "ca5e0887": "内置 · 推荐",
+    "046ce021": "华为 NCE-Fabric、华三 SeerEngine 等厂商 / 开源控制器。",
+    "9264f4d9": "在 Fabric 站点将下发模式设为「控制器托管」并选择内置实例；控制面状态与 EVPN RIB 请前往",
+    "1add12ff": "导出 CSV",
+    "ac341bea": "控制器",
+    "8a5a0d14": "控制器托管模式下，平台将业务意图经北向 RESTful 下发至外部控制器，由后者完成底层设备编排。",
+    "1b597722": "无需手动纳管",
+    "0ec9eaf9": "更多",
+    "f83619b3": "查看全部客户",
+    "9f10a2b2": "编辑设备",
+    "4ac578a0": "进入控制面"
   },
   "dashboard": {
     "ticksExecuted": "已执行 {{count}} 次",

@@ -4,23 +4,19 @@ import { EditOutlined } from "@ant-design/icons";
 import type { Circuit, CircuitEndpoint } from "../api/types";
 import InterfaceNameCell from "./InterfaceNameCell";
 import { useTc } from "@/i18n/useTc";
+import { useTranslation } from "react-i18next";
+import { accessModeLabel } from "../i18n/helpers";
 
-const ACCESS_LABEL: Record<string, string> = {
-  access: "无标签接入",
-  dot1q: "单标签 Dot1Q",
-  qinq: "双标签 QinQ",
-};
-
-function endpointVlanLabel(ep: CircuitEndpoint): string {
+function endpointVlanLabel(ep: CircuitEndpoint, tc: (s: string) => string): string {
   const mode = ep.access_mode || "dot1q";
-  if (mode === "access") return "无 (Access 模式)";
+  if (mode === "access") return tc("无 (Access 模式)");
   if (mode === "qinq") {
-    if (ep.vlan_id == null && ep.inner_vlan_id == null) return "自动分配";
-    const s = ep.vlan_id != null ? `S:${ep.vlan_id}` : "S:自动";
-    const c = ep.inner_vlan_id != null ? `C:${ep.inner_vlan_id}` : ep.inner_vlan_id === undefined ? "" : "C:自动";
+    if (ep.vlan_id == null && ep.inner_vlan_id == null) return tc("自动分配");
+    const s = ep.vlan_id != null ? `S:${ep.vlan_id}` : tc("S:自动");
+    const c = ep.inner_vlan_id != null ? `C:${ep.inner_vlan_id}` : ep.inner_vlan_id === undefined ? "" : tc("C:自动");
     return c ? `${s} / ${c}` : s;
   }
-  return ep.vlan_id != null ? `S-VID ${ep.vlan_id}` : "自动分配";
+  return ep.vlan_id != null ? `S-VID ${ep.vlan_id}` : tc("自动分配");
 }
 
 function endpointTagColor(label: string): string {
@@ -58,6 +54,7 @@ export default function CircuitExpandDetail({
   onEditEndpoints,
 }: Props) {
   const { tc } = useTc();
+  const { t } = useTranslation();
   const endpoints = [...(detail.endpoints || [])].sort((a, b) => {
     if (a.label === "A") return -1;
     if (b.label === "A") return 1;
@@ -68,14 +65,14 @@ export default function CircuitExpandDetail({
     <div className="circuit-expand-detail" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div>
         <Typography.Text type="secondary" style={{ display: "block", marginBottom: 10, fontSize: 12 }}>
-          SLA 告警阈值
+          {tc("SLA 告警阈值")}
           {detail.alarm_thresholds_customized ? (
             <Typography.Text type="warning" style={{ marginLeft: 8 }}>{tc('已自定义')}</Typography.Text>
           ) : (
             <Typography.Text style={{ marginLeft: 8 }}>{tc('继承平台默认')}</Typography.Text>
           )}
           <Typography.Text style={{ marginLeft: 8 }}>
-            · 延迟探测 {detail.latency_probe_enabled !== false ? "开启" : "关闭"}
+            · {tc("延迟探测")} {detail.latency_probe_enabled !== false ? tc("开启") : tc("关闭")}
           </Typography.Text>
         </Typography.Text>
         <Descriptions size="small" column={{ xs: 1, sm: 2, lg: 4 }} bordered>
@@ -121,7 +118,7 @@ export default function CircuitExpandDetail({
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>{tc('接入端点（A / Z 独立配置，VLAN 与封装可不同）')}</Typography.Text>
           {canEditEndpoints && (
             <Button size="small" type="link" icon={<EditOutlined />} onClick={onEditEndpoints}>
-              {detail.adopted ? "添加端点（不下发）" : "修改端点并重新下发"}
+              {detail.adopted ? tc("添加端点（不下发）") : tc("修改端点并重新下发")}
             </Button>
           )}
         </div>
@@ -133,7 +130,7 @@ export default function CircuitExpandDetail({
                 className="endpoint-card"
                 title={
                   <Tag color={endpointTagColor(ep.label)} style={{ margin: 0 }}>
-                    端点 {ep.label}
+                    {tc("端点")} {ep.label}
                   </Tag>
                 }
               >
@@ -143,9 +140,9 @@ export default function CircuitExpandDetail({
                     {ep.interface_name ? <InterfaceNameCell name={ep.interface_name} /> : "—"}
                   </EndpointField>
                   <EndpointField label={tc('封装模式')}>
-                    {ACCESS_LABEL[ep.access_mode || "dot1q"] || ep.access_mode || "—"}
+                    {accessModeLabel(t, ep.access_mode || "dot1q")}
                   </EndpointField>
-                  <EndpointField label="VLAN">{endpointVlanLabel(ep)}</EndpointField>
+                  <EndpointField label="VLAN">{endpointVlanLabel(ep, tc)}</EndpointField>
                   {ep.gateway_ip ? <EndpointField label={tc('网关')}>{ep.gateway_ip}</EndpointField> : null}
                   {ep.ip_address ? <EndpointField label={tc('接口 IP')}>{ep.ip_address}</EndpointField> : null}
                 </EndpointFields>
@@ -162,7 +159,7 @@ export default function CircuitExpandDetail({
             <Descriptions.Item label={tc('出口国家')}>{detail.egress_country || "—"}</Descriptions.Item>
             <Descriptions.Item label={tc('出口站点')}>{siteName(detail.egress_site_id)}</Descriptions.Item>
             <Descriptions.Item label={tc('公网 IP')}>{detail.ipt_public_ip || "—"}</Descriptions.Item>
-            <Descriptions.Item label="NAT">{detail.ipt_nat_enabled ? "启用" : "关闭"}</Descriptions.Item>
+            <Descriptions.Item label="NAT">{detail.ipt_nat_enabled ? tc("启用") : tc("关闭")}</Descriptions.Item>
           </Descriptions>
         </div>
       )}

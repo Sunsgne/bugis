@@ -27,6 +27,7 @@ import { api } from "../api/client";
 import OverlayTopologyPanel from "../components/OverlayTopologyPanel";
 import { empty, page } from "../constants/uiCopy";
 import { useTc } from "@/i18n/useTc";
+import { OVERLAY_SOURCE } from "../constants/statusLabels";
 import { dataTableProps, TABLE_SCROLL } from "../utils/table";
 
 const { Text } = Typography;
@@ -295,7 +296,7 @@ export default function ControlPlane() {
             <Statistic
               title={tc('现网保留 VNI')}
               value={overlay?.reserved_vni_count ?? 0}
-              suffix={overlay?.smart_allocation_enabled ? "智能避让" : ""}
+              suffix={overlay?.smart_allocation_enabled ? tc("智能避让") : ""}
               prefix={<CloudServerOutlined />}
             />
           </Card>
@@ -322,8 +323,8 @@ export default function ControlPlane() {
               scroll={{ x: "max-content" }}
               locale={{ emptyText: <Empty description={tc('暂无现网 Overlay 数据 · 请对设备执行现网学习后扫描')} /> }}
               columns={[
-                { title: "设备", dataIndex: "device", ellipsis: true },
-                { title: "VSI / 服务", dataIndex: "service_name", ellipsis: true },
+                { title: tc("设备"), dataIndex: "device", ellipsis: true },
+                { title: tc("VSI / 服务"), dataIndex: "service_name", ellipsis: true },
                 { title: "VNI", dataIndex: "vni", width: 90 },
                 { title: "RD", dataIndex: "rd", ellipsis: true },
                 {
@@ -332,7 +333,7 @@ export default function ControlPlane() {
                   width: 110,
                   render: (s: string) => (
                     <Tag color={s === "platform" ? "blue" : "orange"}>
-                      {s === "platform" ? "平台纳管" : "现网占用"}
+                      {OVERLAY_SOURCE[s] || s}
                     </Tag>
                   ),
                 },
@@ -364,8 +365,8 @@ export default function ControlPlane() {
           size="small"
           locale={{ emptyText: <Empty description={empty.data} /> }}
           columns={[
-            { title: "节点", dataIndex: "node_id" },
-            { title: "主机", dataIndex: "hostname" },
+            { title: tc("节点"), dataIndex: "node_id" },
+            { title: tc("主机"), dataIndex: "hostname" },
             {
               title: tc('角色'),
               dataIndex: "role",
@@ -381,7 +382,7 @@ export default function ControlPlane() {
               dataIndex: "is_local",
               render: (v) => (v ? <Tag color="green">{tc('是')}</Tag> : "-"),
             },
-            { title: "最近心跳", dataIndex: "last_heartbeat" },
+            { title: tc("最近心跳"), dataIndex: "last_heartbeat" },
           ]}
         />
       </Card>
@@ -395,16 +396,16 @@ export default function ControlPlane() {
           size="small"
           locale={{ emptyText: <Empty description={tc('托管专线开通后自动建立 BGP 对等')} /> }}
           columns={[
-            { title: "设备", dataIndex: "device_name" },
-            { title: "对端 IP", dataIndex: "peer_ip" },
-            { title: "本地 ASN", dataIndex: "local_asn" },
-            { title: "对端 ASN", dataIndex: "remote_asn" },
+            { title: tc("设备"), dataIndex: "device_name" },
+            { title: tc("对端 IP"), dataIndex: "peer_ip" },
+            { title: tc("本地 ASN"), dataIndex: "local_asn" },
+            { title: tc("对端 ASN"), dataIndex: "remote_asn" },
             {
               title: tc('状态'),
               dataIndex: "state",
               render: (s) => <Tag color={BGP_COLOR[s] || "default"}>{s}</Tag>,
             },
-            { title: "收路由", dataIndex: "routes_received" },
+            { title: tc("收路由"), dataIndex: "routes_received" },
             { title: "发路由", dataIndex: "routes_sent" },
           ]}
         />

@@ -55,6 +55,8 @@ import ListToolbar from "../components/ListToolbar";
 import DeviceFormDialog, { type DeviceFormValues } from "@/components/DeviceFormDialog";
 import DevicePortDrawer from "@/components/DevicePortDrawer";
 import { useTc } from "@/i18n/useTc";
+import { useTranslation } from "react-i18next";
+import { deviceStatusLabel } from "../i18n/helpers";
 
 const VENDOR_SHORT: Record<string, string> = {
   h3c: "H3C",
@@ -70,13 +72,6 @@ const DEVICE_STATUS_COLOR: Record<string, string> = {
   offline: "red",
   maintenance: "orange",
   unknown: "default",
-};
-
-const DEVICE_STATUS_LABEL: Record<string, string> = {
-  online: "在线",
-  offline: "离线",
-  maintenance: "维护",
-  unknown: "未知",
 };
 
 const FALLBACK_SNMP: SnmpDefaults = {
@@ -124,6 +119,7 @@ function buildDevicePayload(
 
 export default function Devices() {
   const { tc } = useTc();
+  const { t } = useTranslation();
   const { message, modal } = AntApp.useApp();
   const [rows, setRows] = useState<Device[]>([]);
   const [total, setTotal] = useState(0);
@@ -449,7 +445,11 @@ export default function Devices() {
       }
     >
       <ListToolbar
-        summary={`共 ${total.toLocaleString()} 台 · ${stats.online} 在线 · ${stats.offline} 离线`}
+        summary={t("devices.summary", {
+          total: total.toLocaleString(),
+          online: stats.online,
+          offline: stats.offline,
+        })}
         left={
           <Input.Search
             allowClear
@@ -472,12 +472,12 @@ export default function Devices() {
       <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
         <Col xs={24} sm={8}>
           <Card size="small" styles={{ body: { padding: "12px 16px" } }}>
-            <Statistic title={tc('设备总数')} value={total} suffix="台" />
+            <Statistic title={tc('设备总数')} value={total} suffix={t("devices.unitSuffix")} />
           </Card>
         </Col>
         <Col xs={12} sm={8}>
           <Card size="small" styles={{ body: { padding: "12px 16px" } }}>
-            <Statistic title={tc('在线')} value={stats.online} valueStyle={{ color: "#3f8600" }} suffix="台" />
+            <Statistic title={tc('在线')} value={stats.online} valueStyle={{ color: "#3f8600" }} suffix={t("devices.unitSuffix")} />
           </Card>
         </Col>
         <Col xs={12} sm={8}>
@@ -486,7 +486,7 @@ export default function Devices() {
               title={tc('离线')}
               value={stats.offline}
               valueStyle={{ color: stats.offline ? "#cf1322" : "#8c8c8c" }}
-              suffix="台"
+              suffix={t("devices.unitSuffix")}
             />
           </Card>
         </Col>
@@ -496,7 +496,7 @@ export default function Devices() {
         rowKey="id"
         loading={loading}
         dataSource={rows}
-        locale={{ emptyText: "暂无设备 · 从导入或纳管开始" }}
+        locale={{ emptyText: tc("暂无设备 · 从导入或纳管开始") }}
         {...dataTableProps(TABLE_SCROLL.lg)}
         pagination={tablePagination(total, page, pageSize, (p, ps) => {
           setPage(p);
@@ -548,8 +548,8 @@ export default function Devices() {
             width: "18%",
             ellipsis: true,
             render: (_ip: string, d: Device) => {
-              const primaryLabel = d.mgmt_ip_primary_label || "管理网";
-              const backupLabel = d.mgmt_ip_backup_label || "公网";
+              const primaryLabel = d.mgmt_ip_primary_label || tc("管理网");
+              const backupLabel = d.mgmt_ip_backup_label || tc("公网");
               const active = d.mgmt_ip_active;
               const activeRole = d.mgmt_ip_active_role;
               return (
@@ -572,7 +572,10 @@ export default function Devices() {
                   ) : null}
                   {active && activeRole ? (
                     <Typography.Text type="secondary" style={{ fontSize: 11, display: "block", marginTop: 2 }}>
-                      当前使用 {activeRole === "backup" ? backupLabel : primaryLabel} · {active}
+                      {t("devices.inUse", {
+                        label: activeRole === "backup" ? backupLabel : primaryLabel,
+                        ip: active,
+                      })}
                     </Typography.Text>
                   ) : null}
                 </div>
@@ -614,7 +617,7 @@ export default function Devices() {
             dataIndex: "status",
             width: "8%",
             render: (s: string) => (
-              <Tag color={DEVICE_STATUS_COLOR[s] || "default"}>{DEVICE_STATUS_LABEL[s] || s}</Tag>
+              <Tag color={DEVICE_STATUS_COLOR[s] || "default"}>{deviceStatusLabel(t, s)}</Tag>
             ),
           },
           {

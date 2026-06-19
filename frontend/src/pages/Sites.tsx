@@ -21,9 +21,11 @@ import { dataTableProps } from "../utils/table";
 import { formModalProps } from "../utils/formModal";
 import { action, page, toast } from "../constants/uiCopy";
 import { useTc } from "@/i18n/useTc";
+import { useTranslation } from "react-i18next";
 
 export default function Sites() {
   const { tc } = useTc();
+  const { t } = useTranslation();
   const { message } = AntApp.useApp();
   const [rows, setRows] = useState<Site[]>([]);
   const [controllers, setControllers] = useState<Controller[]>([]);
@@ -83,17 +85,17 @@ export default function Sites() {
         loading={loading}
         dataSource={rows}
         {...dataTableProps()}
-        locale={{ emptyText: "暂无站点 · 点击右上角新建" }}
+        locale={{ emptyText: tc("暂无站点 · 点击右上角新建") }}
         pagination={{
           pageSize: 12,
           hideOnSinglePage: true,
           showSizeChanger: false,
-          showTotal: (t) => `共 ${t} 个站点`,
+          showTotal: (n) => t("table.totalSites", { total: n }),
         }}
         columns={[
-          { title: "编码", dataIndex: "code", width: "10%", ellipsis: true },
-          { title: "名称", dataIndex: "name", width: "14%", ellipsis: true },
-          { title: "区域", dataIndex: "region", width: "10%", render: (v) => v || "—" },
+          { title: tc("编码"), dataIndex: "code", width: "10%", ellipsis: true },
+          { title: tc("名称"), dataIndex: "name", width: "14%", ellipsis: true },
+          { title: tc("区域"), dataIndex: "region", width: "10%", render: (v) => v || "—" },
           {
             title: "BGP ASN",
             dataIndex: "bgp_asn",
@@ -114,7 +116,7 @@ export default function Sites() {
             ellipsis: true,
             render: (m, r) =>
               m === "controller" ? (
-                <Tag color="purple">控制器: {controllerName(r.controller_id) || "?"}</Tag>
+                <Tag color="purple">{tc("控制器")}: {controllerName(r.controller_id) || "?"}</Tag>
               ) : (
                 <Tag color="green">{tc('直连下发')}</Tag>
               ),
@@ -160,8 +162,8 @@ export default function Sites() {
           <Form.Item name="delivery_mode" label={tc('下发模式')} initialValue="direct">
             <Select
               options={[
-                { value: "direct", label: "直连下发 (NETCONF/CLI)" },
-                { value: "controller", label: "控制器北向下发" },
+                { value: "direct", label: tc("直连下发 (NETCONF/CLI)") },
+                { value: "controller", label: tc("控制器北向下发") },
               ]}
             />
           </Form.Item>
@@ -172,7 +174,7 @@ export default function Sites() {
                   value: c.id,
                   label:
                     c.type === "bugis"
-                      ? `${c.name} (内置 · 推荐)`
+                      ? `${c.name} (${tc("内置 · 推荐")})`
                       : c.name,
                 }))}
               />

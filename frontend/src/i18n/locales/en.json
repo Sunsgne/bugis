@@ -1123,6 +1123,17 @@
     "ff17b9f9": "Enterprise WeChat",
     "ff775a06": "Overlay has not been established yet. It will appear automatically after opening the controller hosting dedicated line."
   },
+  "circuits": {
+    "allTenants": "All customers ({{count}})",
+    "paginatedSuffix": " · paginated",
+    "platformStats": "Platform {{tenants}} customers · {{circuits}} circuits",
+    "summary": "Currently {{total}} circuits{{suffix}}"
+  },
+  "devices": {
+    "inUse": "In use {{label}} · {{ip}}",
+    "summary": "{{total}} devices · {{online}} up · {{offline}} down",
+    "unitSuffix": ""
+  },
   "brand": {
     "header": "DCI / EVPN Network Operations Hub",
     "heroSubtitle": "Multi-vendor · VXLAN / SR-MPLS EVPN · SDN · Cross-domain DCI",
@@ -1182,7 +1193,12 @@
     "last30d": "Last 30 days",
     "last6h": "Last 6 hours",
     "last7d": "Last 7 days",
-    "lastNh": "Last {{hours}}h"
+    "lastNh": "Last {{hours}}h",
+    "trafficChart": "Traffic · Rx / Tx ({{window}}, {{points}} points)",
+    "latencyChart": "Latency · Jitter · Loss ({{window}})",
+    "interruptionAlert": "{{window}}: {{count}} interruption(s), {{minutes}} min total downtime",
+    "flashAlert": "{{window}}: {{count}} flash event(s)",
+    "flapWarning": "{{count}} flaps within 15 minutes — check link stability"
   },
   "nav": {
     "groups": {
@@ -1270,9 +1286,9 @@
   },
   "status": {
     "accessMode": {
-      "access": "Untagged",
-      "dot1q": "Single tag",
-      "qinq": "Double tag"
+      "access": "Untagged access",
+      "dot1q": "Single tag Dot1Q",
+      "qinq": "Double tag QinQ"
     },
     "alarm": {
       "acknowledged": "Acknowledged",
@@ -1335,6 +1351,22 @@
       "suspended": "Suspended",
       "terminated": "Terminated"
     },
+    "tenantType": {
+      "enterprise": "Enterprise dedicated line",
+      "hybrid_cloud": "Hybrid cloud access",
+      "internal": "Internal business",
+      "public_cloud": "Public cloud access"
+    },
+    "workOrderType": {
+      "decommission": "Decommission",
+      "migrate": "Migrate",
+      "modify": "Modify",
+      "provision": "Provision"
+    },
+    "overlaySource": {
+      "network_only": "Live network occupied",
+      "platform": "Platform managed"
+    },
     "workOrder": {
       "approved": "Approved",
       "cancelled": "Cancelled",
@@ -1349,8 +1381,13 @@
   },
   "table": {
     "noData": "No data",
+    "pageSize": "{{n}} / page",
     "range": "{{start}}–{{end}} of {{total}}",
-    "totalOnly": "{{total}} total"
+    "totalOnly": "{{total}} total",
+    "totalSites": "{{total}} sites",
+    "totalWorkOrders": "{{total}} work orders",
+    "filterCount": "{{filtered}} / {{total}} shown",
+    "totalCount": "{{total}} items"
   },
   "toast": {
     "created": "Created",
@@ -1684,7 +1721,21 @@
     "0eaac067": "Default Community",
     "9b20caa0": ", only the dedicated line, traffic and 95 billing data of this tenant can be viewed.",
     "c214f5fa": ", the existing network traffic will not be affected. It is recommended to enable \"scheduled live network self-learning\" to continuously synchronize offline changes.",
-    "42ac9be9": "sampling"
+    "42ac9be9": "sampling",
+    "8115e576": "SLA alarm threshold",
+    "281830ce": "The \"Managed External Controller\" below is used for docking",
+    "66241851": "Embed the self-developed EVPN control plane into the platform and automatically register it at startup.",
+    "ca5e0887": "Built-in · Recommended",
+    "046ce021": "Huawei NCE-Fabric, H3C SeerEngine and other manufacturers/open source controllers.",
+    "9264f4d9": "Set the delivery mode to \"Controller Hosting\" on the Fabric site and select the built-in instance; please go to the control plane status and EVPN RIB",
+    "1add12ff": "Export CSV",
+    "ac341bea": "controller",
+    "8a5a0d14": "In the controller hosting mode, the platform delivers the business intent to the external controller via northbound RESTful, and the latter completes the underlying device orchestration.",
+    "1b597722": "No need to manually manage",
+    "0ec9eaf9": "More",
+    "f83619b3": "View all customers",
+    "9f10a2b2": "Edit device",
+    "4ac578a0": "Enter the control plane"
   },
   "dashboard": {
     "ticksExecuted": "Executed {{count}} times",

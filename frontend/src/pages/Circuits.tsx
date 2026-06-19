@@ -59,6 +59,9 @@ import CircuitMonitorPanel from "../components/CircuitMonitorPanel";
 import CircuitEndpointsEditor from "../components/CircuitEndpointsEditor";
 import ProvisionFeedbackModal from "../components/ProvisionFeedbackModal";
 import ProvisionProgressDock from "../components/ProvisionProgressDock";
+import { CIRCUIT_STATUS, SERVICE_TYPE, statusMeta } from "../constants/statusLabels";
+import { useTc } from "@/i18n/useTc";
+import { useTranslation } from "react-i18next";
 
 const SERVICE_LABEL: Record<string, string> = {
   l2vpn_evpn: "EVPN L2VPN",
@@ -89,16 +92,6 @@ const STATUS_COLOR: Record<string, string> = {
   decommissioned: "default",
   failed: "red",
 };
-const STATUS_LABEL: Record<string, string> = {
-  draft: "草稿",
-  pending: "待开通",
-  provisioning: "开通中",
-  active: "运行中",
-  degraded: "降级",
-  suspended: "暂停",
-  decommissioned: "已拆除",
-  failed: "失败",
-};
 
 interface TenantSummary {
   tenant_id: number;
@@ -123,6 +116,8 @@ interface TenantOverview {
 const DELETABLE = new Set(["decommissioned", "draft", "failed"]);
 
 export default function Circuits() {
+  const { tc } = useTc();
+  const { t } = useTranslation();
   const { message, modal } = AntApp.useApp();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -324,7 +319,7 @@ export default function Circuits() {
 
   const stats = selectedTenantId && activeSummary
     ? {
-        title: tenantSearch.options.find((o) => o.value === selectedTenantId)?.label || "当前客户",
+        title: tenantSearch.options.find((o) => o.value === selectedTenantId)?.label || tc("当前客户"),
         active: activeSummary.circuits_active,
         total: activeSummary.circuits_total,
         bandwidth: activeSummary.active_bandwidth_mbps,
@@ -333,7 +328,7 @@ export default function Circuits() {
       }
     : overview
       ? {
-          title: `全部客户 (${overview.tenants_total.toLocaleString()})`,
+          title: t("circuits.allTenants", { count: overview.tenants_total.toLocaleString() }),
           active: overview.circuits_active,
           total: overview.circuits_total,
           bandwidth: overview.active_bandwidth_mbps,
@@ -823,7 +818,7 @@ export default function Circuits() {
 
   return (
     <PageCard
-      title="客户服务 · 专线"
+      title={tc("客户服务 · 专线")}
       extra={
         <Space>
           <Button
@@ -846,16 +841,19 @@ export default function Circuits() {
               }
             }}
           >
-            导出 CSV
+            {tc("导出 CSV")}
           </Button>
           <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>
-            新建专线
+            {tc("新建专线")}
           </Button>
         </Space>
       }
     >
       <ListToolbar
-        summary={`当前 ${total.toLocaleString()} 条专线${total > pageSize ? " · 已分页" : ""}`}
+        summary={t("circuits.summary", {
+          total: total.toLocaleString(),
+          suffix: total > pageSize ? t("circuits.paginatedSuffix") : "",
+        })}
         left={
           <>
             <TenantSearchSelect
@@ -867,11 +865,11 @@ export default function Circuits() {
               tenantTotal={tenantSearch.total}
             />
             {selectedTenantId && (
-              <Button onClick={() => setTenantFilter(null)}>查看全部客户</Button>
+              <Button onClick={() => setTenantFilter(null)}>{tc("查看全部客户")}</Button>
             )}
             <Input.Search
               allowClear
-              placeholder="搜索专线编码或名称"
+              placeholder={tc("搜索专线编码或名称")}
               style={{ width: 260 }}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -886,7 +884,10 @@ export default function Circuits() {
         right={
           overview ? (
             <Typography.Text type="secondary">
-              平台 {overview.tenants_total.toLocaleString()} 客户 · {overview.circuits_total.toLocaleString()} 专线
+              {t("circuits.platformStats", {
+                tenants: overview.tenants_total.toLocaleString(),
+                circuits: overview.circuits_total.toLocaleString(),
+              })}
             </Typography.Text>
           ) : undefined
         }
@@ -899,23 +900,23 @@ export default function Circuits() {
           </Col>
           <Col xs={12} md={6}>
             <Card size="small">
-              <Statistic title="活跃专线" value={stats.active} suffix={`/ ${stats.total}`} />
+              <Statistic title={tc("活跃专线")} value={stats.active} suffix={`/ ${stats.total}`} />
             </Card>
           </Col>
           <Col xs={12} md={6}>
             <Card size="small">
-              <Statistic title="活跃带宽" value={stats.bandwidth} suffix="Mbps" />
+              <Statistic title={tc("活跃带宽")} value={stats.bandwidth} suffix="Mbps" />
             </Card>
           </Col>
           <Col xs={12} md={6}>
             <Card size="small">
-              <Statistic title="已拆除" value={stats.decommissioned} valueStyle={{ color: "#8c8c8c" }} />
+              <Statistic title={tc("已拆除")} value={stats.decommissioned} valueStyle={{ color: "#8c8c8c" }} />
             </Card>
           </Col>
           {stats.serviceTypes != null && (
             <Col xs={12} md={6}>
               <Card size="small">
-                <Statistic title="业务类型" value={stats.serviceTypes} suffix="种" />
+                <Statistic title={tc("业务类型")} value={stats.serviceTypes} suffix={tc("种")} />
               </Card>
             </Col>
           )}
@@ -946,7 +947,7 @@ export default function Circuits() {
                 items={[
                   {
                     key: "detail",
-                    label: "参数详情",
+                    label: tc("参数详情"),
                     children: (
                       <CircuitExpandDetail
                         detail={detail}
@@ -959,7 +960,7 @@ export default function Circuits() {
                   },
                   {
                     key: "monitor",
-                    label: "流量监控",
+                    label: tc("流量监控"),
                     children: (
                       r.status === "active" ? (
                         <CircuitMonitorPanel
@@ -969,7 +970,7 @@ export default function Circuits() {
                           latencyProbeEnabled={detail.latency_probe_enabled !== false}
                         />
                       ) : (
-                        <Alert type="info" showIcon message="专线激活后可查看 SNMP 流量、95 值、时延与中断记录" />
+                        <Alert type="info" showIcon message={tc("专线激活后可查看 SNMP 流量、95 值、时延与中断记录")} />
                       )
                     ),
                   },
@@ -979,18 +980,18 @@ export default function Circuits() {
           },
         }}
         columns={[
-          { title: "编码", dataIndex: "code", width: 120, ellipsis: true },
-          { title: "名称", dataIndex: "name", width: 160, ellipsis: true },
+          { title: tc("编码"), dataIndex: "code", width: 120, ellipsis: true },
+          { title: tc("名称"), dataIndex: "name", width: 160, ellipsis: true },
           ...(!selectedTenantId
-            ? [{ title: "客户", width: 100, ellipsis: true, render: (_: unknown, r: Circuit) => tenantName(r.tenant_id) }]
+            ? [{ title: tc("客户"), width: 100, ellipsis: true, render: (_: unknown, r: Circuit) => tenantName(r.tenant_id) }]
             : []),
           {
-            title: "业务类型",
+            title: tc("业务类型"),
             dataIndex: "service_type",
             width: 120,
             render: (s: string) => (
               <Tag color={s === "remote_ipt" ? "purple" : "geekblue"}>
-                {SERVICE_LABEL[s] || s}
+                {SERVICE_LABEL[s] || SERVICE_TYPE[s] || s}
               </Tag>
             ),
           },
@@ -1003,7 +1004,7 @@ export default function Circuits() {
             render: (v) => v || "—",
           },
           {
-            title: "带宽",
+            title: tc("带宽"),
             dataIndex: "bandwidth_mbps",
             width: 100,
             render: (b) => `${b} Mbps`,
@@ -1015,15 +1016,16 @@ export default function Circuits() {
             render: (s) => (s ? <Tag>{s}%</Tag> : "—"),
           },
           {
-            title: "状态",
+            title: tc("状态"),
             dataIndex: "status",
             width: 88,
-            render: (s) => (
-              <Tag color={STATUS_COLOR[s]}>{STATUS_LABEL[s] || s}</Tag>
-            ),
+            render: (s) => {
+              const m = statusMeta(CIRCUIT_STATUS, s);
+              return <Tag color={m.color}>{m.label}</Tag>;
+            },
           },
           {
-            title: "操作",
+            title: tc("操作"),
             key: "actions",
             width: 184,
             fixed: "right",
@@ -1036,7 +1038,7 @@ export default function Circuits() {
                 r.status === "active" && {
                   key: "modify",
                   icon: <EditOutlined />,
-                  label: "变更参数 / 告警",
+                  label: tc("变更参数 / 告警"),
                   onClick: async () => {
                     const detail = await loadCircuitDetail(r.id);
                     setModifyTarget(detail);
@@ -1053,43 +1055,43 @@ export default function Circuits() {
                 r.status !== "decommissioned" && {
                   key: "endpoints",
                   icon: <ApartmentOutlined />,
-                  label: "修改接入端点",
+                  label: tc("修改接入端点"),
                   onClick: async () => {
                     const detail = await loadCircuitDetail(r.id);
                     openEditEndpoints(r, detail);
                   },
                 },
-                { key: "preview", icon: <EyeOutlined />, label: "预览各厂商配置", onClick: () => preview(r) },
+                { key: "preview", icon: <EyeOutlined />, label: tc("预览各厂商配置"), onClick: () => preview(r) },
                 r.status === "active" && {
                   key: "monitor",
                   icon: <LineChartOutlined />,
-                  label: "流量 / 95 / 监控",
+                  label: tc("流量 / 95 / 监控"),
                   onClick: () => navigate(`/monitoring?circuit=${r.id}`),
                 },
                 r.status === "active" &&
                   r.latency_probe_enabled !== false && {
                   key: "probe",
                   icon: <RadarChartOutlined />,
-                  label: "端到端拨测",
+                  label: tc("端到端拨测"),
                   onClick: () => probe(r),
                 },
-                { key: "history", icon: <HistoryOutlined />, label: "配置历史与对比", onClick: () => openHistory(r) },
+                { key: "history", icon: <HistoryOutlined />, label: tc("配置历史与对比"), onClick: () => openHistory(r) },
                 (r.status !== "decommissioned" && r.status !== "draft") && {
                   key: "decommission",
                   icon: <MinusCircleOutlined />,
                   danger: true,
-                  label: "拆除专线",
+                  label: tc("拆除专线"),
                   onClick: () => setDecommissionTarget(r),
                 },
                 DELETABLE.has(r.status) && {
                   key: "delete",
                   icon: <DeleteOutlined />,
                   danger: true,
-                  label: "永久删除记录",
+                  label: tc("永久删除记录"),
                   onClick: () =>
                     modal.confirm({
-                      title: "确认永久删除该专线记录?",
-                      content: "仅删除系统记录，设备配置应已通过拆除工单清除",
+                      title: tc("确认永久删除该专线记录?"),
+                      content: tc("仅删除系统记录，设备配置应已通过拆除工单清除"),
                       okType: "danger",
                       onOk: () => removeCircuit(r),
                     }),
@@ -1099,7 +1101,7 @@ export default function Circuits() {
               return (
                 <Space size={4} className="table-actions">
                   {r.status !== "decommissioned" && (
-                    <Tooltip title={r.status === "active" ? "重新下发配置 (re-apply)" : "一键开通 (下发配置)"}>
+                    <Tooltip title={r.status === "active" ? tc("重新下发配置 (re-apply)") : tc("一键开通 (下发配置)")}>
                       <Button
                         size="small"
                         type="primary"
@@ -1107,16 +1109,16 @@ export default function Circuits() {
                         loading={provisioningId === r.id}
                         onClick={() => provision(r)}
                       >
-                        {r.status === "active" ? "重新下发" : "开通"}
+                        {r.status === "active" ? tc("重新下发") : tc("开通")}
                       </Button>
                     </Tooltip>
                   )}
                   {moreItems.length > 0 && (
                     <Popconfirm
-                      title="确认拆除该专线?"
+                      title={tc("确认拆除该专线?")}
                       placement="topRight"
-                      okText="确定"
-                      cancelText="取消"
+                      okText={tc("确定")}
+                      cancelText={tc("取消")}
                       okType="danger"
                       open={decommissionTarget?.id === r.id}
                       onOpenChange={(nextOpen) => {
@@ -1131,7 +1133,7 @@ export default function Circuits() {
                       }}
                     >
                       <Dropdown menu={{ items: moreItems }} trigger={["click"]}>
-                        <Button size="small" icon={<MoreOutlined />}>更多</Button>
+                        <Button size="small" icon={<MoreOutlined />}>{tc("更多")}</Button>
                       </Dropdown>
                     </Popconfirm>
                   )}

@@ -24,7 +24,7 @@ import type {
 import {
   buildRangeParams,
   chartRangeKey,
-  HOUR_OPTIONS,
+  getHourOptions,
   sampleLimitForWindow,
   spanHoursFor,
   timeLabel,
@@ -35,14 +35,18 @@ import EChart from "./EChart";
 import { latencyJitterOption, trafficWithP95Option } from "../charts/options";
 import { empty } from "../constants/uiCopy";
 import { useTc } from "@/i18n/useTc";
+import { useTranslation } from "react-i18next";
 
 const { Text } = Typography;
 const { RangePicker } = DatePicker;
 
-const EVENT_KIND: Record<string, { label: string; color: string }> = {
-  interruption: { label: "中断", color: "red" },
-  flash: { label: "闪断", color: "orange" },
-};
+function eventKindMeta(tc: (s: string) => string, kind: string) {
+  const map: Record<string, { label: string; color: string }> = {
+    interruption: { label: tc("中断"), color: "red" },
+    flash: { label: tc("闪断"), color: "orange" },
+  };
+  return map[kind] || { label: kind, color: "default" };
+}
 
 type Props = {
   circuitId: number;
@@ -59,6 +63,7 @@ export default function CircuitMonitorPanel({
   latencyProbeEnabled = true,
 }: Props) {
   const { tc } = useTc();
+  const { t } = useTranslation();
   const [rangeMode, setRangeMode] = useState<RangeMode>("preset");
   const [hours, setHours] = useState(compact ? 6 : 24);
   const [customRange, setCustomRange] = useState<[Dayjs, Dayjs] | null>(null);
@@ -73,9 +78,11 @@ export default function CircuitMonitorPanel({
     [rangeMode, customRange, hours],
   );
 
+  const hourOptions = useMemo(() => getHourOptions(t), [t]);
+
   const windowLabel = useMemo(
-    () => windowLabelFor(rangeMode, hours, customRange),
-    [rangeMode, customRange, hours],
+    () => windowLabelFor(rangeMode, hours, customRange, t),
+    [rangeMode, customRange, hours, t],
   );
 
   const load = useCallback(async () => {
@@ -167,8 +174,8 @@ export default function CircuitMonitorPanel({
             value={rangeMode}
             style={{ width: 88 }}
             options={[
-              { value: "preset", label: "快捷" },
-              { value: "custom", label: "自选" },
+              { value: "preset", label: tc("快捷") },
+              { value: "custom", label: tc("自选") },
             ]}
             onChange={(v) => setRangeMode(v as RangeMode)}
           />
@@ -177,7 +184,7 @@ export default function CircuitMonitorPanel({
               size="small"
               value={hours}
               style={{ width: 120 }}
-              options={HOUR_OPTIONS}
+              options={hourOptions}
               onChange={setHours}
             />
           ) : (
@@ -207,7 +214,7 @@ export default function CircuitMonitorPanel({
       </Space>
 
       {rangeMode === "custom" && !customRange && (
-        <Alert type="info" showIcon message="请选择起始与终止时间后点击「查询」" />
+        <Alert type="info" showIcon message={tc("请选择起始与终止时间后点击「查询」")} />
       )}
 
       {health && (
@@ -264,12 +271,16 @@ export default function CircuitMonitorPanel({
           showIcon
           message={
             availability.interruption_count > 0
-              ? `${windowLabel} 发生 ${availability.interruption_count} 次中断，累计 ${Math.round(availability.total_downtime_sec / 60)} 分钟`
-              : `${windowLabel} 发生 ${availability.flash_count} 次闪断`
+              ? t("monitor.interruptionAlert", {
+                  window: windowLabel,
+                  count: availability.interruption_count,
+                  minutes: Math.round(availability.total_downtime_sec / 60),
+                })
+              : t("monitor.flashAlert", { window: windowLabel, count: availability.flash_count })
           }
           description={
             availability.flap_count >= 3
-              ? `15 分钟内闪断 ${availability.flap_count} 次，请关注链路稳定性`
+              ? t("monitor.flapWarning", { count: availability.flap_count })
               : undefined
           }
         />
@@ -279,7 +290,7 @@ export default function CircuitMonitorPanel({
         <Card
           size="small"
           className="chart-card"
-          title={`流量 · Rx / Tx（${windowLabel}，${chartData.length} 点）`}
+          title={t("monitor.trafficChart", { window: windowLabel, points: chartData.length })}
           loading={loading}
         >
           {chartData.length ? (
@@ -293,7 +304,7 @@ export default function CircuitMonitorPanel({
           <Card
             size="small"
             className="chart-card"
-            title={`时延 · 抖动 · 丢包（${windowLabel}）`}
+            title={t("monitor.latencyChart", { window: windowLabel })}
             loading={loading}
           >
             {qosChartData.length ? (
@@ -318,7 +329,7 @@ export default function CircuitMonitorPanel({
                 dataIndex: "kind",
                 width: 80,
                 render: (k: string) => {
-                  const m = EVENT_KIND[k] || { label: k, color: "default" };
+                  const m = eventKindMeta(tc, k);
                   return <Tag color={m.color}>{m.label}</Tag>;
                 },
               },
@@ -330,15 +341,15 @@ export default function CircuitMonitorPanel({
               {
                 title: tc('结束'),
                 dataIndex: "ended_at",
-                render: (v?: string) => (v ? dayjs(v).format("MM-DD HH:mm:ss") : "进行中"),
+                render: (v?: string) => (v ? dayjs(v).format("MM-DD HH:mm:ss") : tc("进行中")),
               },
               {
                 title: tc('时长'),
                 dataIndex: "duration_sec",
                 render: (v?: number) => (v != null ? `${v}s` : "-"),
               },
-              { title: "来源", dataIndex: "source", width: 90 },
-              { title: "说明", dataIndex: "detail", ellipsis: true },
+              { title: tc("来源"), dataIndex: "source", width: 90 },
+              { title: tc("说明"), dataIndex: "detail", ellipsis: true },
             ]}
           />
         </Card>
