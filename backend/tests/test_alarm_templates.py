@@ -39,6 +39,22 @@ def test_custom_template_overrides_title(db_session):
     assert copy.title == "CUSTOM CIR-XYZ loss alert"
 
 
+def test_preview_accepts_partial_draft(client, auth_headers):
+    """Live preview may send incomplete form state before every field is touched."""
+    r = client.post(
+        "/api/v1/system/settings/alarm-templates/preview",
+        headers=auth_headers,
+        json={
+            "kind": "sla_loss",
+            "severity": "major",
+            "global": {"html_enabled": None},
+            "kinds": {"sla_loss": {"title": "draft title {{circuit_code}}"}},
+        },
+    )
+    assert r.status_code == 200, r.text
+    assert "draft title" in r.json()["title"]
+
+
 def test_preview_all_kinds(client, auth_headers):
     for kind in (
         "tunnel_down",

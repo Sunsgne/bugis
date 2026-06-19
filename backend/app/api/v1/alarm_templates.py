@@ -167,11 +167,17 @@ def preview_alarm_template(
     if body.global_ is not None or body.kinds:
         stored = templates_to_dict(get_templates(db))
         if body.global_ is not None:
-            stored["global"] = body.global_.model_dump()
+            patch = body.global_.model_dump(exclude_none=True)
+            if patch:
+                stored["global"].update(patch)
         if body.kinds:
             stored.setdefault("kinds", {})
             for key, tpl in body.kinds.items():
-                stored["kinds"][key] = tpl.model_dump()
+                patch = tpl.model_dump(exclude_none=True)
+                if not patch:
+                    continue
+                stored["kinds"].setdefault(key, {})
+                stored["kinds"][key].update(patch)
         templates = merge_templates(stored)
     else:
         templates = get_templates(db)

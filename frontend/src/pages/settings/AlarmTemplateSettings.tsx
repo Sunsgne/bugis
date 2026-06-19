@@ -112,21 +112,40 @@ export default function AlarmTemplateSettings() {
   }, [data, selectedKind]);
 
   const runPreview = useCallback(async () => {
+    if (!data) return;
     setPreviewLoading(true);
     try {
+      const globalDraft = {
+        ...data.global,
+        ...globalForm.getFieldsValue(true),
+      } as GlobalTemplate;
+      if (globalDraft.html_enabled == null) {
+        globalDraft.html_enabled = data.global.html_enabled ?? true;
+      }
+      const kindDraft = {
+        ...data.kinds[selectedKind],
+        ...kindForm.getFieldsValue(true),
+      } as KindTemplate;
       const res = await preview(selectedKind, "major", {
-        global: globalForm.getFieldsValue() as GlobalTemplate,
-        kinds: { [selectedKind]: kindForm.getFieldsValue() as KindTemplate },
+        global: globalDraft,
+        kinds: { [selectedKind]: kindDraft },
       });
       setPreviewHtml(res.html);
       setPreviewText(res.text);
       setPreviewSubject(res.subject);
-    } catch {
-      message.error(tc("预览失败"));
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { detail?: string | { msg?: string }[] } } };
+      const detail = err?.response?.data?.detail;
+      const msgText = Array.isArray(detail)
+        ? detail.map((d) => d.msg).filter(Boolean).join("; ")
+        : typeof detail === "string"
+          ? detail
+          : tc("预览失败");
+      message.error(msgText || tc("预览失败"));
     } finally {
       setPreviewLoading(false);
     }
-  }, [preview, selectedKind, globalForm, kindForm, message, tc]);
+  }, [preview, selectedKind, globalForm, kindForm, message, tc, data]);
 
   useEffect(() => {
     if (data) runPreview();
