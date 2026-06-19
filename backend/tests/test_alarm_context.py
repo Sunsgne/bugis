@@ -6,7 +6,7 @@ import pytest
 from app.core.database import SessionLocal
 from app.models.enums import AccessMode, ServiceType
 from app.services import alarm_messages as msg
-from app.services.alarm_context import circuit_alarm_context, link_alarm_context
+from app.services.alarm_context import circuit_alarm_context, link_alarm_context, template_extra
 from app.services.alarm_template_registry import get_templates, merge_templates
 
 
@@ -62,7 +62,7 @@ def test_circuit_alarm_context_includes_endpoints(db_session):
     templates = merge_templates(None)
     copy = msg.build_circuit_tunnel_down(
         circuit.code, "degraded", templates,
-        **{k: v for k, v in ctx.items() if k != "circuit_code"},
+        **template_extra(ctx, "circuit_code", "status"),
     )
     assert "Acme Corp" in copy.detail
     assert "PE-A" in copy.detail
@@ -106,7 +106,15 @@ def test_link_alarm_context_includes_supplier(db_session):
         link.name, 90.0, 85.0,
         capacity_mbps=100000, traffic_mbps=90000.0,
         templates=get_templates(db_session),
-        **{k: v for k, v in ctx.items() if k not in ("link_name", "util_pct", "threshold_pct", "cap_display", "traffic_display")},
+        **template_extra(
+            ctx,
+            "link_name",
+            "util_pct",
+            "threshold_pct",
+            "cap_display",
+            "traffic_display",
+            "link_capacity_mbps",
+        ),
     )
     assert "Telstra" in copy.detail
     assert "GW-A" in copy.detail

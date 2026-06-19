@@ -1,6 +1,8 @@
 """Rich template context for circuit / backbone link alarm notifications."""
 from __future__ import annotations
 
+from typing import Any
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -8,6 +10,12 @@ from app.models.circuit import Circuit, CircuitEndpoint
 from app.models.device import Device
 from app.models.enums import AccessMode
 from app.models.link import Link
+
+
+def template_extra(ctx: dict[str, Any], *exclude: str) -> dict[str, Any]:
+    """Drop keys already passed positionally to alarm copy builders."""
+    skip = set(exclude)
+    return {k: v for k, v in ctx.items() if k not in skip}
 
 
 def _svid_label(ep: CircuitEndpoint) -> str:
