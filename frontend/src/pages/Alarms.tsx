@@ -58,10 +58,10 @@ export default function Alarms() {
               value={filter}
               onChange={(v) => setFilter(v as string)}
               options={[
-                { label: "活跃", value: "active" },
-                { label: "已确认", value: "acknowledged" },
-                { label: "已清除", value: "cleared" },
-                { label: "全域", value: "all" },
+                { label: tc("活跃"), value: "active" },
+                { label: tc("已确认"), value: "acknowledged" },
+                { label: tc("已清除"), value: "cleared" },
+                { label: tc("全域"), value: "all" },
               ]}
             />
             <Button icon={<ThunderboltOutlined />} type="primary" onClick={evaluate}>{tc('触发评估')}</Button>
