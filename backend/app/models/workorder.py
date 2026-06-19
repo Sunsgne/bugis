@@ -20,8 +20,10 @@ class WorkOrder(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     code: Mapped[str] = mapped_column(String(48), unique=True, index=True)
-    circuit_id: Mapped[int] = mapped_column(
-        ForeignKey("circuits.id", ondelete="CASCADE"), index=True
+    # Retained when the circuit row is deleted (audit / billing trail).
+    circuit_code: Mapped[str | None] = mapped_column(String(48), nullable=True, index=True)
+    circuit_id: Mapped[int | None] = mapped_column(
+        ForeignKey("circuits.id", ondelete="SET NULL"), nullable=True, index=True
     )
     type: Mapped[WorkOrderType] = mapped_column(
         str_enum_column(WorkOrderType), default=WorkOrderType.PROVISION
@@ -36,7 +38,7 @@ class WorkOrder(Base, TimestampMixin):
     payload: Mapped[str | None] = mapped_column(Text, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    circuit: Mapped["Circuit"] = relationship(back_populates="work_orders")
+    circuit: Mapped["Circuit | None"] = relationship(back_populates="work_orders")
     events: Mapped[list["WorkOrderEvent"]] = relationship(
         back_populates="work_order",
         cascade="all, delete-orphan",

@@ -1101,6 +1101,17 @@ export default function Circuits() {
               return (
                 <Space size={4} className="table-actions">
                   {r.status !== "decommissioned" && (
+                    r.status === "provisioning" ? (
+                      <Button
+                        size="small"
+                        type="primary"
+                        icon={<ThunderboltOutlined />}
+                        loading
+                        disabled
+                      >
+                        {tc("开通中")}
+                      </Button>
+                    ) : (
                     <Popconfirm
                       title={
                         r.status === "active"
@@ -1129,6 +1140,7 @@ export default function Circuits() {
                         </Button>
                       </Tooltip>
                     </Popconfirm>
+                    )
                   )}
                   {moreItems.length > 0 && (
                     <Popconfirm

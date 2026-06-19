@@ -155,6 +155,40 @@ def next_work_order_code(db: Session) -> str:
 
 
 # --- lifecycle transitions ------------------------------------------------
+INFLIGHT_WO_STATUSES = (
+    WorkOrderStatus.SUBMITTED,
+    WorkOrderStatus.APPROVED,
+    WorkOrderStatus.SCHEDULED,
+    WorkOrderStatus.RUNNING,
+)
+
+
+def find_inflight_work_order(
+    db: Session, circuit_id: int, *, exclude_wo_id: int | None = None
+) -> WorkOrder | None:
+    stmt = (
+        select(WorkOrder)
+        .where(
+            WorkOrder.circuit_id == circuit_id,
+            WorkOrder.status.in_(INFLIGHT_WO_STATUSES),
+        )
+        .order_by(WorkOrder.id.desc())
+        .limit(1)
+    )
+    if exclude_wo_id is not None:
+        stmt = stmt.where(WorkOrder.id != exclude_wo_id)
+    return db.execute(stmt).scalar_one_or_none()
+
+
+def ensure_no_inflight_work_order(db: Session, circuit_id: int) -> None:
+    existing = find_inflight_work_order(db, circuit_id)
+    if existing:
+        raise ValueError(
+            f"该专线已有进行中的工单 {existing.code}（{existing.status.value}），"
+            "请等待完成或取消后再操作"
+        )
+
+
 def create_work_order(
     db: Session,
     circuit: Circuit,
@@ -167,6 +201,7 @@ def create_work_order(
     wo = WorkOrder(
         code=next_work_order_code(db),
         circuit_id=circuit.id,
+        circuit_code=circuit.code,
         type=wo_type,
         status=WorkOrderStatus.DRAFT,
         title=title or f"{wo_type.value} circuit {circuit.code}",
@@ -397,6 +432,10 @@ def execute(db: Session, wo: WorkOrder, actor: str | None = None) -> WorkOrder:
         raise ValueError("work order must be approved before execution")
 
     circuit = wo.circuit
+    if not circuit:
+        wo.status = WorkOrderStatus.FAILED
+        _log(db, wo, "关联专线已删除，无法继续执行", level="error", actor=actor)
+        return wo
 
     if getattr(circuit, "adopted", False):
         from app.services import port_inventory
@@ -464,7 +503,12 @@ def execute(db: Session, wo: WorkOrder, actor: str | None = None) -> WorkOrder:
     service_type: ServiceType = circuit.service_type
     if wo.status != WorkOrderStatus.RUNNING:
         wo.status = WorkOrderStatus.RUNNING
-        circuit.status = CircuitStatus.PROVISIONING
+    if operation == "apply" and wo.type != WorkOrderType.DECOMMISSION:
+        if circuit.status not in (
+            CircuitStatus.ACTIVE,
+            CircuitStatus.DECOMMISSIONED,
+        ):
+            circuit.status = CircuitStatus.PROVISIONING
     _log(db, wo, f"Execution started: {operation} {service_type.value}", actor=actor)
     db.commit()
     db.refresh(wo)

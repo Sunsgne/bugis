@@ -249,7 +249,8 @@ export interface WorkOrderEvent {
 export interface WorkOrder {
   id: number;
   code: string;
-  circuit_id: number;
+  circuit_id: number | null;
+  circuit_code?: string | null;
   type: string;
   status: string;
   title: string;
