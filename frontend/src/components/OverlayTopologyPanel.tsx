@@ -133,12 +133,12 @@ export default function OverlayTopologyPanel({ topo, overlayInventory }: Props) 
         <Col xs={24} lg={16}>
           <Space style={{ marginBottom: 8 }} wrap>
             <Text type="secondary" style={{ fontSize: 12 }}>
-              滚轮缩放 · 拖拽平移
+              {tc("滚轮缩放 · 拖拽平移")}
               {selectedVni != null
-                ? ` · 当前 VNI ${selectedVni} · ${selectedRow?.deviceCount ?? 0} 台设备 · ${tunnelCount} 条隧道`
+                ? ` · ${tc("当前 VNI")} ${selectedVni} · ${selectedRow?.deviceCount ?? 0} ${tc("台设备")} · ${tunnelCount} ${tc("条隧道")}`
                 : selectedDevice
-                  ? ` · 设备 ${selectedDevice.name} · ${deviceVnis.length} 个 VNI`
-                  : ` · ${topo.nodes.length} 台设备 · ${scopedVnis.length} 个 VNI · 选择 VNI 查看隧道`}
+                  ? ` · ${tc("设备")} ${selectedDevice.name} · ${deviceVnis.length} ${tc("个 VNI")}`
+                  : ` · ${topo.nodes.length} ${tc("台设备")} · ${scopedVnis.length} ${tc("个 VNI")} · ${tc("选择 VNI 查看隧道")}`}
             </Text>
             {hasActiveFilter && (
               <Button size="small" icon={<ClearOutlined />} onClick={clearFilters}>{tc('清除筛选')}</Button>
@@ -175,7 +175,7 @@ export default function OverlayTopologyPanel({ topo, overlayInventory }: Props) 
                   optionFilterProp="label"
                   options={scopedVnis.map((row) => ({
                     value: row.vni,
-                    label: `VNI ${row.vni} · ${row.deviceCount} 台${row.platformManaged ? " · 平台" : ""}`,
+                    label: `VNI ${row.vni} · ${row.deviceCount} ${tc("台")}${row.platformManaged ? ` · ${tc("平台")}` : ""}`,
                   }))}
                 />
                 <Input
@@ -192,8 +192,8 @@ export default function OverlayTopologyPanel({ topo, overlayInventory }: Props) 
                   value={vniScope}
                   onChange={(v) => setVniScope(v as VniScope)}
                   options={[
-                    { label: `全部 (${vniIndex.length})`, value: "all" },
-                    { label: `平台纳管 (${platformVnis.size})`, value: "platform" },
+                    { label: `${tc("全部")} (${vniIndex.length})`, value: "all" },
+                    { label: `${tc("平台纳管")} (${platformVnis.size})`, value: "platform" },
                   ]}
                 />
               </div>
@@ -221,7 +221,7 @@ export default function OverlayTopologyPanel({ topo, overlayInventory }: Props) 
                     {selectedRow.platformManaged && <Tag color="blue">{tc('平台纳管')}</Tag>}
                   </Space>
                   <Text type="secondary" style={{ fontSize: 12, display: "block" }}>
-                    关联设备 ({selectedRow.deviceCount})
+                    {tc("关联设备")} ({selectedRow.deviceCount})
                   </Text>
                   <Table
                     className="overlay-vni-device-table"
@@ -271,7 +271,7 @@ export default function OverlayTopologyPanel({ topo, overlayInventory }: Props) 
                 <div>
                   <Text strong>{selectedDevice.name}</Text>
                   <Text type="secondary" style={{ fontSize: 12, display: "block", marginTop: 4 }}>
-                    VTEP {selectedDevice.vtep_ip} · 承载 {deviceVnis.length} 个 VNI
+                    VTEP {selectedDevice.vtep_ip} · {tc("承载")} {deviceVnis.length} {tc("个 VNI")}
                   </Text>
                   <Table
                     className="overlay-vni-list-table"
@@ -300,7 +300,7 @@ export default function OverlayTopologyPanel({ topo, overlayInventory }: Props) 
                       {
                         title: tc('设备数'),
                         dataIndex: "deviceCount",
-                        width: 64,
+                        width: 100,
                         align: "right",
                       },
                       {
@@ -314,7 +314,7 @@ export default function OverlayTopologyPanel({ topo, overlayInventory }: Props) 
                           const preview = peers.slice(0, 2).join(", ");
                           const more = peers.length > 2 ? ` +${peers.length - 2}` : "";
                           return (
-                            <Text type="secondary" ellipsis title={peers.join(", ") || "无对端"}>
+                            <Text type="secondary" ellipsis title={peers.join(", ") || tc("无对端")}>
                               {preview || "—"}
                               {more}
                             </Text>
@@ -338,7 +338,7 @@ export default function OverlayTopologyPanel({ topo, overlayInventory }: Props) 
                       size: "small",
                       showSizeChanger: true,
                       pageSizeOptions: ["12", "24", "48"],
-                      showTotal: (total) => `共 ${total} 个`,
+                      showTotal: (total) => `${tc("共")} ${total}`,
                     }}
                     scroll={{ y: 260 }}
                     onRow={(row) => ({
@@ -362,7 +362,7 @@ export default function OverlayTopologyPanel({ topo, overlayInventory }: Props) 
                       {
                         title: tc('设备数'),
                         dataIndex: "deviceCount",
-                        width: 64,
+                        width: 100,
                         align: "right",
                         sorter: (a: VniMemberSummary, b: VniMemberSummary) => a.deviceCount - b.deviceCount,
                       },

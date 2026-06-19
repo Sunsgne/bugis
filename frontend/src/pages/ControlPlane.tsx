@@ -241,7 +241,7 @@ export default function ControlPlane() {
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <div className="control-plane-page" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       {loadError && (
         <Card size="small">
           <Text type="danger">{loadError}</Text>
@@ -251,7 +251,7 @@ export default function ControlPlane() {
         <Row gutter={16} align="middle">
           <Col flex="auto">
             <span style={{ fontSize: 16, fontWeight: 600 }}>
-              <ShareAltOutlined /> {status?.name || "Bugis SDN 控制器"}
+              <ShareAltOutlined /> {tc(status?.name || "Bugis SDN 控制器")}
             </span>
             <Tag color="geekblue" style={{ marginLeft: 8 }}>{tc('内置 · 自研 SDN')}</Tag>
             {status?.version && <Tag style={{ marginLeft: 4 }}>v{status.version}</Tag>}
@@ -406,7 +406,7 @@ export default function ControlPlane() {
               render: (s) => <Tag color={BGP_COLOR[s] || "default"}>{s}</Tag>,
             },
             { title: tc("收路由"), dataIndex: "routes_received" },
-            { title: "发路由", dataIndex: "routes_sent" },
+            { title: tc("发路由"), dataIndex: "routes_sent" },
           ]}
         />
       </Card>
@@ -420,16 +420,16 @@ export default function ControlPlane() {
           size="small"
           locale={{ emptyText: <Empty description={tc('暂无数据面绑定记录')} /> }}
           columns={[
-            { title: "专线 ID", dataIndex: "circuit_id", width: 90 },
-            { title: "设备 ID", dataIndex: "device_id", width: 90 },
-            { title: "操作", dataIndex: "operation", width: 80 },
-            { title: "传输", dataIndex: "transport", width: 90 },
+            { title: tc("专线 ID"), dataIndex: "circuit_id", width: 90 },
+            { title: tc("设备 ID"), dataIndex: "device_id", width: 90 },
+            { title: tc("操作"), dataIndex: "operation", width: 80 },
+            { title: tc("传输"), dataIndex: "transport", width: 90 },
             {
               title: tc('状态'),
               dataIndex: "state",
               render: (s) => <Tag color={DP_COLOR[s] || "default"}>{s}</Tag>,
             },
-            { title: "时间", dataIndex: "created_at" },
+            { title: tc("时间"), dataIndex: "created_at" },
           ]}
         />
       </Card>
@@ -446,7 +446,7 @@ export default function ControlPlane() {
           pagination={false}
           locale={{ emptyText: <Empty description={tc('暂无 VTEP 邻居')} /> }}
           columns={[
-            { title: "设备", dataIndex: "name" },
+            { title: tc("设备"), dataIndex: "name" },
             { title: "VTEP IP", dataIndex: "vtep_ip" },
             { title: "ASN", dataIndex: "asn" },
             {
@@ -492,12 +492,12 @@ export default function ControlPlane() {
             {
               title: tc('封装'),
               dataIndex: "encap",
-              width: 80,
+              width: 110,
               render: (e) => <Tag>{e || "vxlan"}</Tag>,
             },
-            { title: "MPLS 标签", dataIndex: "mpls_label", render: (v) => v || "-" },
-            { title: "RD", dataIndex: "rd" },
-            { title: "下一跳", dataIndex: "next_hop" },
+            { title: tc("MPLS 标签"), dataIndex: "mpls_label", width: 100, render: (v) => v || "-" },
+            { title: "RD", dataIndex: "rd", width: 120 },
+            { title: tc("下一跳"), dataIndex: "next_hop", ellipsis: true },
           ]}
         />
       </Card>

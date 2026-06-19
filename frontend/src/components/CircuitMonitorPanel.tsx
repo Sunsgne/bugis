@@ -207,7 +207,7 @@ export default function CircuitMonitorPanel({
           {!latencyProbeEnabled && <Tag color="default">{tc('延迟探测已关闭')}</Tag>}
         </Space>
         {!compact && billing?.billable_95_mbps != null && (
-          <Text type="secondary">{tc('当月 95 计费带宽')}<Text strong>{billing.billable_95_mbps} Mbps</Text>
+          <Text type="secondary">{tc('当月 95 计费带宽')}{" "}<Text strong>{billing.billable_95_mbps} Mbps</Text>
             <span style={{ marginLeft: 8, fontSize: 12 }}>({windowLabel})</span>
           </Text>
         )}

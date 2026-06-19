@@ -1103,7 +1103,12 @@ body {
   vertical-align: middle;
 }
 
-.config-device-name,
+.config-device-table .config-device-name {
+  white-space: normal;
+  word-break: break-all;
+  line-height: 1.35;
+}
+
 .config-note-cell {
   display: inline-block;
   max-width: 100%;
@@ -1112,6 +1117,15 @@ body {
   white-space: nowrap;
   vertical-align: bottom;
 }
+
+.overlay-vni-list-table .ant-table-thead > tr > th {
+  white-space: nowrap;
+}
+
+.control-plane-page .ant-table-cell {
+  line-height: 1.5;
+}
+
 
 .config-inline-tag {
   margin: 0;

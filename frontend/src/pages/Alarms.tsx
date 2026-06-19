@@ -101,8 +101,8 @@ export default function Alarms() {
               ellipsis: true,
               render: (k) => <Tag>{ALARM_KIND[k] || k}</Tag>,
             },
-            { title: "标题", dataIndex: "title", width: "26%", ellipsis: true },
-            { title: "详情", dataIndex: "detail", width: "24%", ellipsis: true, render: (v) => v || "—" },
+            { title: tc("标题"), dataIndex: "title", width: "26%", ellipsis: true },
+            { title: tc("详情"), dataIndex: "detail", width: "24%", ellipsis: true, render: (v) => v || "—" },
             {
               title: tc('时间'),
               dataIndex: "created_at",

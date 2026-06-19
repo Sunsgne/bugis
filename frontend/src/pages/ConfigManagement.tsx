@@ -7,6 +7,8 @@ import { api } from "../api/client";
 import { configPreviewModalProps, ConfigPreviewPre } from "../utils/configPreview";
 import { usePlatformSettings } from "../hooks/usePlatformSettings";
 import { useTc } from "@/i18n/useTc";
+import { translateApiText } from "@/i18n/translateApiText";
+import { VENDOR_OPTIONS } from "@/constants/formOptions";
 import { dataTableProps, TABLE_SCROLL } from "../utils/table";
 
 const VENDOR_COLOR: Record<string, string> = {
@@ -15,7 +17,6 @@ const VENDOR_COLOR: Record<string, string> = {
 
 const VENDOR_LABEL: Record<string, string> = {
   h3c: "H3C",
-  huawei: "华为",
   juniper: "Juniper",
   arista: "Arista",
   cisco: "Cisco",
@@ -27,6 +28,10 @@ const SNAPSHOT_SOURCE_LABEL: Record<string, string> = {
   backup: "手动备份",
   learn: "现网学习",
 };
+
+function vendorLabel(vendor: string) {
+  return VENDOR_OPTIONS.find((o) => o.value === vendor)?.label ?? VENDOR_LABEL[vendor] ?? vendor;
+}
 
 type ConfigDeviceRow = {
   device_id: number;
@@ -64,7 +69,7 @@ function ColoredDiff({ text }: { text: string }) {
 }
 
 export default function ConfigManagement() {
-  const { tc } = useTc();
+  const { tc, isEn } = useTc();
   const { message, modal } = AntApp.useApp();
   const { platform } = usePlatformSettings();
   const [devices, setDevices] = useState<ConfigDeviceRow[]>([]);
@@ -83,7 +88,7 @@ export default function ConfigManagement() {
       setDevices(data);
       if (!sel && data.length) select(data[0].device_id);
     } catch (e: any) {
-      message.error(e?.response?.data?.detail || "设备列表加载失败");
+      message.error(e?.response?.data?.detail || tc("设备列表加载失败"));
     } finally {
       setDevicesLoading(false);
     }
@@ -104,13 +109,13 @@ export default function ConfigManagement() {
       setDrift("");
       setLearned(ls.data);
     } catch (e: any) {
-      message.error(e?.response?.data?.detail || "设备配置加载失败");
+      message.error(e?.response?.data?.detail || tc("设备配置加载失败"));
     }
   }
 
   async function backup() {
     if (!sel) return;
-    const hide = message.loading("正在拉取设备 running-config...", 0);
+    const hide = message.loading(tc("正在拉取设备 running-config..."), 0);
     try {
       const { data } = await api.post(`/config/devices/${sel}/backup`);
       hide();
@@ -175,8 +180,12 @@ export default function ConfigManagement() {
         style={{ marginBottom: 0 }}
         message={
           platform?.auto_learn_enabled !== false
-            ? `定时自动拉取已开启（间隔 ${platform?.auto_learn_interval_seconds ?? 60} 秒）`
-            : "定时自动拉取已关闭"
+            ? translateApiText(
+                `定时自动拉取已开启（间隔 ${platform?.auto_learn_interval_seconds ?? 60} 秒）`,
+                tc,
+                isEn,
+              )
+            : tc("定时自动拉取已关闭")
         }
         description={
           <>{tc('可在')}<Link to="/settings/config-learn">{tc('平台设置 → 配置管理')}</Link>{tc('调整自动拉取、变更保护与快照策略。')}</>
@@ -199,7 +208,7 @@ export default function ConfigManagement() {
           className="config-device-table"
           pagination={false}
           loading={devicesLoading}
-          locale={{ emptyText: "暂无纳管设备 · 先在「网络设备」中添加" }}
+          locale={{ emptyText: tc("暂无纳管设备 · 先在「网络设备」中添加") }}
           dataSource={devices}
           tableLayout="fixed"
           onRow={(r) => ({ onClick: () => select(r.device_id), style: { cursor: "pointer" } })}
@@ -208,7 +217,7 @@ export default function ConfigManagement() {
             {
               title: tc('设备'),
               dataIndex: "name",
-              width: 148,
+              width: 220,
               ellipsis: { showTitle: false },
               render: (name: string) => (
                 <Tooltip title={name}>
@@ -223,7 +232,7 @@ export default function ConfigManagement() {
               align: "center",
               render: (v: string) => (
                 <Tag color={VENDOR_COLOR[v]} className="config-inline-tag">
-                  {VENDOR_LABEL[v] || v}
+                  {vendorLabel(v)}
                 </Tag>
               ),
             },
@@ -240,7 +249,7 @@ export default function ConfigManagement() {
               render: (v?: number, r?: ConfigDeviceRow) =>
                 v ? (
                   <Tag color="orange" className="config-inline-tag">
-                    v{v} · {r?.service_count ?? 0} 业务
+                    v{v} · {r?.service_count ?? 0} {tc("业务")}
                   </Tag>
                 ) : (
                   <Tag className="config-inline-tag">{tc('未学习')}</Tag>
@@ -309,7 +318,7 @@ export default function ConfigManagement() {
                         tableLayout="fixed"
                         scroll={{ x: 720 }}
                         columns={[
-                          { title: "业务", dataIndex: "name", width: 160, ellipsis: true },
+                          { title: tc("业务"), dataIndex: "name", width: 160, ellipsis: true },
                           { title: "VNI", dataIndex: "vni", width: 88 },
                           { title: "RD", dataIndex: "rd", width: 140, ellipsis: true },
                           { title: "RT", dataIndex: "rt", width: 140, ellipsis: true },
@@ -338,7 +347,7 @@ export default function ConfigManagement() {
                         scroll={{ x: 960 }}
                         columns={[
                           { title: "接口", dataIndex: "interface", width: 160, ellipsis: true },
-                          { title: "模式", dataIndex: "access_mode", width: 72 },
+                          { title: tc("模式"), dataIndex: "access_mode", width: 72 },
                           {
                             title: "S-VID",
                             dataIndex: "s_vid",
@@ -380,7 +389,7 @@ export default function ConfigManagement() {
               },
               {
                 key: "history",
-                label: `版本历史 (${snaps.length})`,
+                label: `${tc("版本历史")} (${snaps.length})`,
                 children: (
                   <>
                     <Button size="small" icon={<DiffOutlined />} onClick={loadDiff} style={{ marginBottom: 8 }}>{tc('对比最近两版')}</Button>
@@ -411,7 +420,7 @@ export default function ConfigManagement() {
                               className="config-inline-tag"
                               color={s === "push" ? "green" : s === "learn" ? "orange" : "blue"}
                             >
-                              {SNAPSHOT_SOURCE_LABEL[s] || s}
+                              {tc(SNAPSHOT_SOURCE_LABEL[s] || s)}
                             </Tag>
                           ),
                         },

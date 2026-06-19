@@ -1757,7 +1757,21 @@
     "0ec9eaf9": "更多",
     "f83619b3": "查看全部客户",
     "9f10a2b2": "编辑设备",
-    "4ac578a0": "进入控制面"
+    "4ac578a0": "进入控制面",
+    "z_cap_fab": "Fabric 站点容量",
+    "z_cap_bb": "骨干链路 · 利用率",
+    "z_ver_hist": "版本历史",
+    "z_scroll_zoom": "滚轮缩放 · 拖拽平移",
+    "z_sel_vni_tunnel": "选择 VNI 查看隧道",
+    "z_all_vni": "全部",
+    "z_plat_managed": "平台纳管",
+    "z_assoc_devices": "关联设备",
+    "z_no_peer": "无对端",
+    "z_carry_vni": "承载",
+    "z_vni_unit": "个 VNI",
+    "z_tunnel_unit": "条隧道",
+    "z_device_unit": "台设备",
+    "z_curr_vni": "当前 VNI"
   },
   "dashboard": {
     "ticksExecuted": "已执行 {{count}} 次",
