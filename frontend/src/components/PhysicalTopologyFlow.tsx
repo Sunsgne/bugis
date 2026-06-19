@@ -19,10 +19,7 @@ import { vendorColors } from "@/charts/theme";
 import type { Topology } from "@/api/types";
 import { useTc } from "@/i18n/useTc";
 import { backboneUtilColor, fmtLinkBw } from "@/utils/linkUtilization";
-
-const NO_SITE = -1;
-const LANE_GUTTER = 12;
-const LANE_HEADER = 52;
+import { layoutDeviceGraph, siteLabelForNode } from "@/utils/deviceGraphLayout";
 
 const EDGE_STYLE: Record<string, { dash?: string; weight: number }> = {
   dci: { dash: "6 4", weight: 3 },
@@ -52,17 +49,34 @@ function shortHost(name: string, max = 28): string {
 function DeviceNode({
   data,
 }: {
-  data: { label: string; fullName: string; meta: string; border: string; online: boolean };
+  data: {
+    label: string;
+    fullName: string;
+    meta: string;
+    siteLabel?: string | null;
+    border: string;
+    online: boolean;
+    dimmed?: boolean;
+  };
 }) {
   return (
     <div
-      className="rounded-xl border-2 bg-white px-3 py-2.5 shadow-sm transition-shadow hover:shadow-md"
-      style={{ borderColor: data.border, width: 220 }}
+      className="device-graph-node rounded-xl border-2 bg-white px-3 py-2.5 shadow-sm transition-all hover:shadow-md"
+      style={{
+        borderColor: data.border,
+        width: 220,
+        opacity: data.dimmed ? 0.35 : 1,
+      }}
       title={data.fullName}
     >
       <div className="flex items-center gap-2">
         <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${data.online ? "bg-emerald-500" : "bg-slate-300"}`} />
         <span className="truncate text-sm font-semibold text-slate-800">{data.label}</span>
+        {data.siteLabel && (
+          <span className="ml-auto shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+            {data.siteLabel}
+          </span>
+        )}
       </div>
       <div className="mt-1 truncate text-[11px] text-slate-500">{data.meta}</div>
     </div>
@@ -102,7 +116,7 @@ function UtilizationEdge({
         markerEnd={markerEnd}
         style={{
           stroke: color,
-          strokeWidth: selected ? style.weight + 1 : style.weight,
+          strokeWidth: selected ? style.weight + 1.5 : style.weight,
           strokeDasharray: style.dash,
         }}
       />
@@ -131,103 +145,56 @@ function FitViewOnLayout({ layoutKey }: { layoutKey: string }) {
   const { fitView } = useReactFlow();
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      fitView({ padding: 0.08, maxZoom: 1, duration: 280 });
-    }, 60);
+      fitView({ padding: 0.12, maxZoom: 1.15, duration: 320 });
+    }, 80);
     return () => window.clearTimeout(timer);
   }, [fitView, layoutKey]);
   return null;
 }
 
-function buildSiteColumns(topo: Topology, unassignedLabel: string) {
-  const columns = topo.sites
-    .filter((s) => topo.nodes.some((n) => n.site_id === s.id))
-    .map((s) => ({ id: s.id, label: `${s.code} · ${s.name}` }));
-  if (topo.nodes.some((n) => !n.site_id)) {
-    columns.push({ id: NO_SITE, label: unassignedLabel });
-  }
-  return columns;
-}
-
-function buildLayout(
+function buildDeviceGraph(
   topo: Topology,
   size: { w: number; h: number },
-  unassignedLabel: string,
   tc: (s: string) => string,
+  highlightDeviceIds?: Set<number> | null,
 ): { nodes: Node[]; edges: Edge[] } {
-  const siteColumns = buildSiteColumns(topo, unassignedLabel);
-  const laneCount = Math.max(siteColumns.length, 1);
-  const canvasW = Math.max(size.w, 640);
-  const canvasH = Math.max(size.h, 480);
-  const laneW = (canvasW - LANE_GUTTER * (laneCount + 1)) / laneCount;
-  const laneH = canvasH - LANE_GUTTER * 2;
+  const positions = layoutDeviceGraph(
+    topo.nodes.map((n) => ({ id: n.id, site_id: n.site_id })),
+    topo.edges.map((e) => ({ source: e.source, target: e.target })),
+    size.w,
+    size.h,
+  );
 
-  const nodes: Node[] = [];
   const nodeById = new Map(topo.nodes.map((n) => [n.id, n]));
+  const connected = new Set<number>();
+  for (const e of topo.edges) {
+    connected.add(e.source);
+    connected.add(e.target);
+  }
+  const dimUnconnected = highlightDeviceIds != null && highlightDeviceIds.size > 0;
 
-  siteColumns.forEach((site, col) => {
-    const laneId = `lane-${site.id}`;
-    const laneX = LANE_GUTTER + col * (laneW + LANE_GUTTER);
+  const nodes: Node[] = topo.nodes.map((n) => {
+    const pos = positions.get(n.id) ?? { x: 0, y: 0 };
+    const siteLabel = siteLabelForNode(n.site_id, topo.sites);
+    const vendorColor = vendorColors[n.vendor] || "#64748b";
+    const dimmed = dimUnconnected
+      ? !highlightDeviceIds!.has(n.id)
+      : topo.edges.length > 0 && !connected.has(n.id);
 
-    nodes.push({
-      id: laneId,
-      type: "group",
-      position: { x: laneX, y: LANE_GUTTER },
-      data: {},
-      draggable: false,
-      selectable: false,
-      style: {
-        width: laneW,
-        height: laneH,
-        backgroundColor: "rgba(255, 102, 0, 0.05)",
-        border: "1px solid rgba(255, 102, 0, 0.16)",
-        borderRadius: 14,
+    return {
+      id: String(n.id),
+      type: "device",
+      position: pos,
+      data: {
+        label: shortHost(n.name),
+        fullName: n.name,
+        siteLabel,
+        meta: `${n.vendor.toUpperCase()} · ${labelForOption(DEVICE_ROLE_OPTIONS, n.role)}`,
+        border: vendorColor,
+        online: n.status === "online",
+        dimmed,
       },
-    });
-
-    nodes.push({
-      id: `site-label-${site.id}`,
-      parentId: laneId,
-      type: "default",
-      position: { x: 16, y: 12 },
-      data: { label: site.label },
-      draggable: false,
-      selectable: false,
-      style: {
-        background: "transparent",
-        border: "none",
-        boxShadow: "none",
-        fontSize: 12,
-        fontWeight: 700,
-        color: "#4f46e5",
-        padding: 0,
-        pointerEvents: "none",
-      },
-    });
-
-    const devices = topo.nodes.filter((n) => (n.site_id ?? NO_SITE) === site.id);
-    const nodeW = Math.min(220, laneW - 32);
-    const nodeX = (laneW - nodeW) / 2;
-    const usableH = laneH - LANE_HEADER - 24;
-    const step = devices.length > 1 ? usableH / (devices.length - 1) : 0;
-    const startY = devices.length === 1 ? LANE_HEADER + (usableH - 56) / 2 : LANE_HEADER;
-
-    devices.forEach((n, row) => {
-      const vendorColor = vendorColors[n.vendor] || "#64748b";
-      nodes.push({
-        id: String(n.id),
-        type: "device",
-        parentId: laneId,
-        extent: "parent",
-        position: { x: nodeX, y: devices.length === 1 ? startY : startY + row * step },
-        data: {
-          label: shortHost(n.name),
-          fullName: n.name,
-          meta: `${n.vendor.toUpperCase()} · ${labelForOption(DEVICE_ROLE_OPTIONS, n.role)}`,
-          border: vendorColor,
-          online: n.status === "online",
-        },
-      });
-    });
+    };
   });
 
   const nodeIds = new Set(topo.nodes.map((n) => String(n.id)));
@@ -235,8 +202,8 @@ function buildLayout(
     .filter((e) => nodeIds.has(String(e.source)) && nodeIds.has(String(e.target)))
     .map((e, i) => {
       const util = e.utilization_pct ?? (e.capacity_mbps ? (e.reserved_mbps / e.capacity_mbps) * 100 : 0);
-      const src = nodeById.get(Number(e.source));
-      const tgt = nodeById.get(Number(e.target));
+      const src = nodeById.get(e.source);
+      const tgt = nodeById.get(e.target);
       const color = backboneUtilColor(util);
       const title = [
         src && tgt ? `${src.name} ↔ ${tgt.name}` : "",
@@ -248,7 +215,7 @@ function buildLayout(
         .join("\n");
 
       return {
-        id: `e-${i}`,
+        id: `e-${e.id ?? i}`,
         source: String(e.source),
         target: String(e.target),
         type: "utilization",
@@ -291,15 +258,14 @@ export default function PhysicalTopologyFlow({ topo, className }: Props) {
     return () => ro.disconnect();
   }, []);
 
-  const unassignedLabel = tc("未分配站点");
   const { nodes, edges } = useMemo(
-    () => buildLayout(topo, size, unassignedLabel, tc),
-    [topo, size, unassignedLabel, tc],
+    () => buildDeviceGraph(topo, size, tc),
+    [topo, size, tc],
   );
   const layoutKey = `${size.w}x${size.h}-${topo.nodes.length}-${topo.edges.length}`;
 
   return (
-    <div ref={hostRef} className={["physical-topology-flow", className].filter(Boolean).join(" ")}>
+    <div ref={hostRef} className={["physical-topology-flow device-graph-flow", className].filter(Boolean).join(" ")}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -310,8 +276,8 @@ export default function PhysicalTopologyFlow({ topo, className }: Props) {
         elementsSelectable
         panOnDrag
         zoomOnScroll
-        minZoom={0.5}
-        maxZoom={1.4}
+        minZoom={0.35}
+        maxZoom={1.6}
         proOptions={{ hideAttribution: true }}
       >
         <FitViewOnLayout layoutKey={layoutKey} />
@@ -328,7 +294,7 @@ export default function PhysicalTopologyFlow({ topo, className }: Props) {
 
       {topo.edges.length === 0 && (
         <div className="physical-topology-hint">
-          {tc("暂无 DCI / Fabric 链路 · 设备按站点分列展示 · 在容量规划中添加链路后可显示互联关系")}
+          {tc("暂无骨干链路 · 设备节点已按互联关系布局 · 在容量规划中添加链路后显示连线")}
         </div>
       )}
 
@@ -354,4 +320,4 @@ export default function PhysicalTopologyFlow({ topo, className }: Props) {
   );
 }
 
-export { buildSiteColumns };
+export { buildDeviceGraph };

@@ -1207,6 +1207,22 @@ body {
   height: 100%;
 }
 
+.device-graph-flow .react-flow__edge-path {
+  filter: drop-shadow(0 1px 2px rgba(15, 23, 42, 0.12));
+}
+
+.device-graph-flow .react-flow__edges {
+  z-index: 2;
+}
+
+.device-graph-flow .react-flow__nodes {
+  z-index: 3;
+}
+
+.device-graph-node {
+  z-index: 1;
+}
+
 .physical-topology-hint {
   position: absolute;
   top: 12px;

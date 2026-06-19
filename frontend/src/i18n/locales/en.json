@@ -1837,7 +1837,9 @@
     "f9b2c004": "Not required",
     "f9b2c005": "Select S-VID first",
     "f9b2c006": "Confirm provisioning this circuit?",
-    "f9b2c007": "Confirm re-applying configuration to this circuit?"
+    "f9b2c007": "Confirm re-applying configuration to this circuit?",
+    "f9b2c008": "No backbone links yet · devices are laid out by connectivity · add links in Capacity to show edges",
+    "f9b2c009": "Devices are auto-layout by interconnections; add DCI / Fabric links in Capacity to show device-to-device edges and utilization."
   },
   "dashboard": {
     "ticksExecuted": "Executed {{count}} times",

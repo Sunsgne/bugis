@@ -35,11 +35,7 @@ import { vendorColors } from "@/charts/theme";
 import type { LinkUsage, Topology } from "@/api/types";
 import { useTc } from "@/i18n/useTc";
 import { backboneUtilColor, fmtLinkBw, linkUtilizationLines } from "@/utils/linkUtilization";
-import { buildSiteColumns } from "./PhysicalTopologyFlow";
-
-const NO_SITE = -1;
-const LANE_GUTTER = 12;
-const LANE_HEADER = 52;
+import { layoutDeviceGraph, siteLabelForNode } from "@/utils/deviceGraphLayout";
 
 type UtilTier = "all" | "healthy" | "warning" | "critical";
 
@@ -59,11 +55,19 @@ function shortHost(name: string, max = 26): string {
 function DeviceNode({
   data,
 }: {
-  data: { label: string; fullName: string; meta: string; border: string; online: boolean; dimmed?: boolean };
+  data: {
+    label: string;
+    fullName: string;
+    meta: string;
+    siteLabel?: string | null;
+    border: string;
+    online: boolean;
+    dimmed?: boolean;
+  };
 }) {
   return (
     <div
-      className="rounded-xl border-2 bg-white px-3 py-2.5 shadow-sm transition-all hover:shadow-md"
+      className="device-graph-node rounded-xl border-2 bg-white px-3 py-2.5 shadow-sm transition-all hover:shadow-md"
       style={{
         borderColor: data.border,
         width: 220,
@@ -74,6 +78,11 @@ function DeviceNode({
       <div className="flex items-center gap-2">
         <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${data.online ? "bg-emerald-500" : "bg-slate-300"}`} />
         <span className="truncate text-sm font-semibold text-slate-800">{data.label}</span>
+        {data.siteLabel && (
+          <span className="ml-auto shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+            {data.siteLabel}
+          </span>
+        )}
       </div>
       <div className="mt-1 truncate text-[11px] text-slate-500">{data.meta}</div>
     </div>
@@ -176,16 +185,15 @@ function buildLayout(
   topo: Topology,
   size: { w: number; h: number },
   linksById: Map<number, LinkUsage>,
-  unassignedLabel: string,
   highlightLinkId?: number | null,
   highlightDeviceId?: number | null,
 ): { nodes: Node[]; edges: Edge[] } {
-  const siteColumns = buildSiteColumns(topo, unassignedLabel);
-  const laneCount = Math.max(siteColumns.length, 1);
-  const canvasW = Math.max(size.w, 640);
-  const canvasH = Math.max(size.h, 420);
-  const laneW = (canvasW - LANE_GUTTER * (laneCount + 1)) / laneCount;
-  const laneH = canvasH - LANE_GUTTER * 2;
+  const positions = layoutDeviceGraph(
+    topo.nodes.map((n) => ({ id: n.id, site_id: n.site_id })),
+    topo.edges.map((e) => ({ source: e.source, target: e.target })),
+    size.w,
+    size.h,
+  );
 
   const connectedDevices = new Set<number>();
   for (const e of topo.edges) {
@@ -200,77 +208,35 @@ function buildLayout(
     }
   }
 
-  const nodes: Node[] = [];
+  const highlightSet = new Set<number>();
+  if (highlightDeviceId != null) {
+    highlightSet.add(highlightDeviceId);
+    for (const id of connectedDevices) highlightSet.add(id);
+  } else if (highlightLinkId != null) {
+    for (const id of connectedDevices) highlightSet.add(id);
+  }
 
-  siteColumns.forEach((site, col) => {
-    const laneId = `lane-${site.id}`;
-    const laneX = LANE_GUTTER + col * (laneW + LANE_GUTTER);
+  const dimActive = highlightSet.size > 0;
 
-    nodes.push({
-      id: laneId,
-      type: "group",
-      position: { x: laneX, y: LANE_GUTTER },
-      data: {},
-      draggable: false,
-      selectable: false,
-      style: {
-        width: laneW,
-        height: laneH,
-        backgroundColor: "rgba(248, 250, 252, 0.9)",
-        border: "1px solid rgba(148, 163, 184, 0.28)",
-        borderRadius: 16,
+  const nodes: Node[] = topo.nodes.map((n) => {
+    const pos = positions.get(n.id) ?? { x: 0, y: 0 };
+    const vendorColor = vendorColors[n.vendor] || "#64748b";
+    const dimmed = dimActive ? !highlightSet.has(n.id) : false;
+
+    return {
+      id: String(n.id),
+      type: "device",
+      position: pos,
+      data: {
+        label: shortHost(n.name),
+        fullName: n.name,
+        siteLabel: siteLabelForNode(n.site_id, topo.sites),
+        meta: `${n.vendor.toUpperCase()} · ${labelForOption(DEVICE_ROLE_OPTIONS, n.role)}`,
+        border: vendorColor,
+        online: n.status === "online",
+        dimmed,
       },
-    });
-
-    nodes.push({
-      id: `site-label-${site.id}`,
-      parentId: laneId,
-      type: "default",
-      position: { x: 16, y: 12 },
-      data: { label: site.label },
-      draggable: false,
-      selectable: false,
-      style: {
-        background: "transparent",
-        border: "none",
-        boxShadow: "none",
-        fontSize: 12,
-        fontWeight: 700,
-        color: "#475569",
-        padding: 0,
-        pointerEvents: "none",
-      },
-    });
-
-    const devices = topo.nodes.filter((n) => (n.site_id ?? NO_SITE) === site.id);
-    const nodeW = Math.min(220, laneW - 32);
-    const nodeX = (laneW - nodeW) / 2;
-    const usableH = laneH - LANE_HEADER - 24;
-    const step = devices.length > 1 ? usableH / (devices.length - 1) : 0;
-    const startY = devices.length === 1 ? LANE_HEADER + (usableH - 56) / 2 : LANE_HEADER;
-
-    devices.forEach((n, row) => {
-      const vendorColor = vendorColors[n.vendor] || "#64748b";
-      const dimmed =
-        highlightDeviceId != null
-          ? n.id !== highlightDeviceId && !connectedDevices.has(n.id)
-          : highlightLinkId != null && !connectedDevices.has(n.id);
-      nodes.push({
-        id: String(n.id),
-        type: "device",
-        parentId: laneId,
-        extent: "parent",
-        position: { x: nodeX, y: devices.length === 1 ? startY : startY + row * step },
-        data: {
-          label: shortHost(n.name),
-          fullName: n.name,
-          meta: `${n.vendor.toUpperCase()} · ${labelForOption(DEVICE_ROLE_OPTIONS, n.role)}`,
-          border: vendorColor,
-          online: n.status === "online",
-          dimmed,
-        },
-      });
-    });
+    };
   });
 
   const nodeIds = new Set(topo.nodes.map((n) => String(n.id)));
@@ -366,9 +332,9 @@ export default function BackboneTopologyPanel({ topo, links, loading }: Props) {
   const { nodes, edges } = useMemo(
     () =>
       graphTopo
-        ? buildLayout(graphTopo, size, linksById, tc("未分配站点"), selectedLinkId, selectedDeviceId)
+        ? buildLayout(graphTopo, size, linksById, selectedLinkId, selectedDeviceId)
         : { nodes: [], edges: [] },
-    [graphTopo, size, linksById, tc, selectedLinkId, selectedDeviceId],
+    [graphTopo, size, linksById, selectedLinkId, selectedDeviceId],
   );
 
   const layoutKey = `${size.w}x${size.h}-${nodes.length}-${edges.length}-${selectedLinkId}-${selectedDeviceId}`;
@@ -400,7 +366,7 @@ export default function BackboneTopologyPanel({ topo, links, loading }: Props) {
     <div className="backbone-topology-panel">
       <Row gutter={[16, 16]}>
         <Col xs={24} xl={16}>
-          <div ref={hostRef} className="backbone-topology-canvas">
+          <div ref={hostRef} className="backbone-topology-canvas device-graph-flow">
             {graphTopo && graphTopo.nodes.length > 0 ? (
               <ReactFlow
                 nodes={nodes}
