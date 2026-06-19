@@ -16,9 +16,10 @@ import {
   Typography,
 } from "antd";
 import { DeleteOutlined, EditOutlined, PlusOutlined, SearchOutlined, SyncOutlined } from "@ant-design/icons";
-import dayjs from "dayjs";
 import { api } from "../api/client";
-import type { Device, LinkUsage, SiteCapacity } from "../api/types";
+import BackboneTopologyPanel from "../components/BackboneTopologyPanel";
+import type { Device, LinkUsage, SiteCapacity, Topology } from "../api/types";
+import { fmtLinkBw, linkUtilizationLines } from "../utils/linkUtilization";
 import BackboneLinkModal from "../components/BackboneLinkModal";
 import InterfaceNameCell from "../components/InterfaceNameCell";
 import { utilColor } from "../charts/options";
@@ -37,11 +38,6 @@ function gbps(mbps: number) {
   return Math.round((mbps || 0) / 1000);
 }
 
-function fmtBw(mbps?: number) {
-  if (!mbps) return "—";
-  return mbps >= 1000 ? `${Math.round(mbps / 1000)} Gbps` : `${mbps} Mbps`;
-}
-
 function siteRouteLabel(r: LinkUsage) {
   const a = r.site_a_code || r.site_a || "—";
   const z = r.site_z_code || r.site_z || "—";
@@ -52,30 +48,10 @@ function siteRouteKey(r: LinkUsage) {
   return `${r.site_a_id ?? ""}:${r.site_z_id ?? ""}`;
 }
 
-function formatPeakAt(iso?: string | null) {
-  if (!iso) return "—";
-  return dayjs(iso).format("YYYY-MM-DD HH:mm:ss");
-}
-
-function utilizationTooltip(r: LinkUsage, pct: number) {
-  const peakRx = r.peak_rx_mbps ?? 0;
-  const peakTx = r.peak_tx_mbps ?? 0;
-  const peakTotal = r.peak_traffic_mbps ?? peakRx + peakTx;
-  const lines = [
-    `峰值利用率 ${Math.round(pct)}%`,
-    `峰值带宽 Rx ${fmtBw(peakRx)} / Tx ${fmtBw(peakTx)} · 合计 ${fmtBw(peakTotal)}`,
-    `合同带宽 ${fmtBw(r.capacity_mbps)}`,
-    `采样时间 ${formatPeakAt(r.peak_at)}`,
-  ];
-  if (r.traffic_mbps != null && r.traffic_mbps > 0) {
-    lines.push(`当前流量 ${fmtBw(r.traffic_mbps)}`);
-  }
-  if (r.effective_alarm_utilization_pct != null) {
-    lines.push(`告警阈值 ${r.effective_alarm_utilization_pct}%`);
-  }
+function utilizationTooltip(r: LinkUsage, pct: number, tc: (s: string) => string) {
   return (
     <div style={{ lineHeight: 1.6 }}>
-      {lines.map((line) => (
+      {linkUtilizationLines(r, pct, tc).map((line) => (
         <div key={line}>{line}</div>
       ))}
     </div>
@@ -87,6 +63,7 @@ export default function Capacity() {
   const { message } = AntApp.useApp();
   const [sites, setSites] = useState<SiteCapacity[]>([]);
   const [links, setLinks] = useState<LinkUsage[]>([]);
+  const [topo, setTopo] = useState<Topology | null>(null);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [siteSearch, setSiteSearch] = useState("");
@@ -104,12 +81,14 @@ export default function Capacity() {
   async function load(showSpinner = false) {
     if (showSpinner) setLoading(true);
     try {
-      const [s, l] = await Promise.all([
+      const [s, l, t] = await Promise.all([
         api.get<SiteCapacity[]>("/capacity/sites"),
         api.get<LinkUsage[]>("/capacity/links/usage"),
+        api.get<Topology>("/capacity/topology"),
       ]);
       setSites(s.data);
       setLinks(l.data);
+      setTopo(t.data);
     } catch {
       message.error(tc('容量数据加载失败，请稍后重试'));
     } finally {
@@ -245,79 +224,6 @@ export default function Capacity() {
       </div>
 
       <Card
-        className="capacity-section-card"
-        title={`${tc("Fabric 站点容量")} (${sites.length})`}
-        extra={
-          <Input
-            allowClear
-            prefix={<SearchOutlined />}
-            placeholder={tc('搜索站点名称 / 编码')}
-            value={siteSearch}
-            onChange={(e) => setSiteSearch(e.target.value)}
-            style={{ width: 240 }}
-          />
-        }
-      >
-        <Table<SiteCapacity>
-          {...dataTableProps(TABLE_SCROLL.lg)}
-          size="small"
-          className="data-table capacity-data-table"
-          rowKey="site_id"
-          loading={loading}
-          dataSource={filteredSites}
-          pagination={pagination}
-          scroll={{ x: 720 }}
-          locale={{ emptyText: siteSearch ? tc("无匹配站点") : tc("暂无站点容量数据") }}
-          columns={[
-            {
-              title: tc('站点'),
-              dataIndex: "site",
-              fixed: "left",
-              width: 260,
-              sorter: (a, b) => a.code.localeCompare(b.code),
-              render: (_: unknown, r) => (
-                <Space direction="vertical" size={0}>
-                  <span style={{ fontWeight: 600 }}>{r.code}</span>
-                  <span style={{ color: "#8a9099", fontSize: 12 }}>{r.site}</span>
-                </Space>
-              ),
-            },
-            {
-              title: tc('设备'),
-              dataIndex: "devices",
-              width: 90,
-              align: "right",
-              sorter: (a, b) => a.devices - b.devices,
-              render: (v: number) => `${v} ${tc("台")}`,
-            },
-            {
-              title: tc('已分配 / 总容量'),
-              key: "cap",
-              width: 180,
-              align: "right",
-              sorter: (a, b) => a.used_mbps - b.used_mbps,
-              render: (_: unknown, r) => `${gbps(r.used_mbps)} / ${gbps(r.capacity_mbps)} Gbps`,
-            },
-            {
-              title: tc('带宽分配率'),
-              dataIndex: "utilization_pct",
-              width: 260,
-              defaultSortOrder: "descend",
-              sorter: (a, b) => a.utilization_pct - b.utilization_pct,
-              render: (v: number) => (
-                <Progress
-                  percent={v}
-                  size="small"
-                  strokeColor={utilColor(v)}
-                  format={(p) => `${p}%`}
-                />
-              ),
-            },
-          ]}
-        />
-      </Card>
-
-      <Card
         className="capacity-section-card capacity-backbone-card"
         title={`${tc("骨干链路 · 利用率")} (${links.length})`}
         extra={
@@ -355,6 +261,7 @@ export default function Capacity() {
           </Space>
         }
       >
+        <BackboneTopologyPanel topo={topo} links={filteredLinks} loading={loading} />
         <Alert
           type="info"
           showIcon
@@ -454,7 +361,7 @@ export default function Capacity() {
               width: 100,
               align: "right",
               sorter: (a, b) => a.capacity_mbps - b.capacity_mbps,
-              render: (v: number) => fmtBw(v),
+              render: (v: number) => fmtLinkBw(v),
             },
             {
               title: tc('利用率'),
@@ -463,7 +370,7 @@ export default function Capacity() {
               defaultSortOrder: "descend",
               sorter: (a, b) => a.utilization_pct - b.utilization_pct,
               render: (v: number, r) => (
-                <Tooltip title={utilizationTooltip(r, v)}>
+                <Tooltip title={utilizationTooltip(r, v, tc)}>
                   <Progress
                     percent={Math.round(v)}
                     size="small"
@@ -493,6 +400,79 @@ export default function Capacity() {
                     <Button type="text" danger size="small" icon={<DeleteOutlined />} />
                   </Popconfirm>
                 </Space>
+              ),
+            },
+          ]}
+        />
+      </Card>
+
+      <Card
+        className="capacity-section-card"
+        title={`${tc("Fabric 站点容量")} (${sites.length})`}
+        extra={
+          <Input
+            allowClear
+            prefix={<SearchOutlined />}
+            placeholder={tc('搜索站点名称 / 编码')}
+            value={siteSearch}
+            onChange={(e) => setSiteSearch(e.target.value)}
+            style={{ width: 240 }}
+          />
+        }
+      >
+        <Table<SiteCapacity>
+          {...dataTableProps(TABLE_SCROLL.lg)}
+          size="small"
+          className="data-table capacity-data-table"
+          rowKey="site_id"
+          loading={loading}
+          dataSource={filteredSites}
+          pagination={pagination}
+          scroll={{ x: 720 }}
+          locale={{ emptyText: siteSearch ? tc("无匹配站点") : tc("暂无站点容量数据") }}
+          columns={[
+            {
+              title: tc('站点'),
+              dataIndex: "site",
+              fixed: "left",
+              width: 260,
+              sorter: (a, b) => a.code.localeCompare(b.code),
+              render: (_: unknown, r) => (
+                <Space direction="vertical" size={0}>
+                  <span style={{ fontWeight: 600 }}>{r.code}</span>
+                  <span style={{ color: "#8a9099", fontSize: 12 }}>{r.site}</span>
+                </Space>
+              ),
+            },
+            {
+              title: tc('设备'),
+              dataIndex: "devices",
+              width: 90,
+              align: "right",
+              sorter: (a, b) => a.devices - b.devices,
+              render: (v: number) => `${v} ${tc("台")}`,
+            },
+            {
+              title: tc('已分配 / 总容量'),
+              key: "cap",
+              width: 180,
+              align: "right",
+              sorter: (a, b) => a.used_mbps - b.used_mbps,
+              render: (_: unknown, r) => `${gbps(r.used_mbps)} / ${gbps(r.capacity_mbps)} Gbps`,
+            },
+            {
+              title: tc('带宽分配率'),
+              dataIndex: "utilization_pct",
+              width: 260,
+              defaultSortOrder: "descend",
+              sorter: (a, b) => a.utilization_pct - b.utilization_pct,
+              render: (v: number) => (
+                <Progress
+                  percent={v}
+                  size="small"
+                  strokeColor={utilColor(v)}
+                  format={(p) => `${p}%`}
+                />
               ),
             },
           ]}
