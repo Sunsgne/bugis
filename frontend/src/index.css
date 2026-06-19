@@ -745,6 +745,12 @@ body {
 .config-service-table .ant-table-thead > tr > th,
 .overlay-vni-list-table .ant-table-thead > tr > th {
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.overlay-vni-list-table .ant-table-content > table {
+  min-width: 280px;
 }
 
 @media (max-width: 768px) {
@@ -1124,10 +1130,6 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
   vertical-align: bottom;
-}
-
-.overlay-vni-list-table .ant-table-thead > tr > th {
-  white-space: nowrap;
 }
 
 .control-plane-page .ant-table-cell {

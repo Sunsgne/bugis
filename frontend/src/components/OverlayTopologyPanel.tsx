@@ -39,7 +39,7 @@ type Props = {
 };
 
 export default function OverlayTopologyPanel({ topo, overlayInventory }: Props) {
-  const { tc } = useTc();
+  const { tc, i18n } = useTc();
   const [selectedVni, setSelectedVni] = useState<number | undefined>(undefined);
   const [selectedDeviceId, setSelectedDeviceId] = useState<number | undefined>(undefined);
   const [search, setSearch] = useState("");
@@ -92,7 +92,7 @@ export default function OverlayTopologyPanel({ topo, overlayInventory }: Props) 
             highlightDeviceId: selectedVni == null ? selectedDeviceId : undefined,
           })
         : null,
-    [topo, selectedVni, selectedDeviceId],
+    [topo, selectedVni, selectedDeviceId, i18n.language],
   );
 
   function clearFilters() {
@@ -281,7 +281,7 @@ export default function OverlayTopologyPanel({ topo, overlayInventory }: Props) 
                     style={{ marginTop: 8 }}
                     dataSource={deviceVnis}
                     pagination={deviceVnis.length > 10 ? { pageSize: 10, size: "small" } : false}
-                    scroll={{ y: 240 }}
+                    scroll={{ x: 280, y: 240 }}
                     onRow={(row) => ({
                       onClick: () => selectVni(row.vni),
                       style: { cursor: "pointer" },
@@ -290,7 +290,7 @@ export default function OverlayTopologyPanel({ topo, overlayInventory }: Props) 
                       {
                         title: "VNI",
                         dataIndex: "vni",
-                        width: 90,
+                        width: 92,
                         render: (v: number, row: VniMemberSummary) => (
                           <Space size={4}>
                             <Text strong>{v}</Text>
@@ -301,12 +301,13 @@ export default function OverlayTopologyPanel({ topo, overlayInventory }: Props) 
                       {
                         title: tc('设备数'),
                         dataIndex: "deviceCount",
-                        width: 116,
-                        align: "right",
+                        width: 64,
+                        align: "center",
                       },
                       {
                         title: tc('对端'),
                         dataIndex: "devices",
+                        width: 120,
                         ellipsis: true,
                         render: (devices: { name: string; id: number }[]) => {
                           const peers = devices
@@ -341,7 +342,7 @@ export default function OverlayTopologyPanel({ topo, overlayInventory }: Props) 
                       pageSizeOptions: ["12", "24", "48"],
                       showTotal: (total) => `${tc("共")} ${total}`,
                     }}
-                    scroll={{ y: 260 }}
+                    scroll={{ x: 280, y: 260 }}
                     onRow={(row) => ({
                       onClick: () => selectVni(row.vni),
                       style: { cursor: "pointer" },
@@ -350,7 +351,7 @@ export default function OverlayTopologyPanel({ topo, overlayInventory }: Props) 
                       {
                         title: "VNI",
                         dataIndex: "vni",
-                        width: 110,
+                        width: 96,
                         sorter: (a: VniMemberSummary, b: VniMemberSummary) => a.vni - b.vni,
                         defaultSortOrder: "ascend",
                         render: (v: number, row: VniMemberSummary) => (
@@ -363,13 +364,14 @@ export default function OverlayTopologyPanel({ topo, overlayInventory }: Props) 
                       {
                         title: tc('设备数'),
                         dataIndex: "deviceCount",
-                        width: 116,
-                        align: "right",
+                        width: 64,
+                        align: "center",
                         sorter: (a: VniMemberSummary, b: VniMemberSummary) => a.deviceCount - b.deviceCount,
                       },
                       {
                         title: tc('设备'),
                         dataIndex: "devices",
+                        width: 120,
                         ellipsis: true,
                         render: (devices: { name: string }[]) => {
                           const names = devices.map((d) => d.name);

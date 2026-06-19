@@ -113,9 +113,12 @@ export function useTc() {
   return { t, tc, i18n, isEn, ...values };
 }
 
+import i18n from "./index";
+
 /** Non-React: translate Chinese to current locale. */
 export function tcStatic(zhText: string, lng?: string): string {
-  const isEn = (lng || "zh").startsWith("en");
+  const lang = lng ?? i18n.language ?? "zh";
+  const isEn = lang.startsWith("en");
   if (!isEn) return zhText;
   return ZH_TO_EN[zhText] ?? zhText;
 }
