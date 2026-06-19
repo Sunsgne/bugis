@@ -81,10 +81,16 @@ export function useAlarmTemplates() {
     }
   }
 
-  async function preview(kind: string, severity = "major") {
+  async function preview(
+    kind: string,
+    severity = "major",
+    draft?: { global?: GlobalTemplate; kinds?: Record<string, KindTemplate> },
+  ) {
     const { data: res } = await api.post<PreviewResult>("/system/settings/alarm-templates/preview", {
       kind,
       severity,
+      global: draft?.global,
+      kinds: draft?.kinds,
     });
     return res;
   }

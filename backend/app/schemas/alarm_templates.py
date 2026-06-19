@@ -52,6 +52,10 @@ class AlarmTemplatePreviewIn(BaseModel):
     kind: str = "sla_loss"
     severity: str = "major"
     product_name: str | None = None
+    global_: GlobalTemplateIn | None = Field(default=None, alias="global")
+    kinds: dict[str, KindTemplateIn] | None = None
+
+    model_config = {"populate_by_name": True}
 
 
 class AlarmTemplatePreviewOut(BaseModel):

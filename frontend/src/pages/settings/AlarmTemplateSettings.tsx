@@ -114,7 +114,10 @@ export default function AlarmTemplateSettings() {
   const runPreview = useCallback(async () => {
     setPreviewLoading(true);
     try {
-      const res = await preview(selectedKind);
+      const res = await preview(selectedKind, "major", {
+        global: globalForm.getFieldsValue() as GlobalTemplate,
+        kinds: { [selectedKind]: kindForm.getFieldsValue() as KindTemplate },
+      });
       setPreviewHtml(res.html);
       setPreviewText(res.text);
       setPreviewSubject(res.subject);
@@ -123,7 +126,7 @@ export default function AlarmTemplateSettings() {
     } finally {
       setPreviewLoading(false);
     }
-  }, [preview, selectedKind, message, tc]);
+  }, [preview, selectedKind, globalForm, kindForm, message, tc]);
 
   useEffect(() => {
     if (data) runPreview();

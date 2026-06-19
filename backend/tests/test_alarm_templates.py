@@ -1,6 +1,9 @@
 """Tests for editable alarm notification templates."""
 from __future__ import annotations
 
+import pytest
+
+from app.core.database import SessionLocal
 from app.models.alarm import Alarm
 from app.models.enums import AlarmSeverity, AlarmStatus
 from app.services import alarm_messages as msg
@@ -11,6 +14,15 @@ from app.services.alarm_template_registry import (
     save_templates,
     templates_to_dict,
 )
+
+
+@pytest.fixture
+def db_session():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 
 def test_render_template_variables():
@@ -25,6 +37,28 @@ def test_custom_template_overrides_title(db_session):
     save_templates(db_session, base)
     copy = msg.build_circuit_loss("CIR-XYZ", 2.0, 0.5, get_templates(db_session))
     assert copy.title == "CUSTOM CIR-XYZ loss alert"
+
+
+def test_preview_all_kinds(client, auth_headers):
+    for kind in (
+        "tunnel_down",
+        "circuit_interruption",
+        "sla_loss",
+        "sla_latency",
+        "utilization",
+        "health",
+        "circuit_flap",
+        "link_utilization",
+        "test",
+    ):
+        r = client.post(
+            "/api/v1/system/settings/alarm-templates/preview",
+            headers=auth_headers,
+            json={"kind": kind, "severity": "major"},
+        )
+        assert r.status_code == 200, (kind, r.text)
+        body = r.json()
+        assert body.get("text") and body.get("html") and body.get("subject")
 
 
 def test_notification_text_uses_custom_banner(db_session):
