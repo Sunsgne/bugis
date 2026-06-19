@@ -65,7 +65,7 @@ export default function Topology() {
           type="info"
           showIcon
           style={{ marginBottom: 12 }}
-          message="尚未配置站点间链路"
+          message={tc("尚未配置站点间链路")}
           description={tc('当前按站点泳道展示纳管设备。在「容量规划」中添加 DCI / Fabric 链路后，拓扑图将自动绘制互联关系与带宽利用率。')}
         />
       )}

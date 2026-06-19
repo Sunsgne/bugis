@@ -20,17 +20,6 @@ import { action, empty, page } from "../constants/uiCopy";
 import { fetchAllPages } from "../utils/pagination";
 import { useTc } from "@/i18n/useTc";
 
-const STATUS_LABEL: Record<string, string> = {
-  active: "运行中",
-  degraded: "降级",
-  provisioning: "开通中",
-  pending: "待开通",
-  draft: "草稿",
-  suspended: "暂停",
-  failed: "失败",
-  decommissioned: "已拆除",
-};
-
 const STATUS_COLOR: Record<string, string> = {
   active: "green",
   degraded: "orange",
@@ -43,6 +32,20 @@ const STATUS_COLOR: Record<string, string> = {
 };
 
 const MONITORABLE = new Set(["active", "degraded", "provisioning", "pending", "draft", "failed"]);
+
+function circuitStatusLabel(tc: (s: string) => string, status: string) {
+  const map: Record<string, string> = {
+    active: tc("运行中"),
+    degraded: tc("降级"),
+    provisioning: tc("开通中"),
+    pending: tc("待开通"),
+    draft: tc("草稿"),
+    suspended: tc("暂停"),
+    failed: tc("失败"),
+    decommissioned: tc("已拆除"),
+  };
+  return map[status] || status;
+}
 
 export default function Monitoring() {
   const { tc } = useTc();
@@ -84,8 +87,6 @@ export default function Monitoring() {
     loadCircuits();
   }, []);
 
-  // Keep selection in sync with the URL when it changes via back/forward or
-  // cross-page links (e.g. a "查看流量" link landing here with ?circuit=).
   const circuitParam = params.get("circuit");
   useEffect(() => {
     const fromUrl = Number(circuitParam);
@@ -103,8 +104,10 @@ export default function Monitoring() {
     const { data } = await api.post("/telemetry/collect");
     const msg =
       data.collected > 0
-        ? `SNMP 采集 ${data.collected} 条${data.skipped ? `，${data.skipped} 条跳过` : ""}`
-        : data.message || "无 SNMP 数据（请检查 SNMP 与接口 ifIndex）";
+        ? tc(
+            `SNMP 采集 ${data.collected} 条${data.skipped ? `，${data.skipped} 条跳过` : ""}`,
+          )
+        : tc(data.message || "无 SNMP 数据（请检查 SNMP 与接口 ifIndex）");
     message.info(msg);
     setRefreshKey((k) => k + 1);
   }
@@ -140,7 +143,7 @@ export default function Monitoring() {
                         color={STATUS_COLOR[String(option.data.status)] || "default"}
                         style={{ margin: 0 }}
                       >
-                        {STATUS_LABEL[String(option.data.status)] || option.data.status}
+                        {circuitStatusLabel(tc, String(option.data.status))}
                       </Tag>
                     </Space>
                   )}
@@ -149,9 +152,13 @@ export default function Monitoring() {
                 <Alert
                   type="info"
                   showIcon
-                  message="暂无可监控专线"
+                  message={tc("暂无可监控专线")}
                   description={
-                    <>{tc('当前没有已激活（active）的专线。请先在')}<Link to="/circuits">{tc('专线管理')}</Link>{tc('创建并开通专线，或点击刷新重试。')}</>
+                    <>
+                      {tc("当前没有已激活（active）的专线。请先在")}{" "}
+                      <Link to="/circuits">{page.circuits}</Link>{" "}
+                      {tc("创建并开通专线，或点击刷新重试。")}
+                    </>
                   }
                 />
               )}
@@ -168,11 +175,11 @@ export default function Monitoring() {
         </Spin>
       </PageCard>
 
-      {showInactiveHint && (
+      {showInactiveHint && current && (
         <Alert
           type="warning"
           showIcon
-          message={`专线 ${current.code} 当前状态为「${STATUS_LABEL[current.status] || current.status}」`}
+          message={tc(`专线 ${current.code} 当前状态为「${circuitStatusLabel(tc, current.status)}」`)}
           description={tc('SNMP 流量与可用性数据在专线激活（active）后通过 SNMP 与拨测采集；草稿/失败状态仅展示历史数据。')}
         />
       )}

@@ -25,7 +25,9 @@ import InterfaceNameCell from "../components/InterfaceNameCell";
 import { utilColor } from "../charts/options";
 import { fetchAllPages } from "../utils/pagination";
 import { useTc } from "@/i18n/useTc";
-import { dataTableProps, TABLE_SCROLL } from "../utils/table";
+import { dataTableProps, TABLE_SCROLL, colsNowrap } from "../utils/table";
+import { tablePaginationTotal } from "../i18n/helpers";
+import i18n from "../i18n";
 
 const LINK_TYPE_LABEL: Record<string, string> = {
   dci: "跨站点 DCI",
@@ -200,7 +202,8 @@ export default function Capacity() {
     defaultPageSize: 20,
     showSizeChanger: true,
     pageSizeOptions: ["20", "50", "100", "200"],
-    showTotal: (total: number) => `共 ${total} 项`,
+    showTotal: (total: number, range?: [number, number]) =>
+      tablePaginationTotal(i18n.t.bind(i18n), total, range),
   };
 
   return (
@@ -278,7 +281,7 @@ export default function Capacity() {
           pagination={pagination}
           scroll={{ x: 1100 }}
           locale={{ emptyText: linkSearch || supplierFilter || siteRouteFilter ? tc("无匹配链路") : tc("暂无骨干链路 · 点击「配置骨干链路」智能推荐或手动选配") }}
-          columns={[
+          columns={colsNowrap<LinkUsage>([
             {
               title: tc('链路'),
               dataIndex: "name",
@@ -402,7 +405,7 @@ export default function Capacity() {
                 </Space>
               ),
             },
-          ]}
+          ])}
         />
       </Card>
 
@@ -430,7 +433,7 @@ export default function Capacity() {
           pagination={pagination}
           scroll={{ x: 720 }}
           locale={{ emptyText: siteSearch ? tc("无匹配站点") : tc("暂无站点容量数据") }}
-          columns={[
+          columns={colsNowrap<SiteCapacity>([
             {
               title: tc('站点'),
               dataIndex: "site",
@@ -475,7 +478,7 @@ export default function Capacity() {
                 />
               ),
             },
-          ]}
+          ])}
         />
       </Card>
 

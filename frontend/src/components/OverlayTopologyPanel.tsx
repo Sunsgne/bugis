@@ -16,6 +16,7 @@ import {
 import { ClearOutlined, SearchOutlined } from "@ant-design/icons";
 import TopologyGraph from "./TopologyGraph";
 import { useTc } from "@/i18n/useTc";
+import { colsNowrap } from "@/utils/table";
 import {
   buildVniMemberIndex,
   overlayTopologyOption,
@@ -231,7 +232,7 @@ export default function OverlayTopologyPanel({ topo, overlayInventory }: Props) 
                     style={{ marginTop: 8 }}
                     dataSource={selectedRow.devices}
                     scroll={{ y: 140 }}
-                    columns={[
+                    columns={colsNowrap([
                       {
                         title: tc('设备'),
                         dataIndex: "name",
@@ -256,12 +257,12 @@ export default function OverlayTopologyPanel({ topo, overlayInventory }: Props) 
                       {
                         title: tc('状态'),
                         dataIndex: "status",
-                        width: 56,
+                        width: 72,
                         render: (s: string) => (
                           <Tag color={s === "up" ? "green" : "default"}>{s}</Tag>
                         ),
                       },
-                    ]}
+                    ])}
                   />
                   {selectedRow.deviceCount < 2 && (
                     <Text type="secondary" style={{ fontSize: 12 }}>{tc('单点 VNI，无设备间隧道。')}</Text>
@@ -285,7 +286,7 @@ export default function OverlayTopologyPanel({ topo, overlayInventory }: Props) 
                       onClick: () => selectVni(row.vni),
                       style: { cursor: "pointer" },
                     })}
-                    columns={[
+                    columns={colsNowrap([
                       {
                         title: "VNI",
                         dataIndex: "vni",
@@ -300,7 +301,7 @@ export default function OverlayTopologyPanel({ topo, overlayInventory }: Props) 
                       {
                         title: tc('设备数'),
                         dataIndex: "deviceCount",
-                        width: 100,
+                        width: 116,
                         align: "right",
                       },
                       {
@@ -321,7 +322,7 @@ export default function OverlayTopologyPanel({ topo, overlayInventory }: Props) 
                           );
                         },
                       },
-                    ]}
+                    ])}
                   />
                 </div>
               ) : (
@@ -345,7 +346,7 @@ export default function OverlayTopologyPanel({ topo, overlayInventory }: Props) 
                       onClick: () => selectVni(row.vni),
                       style: { cursor: "pointer" },
                     })}
-                    columns={[
+                    columns={colsNowrap([
                       {
                         title: "VNI",
                         dataIndex: "vni",
@@ -362,7 +363,7 @@ export default function OverlayTopologyPanel({ topo, overlayInventory }: Props) 
                       {
                         title: tc('设备数'),
                         dataIndex: "deviceCount",
-                        width: 100,
+                        width: 116,
                         align: "right",
                         sorter: (a: VniMemberSummary, b: VniMemberSummary) => a.deviceCount - b.deviceCount,
                       },
@@ -382,7 +383,7 @@ export default function OverlayTopologyPanel({ topo, overlayInventory }: Props) 
                           );
                         },
                       },
-                    ]}
+                    ])}
                   />
                 </div>
               )}

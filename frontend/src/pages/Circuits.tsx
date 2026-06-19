@@ -171,7 +171,7 @@ export default function Circuits() {
       setRows(data.items);
       setTotal(data.total);
     } catch {
-      message.warning("专线列表加载失败，请刷新重试");
+      message.warning(tc("专线列表加载失败，请刷新重试"));
     } finally {
       setLoading(false);
     }
@@ -205,7 +205,7 @@ export default function Circuits() {
       }
     });
     if (failed.length) {
-      message.warning(`部分数据加载失败: ${failed.join(", ")}，请刷新页面重试`);
+      message.warning(tc(`部分数据加载失败: ${failed.join(", ")}，请刷新页面重试`));
     }
   }
 
@@ -279,7 +279,7 @@ export default function Circuits() {
         }, 150);
       } catch {
         if (!cancelled) {
-          message.warning("无法打开该专线，可能不存在或无权查看");
+          message.warning(tc("无法打开该专线，可能不存在或无权查看"));
         }
       }
     })();
@@ -348,10 +348,10 @@ export default function Circuits() {
   async function removeCircuit(c: Circuit) {
     try {
       await api.delete(`/circuits/${c.id}`);
-      message.success(`专线 ${c.code} 已删除`);
+      message.success(tc(`专线 ${c.code} 已删除`));
       loadCircuits();
     } catch (e: any) {
-      message.error(e?.response?.data?.detail || "删除失败");
+      message.error(e?.response?.data?.detail || tc("删除失败"));
     }
   }
 
@@ -391,12 +391,12 @@ export default function Circuits() {
     delete payload.via_hops;
     try {
       await api.post("/circuits", payload);
-      message.success("专线已创建（草稿），可点击开通下发配置");
+      message.success(tc("专线已创建（草稿），可点击开通下发配置"));
       setOpen(false);
       form.resetFields();
       loadCircuits();
     } catch (e: any) {
-      message.error(e?.response?.data?.detail || "创建失败");
+      message.error(e?.response?.data?.detail || tc("创建失败"));
     }
   }
 
@@ -435,7 +435,7 @@ export default function Circuits() {
       if (!terminal.includes(data.status)) {
         await pollWorkOrderProgress(data, terminal);
       } else if (data.status === "failed") {
-        message.error(`工单 ${data.code} 执行失败，请查看下发详情`);
+        message.error(tc(`工单 ${data.code} 执行失败，请查看下发详情`));
       }
       setDetailCache((prev) => {
         const next = { ...prev };
@@ -464,7 +464,7 @@ export default function Circuits() {
       } catch {
         pollErrors += 1;
         if (pollErrors >= 5) {
-          message.error("工单状态轮询失败，请刷新页面查看进度");
+          message.error(tc("工单状态轮询失败，请刷新页面查看进度"));
           return;
         }
         continue;
@@ -479,7 +479,7 @@ export default function Circuits() {
           /* keep merged */
         }
         if (wo.status === "failed") {
-          message.error(`工单 ${wo.code} 执行失败，请查看下发详情`);
+          message.error(tc(`工单 ${wo.code} 执行失败，请查看下发详情`));
         }
         loadCircuits();
         return;
@@ -562,14 +562,14 @@ export default function Circuits() {
         const { data } = await api.post(
           `/work-orders/provision/${modifyTarget.id}?wo_type=modify`
         );
-        message.success(`变更工单 ${data.code}: ${data.status}`);
+        message.success(tc(`变更工单 ${data.code}: ${data.status}`));
       } else {
-        message.success("告警参数已保存");
+        message.success(tc("告警参数已保存"));
       }
       setModifyTarget(null);
       loadCircuits();
     } catch (e: any) {
-      message.error(e?.response?.data?.detail || "变更失败");
+      message.error(e?.response?.data?.detail || tc("变更失败"));
     }
   }
 
@@ -603,7 +603,7 @@ export default function Circuits() {
     );
     const minEps = editEndpointsTarget.service_type === "remote_ipt" ? 1 : 2;
     if (endpoints.length < minEps) {
-      message.warning(`至少需要 ${minEps} 个端点`);
+      message.warning(tc(`至少需要 ${minEps} 个端点`));
       return;
     }
     const adopted = !!editEndpointsTarget.adopted;
@@ -623,7 +623,7 @@ export default function Circuits() {
       setEditEndpointsTarget(null);
       editEndpointsForm.resetFields();
       if (adopted) {
-        message.success(`端点已登记 · ${data.endpoints?.length ?? endpoints.length} 个节点（未向设备下发配置）`);
+        message.success(tc(`端点已登记 · ${data.endpoints?.length ?? endpoints.length} 个节点（未向设备下发配置）`));
         loadCircuits();
         return;
       }
@@ -637,7 +637,7 @@ export default function Circuits() {
         woType === "modify" ? { previous_endpoints: previousEndpoints } : undefined,
       );
     } catch (e: any) {
-      message.error(e?.response?.data?.detail || "端点更新失败");
+      message.error(e?.response?.data?.detail || tc("端点更新失败"));
     } finally {
       setEditEndpointsSaving(false);
     }
@@ -762,7 +762,7 @@ export default function Circuits() {
       });
     } catch (e: any) {
       hide();
-      message.error(e?.response?.data?.detail || "拨测失败");
+      message.error(e?.response?.data?.detail || tc("拨测失败"));
     }
   }
 
@@ -773,7 +773,7 @@ export default function Circuits() {
       setDiffText({});
       setHistory(data);
     } catch (e: any) {
-      message.error(e?.response?.data?.detail || "加载配置历史失败");
+      message.error(e?.response?.data?.detail || tc("加载配置历史失败"));
     }
   }
 
@@ -784,7 +784,7 @@ export default function Circuits() {
       );
       setDiffText((prev) => ({ ...prev, [deviceId]: data.diff }));
     } catch (e: any) {
-      message.error(e?.response?.data?.detail || "加载配置差异失败");
+      message.error(e?.response?.data?.detail || tc("加载配置差异失败"));
     }
   }
 
@@ -794,7 +794,7 @@ export default function Circuits() {
       // Non-persisting render — does NOT create a work order.
       ({ data } = await api.get(`/circuits/${c.id}/preview`));
     } catch (e: any) {
-      message.error(e?.response?.data?.detail || "配置预览失败");
+      message.error(e?.response?.data?.detail || tc("配置预览失败"));
       return;
     }
     modal.info({
@@ -837,7 +837,7 @@ export default function Circuits() {
                 a.click();
                 URL.revokeObjectURL(dl);
               } catch (e: any) {
-                message.error(e?.response?.data?.detail || "导出失败");
+                message.error(e?.response?.data?.detail || tc("导出失败"));
               }
             }}
           >
@@ -1336,6 +1336,7 @@ function CreateModal({
   onCancel,
   message,
 }: any) {
+  const { tc } = useTc();
   const [pathPreview, setPathPreview] = useState<any>(null);
   const [formLoading, setFormLoading] = useState(false);
   const tenantSearch = useTenantSearch(open ? defaultTenantId : null);
@@ -1363,7 +1364,7 @@ function CreateModal({
         setDevices(deviceRows);
         if (!sitesProp.length) setSites(siteRows);
       } catch {
-        if (!cancelled) message.error("表单数据加载失败，请刷新页面后重试");
+        if (!cancelled) message.error(tc("表单数据加载失败，请刷新页面后重试"));
       } finally {
         if (!cancelled) setFormLoading(false);
       }
@@ -1380,7 +1381,7 @@ function CreateModal({
       .map((e: { device_id?: number }) => e?.device_id)
       .filter(Boolean);
     if (endpointIds.length < 2) {
-      return message.warning("请先选择至少两个端点设备");
+      return message.warning(tc("请先选择至少两个端点设备"));
     }
     const viaIds = (values.via_hops || [])
       .map((h: { device_id?: number }) => h?.device_id)
@@ -1406,13 +1407,13 @@ function CreateModal({
 
   return (
     <Modal
-      title="新建专线"
+      title={tc("新建专线")}
       open={open}
       onOk={onOk}
       onCancel={onCancel}
       confirmLoading={formLoading}
-      okText="创建"
-      cancelText="取消"
+      okText={tc("创建")}
+      cancelText={tc("取消")}
       {...createCircuitModalProps}
     >
       <Form
@@ -1431,23 +1432,23 @@ function CreateModal({
         }}
       >
         <Typography.Text type="secondary" className="app-form-intro">
-          填写业务参数并配置 A/Z 接入端点；选择端口后可查看 S-VID 占用，避免 VLAN 冲突。
+          {tc("填写业务参数并配置 A/Z 接入端点；选择端口后可查看 S-VID 占用，避免 VLAN 冲突。")}
         </Typography.Text>
 
         <Row gutter={16}>
           <Col span={16}>
-            <Form.Item name="name" label="名称" rules={[{ required: true }]}>
-              <Input placeholder="例如 银行北京-上海二层专线" />
+            <Form.Item name="name" label={tc("名称")} rules={[{ required: true }]}>
+              <Input placeholder={tc("例如 银行北京-上海二层专线")} />
             </Form.Item>
           </Col>
           <Col span={8}>
-            <Form.Item name="tenant_id" label="客户" rules={[{ required: true }]}>
+            <Form.Item name="tenant_id" label={tc("客户")} rules={[{ required: true }]}>
               <TenantSearchSelect
                 loading={tenantSearch.loading || formLoading}
                 options={tenantSearch.options}
                 onSearch={tenantSearch.onSearch}
                 tenantTotal={tenantSearch.total}
-                placeholder="搜索客户名称或编码"
+                placeholder={tc("搜索客户名称或编码")}
               />
             </Form.Item>
           </Col>
@@ -1455,7 +1456,7 @@ function CreateModal({
 
         <Row gutter={16}>
           <Col span={10}>
-            <Form.Item name="service_type" label="业务类型">
+            <Form.Item name="service_type" label={tc("业务类型")}>
               <Select
                 onChange={(v) => {
                   if (v === "remote_ipt") {
@@ -1468,7 +1469,7 @@ function CreateModal({
             </Form.Item>
           </Col>
           <Col span={7}>
-            <Form.Item name="bandwidth_mbps" label="带宽 (Mbps)">
+            <Form.Item name="bandwidth_mbps" label={tc("带宽 (Mbps)")}>
               <InputNumber min={1} style={{ width: "100%" }} />
             </Form.Item>
           </Col>
@@ -1484,40 +1485,40 @@ function CreateModal({
           items={[
             {
               key: "evpn",
-              label: "EVPN 标识（VNI / VSI · 留空自动编排）",
+              label: tc("EVPN 标识（VNI / VSI · 留空自动编排）"),
               children: (
                 <Row gutter={16}>
                   <Col span={12}>
                     <Form.Item
                       name="vni"
                       label="VNI"
-                      extra="留空则平台自动分配，不可与已有专线重复"
+                      extra={tc("留空则平台自动分配，不可与已有专线重复")}
                       rules={[
                         {
                           type: "number",
                           min: 1,
                           max: 16777215,
-                          message: "VNI 范围 1–16777215",
+                          message: tc("VNI 范围 1–16777215"),
                         },
                       ]}
                     >
-                      <InputNumber min={1} max={16777215} style={{ width: "100%" }} placeholder="自动分配" />
+                      <InputNumber min={1} max={16777215} style={{ width: "100%" }} placeholder={tc("自动分配")} />
                     </Form.Item>
                   </Col>
                   <Col span={12}>
                     <Form.Item
                       name="vsi_name"
-                      label="VSI 名称"
-                      extra="H3C 等设备 VSI 实例名，留空则按编码自动生成"
+                      label={tc("VSI 名称")}
+                      extra={tc("H3C 等设备 VSI 实例名，留空则按编码自动生成")}
                       rules={[
-                        { max: 63, message: "最长 63 字符" },
+                        { max: 63, message: tc("最长 63 字符") },
                         {
                           pattern: /^[A-Za-z0-9_-]*$/,
-                          message: "仅允许字母、数字、下划线、连字符",
+                          message: tc("仅允许字母、数字、下划线、连字符"),
                         },
                       ]}
                     >
-                      <Input placeholder="例如 vsi_cir_ab12cd" />
+                      <Input placeholder={tc("例如 vsi_cir_ab12cd")} />
                     </Form.Item>
                   </Col>
                 </Row>
@@ -1525,7 +1526,7 @@ function CreateModal({
             },
             {
               key: "alarm",
-              label: "SLA 告警阈值（可选 · 留空继承平台默认）",
+              label: tc("SLA 告警阈值（可选 · 留空继承平台默认）"),
               children: <CircuitAlarmThresholdFields />,
             },
           ]}
@@ -1587,7 +1588,7 @@ function CreateModal({
           }
         </Form.Item>
 
-        <Divider plain>接入端点</Divider>
+        <Divider plain>{tc("接入端点")}</Divider>
         <Form.Item noStyle shouldUpdate={(p, c) => p.service_type !== c.service_type}>
           {({ getFieldValue }) => (
             <CircuitEndpointsEditor
@@ -1599,7 +1600,7 @@ function CreateModal({
           )}
         </Form.Item>
 
-        <Divider plain>Underlay 路径</Divider>
+        <Divider plain>{tc("Underlay 路径")}</Divider>
         <Form.Item noStyle shouldUpdate>
           {({ getFieldValue }) => {
             const eps = getFieldValue("endpoints") || [];
@@ -1621,8 +1622,8 @@ function CreateModal({
                     type="info"
                     showIcon
                     style={{ marginBottom: 12 }}
-                    message="BGP EVPN + OSPF 底层"
-                    description="VXLAN 专线无法指定经由设备，流量按 OSPF/IGP 最短路径自动转发。"
+                    message={tc("BGP EVPN + OSPF 底层")}
+                    description={tc("VXLAN 专线无法指定经由设备，流量按 OSPF/IGP 最短路径自动转发。")}
                   />
                 )}
                 {allSr && (
@@ -1630,16 +1631,16 @@ function CreateModal({
                     type="success"
                     showIcon
                     style={{ marginBottom: 12 }}
-                    message="SR-MPLS 支持显式路径"
-                    description="可指定经由的 P/PE 节点，控制器将下发 SR segment-list 策略。"
+                    message={tc("SR-MPLS 支持显式路径")}
+                    description={tc("可指定经由的 P/PE 节点，控制器将下发 SR segment-list 策略。")}
                   />
                 )}
-                <Form.Item name="path_mode" label="选路模式">
+                <Form.Item name="path_mode" label={tc("选路模式")}>
                   <Segmented
                     disabled={!allSr}
                     options={[
-                      { label: "自动 (IS-IS SR 最短路径)", value: "auto" },
-                      { label: "显式 SR 路径", value: "explicit_sr" },
+                      { label: tc("自动 (IS-IS SR 最短路径)"), value: "auto" },
+                      { label: tc("显式 SR 路径"), value: "explicit_sr" },
                     ]}
                   />
                 </Form.Item>
@@ -1647,7 +1648,7 @@ function CreateModal({
                   {() =>
                     getFieldValue("path_mode") === "explicit_sr" && allSr ? (
                       <>
-                        <div style={{ fontWeight: 500, marginBottom: 8 }}>经由设备 (按顺序)</div>
+                        <div style={{ fontWeight: 500, marginBottom: 8 }}>{tc("经由设备 (按顺序)")}</div>
                         <Form.List name="via_hops">
                           {(fields, { add, remove }) => (
                             <>
@@ -1655,12 +1656,12 @@ function CreateModal({
                                 <Space key={field.key} style={{ display: "flex", marginBottom: 8 }}>
                                   <Form.Item
                                     name={[field.name, "device_id"]}
-                                    rules={[{ required: true, message: "选择经由设备" }]}
+                                    rules={[{ required: true, message: tc("选择经由设备") }]}
                                     noStyle
                                   >
                                     <Select
                                       style={{ width: 320 }}
-                                      placeholder="SR 节点"
+                                      placeholder={tc("SR 节点")}
                                       showSearch
                                       optionFilterProp="label"
                                       options={srDevices
@@ -1680,7 +1681,7 @@ function CreateModal({
                                 icon={<PlusOutlined />}
                                 onClick={() => add({})}
                               >
-                                添加经由跳
+                                {tc("添加经由跳")}
                               </Button>
                             </>
                           )}
@@ -1690,7 +1691,7 @@ function CreateModal({
                   }
                 </Form.Item>
                 <Button onClick={previewPath} style={{ marginTop: 8 }}>
-                  预览路径
+                  {tc("预览路径")}
                 </Button>
                 {pathPreview && (
                   <div style={{ marginTop: 12, fontSize: 12 }}>

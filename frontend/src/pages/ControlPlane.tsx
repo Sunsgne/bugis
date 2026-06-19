@@ -28,7 +28,7 @@ import OverlayTopologyPanel from "../components/OverlayTopologyPanel";
 import { empty, page } from "../constants/uiCopy";
 import { useTc } from "@/i18n/useTc";
 import { OVERLAY_SOURCE } from "../constants/statusLabels";
-import { dataTableProps, TABLE_SCROLL } from "../utils/table";
+import { dataTableProps, TABLE_SCROLL, colsNowrap } from "../utils/table";
 
 const { Text } = Typography;
 
@@ -190,7 +190,7 @@ export default function ControlPlane() {
       setOverlay(o.data);
       setLoadError(null);
     } catch (e: any) {
-      setLoadError(e?.response?.data?.detail || e?.message || "加载控制器数据失败");
+      setLoadError(e?.response?.data?.detail || e?.message || tc("加载控制器数据失败"));
     } finally {
       setLoaded(true);
     }
@@ -214,8 +214,10 @@ export default function ControlPlane() {
       setOverlay(data);
       const cleaned = data.stale_vni_removed ?? 0;
       message.success(
-        `现网扫描完成 · ${data.network_only_services ?? 0} 个未纳管服务 · 保留 ${data.reserved_vni_count ?? 0} 个 VNI` +
-          (cleaned > 0 ? ` · 已清理 ${cleaned} 条陈旧拓扑` : ""),
+        tc(
+          `现网扫描完成 · ${data.network_only_services ?? 0} 个未纳管服务 · 保留 ${data.reserved_vni_count ?? 0} 个 VNI` +
+            (cleaned > 0 ? ` · 已清理 ${cleaned} 条陈旧拓扑` : ""),
+        ),
       );
       // Refresh topology / VTEPs so the graph reflects the reconciled state.
       load();
@@ -268,6 +270,7 @@ export default function ControlPlane() {
           <Descriptions.Item label={tc('配置版本化')}>
             {tc('设备配置见')}{" "}
             <Link to="/config">{page.config}</Link>
+            {"."}
           </Descriptions.Item>
         </Descriptions>
       </Card>
@@ -324,15 +327,24 @@ export default function ControlPlane() {
               size="small"
               scroll={{ x: "max-content" }}
               locale={{ emptyText: <Empty description={tc('暂无现网 Overlay 数据 · 请对设备执行现网学习后扫描')} /> }}
-              columns={[
-                { title: tc("设备"), dataIndex: "device", ellipsis: true },
-                { title: tc("VSI / 服务"), dataIndex: "service_name", ellipsis: true },
+              columns={colsNowrap<{
+                device_id?: number;
+                service_name?: string;
+                vni?: number;
+                device?: string;
+                rd?: string;
+                source?: string;
+                circuit_code?: string;
+                interfaces?: string[];
+              }>([
+                { title: tc("设备"), dataIndex: "device", ellipsis: true, width: 160 },
+                { title: tc("VSI / 服务"), dataIndex: "service_name", ellipsis: true, width: 140 },
                 { title: "VNI", dataIndex: "vni", width: 90 },
-                { title: "RD", dataIndex: "rd", ellipsis: true },
+                { title: "RD", dataIndex: "rd", ellipsis: true, width: 120 },
                 {
                   title: tc('来源'),
                   dataIndex: "source",
-                  width: 110,
+                  width: 130,
                   render: (s: string) => (
                     <Tag color={s === "platform" ? "blue" : "orange"}>
                       {OVERLAY_SOURCE[s] || s}
@@ -342,14 +354,16 @@ export default function ControlPlane() {
                 {
                   title: tc('专线'),
                   dataIndex: "circuit_code",
+                  width: 120,
                   render: (code?: string) => code || "—",
                 },
                 {
                   title: tc('接入接口'),
                   dataIndex: "interfaces",
+                  width: 140,
                   render: (ifs: string[] | undefined) => (ifs?.length ? ifs.join(", ") : "—"),
                 },
-              ]}
+              ])}
             />
           </Col>
           <Col xs={24} xl={8}>
@@ -366,7 +380,7 @@ export default function ControlPlane() {
           pagination={false}
           size="small"
           locale={{ emptyText: <Empty description={empty.data} /> }}
-          columns={[
+          columns={colsNowrap([
             { title: tc("节点"), dataIndex: "node_id" },
             { title: tc("主机"), dataIndex: "hostname" },
             {
@@ -385,7 +399,7 @@ export default function ControlPlane() {
               render: (v) => (v ? <Tag color="green">{tc('是')}</Tag> : "-"),
             },
             { title: tc("最近心跳"), dataIndex: "last_heartbeat" },
-          ]}
+          ])}
         />
       </Card>
 
@@ -397,7 +411,7 @@ export default function ControlPlane() {
           pagination={false}
           size="small"
           locale={{ emptyText: <Empty description={tc('托管专线开通后自动建立 BGP 对等')} /> }}
-          columns={[
+          columns={colsNowrap([
             { title: tc("设备"), dataIndex: "device_name" },
             { title: tc("对端 IP"), dataIndex: "peer_ip" },
             { title: tc("本地 ASN"), dataIndex: "local_asn" },
@@ -409,7 +423,7 @@ export default function ControlPlane() {
             },
             { title: tc("收路由"), dataIndex: "routes_received" },
             { title: tc("发路由"), dataIndex: "routes_sent" },
-          ]}
+          ])}
         />
       </Card>
 
@@ -421,7 +435,7 @@ export default function ControlPlane() {
           pagination={false}
           size="small"
           locale={{ emptyText: <Empty description={tc('暂无数据面绑定记录')} /> }}
-          columns={[
+          columns={colsNowrap([
             { title: tc("专线 ID"), dataIndex: "circuit_id", width: 90 },
             { title: tc("设备 ID"), dataIndex: "device_id", width: 90 },
             { title: tc("操作"), dataIndex: "operation", width: 80 },
@@ -432,7 +446,7 @@ export default function ControlPlane() {
               render: (s) => <Tag color={DP_COLOR[s] || "default"}>{s}</Tag>,
             },
             { title: tc("时间"), dataIndex: "created_at" },
-          ]}
+          ])}
         />
       </Card>
 
@@ -447,7 +461,7 @@ export default function ControlPlane() {
           dataSource={vteps}
           pagination={false}
           locale={{ emptyText: <Empty description={tc('暂无 VTEP 邻居')} /> }}
-          columns={[
+          columns={colsNowrap([
             { title: tc("设备"), dataIndex: "name" },
             { title: "VTEP IP", dataIndex: "vtep_ip" },
             { title: "ASN", dataIndex: "asn" },
@@ -461,7 +475,7 @@ export default function ControlPlane() {
               dataIndex: "vnis",
               render: (vs: number[] | undefined) => (vs ?? []).map((v) => <Tag key={v}>{v}</Tag>),
             },
-          ]}
+          ])}
         />
       </Card>
 
@@ -484,7 +498,7 @@ export default function ControlPlane() {
           dataSource={routes}
           size="small"
           locale={{ emptyText: <Empty description={tc('RIB 为空 · 等待路由同步')} /> }}
-          columns={[
+          columns={colsNowrap([
             {
               title: tc('类型'),
               dataIndex: "type",
@@ -500,7 +514,7 @@ export default function ControlPlane() {
             { title: tc("MPLS 标签"), dataIndex: "mpls_label", width: 100, render: (v) => v || "-" },
             { title: "RD", dataIndex: "rd", width: 120 },
             { title: tc("下一跳"), dataIndex: "next_hop", ellipsis: true },
-          ]}
+          ])}
         />
       </Card>
     </div>

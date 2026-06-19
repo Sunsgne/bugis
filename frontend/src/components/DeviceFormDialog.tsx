@@ -213,8 +213,11 @@ export default function DeviceFormDialog({
             message={tc("远程登录凭证说明")}
             description={
               <>
-                <strong>{tc('配置下发 / 初始化')}</strong>{tc('使用 NETCONF 或 SSH CLI。')}<strong>{tc('SNMP 发现')}</strong> 独立配置 Community / v3。全局默认见{" "}
-                <Link to="/settings/management">{tc('南向接口')}</Link>{tc('与')}<Link to="/settings/snmp">{tc('SNMP 采集')}</Link>。
+                <strong>{tc('配置下发 / 初始化')}</strong> {tc('使用 NETCONF 或 SSH CLI。')}{" "}
+                <strong>{tc('SNMP 发现')}</strong> {tc('独立配置 Community / v3。')}{" "}
+                {tc('全局默认见')}{" "}
+                <Link to="/settings/management">{tc('南向接口')}</Link> {tc('与')}{" "}
+                <Link to="/settings/snmp">{tc('SNMP 采集')}</Link>。
               </>
             }
             style={{ marginBottom: 16 }}
