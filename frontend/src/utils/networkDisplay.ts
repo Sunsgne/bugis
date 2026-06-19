@@ -53,6 +53,36 @@ export function isVlanInterface(name: string): boolean {
   return /^(?:Vlan-interface|Vlanif|Vlan)\d+$/i.test(name.trim());
 }
 
+/** LAG / link aggregation (customer access may terminate on agg ports). */
+export function isAggregatePort(name: string): boolean {
+  const t = name.trim();
+  return (
+    /^Bridge-Aggregation\d+$/i.test(t)
+    || /^Eth-Trunk\d+$/i.test(t)
+    || /^Port-channel\d+$/i.test(t)
+    || /^ae\d+$/i.test(t)
+    || /^Bundle-Ether\d+$/i.test(t)
+  );
+}
+
+const SYSTEM_IFACE = /loop(?:back)?|null0|inloop|console|register|meth\d|management|mgmt|vbdif/i;
+
+/** Physical or aggregate port suitable for circuit L2 access — no VLAN/SVI/sub-if. */
+export function isCircuitAccessPort(name: string): boolean {
+  const trimmed = name.trim();
+  if (!trimmed || SYSTEM_IFACE.test(trimmed)) return false;
+  if (isVlanInterface(trimmed)) return false;
+  if (isHuaweiSubinterface(trimmed)) return false;
+  if (/\.\d+$/.test(trimmed) && /\d+\/\d+/.test(trimmed)) return false;
+  if (isAggregatePort(trimmed)) return true;
+  if (interfacePortSuffix(trimmed)) return true;
+  if (/^(?:Twenty-Five|Hundred|Forty|Ten)?G(?:igabit)?(?:E|igabitEthernet)/i.test(trimmed)) return true;
+  if (/^(?:25|100|10|40)GE/i.test(trimmed)) return true;
+  if (/^(?:xe|et|ge)-/i.test(trimmed)) return true;
+  if (/^GigabitEthernet/i.test(trimmed)) return true;
+  return /^GE\d/i.test(trimmed);
+}
+
 export function formatInterfaceShort(name: string): string {
   const trimmed = name.trim();
   const vlanMatch = trimmed.match(/^(?:Vlan-interface|Vlanif|Vlan)(\d+)$/i);

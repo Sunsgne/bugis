@@ -1830,7 +1830,12 @@
     "f8a91e01": "Alarm evaluation uses the thresholds below; leave blank to inherit platform defaults from Settings → Alarm Thresholds.",
     "f8a91e02": "pts",
     "f8a91e03": "interfaces · VLAN occupancy updated",
-    "f8a91e04": "Discovered"
+    "f8a91e04": "Discovered",
+    "f9b2c001": "Occupied",
+    "f9b2c002": "No physical or aggregate ports found — run SNMP discovery",
+    "f9b2c003": "Access mode does not require VLAN tags",
+    "f9b2c004": "Not required",
+    "f9b2c005": "Select S-VID first"
   },
   "dashboard": {
     "ticksExecuted": "Executed {{count}} times",

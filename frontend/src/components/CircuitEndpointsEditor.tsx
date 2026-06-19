@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Button,
@@ -6,7 +6,6 @@ import {
   Col,
   Form,
   Input,
-  InputNumber,
   Row,
   Select,
   Space,
@@ -24,7 +23,11 @@ import {
   formatInterfaceTooltip,
   formatOperStatus,
   formatVlanLabel,
+  isCircuitAccessPort,
 } from "../utils/networkDisplay";
+
+const VLAN_MIN = 1;
+const VLAN_MAX = 4096;
 
 const SVID_SOURCE: Record<string, { labelKey: string; color: string }> = {
   platform: { labelKey: "平台", color: "blue" },
@@ -47,6 +50,67 @@ function svidUsageTitle(u: SvidUsage, tc: (s: string) => string) {
   if (u.circuit_code) parts.push(`${tc("专线")} ${u.circuit_code}`);
   if (u.note) parts.push(u.note);
   return parts.join(" · ");
+}
+
+function skipUsage(
+  u: SvidUsage,
+  excludeCircuitCode?: string,
+  adoptMode?: boolean,
+): boolean {
+  if (excludeCircuitCode && u.circuit_code === excludeCircuitCode) return true;
+  if (adoptMode && u.source === "device") return true;
+  return false;
+}
+
+function portHasUntagged(usage: SvidUsage[] | null | undefined): boolean {
+  return Boolean(usage?.some((u) => u.access_mode === "access"));
+}
+
+function isDot1qSvidTaken(
+  svid: number,
+  usage: SvidUsage[] | null | undefined,
+  excludeCircuitCode?: string,
+  adoptMode?: boolean,
+): boolean {
+  if (!usage?.length) return false;
+  if (portHasUntagged(usage)) return true;
+  for (const u of usage) {
+    if (skipUsage(u, excludeCircuitCode, adoptMode)) continue;
+    if (u.access_mode !== "qinq" && u.s_vid === svid) return true;
+  }
+  return false;
+}
+
+function isQinqSvidTaken(
+  svid: number,
+  usage: SvidUsage[] | null | undefined,
+  excludeCircuitCode?: string,
+  adoptMode?: boolean,
+): boolean {
+  if (!usage?.length) return false;
+  if (portHasUntagged(usage)) return true;
+  for (const u of usage) {
+    if (skipUsage(u, excludeCircuitCode, adoptMode)) continue;
+    if (u.access_mode !== "qinq" && u.s_vid === svid) return true;
+  }
+  return false;
+}
+
+function isQinqPairTaken(
+  svid: number,
+  cvid: number,
+  usage: SvidUsage[] | null | undefined,
+  excludeCircuitCode?: string,
+  adoptMode?: boolean,
+): boolean {
+  if (!usage?.length) return false;
+  if (portHasUntagged(usage)) return true;
+  for (const u of usage) {
+    if (skipUsage(u, excludeCircuitCode, adoptMode)) continue;
+    if (u.access_mode === "qinq" && u.s_vid === svid && u.c_vid === cvid) return true;
+    if (u.access_mode !== "qinq" && u.s_vid === svid) return true;
+  }
+  return false;
 }
 
 function vlanConflict(
@@ -81,6 +145,37 @@ function vlanConflict(
     }
   }
   return null;
+}
+
+function buildVlanOptions(
+  accessMode: string,
+  usage: SvidUsage[] | null | undefined,
+  tc: (s: string) => string,
+  kind: "svid" | "cvid",
+  selectedSvid?: number | null,
+  excludeCircuitCode?: string,
+  adoptMode?: boolean,
+) {
+  const occupiedLabel = tc("已占用");
+  const options: { value: number; label: string; disabled: boolean }[] = [];
+  for (let v = VLAN_MIN; v <= VLAN_MAX; v += 1) {
+    let disabled = false;
+    if (kind === "svid") {
+      if (accessMode === "dot1q") {
+        disabled = isDot1qSvidTaken(v, usage, excludeCircuitCode, adoptMode);
+      } else if (accessMode === "qinq") {
+        disabled = isQinqSvidTaken(v, usage, excludeCircuitCode, adoptMode);
+      }
+    } else if (kind === "cvid" && selectedSvid != null) {
+      disabled = isQinqPairTaken(selectedSvid, v, usage, excludeCircuitCode, adoptMode);
+    }
+    options.push({
+      value: v,
+      label: disabled ? `${v} · ${occupiedLabel}` : String(v),
+      disabled,
+    });
+  }
+  return options;
 }
 
 function SvidUsageTags({
@@ -140,7 +235,7 @@ function InterfaceOptionRow({ iface }: { iface: DeviceInterface }) {
         <Tag color={iface.oper_status === "up" ? "success" : "default"} bordered={false}>
           {formatOperStatus(iface.oper_status)}
         </Tag>
-        {!used && <Tag color="green" bordered={false}>{tc('空闲')}</Tag>}
+        {!used && <Tag color="green" bordered={false}>{tc("空闲")}</Tag>}
       </div>
       {desc && (
         <div className="iface-option-desc" title={desc}>
@@ -197,12 +292,12 @@ function PortDetailPanel({
       </div>
       {desc && (
         <div className="port-detail-row">
-          <span className="port-detail-label">{tc('端口描述')}</span>
+          <span className="port-detail-label">{tc("端口描述")}</span>
           <span className="port-detail-value">{desc}</span>
         </div>
       )}
       <div className="port-detail-row">
-        <span className="port-detail-label">{tc('S-VID 占用')}</span>
+        <span className="port-detail-label">{tc("S-VID 占用")}</span>
         <SvidUsageTags list={iface.used_s_vids} emptyText={tc("该端口暂无 VLAN 占用")} tc={tc} />
       </div>
       {conflict && (
@@ -217,16 +312,248 @@ function deviceLabel(d: Device) {
   return `${d.name} (${d.vendor}/${d.overlay_tech})${sid}`;
 }
 
+type EndpointCardProps = {
+  field: { name: number; key: number };
+  ep: Record<string, unknown>;
+  form: FormInstance;
+  devices: Device[];
+  formLoading: boolean;
+  minEndpoints: number;
+  fieldsLength: number;
+  onRemove: () => void;
+  ifaceByDevice: Record<number, DeviceInterface[]>;
+  loadIfaces: (deviceId: number) => void;
+  discover: (deviceId: number) => void;
+  excludeCircuitCode?: string;
+  adoptMode: boolean;
+};
+
+function EndpointCard({
+  field,
+  ep,
+  form,
+  devices,
+  formLoading,
+  minEndpoints,
+  fieldsLength,
+  onRemove,
+  ifaceByDevice,
+  loadIfaces,
+  discover,
+  excludeCircuitCode,
+  adoptMode,
+}: EndpointCardProps) {
+  const { tc } = useTc();
+  const did = ep.device_id as number | undefined;
+  const ifName = ep.interface_name as string | undefined;
+  const accessMode = (ep.access_mode as string) || "dot1q";
+  const vlanId = ep.vlan_id as number | undefined;
+  const selectedIface = did && ifName
+    ? (ifaceByDevice[did] || []).find((i) => i.name === ifName)
+    : undefined;
+  const label = (ep.label as string) || String.fromCharCode(65 + field.name);
+  const vlanDisabled = !selectedIface || accessMode === "access";
+  const usage = selectedIface?.used_s_vids;
+
+  const svidOptions = useMemo(
+    () =>
+      selectedIface && accessMode !== "access"
+        ? buildVlanOptions(accessMode, usage, tc, "svid", vlanId, excludeCircuitCode, adoptMode)
+        : [],
+    [selectedIface, accessMode, usage, tc, vlanId, excludeCircuitCode, adoptMode],
+  );
+
+  const cvidOptions = useMemo(
+    () =>
+      selectedIface && accessMode === "qinq"
+        ? buildVlanOptions(accessMode, usage, tc, "cvid", vlanId, excludeCircuitCode, adoptMode)
+        : [],
+    [selectedIface, accessMode, usage, tc, vlanId, excludeCircuitCode, adoptMode],
+  );
+
+  const allIfaces = ifaceByDevice[did || 0] || [];
+  const portOptions = allIfaces
+    .filter((iface) => isCircuitAccessPort(iface.name))
+    .map((iface) => ({
+      value: iface.name,
+      label: interfaceOptionLabel(iface),
+      iface,
+    }));
+
+  return (
+    <Card
+      size="small"
+      className="endpoint-card"
+      title={
+        <Tag color={label === "A" ? "blue" : label === "Z" ? "purple" : "default"}>
+          {tc("端点")} {label}
+        </Tag>
+      }
+      extra={
+        fieldsLength > minEndpoints ? (
+          <Button type="text" danger size="small" icon={<MinusCircleOutlined />} onClick={onRemove} />
+        ) : null
+      }
+      style={{ marginBottom: 0 }}
+    >
+      <Row gutter={[16, 0]}>
+        <Col xs={24} sm={8} md={6} lg={5}>
+          <Form.Item name={[field.name, "label"]} label={tc("标签")} rules={[{ required: true }]}>
+            <Input placeholder="A" />
+          </Form.Item>
+        </Col>
+        <Col xs={24} sm={16} md={18} lg={19}>
+          <Form.Item
+            name={[field.name, "device_id"]}
+            label={tc("接入设备")}
+            rules={[{ required: true, message: tc("请选择设备") }]}
+          >
+            <Select
+              placeholder={tc("选择 VTEP / PE / Leaf")}
+              loading={formLoading}
+              showSearch
+              optionFilterProp="label"
+              onChange={(v) => {
+                form.setFieldValue(["endpoints", field.name, "interface_name"], undefined);
+                form.setFieldValue(["endpoints", field.name, "vlan_id"], undefined);
+                form.setFieldValue(["endpoints", field.name, "inner_vlan_id"], undefined);
+                loadIfaces(v);
+              }}
+              options={devices.map((d) => ({ value: d.id, label: deviceLabel(d) }))}
+            />
+          </Form.Item>
+        </Col>
+      </Row>
+
+      <Form.Item label={tc("物理端口")} required style={{ marginBottom: 12 }}>
+        <div className="endpoint-port-row">
+          <Form.Item
+            name={[field.name, "interface_name"]}
+            rules={[{ required: true, message: tc("请选择端口") }]}
+            noStyle
+          >
+            <Select
+              placeholder={did ? tc("选择端口（下拉可查看占用详情）") : tc("请先选择设备")}
+              showSearch
+              disabled={!did}
+              optionLabelProp="label"
+              popupMatchSelectWidth={520}
+              listHeight={360}
+              notFoundContent={
+                did ? (
+                  allIfaces.length > 0 && portOptions.length === 0 ? (
+                    <span style={{ padding: 8, color: "#888" }}>{tc("无物理/聚合口记录，请 SNMP 发现")}</span>
+                  ) : (
+                    <span style={{ padding: 8, color: "#888" }}>{tc("无接口记录，请点击右侧按钮 SNMP 发现")}</span>
+                  )
+                ) : (
+                  tc("请先选择设备")
+                )
+              }
+              options={portOptions}
+              onChange={() => {
+                form.setFieldValue(["endpoints", field.name, "vlan_id"], undefined);
+                form.setFieldValue(["endpoints", field.name, "inner_vlan_id"], undefined);
+              }}
+              optionRender={(option) => {
+                const iface = (option.data as { iface?: DeviceInterface })?.iface;
+                return iface ? <InterfaceOptionRow iface={iface} /> : option.label;
+              }}
+            />
+          </Form.Item>
+          <Button icon={<RadarChartOutlined />} disabled={!did} onClick={() => did && discover(did)}>
+            {tc("发现")}
+          </Button>
+        </div>
+      </Form.Item>
+
+      <Row gutter={[16, 4]} style={{ marginBottom: selectedIface ? 12 : 0 }}>
+        <Col xs={24} sm={12} md={8}>
+          <Form.Item name={[field.name, "access_mode"]} label={tc("封装模式")} initialValue="dot1q">
+            <Select
+              disabled={!selectedIface}
+              options={[
+                { value: "access", label: tc("Access · 不带标签") },
+                { value: "dot1q", label: tc("Dot1Q · 单标签") },
+                { value: "qinq", label: tc("QinQ · 双标签") },
+              ]}
+              onChange={(mode) => {
+                if (mode === "access") {
+                  form.setFieldValue(["endpoints", field.name, "vlan_id"], undefined);
+                  form.setFieldValue(["endpoints", field.name, "inner_vlan_id"], undefined);
+                } else if (mode === "dot1q") {
+                  form.setFieldValue(["endpoints", field.name, "inner_vlan_id"], undefined);
+                }
+              }}
+            />
+          </Form.Item>
+        </Col>
+        <Col xs={24} sm={12} md={accessMode === "qinq" ? 8 : 16}>
+          <Form.Item
+            name={[field.name, "vlan_id"]}
+            label="S-VID"
+            tooltip={
+              accessMode === "access"
+                ? tc("Access 模式无需 VLAN 标签")
+                : tc("Service VLAN，留空则自动分配")
+            }
+          >
+            <Select
+              allowClear
+              showSearch
+              disabled={vlanDisabled}
+              placeholder={accessMode === "access" ? tc("无需配置") : tc("自动分配")}
+              optionFilterProp="label"
+              options={svidOptions}
+              listHeight={320}
+              virtual
+              onChange={() => {
+                if (accessMode === "qinq") {
+                  form.setFieldValue(["endpoints", field.name, "inner_vlan_id"], undefined);
+                }
+              }}
+            />
+          </Form.Item>
+        </Col>
+        {accessMode === "qinq" && (
+          <Col xs={24} sm={12} md={8}>
+            <Form.Item name={[field.name, "inner_vlan_id"]} label="C-VID">
+              <Select
+                allowClear
+                showSearch
+                disabled={vlanDisabled || vlanId == null}
+                placeholder={vlanId == null ? tc("请先选择 S-VID") : tc("内层 VLAN")}
+                optionFilterProp="label"
+                options={cvidOptions}
+                listHeight={320}
+                virtual
+              />
+            </Form.Item>
+          </Col>
+        )}
+      </Row>
+
+      {selectedIface && (
+        <PortDetailPanel
+          iface={selectedIface}
+          vlanId={vlanId}
+          accessMode={accessMode}
+          innerVlanId={ep.inner_vlan_id as number | undefined}
+          excludeCircuitCode={excludeCircuitCode}
+          adoptMode={adoptMode}
+        />
+      )}
+    </Card>
+  );
+}
+
 export interface CircuitEndpointsEditorProps {
   form: FormInstance;
   devices: Device[];
   formLoading?: boolean;
-  /** Pre-load interface lists when editing existing endpoints. */
   preloadDeviceIds?: number[];
   minEndpoints?: number;
-  /** Ignore S-VID conflicts owned by this circuit (endpoint edit). */
   excludeCircuitCode?: string;
-  /** Allow matching on-box S-VID bindings when extending adopted circuits. */
   adoptMode?: boolean;
 }
 
@@ -254,7 +581,7 @@ export default function CircuitEndpointsEditor({
   }
 
   async function discover(deviceId: number) {
-    if (!deviceId) return message.warning(tc('请先选择设备'));
+    if (!deviceId) return message.warning(tc("请先选择设备"));
     const hide = message.loading(tc("SNMP 发现 + S-VID 扫描..."), 0);
     try {
       const { data } = await api.post<DeviceInterface[]>(`/devices/${deviceId}/discover-interfaces`);
@@ -267,19 +594,6 @@ export default function CircuitEndpointsEditor({
     }
   }
 
-  function ifaceSelectOptions(deviceId: number) {
-    return (ifaceByDevice[deviceId] || []).map((iface) => ({
-      value: iface.name,
-      label: interfaceOptionLabel(iface),
-      iface,
-    }));
-  }
-
-  function findIface(deviceId: number, name?: string) {
-    if (!deviceId || !name) return undefined;
-    return (ifaceByDevice[deviceId] || []).find((i) => i.name === name);
-  }
-
   useEffect(() => {
     preloadDeviceIds.forEach((id) => {
       if (id) loadIfaces(id, false);
@@ -288,10 +602,12 @@ export default function CircuitEndpointsEditor({
 
   return (
     <>
-      <div className="endpoint-legend">{tc('图例：')}<Tag color="green" bordered={false}>{tc('空闲')}</Tag>
-        <Tag color="blue" bordered={false}>{tc('S:VID (平台)')}</Tag>
-        <Tag color="orange" bordered={false}>{tc('S:VID (设备)')}</Tag>
-        <Tag color="red" bordered={false}>{tc('S:VID (手工)')}</Tag>
+      <div className="endpoint-legend">
+        {tc("图例：")}
+        <Tag color="green" bordered={false}>{tc("空闲")}</Tag>
+        <Tag color="blue" bordered={false}>{tc("S:VID (平台)")}</Tag>
+        <Tag color="orange" bordered={false}>{tc("S:VID (设备)")}</Tag>
+        <Tag color="red" bordered={false}>{tc("S:VID (手工)")}</Tag>
       </div>
       <Form.List name="endpoints">
         {(fields, { add, remove }) => (
@@ -305,149 +621,30 @@ export default function CircuitEndpointsEditor({
                 >
                   {({ getFieldValue }) => {
                     const ep = getFieldValue(["endpoints", field.name]) || {};
-                    const did = ep.device_id as number | undefined;
-                    const ifName = ep.interface_name as string | undefined;
-                    const selectedIface = findIface(did || 0, ifName);
-                    const label = ep.label || String.fromCharCode(65 + field.name);
                     return (
-                      <Card
-                        size="small"
-                        className="endpoint-card"
-                        title={
-                          <Tag color={label === "A" ? "blue" : label === "Z" ? "purple" : "default"}>
-                            {tc("端点")} {label}
-                          </Tag>
-                        }
-                        extra={
-                          fields.length > minEndpoints ? (
-                            <Button
-                              type="text"
-                              danger
-                              size="small"
-                              icon={<MinusCircleOutlined />}
-                              onClick={() => remove(field.name)}
-                            />
-                          ) : null
-                        }
-                        style={{ marginBottom: 0 }}
-                      >
-                        <Row gutter={[16, 0]}>
-                          <Col xs={24} sm={8} md={6} lg={5}>
-                            <Form.Item
-                              name={[field.name, "label"]}
-                              label={tc('标签')}
-                              rules={[{ required: true }]}
-                            >
-                              <Input placeholder="A" />
-                            </Form.Item>
-                          </Col>
-                          <Col xs={24} sm={16} md={18} lg={19}>
-                            <Form.Item
-                              name={[field.name, "device_id"]}
-                              label={tc('接入设备')}
-                              rules={[{ required: true, message: tc("请选择设备") }]}
-                            >
-                              <Select
-                                placeholder={tc('选择 VTEP / PE / Leaf')}
-                                loading={formLoading}
-                                showSearch
-                                optionFilterProp="label"
-                                onChange={(v) => {
-                                  form.setFieldValue(["endpoints", field.name, "interface_name"], undefined);
-                                  loadIfaces(v);
-                                }}
-                                options={devices.map((d) => ({
-                                  value: d.id,
-                                  label: deviceLabel(d),
-                                }))}
-                              />
-                            </Form.Item>
-                          </Col>
-                        </Row>
-
-                        <Form.Item label={tc('物理端口')} required style={{ marginBottom: 12 }}>
-                          <div className="endpoint-port-row">
-                            <Form.Item
-                              name={[field.name, "interface_name"]}
-                              rules={[{ required: true, message: tc("请选择端口") }]}
-                              noStyle
-                            >
-                              <Select
-                                placeholder={
-                                  did
-                                    ? tc("选择端口（下拉可查看占用详情）")
-                                    : tc("请先选择设备")
-                                }
-                                showSearch
-                                disabled={!did}
-                                optionLabelProp="label"
-                                popupMatchSelectWidth={520}
-                                listHeight={360}
-                                notFoundContent={
-                                  did ? (
-                                    <span style={{ padding: 8, color: "#888" }}>{tc('无接口记录，请点击右侧按钮 SNMP 发现')}</span>
-                                  ) : (
-                                    tc("请先选择设备")
-                                  )
-                                }
-                                options={ifaceSelectOptions(did || 0)}
-                                optionRender={(option) => {
-                                  const iface = (option.data as { iface?: DeviceInterface })?.iface;
-                                  return iface ? <InterfaceOptionRow iface={iface} /> : option.label;
-                                }}
-                              />
-                            </Form.Item>
-                            <Button icon={<RadarChartOutlined />} disabled={!did} onClick={() => discover(did!)}>{tc('发现')}</Button>
-                          </div>
-                        </Form.Item>
-
-                        {selectedIface && (
-                          <PortDetailPanel
-                            iface={selectedIface}
-                            vlanId={ep.vlan_id}
-                            accessMode={ep.access_mode}
-                            innerVlanId={ep.inner_vlan_id}
-                            excludeCircuitCode={excludeCircuitCode}
-                            adoptMode={adoptMode}
-                          />
-                        )}
-
-                        <Row gutter={[16, 4]} style={{ marginTop: 16 }}>
-                          <Col xs={24} sm={12} md={8}>
-                            <Form.Item name={[field.name, "access_mode"]} label={tc('封装模式')} initialValue="dot1q">
-                              <Select
-                                options={[
-                                  { value: "access", label: tc("Access · 不带标签") },
-                                  { value: "dot1q", label: tc("Dot1Q · 单标签") },
-                                  { value: "qinq", label: tc("QinQ · 双标签") },
-                                ]}
-                              />
-                            </Form.Item>
-                          </Col>
-                          <Col xs={24} sm={12} md={ep.access_mode === "qinq" ? 8 : 16}>
-                            <Form.Item
-                              name={[field.name, "vlan_id"]}
-                              label="S-VID"
-                              tooltip={tc('Service VLAN，留空则自动分配')}
-                            >
-                              <InputNumber placeholder={tc('自动分配')} style={{ width: "100%" }} min={1} max={4094} />
-                            </Form.Item>
-                          </Col>
-                          {ep.access_mode === "qinq" && (
-                            <Col xs={24} sm={12} md={8}>
-                              <Form.Item name={[field.name, "inner_vlan_id"]} label="C-VID">
-                                <InputNumber placeholder={tc('内层 VLAN')} style={{ width: "100%" }} min={1} max={4094} />
-                              </Form.Item>
-                            </Col>
-                          )}
-                        </Row>
-                      </Card>
+                      <EndpointCard
+                        field={field}
+                        ep={ep}
+                        form={form}
+                        devices={devices}
+                        formLoading={formLoading}
+                        minEndpoints={minEndpoints}
+                        fieldsLength={fields.length}
+                        onRemove={() => remove(field.name)}
+                        ifaceByDevice={ifaceByDevice}
+                        loadIfaces={(id) => loadIfaces(id, false)}
+                        discover={discover}
+                        excludeCircuitCode={excludeCircuitCode}
+                        adoptMode={adoptMode}
+                      />
                     );
                   }}
                 </Form.Item>
               ))}
             </div>
-            <Button type="dashed" block icon={<PlusOutlined />} onClick={() => add({ label: "", access_mode: "dot1q" })}>{tc('添加端点')}</Button>
+            <Button type="dashed" block icon={<PlusOutlined />} onClick={() => add({ label: "", access_mode: "dot1q" })}>
+              {tc("添加端点")}
+            </Button>
           </>
         )}
       </Form.List>
