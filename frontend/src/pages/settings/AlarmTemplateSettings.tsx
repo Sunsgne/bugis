@@ -11,11 +11,11 @@ import {
   Row,
   Segmented,
   Space,
-  Switch,
   Tag,
   Tooltip,
   Typography,
 } from "antd";
+import SwitchOnOff from "../../components/SwitchOnOff";
 import type { FormInstance } from "antd/es/form";
 import {
   EyeOutlined,
@@ -238,7 +238,7 @@ export default function AlarmTemplateSettings() {
                   </Col>
                   <Col xs={24} md={12}>
                     <Form.Item name="html_enabled" label={tc("HTML 富文本邮件")} valuePropName="checked">
-                      <Switch checkedChildren="ON" unCheckedChildren="OFF" />
+                      <SwitchOnOff />
                     </Form.Item>
                   </Col>
                   <Col xs={24} md={8}>

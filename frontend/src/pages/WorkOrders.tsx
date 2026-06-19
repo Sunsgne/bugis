@@ -18,6 +18,7 @@ import { formModalProps } from "../utils/formModal";
 import { action, empty, page, toast } from "../constants/uiCopy";
 import { WORK_ORDER_STATUS, WORK_ORDER_TYPE, statusMeta } from "../constants/statusLabels";
 import { useTc } from "@/i18n/useTc";
+import { translateWorkOrderMessage } from "@/i18n/translateApiText";
 import { useTranslation } from "react-i18next";
 
 const { RangePicker } = DatePicker;
@@ -39,7 +40,7 @@ function fmtTs(ts?: string | null) {
 }
 
 export default function WorkOrders() {
-  const { tc } = useTc();
+  const { tc, isEn } = useTc();
   const { t } = useTranslation();
   const { message } = AntApp.useApp();
   const [rows, setRows] = useState<WorkOrder[]>([]);
@@ -333,7 +334,7 @@ export default function WorkOrders() {
                 color: LEVEL_COLOR[e.level] || "blue",
                 children: (
                   <span>
-                    {e.message}
+                    {translateWorkOrderMessage(e.message, tc, isEn)}
                     {e.actor && <Tag style={{ marginLeft: 8 }}>{e.actor}</Tag>}
                   </span>
                 ),

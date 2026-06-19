@@ -307,7 +307,7 @@ export default function DeviceFormDialog({
         <Typography.Text strong>{tc('南向登录凭证')}</Typography.Text>
         {vendor && VENDOR_AUTH_HINT[vendor] ? (
           <Typography.Paragraph type="secondary" style={{ marginBottom: 12, marginTop: 4 }}>
-            {VENDOR_AUTH_HINT[vendor]}
+            {tc(VENDOR_AUTH_HINT[vendor])}
           </Typography.Paragraph>
         ) : null}
         <Row gutter={16}>
@@ -356,7 +356,7 @@ export default function DeviceFormDialog({
             </Form.Item>
           </Col>
           <Col span={24}>
-            <Form.Item name="netmiko_device_type" label={tc('Netmiko 设备类型')} extra="留空则按厂商自动选择，如 hp_comware、cisco_xr">
+            <Form.Item name="netmiko_device_type" label={tc('Netmiko 设备类型')} extra={tc("留空则按厂商自动选择，如 hp_comware、cisco_xr")}>
               <Input placeholder={tc('留空则按厂商自动选择')} />
             </Form.Item>
           </Col>
@@ -390,7 +390,7 @@ export default function DeviceFormDialog({
                         <Input
                           placeholder={
                             isEdit && device?.snmp_community_set
-                              ? "已配置 · 留空不修改"
+                              ? tc("已配置 · 留空不修改")
                               : snmpDefaults.community
                           }
                         />
@@ -400,7 +400,7 @@ export default function DeviceFormDialog({
                       <Form.Item
                         name="snmp_port"
                         label={tc('UDP 端口')}
-                        extra={vendor === "huawei" ? "华为 CE 常见 16161（非标准 161）" : undefined}
+                        extra={vendor === "huawei" ? tc("华为 CE 常见 16161（非标准 161）") : undefined}
                         rules={[{ type: "number", min: 1, max: 65535 }]}
                       >
                         <InputNumber min={1} max={65535} style={{ width: "100%" }} />

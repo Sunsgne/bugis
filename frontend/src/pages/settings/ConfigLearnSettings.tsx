@@ -7,10 +7,10 @@ import {
   InputNumber,
   Row,
   Space,
-  Switch,
   App as AntApp,
   Typography,
 } from "antd";
+import SwitchOnOff from "../../components/SwitchOnOff";
 import { SaveOutlined } from "@ant-design/icons";
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
@@ -95,7 +95,7 @@ export default function ConfigLearnSettings() {
           type="info"
           showIcon
           style={{ marginBottom: 16 }}
-          message="只读：当前账号无修改平台参数的权限"
+          message={tc("只读：当前账号无修改平台参数的权限")}
         />
       )}
 
@@ -104,7 +104,7 @@ export default function ConfigLearnSettings() {
           type="warning"
           showIcon
           style={{ marginBottom: 16 }}
-          message="后台调度器已关闭"
+          message={tc("后台调度器已关闭")}
           description={
             <>{tc('定时自动拉取依赖后台调度器。请前往')}<Link to="/settings/general">{tc('平台运行')}</Link>{tc('开启「后台调度器」。')}</>
           }
@@ -114,7 +114,7 @@ export default function ConfigLearnSettings() {
       {scheduler && (
         <Descriptions bordered size="small" column={2} style={{ marginBottom: 16 }}>
           <Descriptions.Item label={tc('调度器')}>
-            {scheduler.enabled ? (scheduler.running ? "运行中" : "已启用") : "已关闭"}
+            {scheduler.enabled ? (scheduler.running ? tc("运行中") : tc("已启用")) : tc("已关闭")}
           </Descriptions.Item>
           <Descriptions.Item label={tc('最近拉取')}>
             {scheduler.last_learn ? scheduler.last_learn.replace("T", " ").slice(0, 19) : "—"}
@@ -135,9 +135,9 @@ export default function ConfigLearnSettings() {
               name="auto_learn_enabled"
               label={tc('定时自动拉取')}
               valuePropName="checked"
-              extra="后台按间隔对所有在线设备拉取 running-config，更新现网学习与 S-VID 占用"
+              extra={tc("后台按间隔对所有在线设备拉取 running-config，更新现网学习与 S-VID 占用")}
             >
-              <Switch checkedChildren="开" unCheckedChildren="关" />
+              <SwitchOnOff />
             </Form.Item>
           </Col>
           <Col xs={24} md={12}>
@@ -145,9 +145,9 @@ export default function ConfigLearnSettings() {
               name="auto_learn_on_import"
               label={tc('导入/新增设备后自动拉取')}
               valuePropName="checked"
-              extra="CSV 导入或手动新增设备时立即执行一次现网学习"
+              extra={tc("CSV 导入或手动新增设备时立即执行一次现网学习")}
             >
-              <Switch checkedChildren="开" unCheckedChildren="关" />
+              <SwitchOnOff />
             </Form.Item>
           </Col>
         </Row>
@@ -174,7 +174,7 @@ export default function ConfigLearnSettings() {
           type="info"
           showIcon
           style={{ marginBottom: 16 }}
-          message="变更保护与快照"
+          message={tc("变更保护与快照")}
           description={tc('以下选项影响开通/拆除前的现网快照与下发前冲突预检，建议保持开启。')}
         />
 
@@ -186,7 +186,7 @@ export default function ConfigLearnSettings() {
               valuePropName="checked"
               tooltip={tc('下发前用缓存的现网学习快照刷新接口 S-VID 占用，让冲突预检基于最新现网状态')}
             >
-              <Switch checkedChildren="开" unCheckedChildren="关" />
+              <SwitchOnOff />
             </Form.Item>
           </Col>
           <Col xs={24} md={12}>
@@ -196,7 +196,7 @@ export default function ConfigLearnSettings() {
               valuePropName="checked"
               tooltip={tc('开通/拆除前自动拉取各目标设备 running-config 存为 pre_change 快照，用于对比与应急还原')}
             >
-              <Switch checkedChildren="开" unCheckedChildren="关" />
+              <SwitchOnOff />
             </Form.Item>
           </Col>
         </Row>

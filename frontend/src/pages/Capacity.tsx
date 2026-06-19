@@ -246,7 +246,7 @@ export default function Capacity() {
 
       <Card
         className="capacity-section-card"
-        title={`Fabric 站点容量（${sites.length}）`}
+        title={`${tc("Fabric 站点容量")} (${sites.length})`}
         extra={
           <Input
             allowClear
@@ -267,7 +267,7 @@ export default function Capacity() {
           dataSource={filteredSites}
           pagination={pagination}
           scroll={{ x: 720 }}
-          locale={{ emptyText: siteSearch ? "无匹配站点" : "暂无站点容量数据" }}
+          locale={{ emptyText: siteSearch ? tc("无匹配站点") : tc("暂无站点容量数据") }}
           columns={[
             {
               title: tc('站点'),
@@ -288,7 +288,7 @@ export default function Capacity() {
               width: 90,
               align: "right",
               sorter: (a, b) => a.devices - b.devices,
-              render: (v: number) => `${v} 台`,
+              render: (v: number) => `${v} ${tc("台")}`,
             },
             {
               title: tc('已分配 / 总容量'),
@@ -319,7 +319,7 @@ export default function Capacity() {
 
       <Card
         className="capacity-section-card capacity-backbone-card"
-        title={`骨干链路 · 利用率（${links.length}）`}
+        title={`${tc("骨干链路 · 利用率")} (${links.length})`}
         extra={
           <Space wrap>
             <Input
@@ -359,7 +359,7 @@ export default function Capacity() {
           type="info"
           showIcon
           className="capacity-link-hint"
-          message="选用 Vlan-interface / Vlanif 子接口；端口描述标注 bw(100Mbps) 可自动写入合同带宽；利用率超链路或平台阈值触发告警"
+          message={tc("选用 Vlan-interface / Vlanif 子接口；端口描述标注 bw(100Mbps) 可自动写入合同带宽；利用率超链路或平台阈值触发告警")}
         />
         <Table<LinkUsage>
           {...dataTableProps(TABLE_SCROLL.xl)}
@@ -370,7 +370,7 @@ export default function Capacity() {
           dataSource={filteredLinks}
           pagination={pagination}
           scroll={{ x: 1100 }}
-          locale={{ emptyText: linkSearch || supplierFilter || siteRouteFilter ? "无匹配链路" : "暂无骨干链路 · 点击「配置骨干链路」智能推荐或手动选配" }}
+          locale={{ emptyText: linkSearch || supplierFilter || siteRouteFilter ? tc("无匹配链路") : tc("暂无骨干链路 · 点击「配置骨干链路」智能推荐或手动选配") }}
           columns={[
             {
               title: tc('链路'),
@@ -406,10 +406,10 @@ export default function Capacity() {
               title: tc('类型'),
               dataIndex: "type",
               width: 110,
-              filters: Object.entries(LINK_TYPE_LABEL).map(([value, text]) => ({ text, value })),
+              filters: Object.entries(LINK_TYPE_LABEL).map(([value, text]) => ({ text: tc(text), value })),
               onFilter: (val, r) => r.type === val,
               render: (t: string) => (
-                <Tag color={t === "dci" ? "blue" : "green"}>{LINK_TYPE_LABEL[t] || t}</Tag>
+                <Tag color={t === "dci" ? "blue" : "green"}>{tc(LINK_TYPE_LABEL[t] || t)}</Tag>
               ),
             },
             {

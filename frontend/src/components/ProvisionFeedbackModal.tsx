@@ -15,6 +15,7 @@ import { CheckCircleOutlined, CloseCircleOutlined, LoadingOutlined } from "@ant-
 import type { Circuit, ProvisionResult } from "../api/types";
 import { ConfigPreviewPre } from "../utils/configPreview";
 import { useTc } from "@/i18n/useTc";
+import { translateWorkOrderMessage } from "@/i18n/translateApiText";
 
 const WO_STATUS_LABEL: Record<string, string> = {
   completed: "已完成",
@@ -87,7 +88,7 @@ export default function ProvisionFeedbackModal({
   onClose,
   open: openProp,
 }: Props) {
-  const { tc } = useTc();
+  const { tc, isEn } = useTc();
   const open = openProp ?? !!circuit;
   const isTeardown = woType === "decommission";
   const success = result?.status === "completed";
@@ -272,7 +273,7 @@ export default function ProvisionFeedbackModal({
               color: e.level === "error" ? "red" : e.level === "warning" ? "orange" : "blue",
               children: (
                 <span>
-                  {e.message}
+                  {translateWorkOrderMessage(e.message, tc, isEn)}
                   {e.actor ? <Tag style={{ marginLeft: 8 }}>{e.actor}</Tag> : null}
                 </span>
               ),

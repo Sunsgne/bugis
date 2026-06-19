@@ -46,7 +46,7 @@ export default function PortalCircuitMonitorPanel({
   pollSec = 30,
   latencyProbeEnabled = true,
 }: Props) {
-  const { tc } = useTc();
+  const { tc, t } = useTc();
   const [rangeMode, setRangeMode] = useState<RangeMode>("preset");
   const [hours, setHours] = useState(compact ? 6 : 24);
   const [customRange, setCustomRange] = useState<[Dayjs, Dayjs] | null>(null);
@@ -223,7 +223,7 @@ export default function PortalCircuitMonitorPanel({
       </Card>
 
       {latencyProbeEnabled && (
-        <Card size="small" title={`时延 · 抖动 · 丢包（${windowLabel}）`} loading={loading}>
+        <Card size="small" title={t("monitor.latencyChart", { window: windowLabel })} loading={loading}>
           {chartData.length ? (
             <EChart key={`latency-${chartKey}`} option={latencyOpt} height={compact ? 180 : 220} />
           ) : (

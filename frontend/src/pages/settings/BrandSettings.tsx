@@ -117,7 +117,7 @@ export default function BrandSettings() {
         type="info"
         showIcon
         style={{ marginBottom: 16 }}
-        message="品牌与 Logo 自定义"
+        message={tc("品牌与 Logo 自定义")}
         description={tc('修改后将同步应用于登录页、侧栏 Logo、顶栏标题与运营驾驶舱横幅。Logo 支持 PNG / SVG / WebP（Base64 存储，建议小于 512KB）。')}
       />
       {!canEdit && (

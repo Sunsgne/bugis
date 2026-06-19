@@ -739,6 +739,14 @@ body {
   width: 100% !important;
 }
 
+.data-table .ant-table-thead > tr > th,
+.config-device-table .ant-table-thead > tr > th,
+.config-history-table .ant-table-thead > tr > th,
+.config-service-table .ant-table-thead > tr > th,
+.overlay-vni-list-table .ant-table-thead > tr > th {
+  white-space: nowrap;
+}
+
 @media (max-width: 768px) {
   .data-table .ant-table {
     font-size: 12px;
@@ -1103,7 +1111,12 @@ body {
   vertical-align: middle;
 }
 
-.config-device-name,
+.config-device-table .config-device-name {
+  white-space: normal;
+  word-break: break-all;
+  line-height: 1.35;
+}
+
 .config-note-cell {
   display: inline-block;
   max-width: 100%;
@@ -1112,6 +1125,15 @@ body {
   white-space: nowrap;
   vertical-align: bottom;
 }
+
+.overlay-vni-list-table .ant-table-thead > tr > th {
+  white-space: nowrap;
+}
+
+.control-plane-page .ant-table-cell {
+  line-height: 1.5;
+}
+
 
 .config-inline-tag {
   margin: 0;

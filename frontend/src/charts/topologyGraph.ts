@@ -1,4 +1,5 @@
 import type { EChartsOption } from "echarts";
+import { tcStatic } from "@/i18n/useTc";
 import { labelForOption, DEVICE_ROLE_OPTIONS } from "../constants/formOptions";
 import { chartFont, chartText, utilColor, vendorColors } from "./theme";
 import type { Topology } from "../api/types";
@@ -382,7 +383,7 @@ export function overlayTopologyOption(
               left: "center",
               top: "middle",
               style: {
-                text: "选择右侧 VNI 查看隧道互联",
+                text: tcStatic("选择右侧 VNI 查看隧道互联"),
                 fill: chartText.muted,
                 fontSize: 13,
                 fontFamily: chartFont,

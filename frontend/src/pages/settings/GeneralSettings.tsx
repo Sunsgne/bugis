@@ -8,10 +8,10 @@ import {
   InputNumber,
   Row,
   Space,
-  Switch,
   App as AntApp,
   Typography,
 } from "antd";
+import SwitchOnOff from "../../components/SwitchOnOff";
 import { SaveOutlined } from "@ant-design/icons";
 import { useEffect } from "react";
 import { Link } from "react-router-dom";
@@ -58,7 +58,7 @@ export default function GeneralSettings() {
           type="info"
           showIcon
           style={{ marginBottom: 16 }}
-          message="只读：当前账号无修改平台运行参数的权限"
+          message={tc("只读：当前账号无修改平台运行参数的权限")}
         />
       )}
 
@@ -68,7 +68,7 @@ export default function GeneralSettings() {
           <Descriptions.Item label={tc('环境')}>{readonly.app_env}</Descriptions.Item>
           <Descriptions.Item label={tc('数据库')}>{readonly.database_url}</Descriptions.Item>
           <Descriptions.Item label="SECRET_KEY">
-            {readonly.secret_key_set ? "已自定义" : "使用默认值（生产环境请修改）"}
+            {readonly.secret_key_set ? tc("已自定义") : tc("使用默认值（生产环境请修改）")}
           </Descriptions.Item>
         </Descriptions>
       )}
@@ -77,11 +77,11 @@ export default function GeneralSettings() {
         type={platform?.dry_run ? "warning" : "success"}
         showIcon
         style={{ marginBottom: 16 }}
-        message={platform?.dry_run ? "Dry-run 模式（模拟下发）" : "生产模式（真实下发）"}
+        message={platform?.dry_run ? tc("Dry-run 模式（模拟下发）") : tc("生产模式（真实下发）")}
         description={
           platform?.dry_run
-            ? "开启后配置仅渲染预览、不推送到真实设备。"
-            : "配置将通过 NETCONF/SSH 真实下发到设备，请确认设备凭证与网络可达性。"
+            ? tc("开启后配置仅渲染预览、不推送到真实设备。")
+            : tc("配置将通过 NETCONF/SSH 真实下发到设备，请确认设备凭证与网络可达性。")
         }
       />
 
@@ -89,7 +89,7 @@ export default function GeneralSettings() {
         type="info"
         showIcon
         style={{ marginBottom: 16 }}
-        message="现网配置自动拉取"
+        message={tc("现网配置自动拉取")}
         description={
           <>{tc('定时拉取 running-config、导入后学习、变更快照等请在')}<Link to="/settings/config-learn">{tc('配置管理')}</Link>{tc('页配置。')}</>
         }
@@ -99,17 +99,17 @@ export default function GeneralSettings() {
         <Row gutter={16}>
           <Col xs={24} md={8}>
             <Form.Item name="dry_run" label={tc('Dry-run（模拟下发）')} valuePropName="checked">
-              <Switch checkedChildren="开" unCheckedChildren="关" />
+              <SwitchOnOff />
             </Form.Item>
           </Col>
           <Col xs={24} md={8}>
             <Form.Item name="enable_metrics" label={tc('Prometheus 指标')} valuePropName="checked">
-              <Switch />
+              <SwitchOnOff />
             </Form.Item>
           </Col>
           <Col xs={24} md={8}>
             <Form.Item name="scheduler_enabled" label={tc('后台调度器')} valuePropName="checked">
-              <Switch checkedChildren="开" unCheckedChildren="关" />
+              <SwitchOnOff />
             </Form.Item>
           </Col>
           <Col xs={24} md={8}>
@@ -119,7 +119,7 @@ export default function GeneralSettings() {
               valuePropName="checked"
               tooltip={tc('开启后开通/拆除请求会进入后台队列(状态=排队中)立即返回，由工作线程异步下发，避免大量并发操作占满请求线程。前端在工单详情/进度弹窗中轮询进度。')}
             >
-              <Switch checkedChildren="开" unCheckedChildren="关" />
+              <SwitchOnOff />
             </Form.Item>
           </Col>
         </Row>

@@ -60,11 +60,13 @@ export default function ManagementSettings() {
         type="info"
         showIcon
         style={{ marginBottom: 16 }}
-        message="SNMP 采集"
+        message={tc("SNMP 采集")}
         description={
           <>
-            SNMP Community、v3 认证与 IF-MIB 采集策略请在{" "}
-            <Link to="/settings/snmp">{tc('SNMP 采集')}</Link>{tc('页面配置；单台设备可在「设备管理 → 凭证」中覆盖。')}</>
+            {tc("SNMP Community、v3 认证与 IF-MIB 采集策略请在")}{" "}
+            <Link to="/settings/snmp">{tc("SNMP 采集")}</Link>{" "}
+            {tc("页面配置；单台设备可在「设备管理 → 凭证」中覆盖。")}
+          </>
         }
       />
 

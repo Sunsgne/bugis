@@ -24,6 +24,7 @@ import PageCard from "../components/PageCard";
 import { dataTableProps } from "../utils/table";
 import { formModalProps } from "../utils/formModal";
 import { useTc } from "@/i18n/useTc";
+import { translateApiText } from "@/i18n/translateApiText";
 
 const TYPE_LABEL: Record<string, string> = {
   bugis: "Bugis SDN 控制器 (内置)",
@@ -43,7 +44,7 @@ const TYPE_COLOR: Record<string, string> = {
 const EXTERNAL_TYPES = Object.entries(TYPE_LABEL).filter(([value]) => value !== "bugis");
 
 export default function Controllers() {
-  const { tc } = useTc();
+  const { tc, isEn } = useTc();
   const { message } = AntApp.useApp();
   const [rows, setRows] = useState<Controller[]>([]);
   const [loading, setLoading] = useState(false);
@@ -102,13 +103,17 @@ export default function Controllers() {
         type="info"
         showIcon
         icon={<ShareAltOutlined />}
-        message="内置 vs 北向控制器"
+        message={tc("内置 vs 北向控制器")}
         description={
           <span>
-            <Tag color="geekblue">{tc("Bugis SDN 控制器")}</Tag> {tc("为平台内嵌自研 EVPN 控制平面，启动时自动注册，")}
-            <strong>{tc("无需手动纳管")}</strong>。
+            <Tag color="geekblue">{tc("Bugis SDN 控制器")}</Tag>{" "}
+            {tc("为平台内嵌自研 EVPN 控制平面，启动时自动注册，")}{" "}
+            <strong>{tc("无需手动纳管")}</strong>
+            {isEn ? ". " : "。"}
             {tc("在 Fabric 站点将下发模式设为「控制器托管」并选择内置实例；控制面状态与 EVPN RIB 请前往")}{" "}
-            <Link to="/control-plane">{page.controlPlane}</Link>。{tc("下方「纳管外部控制器」用于对接")}
+            <Link to="/control-plane">{page.controlPlane}</Link>
+            {isEn ? ". " : "。"}
+            {tc("下方「纳管外部控制器」用于对接")}{" "}
             {tc("华为 NCE-Fabric、华三 SeerEngine 等厂商 / 开源控制器。")}
           </span>
         }
@@ -123,7 +128,7 @@ export default function Controllers() {
           locale={{ emptyText: empty.data }}
           {...dataTableProps()}
           columns={[
-            { title: tc("名称"), dataIndex: "name", width: "14%", ellipsis: true },
+            { title: tc("名称"), dataIndex: "name", width: "14%", ellipsis: true, render: (n: string) => translateApiText(n, tc, isEn) },
             {
               title: tc("类型"),
               dataIndex: "type",
@@ -146,7 +151,7 @@ export default function Controllers() {
               dataIndex: "description",
               width: "28%",
               ellipsis: true,
-              render: (d) => d || tc("平台内置 · 自动注册"),
+              render: (d) => translateApiText(d, tc, isEn) || tc("平台内置 · 自动注册"),
             },
             {
               title: tc("操作"),
@@ -180,7 +185,7 @@ export default function Controllers() {
           locale={{ emptyText: empty.default }}
           {...dataTableProps()}
           columns={[
-            { title: tc("名称"), dataIndex: "name", width: "16%", ellipsis: true },
+            { title: tc("名称"), dataIndex: "name", width: "16%", ellipsis: true, render: (n: string) => translateApiText(n, tc, isEn) },
             {
               title: tc("类型"),
               dataIndex: "type",
@@ -189,7 +194,7 @@ export default function Controllers() {
             },
             { title: tc("北向地址"), dataIndex: "base_url", width: "24%", ellipsis: true },
             { title: tc("账号"), dataIndex: "username", width: "12%", ellipsis: true, render: (v) => v || "—" },
-            { title: tc("描述"), dataIndex: "description", width: "22%", ellipsis: true, render: (v) => v || "—" },
+            { title: tc("描述"), dataIndex: "description", width: "22%", ellipsis: true, render: (v) => translateApiText(v, tc, isEn) || "—" },
             {
               title: tc("操作"),
               width: "8%",
