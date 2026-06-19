@@ -19,7 +19,6 @@ import { action, empty, page, toast } from "../constants/uiCopy";
 import { WORK_ORDER_STATUS, WORK_ORDER_TYPE, statusMeta } from "../constants/statusLabels";
 import { useTc } from "@/i18n/useTc";
 import { translateWorkOrderMessage, translateWorkOrderTitle } from "@/i18n/translateApiText";
-import { useTranslation } from "react-i18next";
 
 const { RangePicker } = DatePicker;
 

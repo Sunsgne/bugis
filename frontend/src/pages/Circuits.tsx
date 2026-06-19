@@ -115,6 +115,8 @@ interface TenantOverview {
 
 const DELETABLE = new Set(["decommissioned", "draft", "failed"]);
 
+type CircuitConfirmAction = "decommission" | "delete";
+
 export default function Circuits() {
   const { tc } = useTc();
   const { t } = useTranslation();
@@ -154,7 +156,11 @@ export default function Circuits() {
   const [provisioningId, setProvisioningId] = useState<number | null>(null);
   const [provisionType, setProvisionType] = useState<string>("provision");
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const [decommissionTarget, setDecommissionTarget] = useState<Circuit | null>(null);
+  const [circuitConfirm, setCircuitConfirm] = useState<{
+    circuit: Circuit;
+    action: CircuitConfirmAction;
+  } | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
   const [expandedRowKeys, setExpandedRowKeys] = useState<React.Key[]>([]);
   const handledCircuitLink = useRef<number | null>(null);
 
@@ -346,12 +352,24 @@ export default function Circuits() {
   }
 
   async function removeCircuit(c: Circuit) {
+    setDeletingId(c.id);
     try {
       await api.delete(`/circuits/${c.id}`);
+      setRows((prev) => prev.filter((row) => row.id !== c.id));
+      setTotal((prev) => Math.max(0, prev - 1));
+      setExpandedRowKeys((prev) => prev.filter((k) => k !== c.id));
+      setDetailCache((prev) => {
+        const next = { ...prev };
+        delete next[c.id];
+        return next;
+      });
       message.success(tc(`专线 ${c.code} 已删除`));
-      loadCircuits();
+      loadTenantSummary();
     } catch (e: any) {
       message.error(e?.response?.data?.detail || tc("删除失败"));
+      loadCircuits();
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -1081,20 +1099,14 @@ export default function Circuits() {
                   icon: <MinusCircleOutlined />,
                   danger: true,
                   label: tc("拆除专线"),
-                  onClick: () => setDecommissionTarget(r),
+                  onClick: () => setCircuitConfirm({ circuit: r, action: "decommission" }),
                 },
                 DELETABLE.has(r.status) && {
                   key: "delete",
                   icon: <DeleteOutlined />,
                   danger: true,
                   label: tc("永久删除记录"),
-                  onClick: () =>
-                    modal.confirm({
-                      title: tc("确认永久删除该专线记录?"),
-                      content: tc("仅删除系统记录，设备配置应已通过拆除工单清除"),
-                      okType: "danger",
-                      onOk: () => removeCircuit(r),
-                    }),
+                  onClick: () => setCircuitConfirm({ circuit: r, action: "delete" }),
                 },
               ].filter(Boolean) as { key: string }[];
 
@@ -1144,21 +1156,34 @@ export default function Circuits() {
                   )}
                   {moreItems.length > 0 && (
                     <Popconfirm
-                      title={tc("确认拆除该专线?")}
+                      title={
+                        circuitConfirm?.action === "delete"
+                          ? tc("确认永久删除该专线记录?")
+                          : tc("确认拆除该专线?")
+                      }
                       placement="topRight"
                       okText={tc("确定")}
                       cancelText={tc("取消")}
-                      okType="danger"
-                      open={decommissionTarget?.id === r.id}
+                      okButtonProps={{
+                        loading:
+                          circuitConfirm?.action === "delete" &&
+                          deletingId === circuitConfirm.circuit.id,
+                      }}
+                      open={circuitConfirm?.circuit.id === r.id}
                       onOpenChange={(nextOpen) => {
-                        if (!nextOpen && decommissionTarget?.id === r.id) {
-                          setDecommissionTarget(null);
+                        if (!nextOpen && circuitConfirm?.circuit.id === r.id) {
+                          setCircuitConfirm(null);
                         }
                       }}
-                      onConfirm={() => {
-                        const target = decommissionTarget;
-                        setDecommissionTarget(null);
-                        if (target) return decommission(target);
+                      onConfirm={async () => {
+                        const target = circuitConfirm;
+                        setCircuitConfirm(null);
+                        if (!target) return;
+                        if (target.action === "delete") {
+                          await removeCircuit(target.circuit);
+                        } else {
+                          await decommission(target.circuit);
+                        }
                       }}
                     >
                       <Dropdown menu={{ items: moreItems }} trigger={["click"]}>

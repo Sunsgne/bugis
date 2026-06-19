@@ -27,6 +27,7 @@ from app.services.alarm_template_registry import (
     get_templates,
     render_template,
     reset_templates,
+    sample_context,
     save_templates,
     templates_to_dict,
 )
@@ -36,16 +37,57 @@ router = APIRouter()
 
 
 def _preview_copy(kind: str, templates):
+    ctx = sample_context(kind)
     builders = {
-        "tunnel_down": lambda: msg.build_circuit_tunnel_down("CIR-PREVIEW", "degraded", templates),
-        "circuit_interruption": lambda: msg.build_circuit_interruption("CIR-PREVIEW", None, templates),
-        "sla_loss": lambda: msg.build_circuit_loss("CIR-PREVIEW", 1.25, 0.5, templates),
-        "sla_latency": lambda: msg.build_circuit_latency("CIR-PREVIEW", 68.2, 50.0, templates),
-        "utilization": lambda: msg.build_circuit_utilization("CIR-PREVIEW", 92.4, 90.0, templates),
-        "health": lambda: msg.build_circuit_health("CIR-PREVIEW", 62.5, 70.0, templates),
-        "circuit_flap": lambda: msg.build_circuit_flap("CIR-PREVIEW", 4, 15, templates),
+        "tunnel_down": lambda: msg.build_circuit_tunnel_down(
+            ctx.get("circuit_code", "CIR-PREVIEW"), str(ctx.get("status", "degraded")), templates, **ctx
+        ),
+        "circuit_interruption": lambda: msg.build_circuit_interruption(
+            str(ctx.get("circuit_code", "CIR-PREVIEW")), ctx.get("event_detail"), templates, **ctx
+        ),
+        "sla_loss": lambda: msg.build_circuit_loss(
+            str(ctx.get("circuit_code", "CIR-PREVIEW")),
+            float(ctx.get("loss_pct", 1.25)),
+            float(ctx.get("threshold_pct", 0.5)),
+            templates,
+            **ctx,
+        ),
+        "sla_latency": lambda: msg.build_circuit_latency(
+            str(ctx.get("circuit_code", "CIR-PREVIEW")),
+            float(ctx.get("latency_ms", 68.2)),
+            float(ctx.get("threshold_ms", 50.0)),
+            templates,
+            **ctx,
+        ),
+        "utilization": lambda: msg.build_circuit_utilization(
+            str(ctx.get("circuit_code", "CIR-PREVIEW")),
+            float(ctx.get("peak_pct", 92.4)),
+            float(ctx.get("threshold_pct", 90.0)),
+            templates,
+            **ctx,
+        ),
+        "health": lambda: msg.build_circuit_health(
+            str(ctx.get("circuit_code", "CIR-PREVIEW")),
+            float(ctx.get("score", 62.5)),
+            float(ctx.get("threshold", 70.0)),
+            templates,
+            **ctx,
+        ),
+        "circuit_flap": lambda: msg.build_circuit_flap(
+            str(ctx.get("circuit_code", "CIR-PREVIEW")),
+            int(ctx.get("flaps", 4)),
+            int(ctx.get("window_min", 15)),
+            templates,
+            **ctx,
+        ),
         "link_utilization": lambda: msg.build_link_utilization(
-            "SG-HK-01", 88.2, 85.0, capacity_mbps=10000, traffic_mbps=8800, templates=templates
+            str(ctx.get("link_name", "SG-HK-01")),
+            float(ctx.get("util_pct", 88.2)),
+            float(ctx.get("threshold_pct", 85.0)),
+            capacity_mbps=int(ctx.get("capacity_mbps", 10000)),
+            traffic_mbps=8800.0,
+            templates=templates,
+            **ctx,
         ),
         "test": lambda: msg.build_test_notification(templates),
     }
