@@ -739,6 +739,14 @@ body {
   width: 100% !important;
 }
 
+.data-table .ant-table-thead > tr > th,
+.config-device-table .ant-table-thead > tr > th,
+.config-history-table .ant-table-thead > tr > th,
+.config-service-table .ant-table-thead > tr > th,
+.overlay-vni-list-table .ant-table-thead > tr > th {
+  white-space: nowrap;
+}
+
 @media (max-width: 768px) {
   .data-table .ant-table {
     font-size: 12px;

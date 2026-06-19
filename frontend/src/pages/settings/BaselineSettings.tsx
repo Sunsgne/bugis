@@ -42,7 +42,7 @@ export default function BaselineSettings() {
         type="info"
         showIcon
         style={{ marginBottom: 16 }}
-        message="SNMP community 请在「SNMP 采集」页配置 baseline_community。"
+        message={tc("SNMP community 请在「SNMP 采集」页配置 baseline_community。")}
       />
       <Form form={form} layout="vertical" className="app-form" disabled={loading} style={{ maxWidth: 520 }}>
         <Form.Item name="baseline_ntp_server" label={tc('NTP 服务器')}>

@@ -5,7 +5,7 @@ import dayjs from "dayjs";
 import { api } from "../api/client";
 import type { Alarm } from "../api/types";
 import PageCard from "../components/PageCard";
-import { dataTableProps, TABLE_SCROLL, withMobileHide } from "../utils/table";
+import { dataTableProps, TABLE_SCROLL, colsNowrap } from "../utils/table";
 import { action, empty, page } from "../constants/uiCopy";
 import { ALARM_KIND, ALARM_SEVERITY, ALARM_STATUS, statusMeta } from "../constants/statusLabels";
 import { useTc } from "@/i18n/useTc";
@@ -83,8 +83,7 @@ export default function Alarms() {
               />
             ),
           }}
-          columns={withMobileHide(
-            [
+          columns={colsNowrap<Alarm>([
             {
               title: tc('级别'),
               dataIndex: "severity",
@@ -118,7 +117,7 @@ export default function Alarms() {
                 const auto = r.acknowledged_by === "system:auto-notify";
                 return (
                   <Tag color={m.color}>
-                    {auto && s === "acknowledged" ? "已确认(自动)" : m.label}
+                    {auto && s === "acknowledged" ? tc("已确认(自动)") : m.label}
                   </Tag>
                 );
               },
@@ -139,9 +138,7 @@ export default function Alarms() {
                   </Space>
                 ) : null,
             },
-          ],
-            ["kind", "detail", "status"],
-          )}
+          ])}
         />
       </PageCard>
     </div>

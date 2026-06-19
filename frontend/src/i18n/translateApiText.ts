@@ -9,7 +9,7 @@ const WO_PATTERNS: Array<{ re: RegExp; en: (...m: string[]) => string }> = [
       "Queued for provisioning; running asynchronously in the background (see work order details for progress)",
   },
   {
-    re: /^已保存 (\d+) 台设备的变更前现网配置快照（变更对比 \/ 应急还原）$/,
+    re: /^已保存 (\d+) 台设备的变更前(?:现网|网)配置快照（变更对比 \/ 应急还原）$/,
     en: (n) =>
       `Saved pre-change live config snapshots for ${n} device(s) (change comparison / emergency restore)`,
   },

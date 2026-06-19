@@ -188,7 +188,11 @@ export default function ConfigManagement() {
             : tc("定时自动拉取已关闭")
         }
         description={
-          <>{tc('可在')}<Link to="/settings/config-learn">{tc('平台设置 → 配置管理')}</Link>{tc('调整自动拉取、变更保护与快照策略。')}</>
+          <>
+            {tc("可在")}{" "}
+            <Link to="/settings/config-learn">{tc("平台设置 → 配置管理")}</Link>{" "}
+            {tc("调整自动拉取、变更保护与快照策略。")}
+          </>
         }
         action={
           <Link to="/settings/config-learn">
@@ -239,8 +243,9 @@ export default function ConfigManagement() {
             {
               title: tc('版本'),
               dataIndex: "latest_version",
-              width: 56,
+              width: 72,
               align: "center",
+              onHeaderCell: () => ({ style: { whiteSpace: "nowrap" } }),
               render: (v?: number) => (v ? `v${v}` : "—"),
             },
             {
@@ -346,7 +351,7 @@ export default function ConfigManagement() {
                         tableLayout="fixed"
                         scroll={{ x: 960 }}
                         columns={[
-                          { title: "接口", dataIndex: "interface", width: 160, ellipsis: true },
+                          { title: tc("接口"), dataIndex: "interface", width: 160, ellipsis: true },
                           { title: tc("模式"), dataIndex: "access_mode", width: 72 },
                           {
                             title: "S-VID",
@@ -410,7 +415,7 @@ export default function ConfigManagement() {
                       dataSource={snaps}
                       locale={{ emptyText: <Empty description={tc('暂无快照，点击「备份现网配置」')} /> }}
                       columns={[
-                        { title: "版本", dataIndex: "version", width: 72, render: (v) => `v${v}` },
+                        { title: tc("版本"), dataIndex: "version", width: 80, render: (v) => `v${v}` },
                         {
                           title: tc('来源'),
                           dataIndex: "source",
@@ -424,7 +429,7 @@ export default function ConfigManagement() {
                             </Tag>
                           ),
                         },
-                        { title: "行数", dataIndex: "lines", width: 72, align: "right" },
+                        { title: tc("行数"), dataIndex: "lines", width: 72, align: "right" },
                         {
                           title: tc('操作人'),
                           dataIndex: "created_by",

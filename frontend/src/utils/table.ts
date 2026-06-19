@@ -1,6 +1,7 @@
 import type { ColumnType } from "antd/es/table";
 import type { Breakpoint } from "antd/es/_util/responsiveObserver";
 import type { TablePaginationConfig, TableProps } from "antd";
+import type { CSSProperties } from "react";
 import i18n from "../i18n";
 import { tablePaginationTotal } from "../i18n/helpers";
 
@@ -64,6 +65,28 @@ export function dataTableProps(
     className: "data-table",
     ...(enableScroll ? { scroll: { x: scrollX } } : {}),
   };
+}
+
+const NOWRAP_HEADER: CSSProperties = { whiteSpace: "nowrap" };
+
+/** Table column with nowrap header — prevents awkward English line breaks. */
+export function colNowrap<T>(
+  col: ColumnType<T>,
+  minWidth?: number,
+): ColumnType<T> {
+  return {
+    ...col,
+    ...(minWidth != null ? { width: col.width ?? minWidth } : {}),
+    onHeaderCell: () => ({ style: NOWRAP_HEADER }),
+  };
+}
+
+/** Apply nowrap headers to all columns. */
+export function colsNowrap<T>(columns: ColumnType<T>[], minWidths?: Record<string, number>): ColumnType<T>[] {
+  return columns.map((col, idx) => {
+    const key = String(col.key ?? col.dataIndex ?? idx);
+    return colNowrap(col, minWidths?.[key]);
+  });
 }
 
 export function tablePagination(

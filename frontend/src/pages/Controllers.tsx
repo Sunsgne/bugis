@@ -106,10 +106,14 @@ export default function Controllers() {
         message={tc("内置 vs 北向控制器")}
         description={
           <span>
-            <Tag color="geekblue">{tc("Bugis SDN 控制器")}</Tag> {tc("为平台内嵌自研 EVPN 控制平面，启动时自动注册，")}
-            <strong>{tc("无需手动纳管")}</strong>。
+            <Tag color="geekblue">{tc("Bugis SDN 控制器")}</Tag>{" "}
+            {tc("为平台内嵌自研 EVPN 控制平面，启动时自动注册，")}{" "}
+            <strong>{tc("无需手动纳管")}</strong>
+            {isEn ? ". " : "。"}
             {tc("在 Fabric 站点将下发模式设为「控制器托管」并选择内置实例；控制面状态与 EVPN RIB 请前往")}{" "}
-            <Link to="/control-plane">{page.controlPlane}</Link>。{tc("下方「纳管外部控制器」用于对接")}
+            <Link to="/control-plane">{page.controlPlane}</Link>
+            {isEn ? ". " : "。"}
+            {tc("下方「纳管外部控制器」用于对接")}{" "}
             {tc("华为 NCE-Fabric、华三 SeerEngine 等厂商 / 开源控制器。")}
           </span>
         }
