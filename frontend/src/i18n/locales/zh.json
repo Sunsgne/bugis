@@ -1167,6 +1167,10 @@
       "netconf": "NETCONF",
       "ssh": "SSH CLI"
     },
+    "mgmtIpType": {
+      "management": "管理网",
+      "public": "公网"
+    },
     "vendor": {
       "arista": "Arista",
       "cisco": "Cisco 思科",

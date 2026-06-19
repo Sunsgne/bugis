@@ -1167,6 +1167,10 @@
       "netconf": "NETCONF",
       "ssh": "SSH CLI"
     },
+    "mgmtIpType": {
+      "management": "Management network",
+      "public": "Public network"
+    },
     "vendor": {
       "arista": "Arista",
       "cisco": "Cisco",
