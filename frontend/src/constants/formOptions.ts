@@ -46,6 +46,25 @@ export const MANAGEMENT_TRANSPORT_OPTIONS = [
   { value: "ssh", label: "SSH CLI" },
 ];
 
+/** Canonical values stored in API/DB (Chinese literals). */
+export const MGMT_IP_TYPE_MANAGEMENT = "管理网";
+export const MGMT_IP_TYPE_PUBLIC = "公网";
+
+export const MGMT_IP_TYPE_OPTIONS = [
+  { value: MGMT_IP_TYPE_MANAGEMENT, get label() { return tKey("form.mgmtIpType.management", tc("管理网")); } },
+  { value: MGMT_IP_TYPE_PUBLIC, get label() { return tKey("form.mgmtIpType.public", tc("公网")); } },
+];
+
+export function mgmtIpTypeLabel(value?: string | null): string {
+  if (!value || value === MGMT_IP_TYPE_MANAGEMENT) {
+    return tKey("form.mgmtIpType.management", tc("管理网"));
+  }
+  if (value === MGMT_IP_TYPE_PUBLIC) {
+    return tKey("form.mgmtIpType.public", tc("公网"));
+  }
+  return value;
+}
+
 export const SNMP_V3_SECURITY_OPTIONS = [
   { value: "noAuthNoPriv", label: "noAuthNoPriv" },
   { value: "authNoPriv", label: "authNoPriv" },

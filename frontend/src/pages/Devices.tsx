@@ -47,6 +47,7 @@ import { ConfigPreviewPre } from "../utils/configPreview";
 import {
   DEVICE_ROLE_OPTIONS,
   labelForOption,
+  mgmtIpTypeLabel,
 } from "../constants/formOptions";
 import { page as pageCopy, toast as toastCopy } from "../constants/uiCopy";
 import { buildListQuery, dataTableProps, TABLE_SCROLL, tablePagination, withMobileHide } from "../utils/table";
@@ -548,8 +549,8 @@ export default function Devices() {
             width: "18%",
             ellipsis: true,
             render: (_ip: string, d: Device) => {
-              const primaryLabel = d.mgmt_ip_primary_label || tc("管理网");
-              const backupLabel = d.mgmt_ip_backup_label || tc("公网");
+              const primaryLabel = mgmtIpTypeLabel(d.mgmt_ip_primary_label);
+              const backupLabel = mgmtIpTypeLabel(d.mgmt_ip_backup_label);
               const active = d.mgmt_ip_active;
               const activeRole = d.mgmt_ip_active_role;
               return (

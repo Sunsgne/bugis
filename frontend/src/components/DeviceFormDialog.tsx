@@ -17,6 +17,9 @@ import { Link } from "react-router-dom";
 import {
   DEVICE_ROLE_OPTIONS,
   MANAGEMENT_TRANSPORT_OPTIONS,
+  MGMT_IP_TYPE_MANAGEMENT,
+  MGMT_IP_TYPE_OPTIONS,
+  MGMT_IP_TYPE_PUBLIC,
   OVERLAY_OPTIONS,
   SNMP_V3_SECURITY_OPTIONS,
   SNMP_VERSION_OPTIONS,
@@ -82,8 +85,8 @@ function defaultValues(mgmt: ManagementDefaults, snmp: SnmpDefaults): Partial<De
     snmp_version: snmp.version,
     snmp_v3_security_level: "authPriv",
     is_route_reflector: false,
-    mgmt_ip_primary_label: mgmt.mgmt_ip_primary_label || "管理网",
-    mgmt_ip_backup_label: mgmt.mgmt_ip_backup_label || "公网",
+    mgmt_ip_primary_label: mgmt.mgmt_ip_primary_label || MGMT_IP_TYPE_MANAGEMENT,
+    mgmt_ip_backup_label: mgmt.mgmt_ip_backup_label || MGMT_IP_TYPE_PUBLIC,
   };
 }
 
@@ -100,8 +103,8 @@ export function deviceToFormValues(
     overlay_tech: device.overlay_tech,
     mgmt_ip: device.mgmt_ip,
     mgmt_ip_backup: device.mgmt_ip_backup || "",
-    mgmt_ip_primary_label: device.mgmt_ip_primary_label || "管理网",
-    mgmt_ip_backup_label: device.mgmt_ip_backup_label || "公网",
+    mgmt_ip_primary_label: device.mgmt_ip_primary_label || MGMT_IP_TYPE_MANAGEMENT,
+    mgmt_ip_backup_label: device.mgmt_ip_backup_label || MGMT_IP_TYPE_PUBLIC,
     loopback_ip: device.loopback_ip || "",
     bgp_asn: device.bgp_asn ?? null,
     site_id: device.site_id ?? null,
@@ -250,7 +253,7 @@ export default function DeviceFormDialog({
           </Col>
           <Col xs={24} sm={8}>
             <Form.Item name="mgmt_ip_primary_label" label={tc('主 IP 类型')}>
-              <Input placeholder={tc('管理网')} />
+              <Select options={MGMT_IP_TYPE_OPTIONS} />
             </Form.Item>
           </Col>
           <Col xs={24} sm={16}>
@@ -260,7 +263,7 @@ export default function DeviceFormDialog({
           </Col>
           <Col xs={24} sm={8}>
             <Form.Item name="mgmt_ip_backup_label" label={tc('备 IP 类型')}>
-              <Input placeholder={tc('公网')} />
+              <Select options={MGMT_IP_TYPE_OPTIONS} />
             </Form.Item>
           </Col>
           <Col xs={24} sm={16}>
