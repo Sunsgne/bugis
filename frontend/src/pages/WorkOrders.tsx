@@ -41,7 +41,6 @@ function fmtTs(ts?: string | null) {
 
 export default function WorkOrders() {
   const { tc, isEn, t } = useTc();
-  const { t } = useTranslation();
   const { message } = AntApp.useApp();
   const [rows, setRows] = useState<WorkOrder[]>([]);
   const [loading, setLoading] = useState(false);
