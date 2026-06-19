@@ -16,17 +16,20 @@ from app.models.alarm import Alarm
 from app.models.enums import AlarmSeverity, AlarmStatus, SEVERITY_RANK, NotificationType
 from app.models.notification import NotificationChannel
 from app.services import alarm_messages as msg
+from app.services.alarm_email_templates import render_alarm_email
+from app.services.alarm_template_registry import get_templates, render_template
+from app.services.platform_settings import get_or_create
 
 logger = logging.getLogger("bugis.notify")
 
 
-def _format_text(alarm: Alarm) -> str:
-    return msg.format_notification_text(alarm)
-
-
-def build_payload(channel: NotificationChannel, alarm: Alarm) -> dict:
-    text = _format_text(alarm)
-    structured = msg.format_notification_payload(alarm)
+def build_payload(channel: NotificationChannel, alarm: Alarm, db: Session) -> dict:
+    templates = get_templates(db)
+    plat = get_or_create(db)
+    product = plat.product_name or "Bugis Network"
+    text = msg.format_notification_text(alarm, templates=templates, product_name=product)
+    structured = msg.format_notification_payload(alarm, templates=templates)
+    copy = msg.copy_from_alarm(alarm, templates)
     if channel.type == NotificationType.SLACK:
         return {"text": text}
     if channel.type in (NotificationType.DINGTALK, NotificationType.WECOM):
@@ -44,11 +47,20 @@ def build_payload(channel: NotificationChannel, alarm: Alarm) -> dict:
         }
     if channel.type == NotificationType.EMAIL:
         sev = msg.severity_label(alarm.severity.value)
-        return {
+        ctx = {
+            "product_name": product,
+            "severity_label": sev,
+            "title": copy.title,
+        }
+        subject = render_template(templates.global_.email_subject, ctx)
+        payload: dict = {
             "to": channel.url,
-            "subject": f"[Bugis][{sev}] {alarm.title}",
+            "subject": subject,
             "body": text,
         }
+        if templates.global_.html_enabled:
+            payload["html"] = render_alarm_email(plat, alarm, copy=copy, templates=templates, plain_body=text)
+        return payload
     return structured
 
 
@@ -73,9 +85,15 @@ def _send_email(channel: NotificationChannel, payload: dict) -> tuple[bool, str]
     if not host:
         return False, "SMTP not configured (set BUGIS_SMTP_HOST)"
     import smtplib
+    from email.mime.multipart import MIMEMultipart
     from email.mime.text import MIMEText
 
-    msg_obj = MIMEText(payload["body"], "plain", "utf-8")
+    if payload.get("html"):
+        msg_obj = MIMEMultipart("alternative")
+        msg_obj.attach(MIMEText(payload["body"], "plain", "utf-8"))
+        msg_obj.attach(MIMEText(payload["html"], "html", "utf-8"))
+    else:
+        msg_obj = MIMEText(payload["body"], "plain", "utf-8")
     msg_obj["Subject"] = payload["subject"]
     msg_obj["From"] = getattr(settings, "smtp_from", "bugis@localhost")
     msg_obj["To"] = payload["to"]
@@ -122,7 +140,7 @@ def dispatch_for_alarm(db: Session, alarm: Alarm) -> int:
     for ch in channels:
         if SEVERITY_RANK.get(ch.min_severity.value, 0) > threshold_rank:
             continue
-        ok, detail = _send(ch, build_payload(ch, alarm))
+        ok, detail = _send(ch, build_payload(ch, alarm, db))
         ch.last_status = ("ok" if ok else "failed") + f": {detail}"
         ch.last_dispatch_at = datetime.now(timezone.utc)
         dispatched += 1
@@ -134,7 +152,8 @@ def dispatch_for_alarm(db: Session, alarm: Alarm) -> int:
 
 
 def test_channel(db: Session, channel: NotificationChannel) -> dict:
-    copy = msg.build_test_notification()
+    templates = get_templates(db)
+    copy = msg.build_test_notification(templates)
     sample = Alarm(
         severity=channel.min_severity,
         kind=copy.kind,
@@ -142,8 +161,8 @@ def test_channel(db: Session, channel: NotificationChannel) -> dict:
         detail=copy.detail,
         dedup_key="test",
     )
-    ok, detail = _send(channel, build_payload(channel, sample))
+    payload = build_payload(channel, sample, db)
+    ok, detail = _send(channel, payload)
     channel.last_status = ("ok" if ok else "failed") + f": {detail}"
     channel.last_dispatch_at = datetime.now(timezone.utc)
-    return {"success": ok, "detail": detail,
-            "payload": build_payload(channel, sample)}
+    return {"success": ok, "detail": detail, "payload": payload}

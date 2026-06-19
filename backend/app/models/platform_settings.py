@@ -118,3 +118,5 @@ class PlatformSettings(Base, TimestampMixin):
         nullable=True,
         default="linear-gradient(135deg, #0b1f3a 0%, #1677ff 100%)",
     )
+
+    alarm_notification_templates: Mapped[str | None] = mapped_column(Text, nullable=True)

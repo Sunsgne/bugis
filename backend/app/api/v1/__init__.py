@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends
 
 from app.api.v1 import (
     alarms,
+    alarm_templates,
     audit,
     auth,
     bulk,
@@ -63,6 +64,12 @@ api_router.include_router(stream.router, prefix="/stream", tags=["stream"])
 api_router.include_router(system.router, prefix="/system", tags=["system"])
 api_router.include_router(
     platform_settings.router, prefix="/system/settings", tags=["platform-settings"], dependencies=_platform
+)
+api_router.include_router(
+    alarm_templates.router,
+    prefix="/system/settings/alarm-templates",
+    tags=["alarm-templates"],
+    dependencies=_platform,
 )
 api_router.include_router(
     snmp_settings.router, prefix="/system/snmp", tags=["snmp-settings"], dependencies=_platform

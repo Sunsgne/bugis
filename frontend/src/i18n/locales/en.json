@@ -1269,6 +1269,7 @@
     "intro": "Manage branding, runtime, alarms, SNMP/email, integrations and users. Changes apply immediately.",
     "nav": {
       "alarms": "Alarm thresholds",
+      "alarmTemplates": "Alert templates",
       "audit": "Audit",
       "baseline": "Device baseline",
       "brand": "Branding",
@@ -1282,7 +1283,24 @@
       "snmp": "SNMP collection",
       "users": "Users"
     },
-    "title": "Platform settings"
+    "title": "Platform settings",
+    "alarmTemplates": {
+      "title": "Alert notification templates",
+      "subtitle": "Customize alert copy and layout for email, IM bots, and webhooks",
+      "globalLayout": "Global layout",
+      "globalHint": "Header, footer, email subject, section headings",
+      "save": "Save templates",
+      "reset": "Restore defaults",
+      "preview": "Live preview",
+      "refresh": "Refresh",
+      "plainText": "Plain text",
+      "subject": "Subject",
+      "restoreKind": "Restore type default",
+      "restoreKindHint": "Loaded default copy for this type (save to apply)",
+      "saved": "Alert templates saved",
+      "resetOk": "Defaults restored",
+      "previewFail": "Preview failed"
+    }
   },
   "status": {
     "accessMode": {

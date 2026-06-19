@@ -18,6 +18,7 @@ from app.schemas.telemetry import CircuitHealth
 from app.services import platform_settings as platform_cfg
 from app.services.circuit_alarm_settings import effective_thresholds
 from app.services import alarm_messages as msg
+from app.services.alarm_template_registry import get_templates
 
 
 def _active_by_key(db: Session, dedup_key: str) -> Alarm | None:
@@ -82,12 +83,13 @@ def evaluate_circuit_health(db: Session, circuit: Circuit, health: CircuitHealth
     cid = circuit.id
     plat = platform_cfg.get_or_create(db)
     th = effective_thresholds(circuit, plat)
+    templates = get_templates(db)
 
     # Tunnel / status down — also check latest telemetry tunnel_state
     key_down = f"circuit:{cid}:down"
     latest_down = health.tunnel_down
     if circuit.status in (CircuitStatus.FAILED, CircuitStatus.DEGRADED) or latest_down:
-        copy = msg.build_circuit_tunnel_down(circuit.code, circuit.status.value)
+        copy = msg.build_circuit_tunnel_down(circuit.code, circuit.status.value, templates)
         raise_alarm(
             db, "tunnel_down", AlarmSeverity.CRITICAL,
             copy.title,
@@ -104,7 +106,7 @@ def evaluate_circuit_health(db: Session, circuit: Circuit, health: CircuitHealth
     key_lat = f"circuit:{cid}:latency"
     if circuit.latency_probe_enabled:
         if health.avg_packet_loss_pct > th.packet_loss_pct:
-            copy = msg.build_circuit_loss(circuit.code, health.avg_packet_loss_pct, th.packet_loss_pct)
+            copy = msg.build_circuit_loss(circuit.code, health.avg_packet_loss_pct, th.packet_loss_pct, templates)
             raise_alarm(
                 db, "sla_loss", AlarmSeverity.MAJOR,
                 copy.title,
@@ -115,7 +117,7 @@ def evaluate_circuit_health(db: Session, circuit: Circuit, health: CircuitHealth
             clear_by_key(db, key_loss)
 
         if health.avg_latency_ms > th.latency_ms:
-            copy = msg.build_circuit_latency(circuit.code, health.avg_latency_ms, th.latency_ms)
+            copy = msg.build_circuit_latency(circuit.code, health.avg_latency_ms, th.latency_ms, templates)
             raise_alarm(
                 db, "sla_latency", AlarmSeverity.MINOR,
                 copy.title,
@@ -132,7 +134,7 @@ def evaluate_circuit_health(db: Session, circuit: Circuit, health: CircuitHealth
     key_util = f"circuit:{cid}:utilization"
     if health.peak_utilization_pct > th.utilization_pct:
         copy = msg.build_circuit_utilization(
-            circuit.code, health.peak_utilization_pct, th.utilization_pct
+            circuit.code, health.peak_utilization_pct, th.utilization_pct, templates
         )
         raise_alarm(
             db, "utilization", AlarmSeverity.MINOR,
@@ -145,7 +147,7 @@ def evaluate_circuit_health(db: Session, circuit: Circuit, health: CircuitHealth
     # Composite health score
     key_health = f"circuit:{cid}:health"
     if health.health_score < th.health_score_min:
-        copy = msg.build_circuit_health(circuit.code, health.health_score, th.health_score_min)
+        copy = msg.build_circuit_health(circuit.code, health.health_score, th.health_score_min, templates)
         raise_alarm(
             db, "health", AlarmSeverity.MAJOR,
             copy.title,
@@ -168,9 +170,10 @@ def evaluate_circuit_availability(db: Session, circuit: Circuit) -> None:
         )
     ).scalar_one_or_none()
 
+    templates = get_templates(db)
     key_interrupt = f"circuit:{cid}:interruption"
     if open_ev and open_ev.kind == "interruption":
-        copy = msg.build_circuit_interruption(circuit.code, open_ev.detail)
+        copy = msg.build_circuit_interruption(circuit.code, open_ev.detail, templates)
         raise_alarm(
             db,
             "circuit_interruption",
@@ -187,7 +190,7 @@ def evaluate_circuit_availability(db: Session, circuit: Circuit) -> None:
     key_flap = f"circuit:{cid}:flap"
     if flaps >= availability_service.FLAP_COUNT_THRESHOLD:
         copy = msg.build_circuit_flap(
-            circuit.code, flaps, availability_service.FLAP_WINDOW_MIN
+            circuit.code, flaps, availability_service.FLAP_WINDOW_MIN, templates
         )
         raise_alarm(
             db,
@@ -211,6 +214,7 @@ def evaluate_link_health(db: Session, link: Link, health) -> None:
         return
     plat = platform_cfg.get_or_create(db)
     threshold = link_alarm_settings.effective_utilization_threshold(link, plat)
+    templates = get_templates(db)
     if health.peak_utilization_pct > threshold:
         copy = msg.build_link_utilization(
             link.name,
@@ -218,6 +222,7 @@ def evaluate_link_health(db: Session, link: Link, health) -> None:
             threshold,
             capacity_mbps=health.capacity_mbps,
             traffic_mbps=health.traffic_mbps,
+            templates=templates,
         )
         raise_alarm(
             db,

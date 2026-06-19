@@ -1269,6 +1269,7 @@
     "intro": "集中管理品牌外观、平台运行参数、告警策略、SNMP/邮件、北向集成与用户权限。修改后即时生效。",
     "nav": {
       "alarms": "告警阈值",
+      "alarmTemplates": "告警模板",
       "audit": "操作审计",
       "baseline": "设备基线",
       "brand": "品牌外观",
@@ -1282,7 +1283,24 @@
       "snmp": "SNMP 采集",
       "users": "用户权限"
     },
-    "title": "平台设置"
+    "title": "平台设置",
+    "alarmTemplates": {
+      "title": "告警通知模板",
+      "subtitle": "自定义外发至邮件、钉钉、飞书、Webhook 等渠道的告警文案与版式",
+      "globalLayout": "全局版式",
+      "globalHint": "页眉、页脚、邮件主题、章节标题",
+      "save": "保存模板",
+      "reset": "恢复默认",
+      "preview": "实时预览",
+      "refresh": "刷新",
+      "plainText": "纯文本",
+      "subject": "主题",
+      "restoreKind": "恢复此类型默认",
+      "restoreKindHint": "已载入该类型默认文案（需保存后生效）",
+      "saved": "告警模板已保存",
+      "resetOk": "已恢复默认模板",
+      "previewFail": "预览失败"
+    }
   },
   "status": {
     "accessMode": {
