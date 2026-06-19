@@ -18,7 +18,7 @@ import { formModalProps } from "../utils/formModal";
 import { action, empty, page, toast } from "../constants/uiCopy";
 import { WORK_ORDER_STATUS, WORK_ORDER_TYPE, statusMeta } from "../constants/statusLabels";
 import { useTc } from "@/i18n/useTc";
-import { translateWorkOrderMessage } from "@/i18n/translateApiText";
+import { translateWorkOrderMessage, translateWorkOrderTitle } from "@/i18n/translateApiText";
 import { useTranslation } from "react-i18next";
 
 const { RangePicker } = DatePicker;
@@ -40,7 +40,7 @@ function fmtTs(ts?: string | null) {
 }
 
 export default function WorkOrders() {
-  const { tc, isEn } = useTc();
+  const { tc, isEn, t } = useTc();
   const { t } = useTranslation();
   const { message } = AntApp.useApp();
   const [rows, setRows] = useState<WorkOrder[]>([]);
@@ -241,7 +241,9 @@ export default function WorkOrders() {
             ellipsis: true,
             render: (_, r) => r.circuit_code || (r.circuit_id != null ? `#${r.circuit_id}` : tc("已删除")),
           },
-          { title: tc("标题"), dataIndex: "title", width: "18%", ellipsis: true },
+          { title: tc("标题"), dataIndex: "title", width: "18%", ellipsis: true,
+            render: (title: string) => translateWorkOrderTitle(title, t, isEn),
+          },
           {
             title: tc('类型'),
             dataIndex: "type",

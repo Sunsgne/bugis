@@ -104,3 +104,31 @@ export function translateApiText(text: string, tc: TcFn, isEn: boolean): string 
 export function translateWorkOrderMessage(message: string, tc: TcFn, isEn: boolean): string {
   return translateApiText(message, tc, isEn);
 }
+
+const DEFAULT_WO_TITLE_PATTERNS: Array<{ re: RegExp; type: string }> = [
+  { re: /^provision circuit (.+)$/i, type: "provision" },
+  { re: /^modify circuit (.+)$/i, type: "modify" },
+  { re: /^decommission circuit (.+)$/i, type: "decommission" },
+  { re: /^migrate circuit (.+)$/i, type: "migrate" },
+  { re: /^开通专线\s*(.+)$/, type: "provision" },
+  { re: /^变更专线\s*(.+)$/, type: "modify" },
+  { re: /^拆除专线\s*(.+)$/, type: "decommission" },
+  { re: /^迁移专线\s*(.+)$/, type: "migrate" },
+];
+
+/** Localize auto-generated work order titles (legacy English/Chinese rows). */
+export function translateWorkOrderTitle(
+  title: string,
+  t: (key: string, opts?: { defaultValue?: string }) => string,
+  isEn: boolean,
+): string {
+  if (!title) return title;
+  for (const { re, type } of DEFAULT_WO_TITLE_PATTERNS) {
+    const m = title.match(re);
+    if (!m) continue;
+    const code = m[1].trim();
+    const typeLabel = t(`status.workOrderType.${type}`, { defaultValue: type });
+    return isEn ? `${typeLabel} circuit ${code}` : `${typeLabel}专线 ${code}`;
+  }
+  return title;
+}

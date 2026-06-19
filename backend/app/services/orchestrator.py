@@ -49,6 +49,7 @@ from app.services import (
     device_management,
     platform_settings as platform_cfg,
     validation,
+    work_order_titles,
 )
 
 
@@ -197,6 +198,7 @@ def create_work_order(
     requested_by: str | None = None,
     payload: str | None = None,
     notes: str | None = None,
+    locale: str | None = None,
 ) -> WorkOrder:
     wo = WorkOrder(
         code=next_work_order_code(db),
@@ -204,7 +206,10 @@ def create_work_order(
         circuit_code=circuit.code,
         type=wo_type,
         status=WorkOrderStatus.DRAFT,
-        title=title or f"{wo_type.value} circuit {circuit.code}",
+        title=title
+        or work_order_titles.default_work_order_title(
+            wo_type, circuit.code, locale=locale
+        ),
         requested_by=requested_by,
         payload=payload,
         notes=notes,

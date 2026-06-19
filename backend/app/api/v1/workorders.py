@@ -86,6 +86,7 @@ def create_work_order(
         requested_by=payload.requested_by or user.username,
         payload=payload.payload,
         notes=payload.notes,
+        locale=user.locale,
     )
     db.commit()
     db.refresh(wo)
@@ -250,7 +251,8 @@ def provision_circuit(
             }
         )
     wo = orchestrator.create_work_order(
-        db, circuit, wo_type, requested_by=user.username, payload=payload
+        db, circuit, wo_type, requested_by=user.username, payload=payload,
+        locale=user.locale,
     )
     orchestrator.submit(db, wo, actor=user.username)
     orchestrator.approve(db, wo, user.username, approve_it=True)
