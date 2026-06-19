@@ -92,6 +92,33 @@ function matchPatterns(text: string, patterns: typeof WO_PATTERNS, isEn: boolean
   return null;
 }
 
+const CONFIG_NOTE_PATTERNS: Array<{ re: RegExp; en: (...m: string[]) => string }> = [
+  { re: /^现网配置自动学习$/, en: () => "Live network auto-learn" },
+  { re: /^现网 running-config 备份$/, en: () => "Live running-config backup" },
+  { re: /^开通前-(.+)$/, en: (code) => `Before provision · ${code}` },
+  { re: /^拆除前-(.+)$/, en: (code) => `Before teardown · ${code}` },
+];
+
+function matchConfigNote(text: string, isEn: boolean): string | null {
+  if (!isEn) return null;
+  for (const { re, en } of CONFIG_NOTE_PATTERNS) {
+    const m = text.match(re);
+    if (m) return en(...m.slice(1));
+  }
+  return null;
+}
+
+export function translateConfigSnapshotNote(
+  note: string | undefined | null,
+  tc: TcFn,
+  isEn: boolean,
+): string {
+  if (!note) return "—";
+  const fromPattern = matchConfigNote(note, isEn);
+  if (fromPattern) return fromPattern;
+  return translateApiText(note, tc, isEn);
+}
+
 export function translateApiText(text: string, tc: TcFn, isEn: boolean): string {
   if (!text || !isEn) return text;
   const fromPattern =
