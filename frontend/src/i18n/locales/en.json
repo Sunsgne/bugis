@@ -1835,7 +1835,9 @@
     "f9b2c002": "No physical or aggregate ports found — run SNMP discovery",
     "f9b2c003": "Access mode does not require VLAN tags",
     "f9b2c004": "Not required",
-    "f9b2c005": "Select S-VID first"
+    "f9b2c005": "Select S-VID first",
+    "f9b2c006": "Confirm provisioning this circuit?",
+    "f9b2c007": "Confirm re-applying configuration to this circuit?"
   },
   "dashboard": {
     "ticksExecuted": "Executed {{count}} times",

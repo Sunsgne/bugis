@@ -1101,17 +1101,34 @@ export default function Circuits() {
               return (
                 <Space size={4} className="table-actions">
                   {r.status !== "decommissioned" && (
-                    <Tooltip title={r.status === "active" ? tc("重新下发配置 (re-apply)") : tc("一键开通 (下发配置)")}>
-                      <Button
-                        size="small"
-                        type="primary"
-                        icon={<ThunderboltOutlined />}
-                        loading={provisioningId === r.id}
-                        onClick={() => provision(r)}
+                    <Popconfirm
+                      title={
+                        r.status === "active"
+                          ? tc("确认重新下发该专线?")
+                          : tc("确认开通该专线?")
+                      }
+                      placement="topRight"
+                      okText={tc("确定")}
+                      cancelText={tc("取消")}
+                      onConfirm={() => provision(r)}
+                    >
+                      <Tooltip
+                        title={
+                          r.status === "active"
+                            ? tc("重新下发配置 (re-apply)")
+                            : tc("一键开通 (下发配置)")
+                        }
                       >
-                        {r.status === "active" ? tc("重新下发") : tc("开通")}
-                      </Button>
-                    </Tooltip>
+                        <Button
+                          size="small"
+                          type="primary"
+                          icon={<ThunderboltOutlined />}
+                          loading={provisioningId === r.id}
+                        >
+                          {r.status === "active" ? tc("重新下发") : tc("开通")}
+                        </Button>
+                      </Tooltip>
+                    </Popconfirm>
                   )}
                   {moreItems.length > 0 && (
                     <Popconfirm
