@@ -7,6 +7,8 @@ simulation mode.
 """
 from __future__ import annotations
 
+import re
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -16,18 +18,47 @@ from app.models.device import Device, DeviceInterface
 from app.models.enums import Vendor
 
 
+def _quote_description(vendor: Vendor, desc: str) -> str:
+    """Wrap description for vendor CLI when special characters are present."""
+    if not desc:
+        return desc
+    if vendor == Vendor.JUNIPER:
+        return desc.replace('"', '\\"')
+    if re.search(r'[\s#;"\'\\()]', desc) or ":" in desc:
+        escaped = desc.replace("\\", "\\\\").replace('"', '\\"')
+        return f'"{escaped}"'
+    return desc
+
+
+def _cli_iface_name(name: str, vendor: Vendor) -> str:
+    """Normalize interface name for device CLI (Vlan-interface2600, etc.)."""
+    from app.services.port_inventory import _normalize_iface, is_vlan_interface_name
+
+    norm = _normalize_iface(name)
+    if vendor == Vendor.H3C and is_vlan_interface_name(norm):
+        m = re.match(r"^(?:Vlan-interface|Vlan)(\d+)$", norm, re.IGNORECASE)
+        if m:
+            return f"Vlan-interface{m.group(1)}"
+    if vendor == Vendor.HUAWEI and is_vlan_interface_name(norm):
+        m = re.match(r"^(?:Vlanif|Vlan-interface|Vlan)(\d+)$", norm, re.IGNORECASE)
+        if m:
+            return f"Vlanif{m.group(1)}"
+    return norm
+
+
 def _desc_lines(vendor: Vendor, name: str, description: str | None) -> list[str]:
     """Render the vendor CLI to set (or clear) one interface description."""
     desc = (description or "").strip()
+    cli_name = _cli_iface_name(name, vendor)
     if vendor == Vendor.JUNIPER:
         if desc:
-            return [f'set interfaces {name} description "{desc}"']
-        return [f"delete interfaces {name} description"]
+            return [f'set interfaces {cli_name} description "{_quote_description(vendor, desc)}"']
+        return [f"delete interfaces {cli_name} description"]
     # Comware (H3C), VRP (Huawei), IOS-XR (Cisco), EOS (Arista), FRR/vtysh.
     negate = "undo" if vendor in (Vendor.H3C, Vendor.HUAWEI) else "no"
-    lines = [f"interface {name}"]
+    lines = [f"interface {cli_name}"]
     if desc:
-        lines.append(f" description {desc}")
+        lines.append(f" description {_quote_description(vendor, desc)}")
     else:
         lines.append(f" {negate} description")
     return lines

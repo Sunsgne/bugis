@@ -142,6 +142,37 @@ def test_clear_interface_description(client, auth_headers):
     assert "undo description" in r["rendered"]
 
 
+def test_h3c_vlan_description_quoted(client, auth_headers):
+    site = client.post(
+        "/api/v1/sites", headers=auth_headers,
+        json={"name": "TYO VLAN", "code": "TVQ99", "city": "TYO"},
+    ).json()
+    dev = client.post(
+        "/api/v1/devices", headers=auth_headers,
+        json={
+            "name": "h3c-vlan-q-99", "vendor": "h3c", "role": "pe",
+            "overlay_tech": "vxlan_evpn", "mgmt_ip": "10.88.110.99",
+            "site_id": site["id"], "bgp_asn": 65010, "loopback_ip": "10.88.255.99",
+        },
+    ).json()
+    assert "id" in dev, dev
+    r = client.post(
+        f"/api/v1/devices/{dev['id']}/interfaces/descriptions",
+        headers=auth_headers,
+        json={
+            "items": [{
+                "name": "Vlan-interface2600",
+                "description": "BB:P1:d(cs-1.tyo2):cm(pl-bb)",
+            }],
+            "push": True,
+        },
+    )
+    assert r.status_code == 200, r.text
+    rendered = r.json()["rendered"]
+    assert "interface Vlan-interface2600" in rendered
+    assert 'description "BB:P1:d(cs-1.tyo2):cm(pl-bb)"' in rendered
+
+
 def test_parallel_bulk_interface_descriptions(client, auth_headers):
     _, dev_a = _huawei_topology(client, auth_headers, "46")
     _, dev_b = _huawei_topology(client, auth_headers, "47")

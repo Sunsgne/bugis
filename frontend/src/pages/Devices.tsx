@@ -317,9 +317,13 @@ export default function Devices() {
       if (data.success) {
         const inv = data.inventory;
         const svidTotal = data.svid_scan?.total_s_vids ?? 0;
-        message.success(
-          `${d.name} 学习完成 · ${inv?.service_count ?? 0} 个业务 · v${data.snapshot_version}`,
-        );
+        if (data.dry_run) {
+          message.warning(`${d.name} 学习完成（Dry-run：未从真实设备拉取配置）`);
+        } else {
+          message.success(
+            `${d.name} 学习完成 · ${inv?.service_count ?? 0} 个业务 · v${data.snapshot_version}`,
+          );
+        }
         if (svidTotal === 0) {
           message.info(tc('未解析到 S-VID，请确认设备 running-config 含 service-instance / dot1q 配置'));
         }
@@ -721,7 +725,10 @@ export default function Devices() {
         onBeginEdit={(ports) => drawerDevice && descJobs.beginEdit(drawerDevice.id, ports)}
         onCancelEdit={() => drawerDevice && descJobs.cancelEdit(drawerDevice.id)}
         onDraftChange={(name, value) => drawerDevice && descJobs.updateDraft(drawerDevice.id, name, value)}
-        onEnqueueSave={(ports) => drawerDevice && descJobs.enqueueSave(drawerDevice, ports)}
+        onEnqueueSave={(ports, draft) =>
+          drawerDevice &&
+          descJobs.enqueueSave(drawerDevice, ports, draft, () => setPortDrawerRefresh((v) => v + 1))
+        }
       />
 
       <DeviceFormDialog

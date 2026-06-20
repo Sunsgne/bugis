@@ -96,7 +96,7 @@ interface DevicePortDrawerProps {
   onBeginEdit?: (physicalPorts: DeviceInterface[]) => void;
   onCancelEdit?: () => void;
   onDraftChange?: (name: string, value: string) => void;
-  onEnqueueSave?: (physicalPorts: DeviceInterface[]) => void;
+  onEnqueueSave?: (physicalPorts: DeviceInterface[], draft: Record<string, string>) => void;
 }
 
 export default function DevicePortDrawer({
@@ -124,6 +124,7 @@ export default function DevicePortDrawer({
   const [ifaceStatus, setIfaceStatus] = useState<"all" | "up" | "down" | "allocated">("all");
   const [activeTab, setActiveTab] = useState("ports");
   const [discovering, setDiscovering] = useState(false);
+  const [learning, setLearning] = useState(false);
   const [adoptBinding, setAdoptBinding] = useState<DevicePortBinding | null>(null);
 
   const [discoverError, setDiscoverError] = useState<string | null>(null);
@@ -178,13 +179,16 @@ export default function DevicePortDrawer({
 
     let cancelled = false;
     void (async () => {
-      await loadBindings(device.id, false);
-      if (!cancelled) void loadBindings(device.id, true);
+      await Promise.all([loadBindings(device.id, false), loadIfaces(device.id, false)]);
+      if (cancelled) return;
+      await Promise.all([loadBindings(device.id, true), loadIfaces(device.id, true)]);
     })();
-    (async () => {
+
+    void (async () => {
+      if (refreshVersion > 0) return;
       const rows = await loadIfaces(device.id, false);
       if (cancelled) return;
-      if (refreshVersion === 0 && rows.length === 0) {
+      if (rows.length === 0) {
         setDiscovering(true);
         setDiscoverError(null);
         try {
@@ -214,7 +218,8 @@ export default function DevicePortDrawer({
     if (!device) return;
     const status = saveJob?.status ?? "idle";
     if (prevSaveStatus.current === "saving" && status === "success") {
-      void loadIfaces(device.id, false);
+      void loadIfaces(device.id, true);
+      void loadBindings(device.id, true);
     }
     prevSaveStatus.current = status;
   }, [device, saveJob?.status]);
@@ -265,7 +270,7 @@ export default function DevicePortDrawer({
   function saveDescriptions() {
     if (!device) return;
     if (onEnqueueSave) {
-      onEnqueueSave(physicalPorts);
+      onEnqueueSave(physicalPorts, descDraft);
       return;
     }
     message.error("保存队列未就绪");
@@ -305,8 +310,22 @@ export default function DevicePortDrawer({
             >
               SNMP 发现
             </Button>
-            <Button size="small" icon={<BookOutlined />} onClick={() => onLearn(device)}>
-              现网学习
+            <Button
+              size="small"
+              icon={<BookOutlined />}
+              loading={learning}
+              onClick={async () => {
+                if (!device) return;
+                setLearning(true);
+                try {
+                  await onLearn(device);
+                  await refreshAll(true);
+                } finally {
+                  setLearning(false);
+                }
+              }}
+            >
+              {learning ? "学习中…" : "现网学习"}
             </Button>
             {editingDesc ? (
               <>

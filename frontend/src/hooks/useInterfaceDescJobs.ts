@@ -86,9 +86,17 @@ export function useInterfaceDescJobs(notify: {
   }, []);
 
   const enqueueSave = useCallback(
-    (device: Device, physicalPorts: DeviceInterface[]) => {
-      const draft = drafts[device.id];
-      if (!draft) return;
+    (
+      device: Device,
+      physicalPorts: DeviceInterface[],
+      draftSnapshot?: Record<string, string>,
+      onSuccess?: () => void,
+    ) => {
+      const draft = draftSnapshot ?? drafts[device.id];
+      if (!draft || Object.keys(draft).length === 0) {
+        notify.error(`${device.name}：请先点击「编辑描述」并修改接口描述`);
+        return;
+      }
       const items = diffDescriptionItems(physicalPorts, draft);
       if (items.length === 0) {
         notify.info("没有需要保存的描述变更");
@@ -112,15 +120,16 @@ export function useInterfaceDescJobs(notify: {
             updated: number;
             pushed: boolean;
             dry_run: boolean;
+            output?: string | null;
           }>(`/devices/${device.id}/interfaces/descriptions`, { items, push: true });
 
           let message: string;
           if (data.dry_run) {
-            message = `已保存 ${data.updated} 个接口描述（Dry-run）`;
+            message = `已保存 ${data.updated} 个接口描述（Dry-run：未真实下发到设备）`;
           } else if (data.pushed) {
-            message = `已保存并下发 ${data.updated} 个接口描述`;
+            message = `已保存并下发 ${data.updated} 个接口描述到设备`;
           } else {
-            message = `已保存 ${data.updated} 个接口描述，但下发失败`;
+            message = `已保存 ${data.updated} 个接口描述，但下发失败，请检查 SSH/NETCONF 连通性`;
           }
 
           setJobs((prev) => ({
@@ -138,9 +147,11 @@ export function useInterfaceDescJobs(notify: {
             return next;
           });
 
-          if (data.dry_run) notify.success(`${device.name}：${message}`);
+          if (data.dry_run) notify.warning(`${device.name}：${message}`);
           else if (data.pushed) notify.success(`${device.name}：${message}`);
           else notify.warning(`${device.name}：${message}`);
+
+          onSuccess?.();
         } catch (e: unknown) {
           const err = e as { response?: { data?: { detail?: string } } };
           const detail = err?.response?.data?.detail || "保存接口描述失败";
