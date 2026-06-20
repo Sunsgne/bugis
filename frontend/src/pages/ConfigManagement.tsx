@@ -206,7 +206,7 @@ export default function ConfigManagement() {
         extra={<Button size="small" icon={<ReloadOutlined />} onClick={loadDevices} />}
       >
         <Table<ConfigDeviceRow>
-          {...dataTableProps(TABLE_SCROLL.lg)}
+          {...dataTableProps(undefined, false)}
           rowKey="device_id"
           size="small"
           className="config-device-table"
@@ -221,44 +221,36 @@ export default function ConfigManagement() {
             {
               title: tc('设备'),
               dataIndex: "name",
-              width: 220,
               ellipsis: { showTitle: false },
-              render: (name: string) => (
-                <Tooltip title={name}>
-                  <span className="config-device-name">{name}</span>
-                </Tooltip>
+              render: (name: string, row: ConfigDeviceRow) => (
+                <div className="config-device-cell">
+                  <Tooltip title={name}>
+                    <span className="config-device-name">{name}</span>
+                  </Tooltip>
+                  <Tag color={VENDOR_COLOR[row.vendor]} className="config-inline-tag config-device-vendor">
+                    {vendorLabel(row.vendor)}
+                  </Tag>
+                </div>
               ),
-            },
-            {
-              title: tc('厂商'),
-              dataIndex: "vendor",
-              width: 72,
-              align: "center",
-              render: (v: string) => (
-                <Tag color={VENDOR_COLOR[v]} className="config-inline-tag">
-                  {vendorLabel(v)}
-                </Tag>
-              ),
-            },
-            {
-              title: tc('版本'),
-              dataIndex: "latest_version",
-              width: 72,
-              align: "center",
-              onHeaderCell: () => ({ style: { whiteSpace: "nowrap" } }),
-              render: (v?: number) => (v ? `v${v}` : "—"),
             },
             {
               title: tc('现网学习'),
-              dataIndex: "learned_version",
-              render: (v?: number, r?: ConfigDeviceRow) =>
-                v ? (
-                  <Tag color="orange" className="config-inline-tag">
-                    v{v} · {r?.service_count ?? 0} {tc("业务")}
-                  </Tag>
-                ) : (
-                  <Tag className="config-inline-tag">{tc('未学习')}</Tag>
-                ),
+              width: 96,
+              align: "right",
+              onHeaderCell: () => ({ style: { whiteSpace: "nowrap" } }),
+              render: (_: unknown, row: ConfigDeviceRow) => {
+                if (row.learned_version) {
+                  return (
+                    <div className="config-device-status">
+                      <span className="config-device-version">v{row.learned_version}</span>
+                      <span className="config-device-services">
+                        {row.service_count ?? 0} {tc("业务")}
+                      </span>
+                    </div>
+                  );
+                }
+                return <Tag className="config-inline-tag">{tc('未学习')}</Tag>;
+              },
             },
           ]}
         />
@@ -284,10 +276,10 @@ export default function ConfigManagement() {
                 key: "running",
                 label: tc('平台期望配置 (Desired)'),
                 children: (
-                  <>
-                    <Typography.Text type="secondary" style={{ display: "block", marginBottom: 8, fontSize: 12 }}>{tc('由平台纳管专线拼装的目标配置；与设备现网配置可能不同。备份请使用右上角「备份现网配置」。')}</Typography.Text>
+                  <div className="config-tab-pane-fill">
+                    <Typography.Text type="secondary" className="config-tab-hint">{tc('由平台纳管专线拼装的目标配置；与设备现网配置可能不同。备份请使用右上角「备份现网配置」。')}</Typography.Text>
                     <pre className="config-pre config-pre-fill">{running}</pre>
-                  </>
+                  </div>
                 ),
               },
               {
