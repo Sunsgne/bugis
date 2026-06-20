@@ -1,4 +1,5 @@
 import type { EChartsOption } from "echarts";
+import i18n from "@/i18n";
 import { tcStatic } from "@/i18n/useTc";
 import { labelForOption, DEVICE_ROLE_OPTIONS } from "../constants/formOptions";
 import { chartFont, chartText, utilColor, vendorColors } from "./theme";
@@ -318,7 +319,7 @@ export function overlayTopologyOption(
                 }`;
           return (
             `<b>${node.name}</b><br/>VTEP ${node.vtep_ip}<br/>` +
-            `${vniText}<br/>状态 ${up ? "Up" : node.status}`
+            `${vniText}<br/>${tcStatic("状态", i18n.language)} ${up ? "Up" : node.status}`
           );
         },
       },
@@ -383,7 +384,7 @@ export function overlayTopologyOption(
               left: "center",
               top: "middle",
               style: {
-                text: tcStatic("选择右侧 VNI 查看隧道互联"),
+                text: tcStatic("选择右侧 VNI 查看隧道互联", i18n.language),
                 fill: chartText.muted,
                 fontSize: 13,
                 fontFamily: chartFont,

@@ -42,15 +42,17 @@ def _enrich_work_order(db: Session, wo: WorkOrder) -> dict:
         ).scalars().all()
     }
     data = WorkOrderOut.model_validate(wo).model_dump()
+    if not data.get("circuit_code") and wo.circuit:
+        data["circuit_code"] = wo.circuit.code
     for job in data.get("config_jobs") or []:
         job["device_name"] = device_names.get(job["device_id"])
     return data
 
 
-def _provision_result(db: Session, wo: WorkOrder, circuit: Circuit) -> dict:
+def _provision_result(db: Session, wo: WorkOrder, circuit: Circuit | None) -> dict:
     payload = _enrich_work_order(db, wo)
-    payload["circuit_status"] = circuit.status.value
-    payload["circuit_code"] = circuit.code
+    payload["circuit_status"] = circuit.status.value if circuit else "deleted"
+    payload["circuit_code"] = wo.circuit_code or (circuit.code if circuit else None)
     payload["dry_run"] = settings.dry_run
     return payload
 
@@ -84,6 +86,7 @@ def create_work_order(
         requested_by=payload.requested_by or user.username,
         payload=payload.payload,
         notes=payload.notes,
+        locale=user.locale,
     )
     db.commit()
     db.refresh(wo)
@@ -223,6 +226,15 @@ def provision_circuit(
     circuit = db.get(Circuit, circuit_id)
     if not circuit:
         raise HTTPException(status_code=404, detail="circuit not found")
+    try:
+        orchestrator.ensure_no_inflight_work_order(db, circuit.id)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if circuit.status == CircuitStatus.PROVISIONING:
+        raise HTTPException(
+            status_code=409,
+            detail="专线正在开通中，请等待当前工单完成",
+        )
     if wo_type == WorkOrderType.PROVISION and circuit.status == CircuitStatus.ACTIVE:
         if not getattr(circuit, "adopted", False):
             raise HTTPException(
@@ -239,7 +251,8 @@ def provision_circuit(
             }
         )
     wo = orchestrator.create_work_order(
-        db, circuit, wo_type, requested_by=user.username, payload=payload
+        db, circuit, wo_type, requested_by=user.username, payload=payload,
+        locale=user.locale,
     )
     orchestrator.submit(db, wo, actor=user.username)
     orchestrator.approve(db, wo, user.username, approve_it=True)
@@ -248,6 +261,11 @@ def provision_circuit(
         # thread is never held by the (synchronous) device push. The frontend
         # polls GET /work-orders/{id} for live progress.
         wo.status = WorkOrderStatus.SCHEDULED
+        if wo_type != WorkOrderType.DECOMMISSION and circuit.status not in (
+            CircuitStatus.ACTIVE,
+            CircuitStatus.DECOMMISSIONED,
+        ):
+            circuit.status = CircuitStatus.PROVISIONING
         orchestrator._log(
             db, wo, "已加入开通队列，后台异步执行（可在工单详情查看进度）",
             actor=user.username,
@@ -271,6 +289,8 @@ def preview_work_order(
     if not wo:
         raise HTTPException(status_code=404, detail="work order not found")
     circuit = wo.circuit
+    if not circuit:
+        raise HTTPException(status_code=404, detail="circuit not found for this work order")
     operation = "remove" if wo.type == WorkOrderType.DECOMMISSION else "apply"
     previews = []
     for ep in circuit.endpoints:

@@ -216,6 +216,24 @@ def traffic_summary_payload(
         and telemetry_timescale.should_use_continuous_aggregate(eff_hours)
     )
 
+    kwargs = {
+        "limit": limit,
+        "hours": hours if not (start_at and end_at) else None,
+        "start_at": start_at,
+        "end_at": end_at,
+    }
+
+    def _raw_summary() -> tuple[list, list]:
+        traffic = list_circuit_samples(db, circuit.id, traffic_only=True, **kwargs)
+        qos: list = []
+        if circuit.latency_probe_enabled:
+            qos = [
+                s
+                for s in list_circuit_samples(db, circuit.id, traffic_only=False, **kwargs)
+                if s.source == "probe"
+            ]
+        return traffic, qos
+
     if use_ca:
         traffic_rows = [
             _bucket_traffic_sample(circuit.id, b)
@@ -231,22 +249,19 @@ def traffic_summary_payload(
                     db, circuit_id=circuit.id, hours=eff_hours
                 )
             ]
-        resolution = "5m_aggregate"
+        # Newly provisioned circuits may have raw samples before the 5m CA refreshes.
+        used_raw_fallback = False
+        if not traffic_rows or (circuit.latency_probe_enabled and not qos_rows):
+            raw_traffic, raw_qos = _raw_summary()
+            if not traffic_rows and raw_traffic:
+                traffic_rows = raw_traffic
+                used_raw_fallback = True
+            if circuit.latency_probe_enabled and not qos_rows and raw_qos:
+                qos_rows = raw_qos
+                used_raw_fallback = True
+        resolution = "raw" if used_raw_fallback else "5m_aggregate"
     else:
-        kwargs = {
-            "limit": limit,
-            "hours": hours if not (start_at and end_at) else None,
-            "start_at": start_at,
-            "end_at": end_at,
-        }
-        traffic_rows = list_circuit_samples(db, circuit.id, traffic_only=True, **kwargs)
-        qos_rows = []
-        if circuit.latency_probe_enabled:
-            qos_rows = [
-                s
-                for s in list_circuit_samples(db, circuit.id, traffic_only=False, **kwargs)
-                if s.source == "probe"
-            ]
+        traffic_rows, qos_rows = _raw_summary()
         resolution = "raw"
 
     p95 = chart_p95(traffic_rows) if traffic_rows else {

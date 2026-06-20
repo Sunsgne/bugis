@@ -12,35 +12,18 @@ import {
   Typography,
 } from "antd";
 import { CheckCircleOutlined, CloseCircleOutlined, LoadingOutlined } from "@ant-design/icons";
+import { useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import type { Circuit, ProvisionResult } from "../api/types";
 import { ConfigPreviewPre } from "../utils/configPreview";
 import { useTc } from "@/i18n/useTc";
 import { translateWorkOrderMessage } from "@/i18n/translateApiText";
 
-const WO_STATUS_LABEL: Record<string, string> = {
-  completed: "已完成",
-  failed: "失败",
-  running: "执行中",
-  scheduled: "排队中",
-  draft: "草稿",
-  submitted: "已提交",
-  approved: "已审批",
-  cancelled: "已取消",
+const WO_STATUS_TC: Record<string, string> = {
   rolled_back: "已回滚",
 };
 
-const CIRCUIT_STATUS_LABEL: Record<string, string> = {
-  active: "运行中",
-  provisioning: "开通中",
-  failed: "失败",
-  draft: "草稿",
-  pending: "待开通",
-  degraded: "降级",
-  suspended: "暂停",
-  decommissioned: "已拆除",
-};
-
-const JOB_STATUS_LABEL: Record<string, string> = {
+const JOB_STATUS_ZH: Record<string, string> = {
   succeeded: "成功",
   failed: "失败",
   dry_run: "模拟成功",
@@ -66,11 +49,11 @@ type Props = {
   open?: boolean;
 };
 
-function fmtTs(ts?: string | null) {
+function fmtTs(ts: string | null | undefined, locale: string) {
   if (!ts) return "—";
   const d = new Date(ts);
   if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleString("zh-CN", { hour12: false });
+  return d.toLocaleString(locale, { hour12: false });
 }
 
 function summarizeOutput(output?: string | null) {
@@ -89,6 +72,7 @@ export default function ProvisionFeedbackModal({
   open: openProp,
 }: Props) {
   const { tc, isEn } = useTc();
+  const { t } = useTranslation();
   const open = openProp ?? !!circuit;
   const isTeardown = woType === "decommission";
   const success = result?.status === "completed";
@@ -96,43 +80,75 @@ export default function ProvisionFeedbackModal({
   const inProgress =
     loading || result?.status === "running" || result?.status === "scheduled";
   const queued = result?.status === "scheduled";
+  const dateLocale = isEn ? "en-US" : "zh-CN";
+
+  const woStatusLabel = (s: string) => {
+    if (WO_STATUS_TC[s]) return tc(WO_STATUS_TC[s]);
+    const key = `status.workOrder.${s}`;
+    const tr = t(key);
+    return tr !== key ? tr : s;
+  };
+
+  const circuitStatusLabel = (s: string) => {
+    const key = `status.circuit.${s}`;
+    const tr = t(key);
+    return tr !== key ? tr : s;
+  };
+
+  const jobStatusLabel = (s: string) => {
+    const zh = JOB_STATUS_ZH[s];
+    return zh ? tc(zh) : s;
+  };
+
+  const circuitStatusLine = (status: string) =>
+    `${tc("专线")} ${tc("状态")}${isEn ? ": " : "："}${circuitStatusLabel(status)}`;
 
   const currentStep = inProgress ? 1 : failed ? 2 : success ? 3 : 2;
 
-  const title = isTeardown ? "拆除回收" : "开通下发";
-  const stepItems = isTeardown
-    ? [
-        { title: "安全校验", description: "依赖 / 资源占用确认" },
-        {
-          title: tc('配置回收'),
-          description: inProgress ? "正在回收各端设备配置…" : "回收作业完毕",
-        },
-        {
-          title: tc('资源释放'),
-          description: result?.circuit_status
-            ? `专线状态：${CIRCUIT_STATUS_LABEL[result.circuit_status] || result.circuit_status}`
-            : "等待结果",
-        },
-      ]
-    : [
-        { title: "合规预检", description: "VLAN / 端口占用校验" },
-        {
-          title: tc('编排下发'),
-          description: inProgress ? "正在创建工单并推送配置…" : "工单执行完毕",
-        },
-        {
-          title: tc('结果确认'),
-          description: result?.circuit_status
-            ? `专线状态：${CIRCUIT_STATUS_LABEL[result.circuit_status] || result.circuit_status}`
-            : "等待结果",
-        },
-      ];
+  const title = isTeardown ? tc("拆除回收") : tc("开通下发");
+
+  const stepItems = useMemo(
+    () =>
+      isTeardown
+        ? [
+            { title: tc("安全校验"), description: tc("依赖 / 资源占用确认") },
+            {
+              title: tc("配置回收"),
+              description: inProgress ? tc("正在回收各端设备配置…") : tc("回收作业完毕"),
+            },
+            {
+              title: tc("资源释放"),
+              description: result?.circuit_status
+                ? circuitStatusLine(result.circuit_status)
+                : tc("等待结果"),
+            },
+          ]
+        : [
+            { title: tc("合规预检"), description: tc("VLAN / 端口占用校验") },
+            {
+              title: tc("编排下发"),
+              description: inProgress ? tc("正在创建工单并推送配置…") : tc("工单执行完毕"),
+            },
+            {
+              title: tc("结果确认"),
+              description: result?.circuit_status
+                ? circuitStatusLine(result.circuit_status)
+                : tc("等待结果"),
+            },
+          ],
+    [isTeardown, inProgress, result?.circuit_status, tc, isEn, t],
+  );
 
   const spinnerText = queued
-    ? "已加入后台队列，正在等待工作线程执行…"
+    ? tc("已加入后台队列，正在等待工作线程执行…")
     : isTeardown
-      ? "正在回收各端设备配置并释放资源，请稍候…"
-      : "正在向各端设备渲染并下发配置，请稍候…";
+      ? tc("正在回收各端设备配置并释放资源，请稍候…")
+      : tc("正在向各端设备渲染并下发配置，请稍候…");
+
+  const jobSuccessCount = result
+    ? result.config_jobs.filter((j) => j.status === "succeeded" || j.status === "dry_run").length
+    : 0;
+  const jobTotal = result?.config_jobs.length ?? 0;
 
   return (
     <Modal
@@ -145,7 +161,7 @@ export default function ProvisionFeedbackModal({
     >
       {circuit ? (
         <Typography.Paragraph type="secondary" style={{ marginTop: 0 }}>
-          {circuit.name} · {circuit.endpoints?.length || 0} 个端点
+          {circuit.name} · {circuit.endpoints?.length || 0} {tc("端点")}
         </Typography.Paragraph>
       ) : null}
 
@@ -160,26 +176,34 @@ export default function ProvisionFeedbackModal({
       {inProgress ? (
         <div style={{ textAlign: "center", padding: "32px 0" }}>
           <Spin indicator={<LoadingOutlined style={{ fontSize: 36 }} spin />} />
-          <Typography.Paragraph style={{ marginTop: 16 }}>
-            {spinnerText}
-          </Typography.Paragraph>
+          <Typography.Paragraph style={{ marginTop: 16 }}>{spinnerText}</Typography.Paragraph>
         </div>
       ) : null}
 
       {error ? (
-        <Alert type="error" showIcon message={isTeardown ? "拆除失败" : "开通失败"} description={error} style={{ marginBottom: 16 }} />
+        <Alert
+          type="error"
+          showIcon
+          message={isTeardown ? tc("拆除失败") : tc("开通失败")}
+          description={translateWorkOrderMessage(error, tc, isEn)}
+          style={{ marginBottom: 16 }}
+        />
       ) : null}
 
       {result ? (
         <>
           <Space wrap style={{ marginBottom: 16 }}>
             <Tag color={success ? "green" : "red"}>
-              工单 {result.code} · {WO_STATUS_LABEL[result.status] || result.status}
+              {tc("工单")} {result.code} · {woStatusLabel(result.status)}
             </Tag>
             <Tag color={result.circuit_status === "active" ? "green" : "default"}>
-              专线 {CIRCUIT_STATUS_LABEL[result.circuit_status] || result.circuit_status}
+              {tc("专线")} {circuitStatusLabel(result.circuit_status)}
             </Tag>
-            {result.dry_run ? <Tag color="gold">{tc('Dry-run 模拟下发')}</Tag> : <Tag color="blue">{tc('现网下发')}</Tag>}
+            {result.dry_run ? (
+              <Tag color="gold">{tc("Dry-run 模拟下发")}</Tag>
+            ) : (
+              <Tag color="blue">{tc("现网下发")}</Tag>
+            )}
           </Space>
 
           {result.status === "completed" ? (
@@ -187,8 +211,12 @@ export default function ProvisionFeedbackModal({
               type="success"
               showIcon
               icon={<CheckCircleOutlined />}
-              message={isTeardown ? "配置已回收完成" : "配置已下发完成"}
-              description={`${result.config_jobs.filter((j) => j.status === "succeeded" || j.status === "dry_run").length} / ${result.config_jobs.length} 个设备作业成功`}
+              message={isTeardown ? tc("配置已回收完成") : tc("配置已下发完成")}
+              description={
+                isEn
+                  ? `${jobSuccessCount} / ${jobTotal} device jobs succeeded`
+                  : `${jobSuccessCount} / ${jobTotal} 个设备作业成功`
+              }
               style={{ marginBottom: 16 }}
             />
           ) : null}
@@ -198,44 +226,46 @@ export default function ProvisionFeedbackModal({
               type="error"
               showIcon
               icon={<CloseCircleOutlined />}
-              message="工单执行失败"
-              description={tc('请查看下方设备作业与流转轨迹中的错误信息')}
+              message={tc("工单执行失败")}
+              description={tc("请查看下方设备作业与流转轨迹中的错误信息")}
               style={{ marginBottom: 16 }}
             />
           ) : null}
 
-          <Typography.Title level={5} style={{ marginTop: 0 }}>{tc('设备下发作业')}</Typography.Title>
+          <Typography.Title level={5} style={{ marginTop: 0 }}>
+            {tc("设备下发作业")}
+          </Typography.Title>
           <Table
             size="small"
             rowKey="id"
             pagination={false}
             dataSource={result.config_jobs}
-            locale={{ emptyText: "无配置作业（可能被预检阻断）" }}
+            locale={{ emptyText: tc("无配置作业（可能被预检阻断）") }}
             columns={[
               {
-                title: tc('设备'),
+                title: tc("设备"),
                 render: (_, row) => row.device_name || `#${row.device_id}`,
               },
-              { title: "操作", dataIndex: "operation", width: 64 },
-              { title: "传输", dataIndex: "transport", width: 80 },
+              { title: tc("操作"), dataIndex: "operation", width: 64 },
+              { title: tc("传输"), dataIndex: "transport", width: 80 },
               {
-                title: tc('状态'),
+                title: tc("状态"),
                 dataIndex: "status",
                 width: 90,
                 render: (s: string) => (
-                  <Tag color={JOB_STATUS_COLOR[s] || "default"}>{JOB_STATUS_LABEL[s] || s}</Tag>
+                  <Tag color={JOB_STATUS_COLOR[s] || "default"}>{jobStatusLabel(s)}</Tag>
                 ),
               },
               {
-                title: tc('时间'),
+                title: tc("时间"),
                 dataIndex: "created_at",
                 width: 150,
                 render: (v?: string) => (
-                  <span style={{ fontSize: 12 }}>{fmtTs(v)}</span>
+                  <span style={{ fontSize: 12 }}>{fmtTs(v, dateLocale)}</span>
                 ),
               },
               {
-                title: tc('回显'),
+                title: tc("回显"),
                 dataIndex: "output",
                 ellipsis: true,
                 render: (v?: string) => summarizeOutput(v),
@@ -255,7 +285,7 @@ export default function ProvisionFeedbackModal({
                       items={[
                         {
                           key: "cfg",
-                          label: tc('渲染配置片段'),
+                          label: tc("渲染配置片段"),
                           children: <ConfigPreviewPre>{row.rendered_config}</ConfigPreviewPre>,
                         },
                       ]}
@@ -267,7 +297,7 @@ export default function ProvisionFeedbackModal({
             }}
           />
 
-          <Typography.Title level={5}>{tc('流转轨迹')}</Typography.Title>
+          <Typography.Title level={5}>{tc("流转轨迹")}</Typography.Title>
           <Timeline
             items={(result.events || []).map((e) => ({
               color: e.level === "error" ? "red" : e.level === "warning" ? "orange" : "blue",
@@ -282,14 +312,9 @@ export default function ProvisionFeedbackModal({
 
           {result.config_jobs.length > 0 ? (
             <div style={{ marginTop: 8 }}>
-              <Typography.Text type="secondary">{tc('作业成功率')}</Typography.Text>
+              <Typography.Text type="secondary">{tc("作业成功率")}</Typography.Text>
               <Progress
-                percent={Math.round(
-                  (result.config_jobs.filter((j) => j.status === "succeeded" || j.status === "dry_run")
-                    .length /
-                    result.config_jobs.length) *
-                    100,
-                )}
+                percent={Math.round((jobSuccessCount / result.config_jobs.length) * 100)}
                 status={success ? "success" : "exception"}
                 size="small"
               />

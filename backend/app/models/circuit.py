@@ -84,9 +84,7 @@ class Circuit(Base, TimestampMixin):
         back_populates="circuit", cascade="all, delete-orphan",
         order_by="CircuitPathHop.sequence",
     )
-    work_orders: Mapped[list["WorkOrder"]] = relationship(
-        back_populates="circuit", cascade="all, delete-orphan"
-    )
+    work_orders: Mapped[list["WorkOrder"]] = relationship(back_populates="circuit")
     probe_logs: Mapped[list["CircuitProbeLog"]] = relationship(
         back_populates="circuit", cascade="all, delete-orphan",
         order_by="CircuitProbeLog.id.desc()",

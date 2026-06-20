@@ -506,8 +506,10 @@ def delete_circuit(
     # Clean controller overlay state (EVPN routes + VTEP/VNI membership) so the
     # topology graph does not keep a stale edge for the deleted circuit.
     from app.controller import controller as bugis_controller
+    from app.services.circuit_cleanup import purge_circuit_dependencies
 
     bugis_controller.purge_circuit(db, circuit)
+    purge_circuit_dependencies(db, circuit.id)
     db.delete(circuit)
     db.commit()
 

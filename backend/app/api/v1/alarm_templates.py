@@ -25,8 +25,10 @@ from app.services.alarm_template_registry import (
     VARIABLE_CATALOG,
     default_templates_dict,
     get_templates,
+    merge_templates,
     render_template,
     reset_templates,
+    sample_context,
     save_templates,
     templates_to_dict,
 )
@@ -35,17 +37,78 @@ from app.services.platform_settings import get_or_create
 router = APIRouter()
 
 
+def _sample_extra(ctx: dict, *exclude: str) -> dict:
+    skip = set(exclude)
+    return {k: v for k, v in ctx.items() if k not in skip}
+
+
 def _preview_copy(kind: str, templates):
+    ctx = sample_context(kind)
+    code = str(ctx.get("circuit_code", "CIR-PREVIEW"))
     builders = {
-        "tunnel_down": lambda: msg.build_circuit_tunnel_down("CIR-PREVIEW", "degraded", templates),
-        "circuit_interruption": lambda: msg.build_circuit_interruption("CIR-PREVIEW", None, templates),
-        "sla_loss": lambda: msg.build_circuit_loss("CIR-PREVIEW", 1.25, 0.5, templates),
-        "sla_latency": lambda: msg.build_circuit_latency("CIR-PREVIEW", 68.2, 50.0, templates),
-        "utilization": lambda: msg.build_circuit_utilization("CIR-PREVIEW", 92.4, 90.0, templates),
-        "health": lambda: msg.build_circuit_health("CIR-PREVIEW", 62.5, 70.0, templates),
-        "circuit_flap": lambda: msg.build_circuit_flap("CIR-PREVIEW", 4, 15, templates),
+        "tunnel_down": lambda: msg.build_circuit_tunnel_down(
+            code,
+            str(ctx.get("status", "degraded")),
+            templates,
+            **_sample_extra(ctx, "circuit_code", "status"),
+        ),
+        "circuit_interruption": lambda: msg.build_circuit_interruption(
+            code,
+            ctx.get("event_detail"),
+            templates,
+            **_sample_extra(ctx, "circuit_code", "event_detail"),
+        ),
+        "sla_loss": lambda: msg.build_circuit_loss(
+            code,
+            float(ctx.get("loss_pct", 1.25)),
+            float(ctx.get("threshold_pct", 0.5)),
+            templates,
+            **_sample_extra(ctx, "circuit_code", "loss_pct", "threshold_pct"),
+        ),
+        "sla_latency": lambda: msg.build_circuit_latency(
+            code,
+            float(ctx.get("latency_ms", 68.2)),
+            float(ctx.get("threshold_ms", 50.0)),
+            templates,
+            **_sample_extra(ctx, "circuit_code", "latency_ms", "threshold_ms"),
+        ),
+        "utilization": lambda: msg.build_circuit_utilization(
+            code,
+            float(ctx.get("peak_pct", 92.4)),
+            float(ctx.get("threshold_pct", 90.0)),
+            templates,
+            **_sample_extra(ctx, "circuit_code", "peak_pct", "threshold_pct"),
+        ),
+        "health": lambda: msg.build_circuit_health(
+            code,
+            float(ctx.get("score", 62.5)),
+            float(ctx.get("threshold", 70.0)),
+            templates,
+            **_sample_extra(ctx, "circuit_code", "score", "threshold"),
+        ),
+        "circuit_flap": lambda: msg.build_circuit_flap(
+            code,
+            int(ctx.get("flaps", 4)),
+            int(ctx.get("window_min", 15)),
+            templates,
+            **_sample_extra(ctx, "circuit_code", "flaps", "window_min"),
+        ),
         "link_utilization": lambda: msg.build_link_utilization(
-            "SG-HK-01", 88.2, 85.0, capacity_mbps=10000, traffic_mbps=8800, templates=templates
+            str(ctx.get("link_name", "SG-HK-01")),
+            float(ctx.get("util_pct", 88.2)),
+            float(ctx.get("threshold_pct", 85.0)),
+            capacity_mbps=int(ctx.get("link_capacity_mbps", 10000)),
+            traffic_mbps=8800.0,
+            templates=templates,
+            **_sample_extra(
+                ctx,
+                "link_name",
+                "util_pct",
+                "threshold_pct",
+                "cap_display",
+                "traffic_display",
+                "link_capacity_mbps",
+            ),
         ),
         "test": lambda: msg.build_test_notification(templates),
     }
@@ -101,7 +164,23 @@ def preview_alarm_template(
 ):
     plat = get_or_create(db)
     product = body.product_name or plat.product_name or "Bugis Network"
-    templates = get_templates(db)
+    if body.global_ is not None or body.kinds:
+        stored = templates_to_dict(get_templates(db))
+        if body.global_ is not None:
+            patch = body.global_.model_dump(exclude_none=True)
+            if patch:
+                stored["global"].update(patch)
+        if body.kinds:
+            stored.setdefault("kinds", {})
+            for key, tpl in body.kinds.items():
+                patch = tpl.model_dump(exclude_none=True)
+                if not patch:
+                    continue
+                stored["kinds"].setdefault(key, {})
+                stored["kinds"][key].update(patch)
+        templates = merge_templates(stored)
+    else:
+        templates = get_templates(db)
     copy = _preview_copy(body.kind, templates)
     alarm = Alarm(
         kind=body.kind,

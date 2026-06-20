@@ -23,6 +23,8 @@ from app.schemas.device import (
     DeviceUpdate,
     InterfaceDescriptionBulkIn,
     InterfaceDescriptionBulkOut,
+    InterfaceDescriptionMultiBulkIn,
+    InterfaceDescriptionMultiBulkOut,
 )
 from app.schemas.pagination import PaginatedResponse, paginate_query, paginated
 from app.services import baseline, config_learn, config_mgmt, port_inventory, snmp, snmp_settings as snmp_cfg
@@ -274,6 +276,39 @@ def set_interface_descriptions(
             raise HTTPException(status_code=502, detail=str(exc)) from exc
     items = [(i.name, i.description) for i in payload.items]
     return interface_admin.apply_descriptions(db, device, items, push=payload.push)
+
+
+@router.post(
+    "/interfaces/descriptions/bulk",
+    response_model=InterfaceDescriptionMultiBulkOut,
+)
+def bulk_set_interface_descriptions(
+    payload: InterfaceDescriptionMultiBulkIn,
+    _: User = Depends(require_operator),
+):
+    """Update and push interface descriptions on multiple devices in parallel."""
+    if not payload.devices:
+        raise HTTPException(status_code=400, detail="no devices provided")
+    jobs = [
+        (entry.device_id, [(i.name, i.description) for i in entry.items])
+        for entry in payload.devices
+        if entry.items
+    ]
+    if not jobs:
+        raise HTTPException(status_code=400, detail="no interfaces provided")
+    results = interface_admin.apply_descriptions_parallel(jobs, push=payload.push)
+    errors = [r for r in results if r.get("error")]
+    if errors and len(errors) == len(results):
+        raise HTTPException(status_code=502, detail=errors[0].get("error", "push failed"))
+    total_updated = sum(int(r.get("updated") or 0) for r in results)
+    dry_run = bool(results[0].get("dry_run")) if results else settings.dry_run
+    all_pushed = all(bool(r.get("pushed")) for r in results if not r.get("error"))
+    return {
+        "results": results,
+        "total_updated": total_updated,
+        "all_pushed": all_pushed,
+        "dry_run": dry_run,
+    }
 
 
 @router.get("/{device_id}/interfaces", response_model=list[DeviceInterfaceOut])

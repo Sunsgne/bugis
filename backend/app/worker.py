@@ -31,7 +31,8 @@ from sqlalchemy import func, select, update
 
 from app.core.config import settings
 from app.core.database import SessionLocal
-from app.models.enums import WorkOrderStatus
+from app.models.config_job import ConfigJob
+from app.models.enums import CircuitStatus, WorkOrderStatus
 from app.models.workorder import WorkOrder
 from app.services import orchestrator
 
@@ -226,16 +227,67 @@ async def _reconcile_loop() -> None:
         logger.info("provisioning worker stopped")
 
 
+def recover_orphaned_running() -> list[int]:
+    """Re-queue or fail work orders left RUNNING after a backend restart."""
+    db = SessionLocal()
+    requeue: list[int] = []
+    try:
+        orphans = db.execute(
+            select(WorkOrder).where(WorkOrder.status == WorkOrderStatus.RUNNING)
+        ).scalars().all()
+        if not orphans:
+            return requeue
+        for wo in orphans:
+            job_count = int(
+                db.scalar(
+                    select(func.count())
+                    .select_from(ConfigJob)
+                    .where(ConfigJob.work_order_id == wo.id)
+                )
+                or 0
+            )
+            if job_count == 0:
+                wo.status = WorkOrderStatus.SCHEDULED
+                orchestrator._log(
+                    db,
+                    wo,
+                    "检测到进程重启导致执行中断，已重新加入开通队列",
+                    actor="worker",
+                )
+                requeue.append(wo.id)
+            else:
+                wo.status = WorkOrderStatus.FAILED
+                circuit = wo.circuit
+                if circuit and circuit.status == CircuitStatus.PROVISIONING:
+                    circuit.status = CircuitStatus.FAILED
+                orchestrator._log(
+                    db,
+                    wo,
+                    "检测到进程重启导致执行中断（已有部分配置作业），已标记失败",
+                    level="error",
+                    actor="worker",
+                )
+        db.commit()
+        return requeue
+    finally:
+        db.close()
+
+
 def start() -> None:
     global _loop, _reconcile_task, _dispatch_lock
     if not getattr(settings, "worker_enabled", True):
         logger.info("provisioning worker disabled (BUGIS_WORKER_ENABLED=false)")
         return
+    requeued = recover_orphaned_running()
+    if requeued:
+        logger.info("recovered %s orphaned RUNNING work order(s)", len(requeued))
     _loop = asyncio.get_event_loop()
     _dispatch_lock = asyncio.Lock()
     if _reconcile_task and not _reconcile_task.done():
         return
     _reconcile_task = asyncio.create_task(_reconcile_loop())
+    for wo_id in requeued:
+        enqueue(wo_id)
 
 
 async def stop() -> None:

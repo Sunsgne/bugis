@@ -140,3 +140,30 @@ def test_clear_interface_description(client, auth_headers):
         json={"items": [{"name": "GE1/0/15", "description": ""}], "push": True},
     ).json()
     assert "undo description" in r["rendered"]
+
+
+def test_parallel_bulk_interface_descriptions(client, auth_headers):
+    _, dev_a = _huawei_topology(client, auth_headers, "46")
+    _, dev_b = _huawei_topology(client, auth_headers, "47")
+    r = client.post(
+        "/api/v1/devices/interfaces/descriptions/bulk",
+        headers=auth_headers,
+        json={
+            "push": True,
+            "devices": [
+                {
+                    "device_id": dev_a["id"],
+                    "items": [{"name": "GE1/0/16", "description": "SDWAN-A"}],
+                },
+                {
+                    "device_id": dev_b["id"],
+                    "items": [{"name": "GE1/0/17", "description": "SDWAN-B"}],
+                },
+            ],
+        },
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["total_updated"] == 2
+    assert len(body["results"]) == 2
+    assert all(item["dry_run"] is True for item in body["results"])
