@@ -357,56 +357,122 @@ export function siteLabelForNode(
   return s ? s.code : null;
 }
 
-export function layoutEdgeCurvature(
+export type EdgeHandleSide = "top" | "bottom" | "left" | "right";
+
+export type EdgeHandlePair = {
+  sourceHandle: string;
+  targetHandle: string;
+  sourceSide: EdgeHandleSide;
+  targetSide: EdgeHandleSide;
+};
+
+function nodeCenter(pos: { x: number; y: number }): { cx: number; cy: number } {
+  return { cx: pos.x + NODE_W / 2, cy: pos.y + NODE_H / 2 };
+}
+
+/** Pick the rectangle side that best faces the other node. */
+export function edgeSidesForLayout(
   sourceId: number,
   targetId: number,
   positions: Map<number, { x: number; y: number }>,
-  baseCurvature: number,
-): number {
+): { sourceSide: EdgeHandleSide; targetSide: EdgeHandleSide } {
   const src = positions.get(sourceId);
   const tgt = positions.get(targetId);
-  if (src && tgt) {
-    const dx = Math.abs(src.x + NODE_W / 2 - (tgt.x + NODE_W / 2));
-    const dy = Math.abs(src.y + NODE_H / 2 - (tgt.y + NODE_H / 2));
-    if (dx < NODE_W * 0.4 && dy > NODE_H * 0.5) {
-      return src.y < tgt.y ? -0.38 : 0.38;
-    }
-    if (dx < NODE_W * 0.25) {
-      return src.y < tgt.y ? -0.45 : 0.45;
-    }
+  if (!src || !tgt) {
+    return { sourceSide: "right", targetSide: "left" };
   }
-  return baseCurvature;
+
+  const { cx: srcCx, cy: srcCy } = nodeCenter(src);
+  const { cx: tgtCx, cy: tgtCy } = nodeCenter(tgt);
+  const dx = tgtCx - srcCx;
+  const dy = tgtCy - srcCy;
+  const absDx = Math.abs(dx);
+  const absDy = Math.abs(dy);
+
+  // Staggered spokes (e.g. TYO2/TYO3): route through left/right gap when horizontally offset.
+  if (absDx >= NODE_W * 0.12) {
+    return dx > 0
+      ? { sourceSide: "right", targetSide: "left" }
+      : { sourceSide: "left", targetSide: "right" };
+  }
+
+  if (absDy >= NODE_H * 0.2) {
+    return dy > 0
+      ? { sourceSide: "bottom", targetSide: "top" }
+      : { sourceSide: "top", targetSide: "bottom" };
+  }
+
+  if (absDx >= absDy) {
+    return dx >= 0
+      ? { sourceSide: "right", targetSide: "left" }
+      : { sourceSide: "left", targetSide: "right" };
+  }
+
+  return dy >= 0
+    ? { sourceSide: "bottom", targetSide: "top" }
+    : { sourceSide: "top", targetSide: "bottom" };
 }
 
-/** Prefer horizontal handles when source is left of target. */
 export function edgeHandlesForLayout(
   sourceId: number,
   targetId: number,
   positions: Map<number, { x: number; y: number }>,
 ): { sourceHandle?: string; targetHandle?: string } {
+  const { sourceSide, targetSide } = edgeSidesForLayout(sourceId, targetId, positions);
+  return {
+    sourceHandle: `${sourceSide}-out`,
+    targetHandle: `${targetSide}-in`,
+  };
+}
+
+export function edgeHandlePairForLayout(
+  sourceId: number,
+  targetId: number,
+  positions: Map<number, { x: number; y: number }>,
+): EdgeHandlePair {
+  const { sourceSide, targetSide } = edgeSidesForLayout(sourceId, targetId, positions);
+  return {
+    sourceSide,
+    targetSide,
+    sourceHandle: `${sourceSide}-out`,
+    targetHandle: `${targetSide}-in`,
+  };
+}
+
+export function layoutEdgeCurvature(
+  sourceId: number,
+  targetId: number,
+  positions: Map<number, { x: number; y: number }>,
+  baseCurvature: number,
+  handlePair?: Pick<EdgeHandlePair, "sourceSide" | "targetSide">,
+): number {
   const src = positions.get(sourceId);
   const tgt = positions.get(targetId);
-  if (!src || !tgt) return {};
-  const srcCx = src.x + NODE_W / 2;
-  const tgtCx = tgt.x + NODE_W / 2;
-  const srcCy = src.y + NODE_H / 2;
-  const tgtCy = tgt.y + NODE_H / 2;
-  const sameColumn = Math.abs(tgtCx - srcCx) < NODE_W * 0.42;
+  if (!src || !tgt) return baseCurvature;
 
-  if (sameColumn && Math.abs(tgtCy - srcCy) > NODE_H * 0.4) {
-    return { sourceHandle: "left-out", targetHandle: "left" };
+  const { cx: srcCx, cy: srcCy } = nodeCenter(src);
+  const { cx: tgtCx, cy: tgtCy } = nodeCenter(tgt);
+  const dx = tgtCx - srcCx;
+  const dy = tgtCy - srcCy;
+  const absDx = Math.abs(dx);
+  const absDy = Math.abs(dy);
+
+  const sides = handlePair ?? edgeSidesForLayout(sourceId, targetId, positions);
+  const horizontal = sides.sourceSide === "left" || sides.sourceSide === "right";
+
+  if (horizontal) {
+    if (absDy > NODE_H * 0.45) {
+      return dy > 0 ? 0.32 : -0.32;
+    }
+    if (absDy > NODE_H * 0.15) {
+      return dy > 0 ? 0.22 : -0.22;
+    }
+    return baseCurvature * 0.85;
   }
-  if (tgtCx - srcCx > NODE_W * 0.4) {
-    return { sourceHandle: "right", targetHandle: "left" };
+
+  if (absDx < NODE_W * 0.2 && absDy > NODE_H * 0.45) {
+    return dy > 0 ? 0.28 : -0.28;
   }
-  if (srcCx - tgtCx > NODE_W * 0.4) {
-    return { sourceHandle: "left-out", targetHandle: "right" };
-  }
-  if (tgtCy > srcCy + NODE_H * 0.25) {
-    return { sourceHandle: "bottom", targetHandle: "top" };
-  }
-  if (tgtCy < srcCy - NODE_H * 0.25) {
-    return { sourceHandle: "top", targetHandle: "bottom" };
-  }
-  return {};
+
+  return baseCurvature;
 }

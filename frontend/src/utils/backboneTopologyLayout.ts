@@ -3,7 +3,7 @@ import { labelForOption, DEVICE_ROLE_OPTIONS } from "@/constants/formOptions";
 import { vendorColors } from "@/charts/theme";
 import type { LinkUsage, Topology } from "@/api/types";
 import { backboneUtilColor, fmtLinkBw } from "@/utils/linkUtilization";
-import { layoutDeviceGraph, siteLabelForNode, edgeHandlesForLayout, layoutEdgeCurvature, findHubNodeId, applySpokePeerSeparation } from "@/utils/deviceGraphLayout";
+import { layoutDeviceGraph, siteLabelForNode, edgeHandlePairForLayout, layoutEdgeCurvature, findHubNodeId, applySpokePeerSeparation } from "@/utils/deviceGraphLayout";
 import {
   curvatureForEdge,
   linkEdgeShortLabel,
@@ -136,7 +136,7 @@ export function buildBackboneTopologyLayout(
       const pct = link?.utilization_pct ?? e.utilization_pct ?? 0;
       const selected = highlightLinkId != null && link?.link_id === highlightLinkId;
       const color = backboneUtilColor(pct);
-      const handles = edgeHandlesForLayout(e.source, e.target, posById);
+      const handles = edgeHandlePairForLayout(e.source, e.target, posById);
       return {
         id: `e-${link?.link_id ?? i}`,
         source: String(e.source),
@@ -145,7 +145,8 @@ export function buildBackboneTopologyLayout(
         animated: pct >= 85,
         selected,
         interactionWidth: 24,
-        ...handles,
+        sourceHandle: handles.sourceHandle,
+        targetHandle: handles.targetHandle,
         data: {
           link,
           utilization_pct: pct,
@@ -155,6 +156,7 @@ export function buildBackboneTopologyLayout(
             e.target,
             posById,
             curvatureForEdge(topo.edges, e.id),
+            handles,
           ),
         } satisfies EdgeData,
         style: { stroke: color },
@@ -162,7 +164,22 @@ export function buildBackboneTopologyLayout(
     });
 
   const links = [...linksById.values()];
-  const edges = mergeTopologyEdges(utilizationEdges, links, nodeIds, tc);
+  const merged = mergeTopologyEdges(utilizationEdges, links, nodeIds, tc);
+  const edges = merged.map((e) => {
+    if (e.type !== "logicalPeer") return e;
+    const srcId = Number(e.source);
+    const tgtId = Number(e.target);
+    const handles = edgeHandlePairForLayout(srcId, tgtId, posById);
+    return {
+      ...e,
+      sourceHandle: handles.sourceHandle,
+      targetHandle: handles.targetHandle,
+      data: {
+        ...(e.data as object),
+        curvature: layoutEdgeCurvature(srcId, tgtId, posById, -0.35, handles),
+      },
+    };
+  });
 
   return { nodes, edges };
 }

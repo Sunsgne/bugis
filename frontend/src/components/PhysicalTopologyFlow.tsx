@@ -22,7 +22,7 @@ import { vendorColors } from "@/charts/theme";
 import type { LinkUsage, Topology } from "@/api/types";
 import { useTc } from "@/i18n/useTc";
 import { backboneUtilColor, fmtLinkBw } from "@/utils/linkUtilization";
-import { layoutDeviceGraph, siteLabelForNode, edgeHandlesForLayout } from "@/utils/deviceGraphLayout";
+import { layoutDeviceGraph, siteLabelForNode, edgeHandlePairForLayout, layoutEdgeCurvature } from "@/utils/deviceGraphLayout";
 import {
   curvatureForEdge,
   linkEdgeShortLabel,
@@ -214,7 +214,7 @@ function buildDeviceGraph(
       const link = linksById.get(e.id);
       const util = link?.utilization_pct ?? e.utilization_pct ?? (e.capacity_mbps ? (e.reserved_mbps / e.capacity_mbps) * 100 : 0);
       const highlighted = hoveredLinkId != null && link?.link_id === hoveredLinkId;
-      const handles = edgeHandlesForLayout(e.source, e.target, posById);
+      const handles = edgeHandlePairForLayout(e.source, e.target, posById);
 
       return {
         id: `e-${e.id ?? i}`,
@@ -223,7 +223,8 @@ function buildDeviceGraph(
         type: "utilization",
         animated: e.type === "dci",
         interactionWidth: 20,
-        ...handles,
+        sourceHandle: handles.sourceHandle,
+        targetHandle: handles.targetHandle,
         data: {
           link,
           utilization_pct: util,
@@ -232,7 +233,13 @@ function buildDeviceGraph(
             : `${fmtG(e.capacity_mbps)} · ${util.toFixed(0)}%`,
           linkType: e.type,
           highlighted,
-          curvature: curvatureForEdge(topo.edges, e.id),
+          curvature: layoutEdgeCurvature(
+            e.source,
+            e.target,
+            posById,
+            curvatureForEdge(topo.edges, e.id),
+            handles,
+          ),
         } satisfies EdgeData,
       };
     });

@@ -165,6 +165,14 @@ if (!peerEdge) {
   console.error("Missing utilization edge between TYO2 and TYO3");
   process.exit(1);
 }
+const peerHandles = new Set([peerEdge.sourceHandle, peerEdge.targetHandle]);
+if (peerHandles.has("top-out") || peerHandles.has("bottom-out") || peerHandles.has("top-in") || peerHandles.has("bottom-in")) {
+  console.error(
+    `TYO2-TYO3 should use horizontal side handles, got ${peerEdge.sourceHandle} → ${peerEdge.targetHandle}`,
+  );
+  process.exit(1);
+}
 
 console.log(`peer separation: ${Math.round(peerSeparation)}px`);
+console.log(`peer handles: ${peerEdge.sourceHandle} → ${peerEdge.targetHandle}`);
 console.log("direct link replaces logical peer — passed");
