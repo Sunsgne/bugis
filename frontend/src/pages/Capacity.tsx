@@ -19,9 +19,10 @@ import { DeleteOutlined, EditOutlined, PlusOutlined, SearchOutlined, SyncOutline
 import { api } from "../api/client";
 import BackboneTopologyPanel from "../components/BackboneTopologyPanel";
 import type { Device, LinkUsage, SiteCapacity, Topology } from "../api/types";
-import { fmtLinkBw, linkUtilizationLines } from "../utils/linkUtilization";
+import { fmtLinkBw } from "../utils/linkUtilization";
 import BackboneLinkModal from "../components/BackboneLinkModal";
 import InterfaceNameCell from "../components/InterfaceNameCell";
+import LinkUtilizationTooltipContent from "../components/LinkUtilizationTooltipContent";
 import { utilColor } from "../charts/options";
 import { fetchAllPages } from "../utils/pagination";
 import { useTc } from "@/i18n/useTc";
@@ -48,16 +49,6 @@ function siteRouteLabel(r: LinkUsage) {
 
 function siteRouteKey(r: LinkUsage) {
   return `${r.site_a_id ?? ""}:${r.site_z_id ?? ""}`;
-}
-
-function utilizationTooltip(r: LinkUsage, pct: number, tc: (s: string) => string) {
-  return (
-    <div style={{ lineHeight: 1.6 }}>
-      {linkUtilizationLines(r, pct, tc).map((line) => (
-        <div key={line}>{line}</div>
-      ))}
-    </div>
-  );
 }
 
 export default function Capacity() {
@@ -373,7 +364,7 @@ export default function Capacity() {
               defaultSortOrder: "descend",
               sorter: (a, b) => a.utilization_pct - b.utilization_pct,
               render: (v: number, r) => (
-                <Tooltip title={utilizationTooltip(r, v, tc)}>
+                <Tooltip title={<LinkUtilizationTooltipContent link={r} pct={v} tc={tc} />}>
                   <Progress
                     percent={Math.round(v)}
                     size="small"

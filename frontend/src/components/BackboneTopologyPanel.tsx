@@ -27,6 +27,7 @@ import {
   Space,
   Statistic,
   Tag,
+  Tooltip,
   Typography,
 } from "antd";
 import { ClearOutlined, SearchOutlined } from "@ant-design/icons";
@@ -36,6 +37,8 @@ import type { LinkUsage, Topology } from "@/api/types";
 import { useTc } from "@/i18n/useTc";
 import { backboneUtilColor, fmtLinkBw, linkUtilizationLines } from "@/utils/linkUtilization";
 import { layoutDeviceGraph, siteLabelForNode } from "@/utils/deviceGraphLayout";
+import LinkUtilizationTooltipContent from "./LinkUtilizationTooltipContent";
+import InterfaceNameCell from "./InterfaceNameCell";
 
 type UtilTier = "all" | "healthy" | "warning" | "critical";
 
@@ -43,6 +46,7 @@ type EdgeData = {
   link?: LinkUsage;
   utilization_pct: number;
   shortLabel: string;
+  highlighted?: boolean;
 };
 
 function shortHost(name: string, max = 26): string {
@@ -105,6 +109,10 @@ function UtilizationEdge({
   const d = data as EdgeData | undefined;
   const pct = d?.utilization_pct ?? 0;
   const color = backboneUtilColor(pct);
+  const link = d?.link;
+  const [labelHover, setLabelHover] = useState(false);
+  const [edgeHover, setEdgeHover] = useState(false);
+  const showTooltip = Boolean(link && (edgeHover || labelHover || d?.highlighted));
   const [edgePath, labelX, labelY] = getBezierPath({
     sourceX,
     sourceY,
@@ -116,6 +124,15 @@ function UtilizationEdge({
 
   return (
     <>
+      <path
+        d={edgePath}
+        fill="none"
+        stroke="transparent"
+        strokeWidth={24}
+        className="react-flow__edge-interaction backbone-edge-hit"
+        onMouseEnter={() => setEdgeHover(true)}
+        onMouseLeave={() => setEdgeHover(false)}
+      />
       <BaseEdge
         id={id}
         path={edgePath}
@@ -127,16 +144,25 @@ function UtilizationEdge({
         }}
       />
       <EdgeLabelRenderer>
-        <div
-          className="backbone-edge-label nodrag nopan"
-          style={{
-            transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
-            borderColor: color,
-          }}
-          title={d?.link ? linkUtilizationLines(d.link, pct, tc).join("\n") : undefined}
+        <Tooltip
+          open={showTooltip}
+          placement="top"
+          mouseEnterDelay={0.12}
+          overlayStyle={{ maxWidth: 420 }}
+          title={link ? <LinkUtilizationTooltipContent link={link} pct={pct} tc={tc} /> : undefined}
         >
-          {d?.shortLabel ?? ""}
-        </div>
+          <div
+            className="backbone-edge-label nodrag nopan"
+            style={{
+              transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
+              borderColor: color,
+            }}
+            onMouseEnter={() => setLabelHover(true)}
+            onMouseLeave={() => setLabelHover(false)}
+          >
+            {d?.shortLabel ?? ""}
+          </div>
+        </Tooltip>
       </EdgeLabelRenderer>
     </>
   );
@@ -329,12 +355,28 @@ export default function BackboneTopologyPanel({ topo, links, loading }: Props) {
     [topo, panelFilteredLinks],
   );
 
-  const { nodes, edges } = useMemo(
+  const { nodes, edges: layoutEdges } = useMemo(
     () =>
       graphTopo
         ? buildLayout(graphTopo, size, linksById, selectedLinkId, selectedDeviceId)
         : { nodes: [], edges: [] },
     [graphTopo, size, linksById, selectedLinkId, selectedDeviceId],
+  );
+
+  const edges = useMemo(
+    () =>
+      layoutEdges.map((e) => {
+        const link = (e.data as EdgeData | undefined)?.link;
+        return {
+          ...e,
+          interactionWidth: 24,
+          data: {
+            ...(e.data as EdgeData),
+            highlighted: hoveredLink != null && link?.link_id === hoveredLink.link_id,
+          },
+        };
+      }),
+    [layoutEdges, hoveredLink],
   );
 
   const layoutKey = `${size.w}x${size.h}-${nodes.length}-${edges.length}-${selectedLinkId}-${selectedDeviceId}`;
@@ -514,6 +556,16 @@ export default function BackboneTopologyPanel({ topo, links, loading }: Props) {
                   <Typography.Text type="secondary" style={{ fontSize: 12 }}>
                     {detailLink.device_a} ↔ {detailLink.device_z}
                   </Typography.Text>
+                  {(detailLink.interface_a || detailLink.interface_z) && (
+                    <Space direction="vertical" size={2} style={{ width: "100%" }}>
+                      {detailLink.interface_a ? (
+                        <InterfaceNameCell name={detailLink.interface_a} copyable={false} />
+                      ) : null}
+                      {detailLink.interface_z ? (
+                        <InterfaceNameCell name={detailLink.interface_z} copyable={false} />
+                      ) : null}
+                    </Space>
+                  )}
                   <Progress
                     percent={Math.round(detailLink.utilization_pct ?? 0)}
                     strokeColor={backboneUtilColor(detailLink.utilization_pct ?? 0)}
