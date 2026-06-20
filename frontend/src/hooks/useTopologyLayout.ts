@@ -31,6 +31,7 @@ export function useTopologyLayout() {
   const [autoSave, setAutoSave] = useState(readAutoSavePref);
   const layoutLoaded = useRef(false);
   const layoutDirtyRef = useRef(false);
+  const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   layoutDirtyRef.current = layoutDirty;
 
@@ -95,8 +96,14 @@ export function useTopologyLayout() {
       const dirty = !positionsEqual(positions, savedPositions);
       setLayoutDirty(dirty);
       const shouldAutoSave = options?.autoSave ?? autoSave;
+      if (autoSaveTimer.current) {
+        clearTimeout(autoSaveTimer.current);
+        autoSaveTimer.current = null;
+      }
       if (shouldAutoSave && dirty) {
-        void saveLayout(positions);
+        autoSaveTimer.current = setTimeout(() => {
+          void saveLayout(positions);
+        }, 450);
       }
     },
     [autoSave, savedPositions, saveLayout],

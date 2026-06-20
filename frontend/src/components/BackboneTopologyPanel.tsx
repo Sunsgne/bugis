@@ -174,6 +174,8 @@ export default function BackboneTopologyPanel({ topo, links, loading }: Props) {
   const [selectedLinkId, setSelectedLinkId] = useState<number | null>(null);
   const [selectedDeviceId, setSelectedDeviceId] = useState<number | null>(null);
   const [hoveredLink, setHoveredLink] = useState<LinkUsage | null>(null);
+  const draggingRef = useRef(false);
+  const layoutStructureKeyRef = useRef("");
 
   useEffect(() => {
     void layout.loadLayout();
@@ -252,18 +254,41 @@ export default function BackboneTopologyPanel({ topo, links, loading }: Props) {
     [layoutEdges, hoveredLink],
   );
 
-  const [flowNodes, setFlowNodes, onNodesChange] = useNodesState<Node>(layoutNodes);
-
-  useEffect(() => {
-    setFlowNodes(layoutNodes);
-  }, [layoutNodes, setFlowNodes]);
-
   const graphRevision = useMemo(
     () => layoutEdges.map((e) => e.id).sort().join("|"),
     [layoutEdges],
   );
 
-  const layoutKey = `${size.w}x${size.h}-${layoutNodes.length}-${graphRevision}-${selectedLinkId}-${selectedDeviceId}-${Object.keys(layout.draftPositions).length}`;
+  const [flowNodes, setFlowNodes, onNodesChange] = useNodesState<Node>(layoutNodes);
+
+  const layoutStructureKey = useMemo(
+    () => `${graphRevision}-${size.w}x${size.h}-${layoutNodes.length}`,
+    [graphRevision, size.w, size.h, layoutNodes.length],
+  );
+
+  useEffect(() => {
+    if (draggingRef.current) return;
+
+    const structureChanged = layoutStructureKey !== layoutStructureKeyRef.current;
+    if (structureChanged) {
+      layoutStructureKeyRef.current = layoutStructureKey;
+      setFlowNodes(layoutNodes);
+      return;
+    }
+
+    setFlowNodes((current) => {
+      if (current.length !== layoutNodes.length) return layoutNodes;
+      const byId = new Map(current.map((n) => [n.id, n]));
+      return layoutNodes.map((ln) => {
+        const cur = byId.get(ln.id);
+        if (!cur) return ln;
+        if (cur.position.x === ln.position.x && cur.position.y === ln.position.y) return cur;
+        return { ...ln, position: cur.position };
+      });
+    });
+  }, [layoutNodes, layoutStructureKey, setFlowNodes]);
+
+  const layoutKey = `${layoutStructureKey}-${selectedLinkId ?? "none"}-${selectedDeviceId ?? "none"}`;
 
   const selectedLink = selectedLinkId != null ? linksById.get(selectedLinkId) : null;
   const detailLink = hoveredLink ?? selectedLink;
@@ -305,15 +330,21 @@ export default function BackboneTopologyPanel({ topo, links, loading }: Props) {
                 elementsSelectable
                 elevateEdgesOnSelect
                 onNodesChange={onNodesChange}
+                onNodeDragStart={() => {
+                  draggingRef.current = true;
+                }}
                 onNodeDragStop={(_, node) => {
+                  draggingRef.current = false;
                   setFlowNodes((current) => {
+                    const updated = current.map((n) =>
+                      n.id === node.id ? { ...n, position: node.position } : n,
+                    );
                     const next: TopologyNodePositions = {};
-                    for (const n of current) {
-                      next[n.id] = n.id === node.id ? node.position : n.position;
+                    for (const n of updated) {
+                      next[n.id] = n.position;
                     }
-                    next[node.id] = node.position;
                     layout.handlePositionsChange(next, { autoSave: layout.autoSave });
-                    return current.map((n) => (n.id === node.id ? { ...n, position: node.position } : n));
+                    return updated;
                   });
                 }}
                 onNodeClick={(_, node) => {

@@ -56,11 +56,15 @@ export function applySpokePeerSeparation(
   edges: LayoutGraphEdge[],
   positions: Map<number, { x: number; y: number }>,
   anchorRightX?: number,
+  frozenIds?: Set<number>,
 ): void {
   const peerIds = spokePeerNodeIds(hubId, edges);
   if (peerIds.size < 2) return;
 
-  const sorted = [...peerIds].sort((a, b) => {
+  const adjustable = [...peerIds].filter((id) => !frozenIds?.has(id));
+  if (adjustable.length < 2) return;
+
+  const sorted = adjustable.sort((a, b) => {
     const ya = positions.get(a)?.y ?? 0;
     const yb = positions.get(b)?.y ?? 0;
     return ya - yb || a - b;
