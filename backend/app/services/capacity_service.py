@@ -185,3 +185,46 @@ def topology(db: Session) -> dict:
             for l in links
         ],
     }
+
+
+def get_topology_layout(db: Session) -> dict[str, dict[str, float]]:
+    from app.services import platform_settings
+
+    plat = platform_settings.get_or_create(db)
+    raw = plat.topology_layout if isinstance(plat.topology_layout, dict) else {}
+    out: dict[str, dict[str, float]] = {}
+    for key, val in raw.items():
+        if not isinstance(val, dict):
+            continue
+        try:
+            x = float(val.get("x", 0))
+            y = float(val.get("y", 0))
+        except (TypeError, ValueError):
+            continue
+        out[str(key)] = {"x": x, "y": y}
+    return out
+
+
+def save_topology_layout(db: Session, positions: dict) -> dict[str, dict[str, float]]:
+    from app.services import platform_settings
+
+    if not isinstance(positions, dict):
+        raise ValueError("positions must be an object")
+
+    device_ids = {str(i) for i in db.execute(select(Device.id)).scalars().all()}
+    cleaned: dict[str, dict[str, float]] = {}
+    for key, val in positions.items():
+        sk = str(key)
+        if sk not in device_ids or not isinstance(val, dict):
+            continue
+        try:
+            x = float(val.get("x", 0))
+            y = float(val.get("y", 0))
+        except (TypeError, ValueError):
+            continue
+        cleaned[sk] = {"x": x, "y": y}
+
+    plat = platform_settings.get_or_create(db)
+    plat.topology_layout = cleaned or None
+    db.commit()
+    return get_topology_layout(db)

@@ -11,15 +11,18 @@ import {
   type Edge,
   type EdgeProps,
   type Node,
+  applyNodeChanges,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Tooltip } from "antd";
 import { labelForOption, DEVICE_ROLE_OPTIONS } from "@/constants/formOptions";
 import { vendorColors } from "@/charts/theme";
-import type { Topology } from "@/api/types";
+import type { LinkUsage, Topology } from "@/api/types";
 import { useTc } from "@/i18n/useTc";
 import { backboneUtilColor, fmtLinkBw } from "@/utils/linkUtilization";
 import { layoutDeviceGraph, siteLabelForNode } from "@/utils/deviceGraphLayout";
+import LinkUtilizationTooltipContent from "./LinkUtilizationTooltipContent";
 
 const EDGE_STYLE: Record<string, { dash?: string; weight: number }> = {
   dci: { dash: "6 4", weight: 3 },
@@ -28,11 +31,14 @@ const EDGE_STYLE: Record<string, { dash?: string; weight: number }> = {
   uplink: { weight: 2 },
 };
 
+export type TopologyNodePositions = Record<string, { x: number; y: number }>;
+
 type EdgeData = {
+  link?: LinkUsage;
   utilization_pct: number;
   shortLabel: string;
-  title: string;
   linkType: string;
+  highlighted?: boolean;
 };
 
 function fmtG(mbps: number): string {
@@ -95,10 +101,15 @@ function UtilizationEdge({
   selected,
   markerEnd,
 }: EdgeProps) {
+  const { tc } = useTc();
   const d = data as EdgeData | undefined;
   const pct = d?.utilization_pct ?? 0;
   const color = backboneUtilColor(pct);
+  const link = d?.link;
   const style = EDGE_STYLE[d?.linkType || "intra_dc"] || EDGE_STYLE.intra_dc;
+  const [labelHover, setLabelHover] = useState(false);
+  const [edgeHover, setEdgeHover] = useState(false);
+  const showTooltip = Boolean(link && (edgeHover || labelHover || d?.highlighted));
   const [edgePath, labelX, labelY] = getBezierPath({
     sourceX,
     sourceY,
@@ -110,6 +121,15 @@ function UtilizationEdge({
 
   return (
     <>
+      <path
+        d={edgePath}
+        fill="none"
+        stroke="transparent"
+        strokeWidth={24}
+        className="react-flow__edge-interaction backbone-edge-hit"
+        onMouseEnter={() => setEdgeHover(true)}
+        onMouseLeave={() => setEdgeHover(false)}
+      />
       <BaseEdge
         id={id}
         path={edgePath}
@@ -122,16 +142,25 @@ function UtilizationEdge({
       />
       {d?.shortLabel && (
         <EdgeLabelRenderer>
-          <div
-            className="physical-topology-edge-label"
-            style={{
-              transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
-              borderColor: color,
-            }}
-            title={d.title}
+          <Tooltip
+            open={showTooltip}
+            placement="top"
+            mouseEnterDelay={0.12}
+            overlayStyle={{ maxWidth: 420 }}
+            title={link ? <LinkUtilizationTooltipContent link={link} pct={pct} tc={tc} /> : undefined}
           >
-            {d.shortLabel}
-          </div>
+            <div
+              className="physical-topology-edge-label backbone-edge-label nodrag nopan"
+              style={{
+                transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
+                borderColor: color,
+              }}
+              onMouseEnter={() => setLabelHover(true)}
+              onMouseLeave={() => setLabelHover(false)}
+            >
+              {d.shortLabel}
+            </div>
+          </Tooltip>
         </EdgeLabelRenderer>
       )}
     </>
@@ -141,24 +170,27 @@ function UtilizationEdge({
 const nodeTypes = { device: DeviceNode };
 const edgeTypes = { utilization: UtilizationEdge };
 
-function FitViewOnLayout({ layoutKey }: { layoutKey: string }) {
+function FitViewOnLayout({ layoutKey, skip }: { layoutKey: string; skip?: boolean }) {
   const { fitView } = useReactFlow();
   useEffect(() => {
+    if (skip) return;
     const timer = window.setTimeout(() => {
       fitView({ padding: 0.12, maxZoom: 1.15, duration: 320 });
     }, 80);
     return () => window.clearTimeout(timer);
-  }, [fitView, layoutKey]);
+  }, [fitView, layoutKey, skip]);
   return null;
 }
 
 function buildDeviceGraph(
   topo: Topology,
   size: { w: number; h: number },
-  tc: (s: string) => string,
+  linksById: Map<number, LinkUsage>,
+  savedPositions: TopologyNodePositions,
   highlightDeviceIds?: Set<number> | null,
+  hoveredLinkId?: number | null,
 ): { nodes: Node[]; edges: Edge[] } {
-  const positions = layoutDeviceGraph(
+  const autoPositions = layoutDeviceGraph(
     topo.nodes.map((n) => ({ id: n.id, site_id: n.site_id })),
     topo.edges.map((e) => ({ source: e.source, target: e.target })),
     size.w,
@@ -174,7 +206,9 @@ function buildDeviceGraph(
   const dimUnconnected = highlightDeviceIds != null && highlightDeviceIds.size > 0;
 
   const nodes: Node[] = topo.nodes.map((n) => {
-    const pos = positions.get(n.id) ?? { x: 0, y: 0 };
+    const saved = savedPositions[String(n.id)];
+    const auto = autoPositions.get(n.id) ?? { x: 0, y: 0 };
+    const pos = saved ?? auto;
     const siteLabel = siteLabelForNode(n.site_id, topo.sites);
     const vendorColor = vendorColors[n.vendor] || "#64748b";
     const dimmed = dimUnconnected
@@ -201,18 +235,10 @@ function buildDeviceGraph(
   const edges: Edge[] = topo.edges
     .filter((e) => nodeIds.has(String(e.source)) && nodeIds.has(String(e.target)))
     .map((e, i) => {
-      const util = e.utilization_pct ?? (e.capacity_mbps ? (e.reserved_mbps / e.capacity_mbps) * 100 : 0);
-      const src = nodeById.get(e.source);
-      const tgt = nodeById.get(e.target);
+      const link = linksById.get(e.id);
+      const util = link?.utilization_pct ?? e.utilization_pct ?? (e.capacity_mbps ? (e.reserved_mbps / e.capacity_mbps) * 100 : 0);
       const color = backboneUtilColor(util);
-      const title = [
-        src && tgt ? `${src.name} ↔ ${tgt.name}` : "",
-        `${tc("峰值利用率")} ${util.toFixed(1)}%`,
-        `${tc("合同带宽")} ${fmtLinkBw(e.capacity_mbps)}`,
-        e.type === "dci" ? tc("DCI 互联") : tc("Fabric 内链路"),
-      ]
-        .filter(Boolean)
-        .join("\n");
+      const highlighted = hoveredLinkId != null && link?.link_id === hoveredLinkId;
 
       return {
         id: `e-${e.id ?? i}`,
@@ -220,11 +246,15 @@ function buildDeviceGraph(
         target: String(e.target),
         type: "utilization",
         animated: e.type === "dci",
+        interactionWidth: 24,
         data: {
+          link,
           utilization_pct: util,
-          shortLabel: `${fmtG(e.capacity_mbps)} · ${util.toFixed(0)}%`,
-          title,
+          shortLabel: link
+            ? `${fmtLinkBw(link.capacity_mbps)} · ${Math.round(util)}%`
+            : `${fmtG(e.capacity_mbps)} · ${util.toFixed(0)}%`,
           linkType: e.type,
+          highlighted,
         } satisfies EdgeData,
         markerEnd: { type: MarkerType.ArrowClosed, color },
       };
@@ -235,13 +265,29 @@ function buildDeviceGraph(
 
 type Props = {
   topo: Topology;
+  links: LinkUsage[];
+  savedPositions: TopologyNodePositions;
+  onPositionsChange?: (positions: TopologyNodePositions) => void;
   className?: string;
 };
 
-export default function PhysicalTopologyFlow({ topo, className }: Props) {
+export default function PhysicalTopologyFlow({
+  topo,
+  links,
+  savedPositions,
+  onPositionsChange,
+  className,
+}: Props) {
   const { tc } = useTc();
   const hostRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 960, h: 560 });
+  const [positions, setPositions] = useState<TopologyNodePositions>(savedPositions);
+  const [hoveredLinkId, setHoveredLinkId] = useState<number | null>(null);
+  const hasSavedLayout = Object.keys(savedPositions).length > 0;
+
+  useEffect(() => {
+    setPositions(savedPositions);
+  }, [savedPositions]);
 
   useEffect(() => {
     const el = hostRef.current;
@@ -258,29 +304,57 @@ export default function PhysicalTopologyFlow({ topo, className }: Props) {
     return () => ro.disconnect();
   }, []);
 
+  const linksById = useMemo(() => new Map(links.map((l) => [l.link_id, l])), [links]);
+
+  const graphKey = `${size.w}x${size.h}-${topo.nodes.length}-${topo.edges.length}-${links.length}`;
+
   const { nodes, edges } = useMemo(
-    () => buildDeviceGraph(topo, size, tc),
-    [topo, size, tc],
+    () => buildDeviceGraph(topo, size, linksById, positions, null, hoveredLinkId),
+    [topo, size, linksById, positions, hoveredLinkId],
   );
-  const layoutKey = `${size.w}x${size.h}-${topo.nodes.length}-${topo.edges.length}`;
+
+  const onNodeDragStop = useCallback(
+    (_: unknown, node: Node) => {
+      setPositions((prev) => {
+        const next = { ...prev, [node.id]: node.position };
+        onPositionsChange?.(next);
+        return next;
+      });
+    },
+    [onPositionsChange],
+  );
+
+  const [flowNodes, setFlowNodes] = useState<Node[]>(nodes);
+  useEffect(() => {
+    setFlowNodes(nodes);
+  }, [nodes]);
 
   return (
     <div ref={hostRef} className={["physical-topology-flow device-graph-flow", className].filter(Boolean).join(" ")}>
       <ReactFlow
-        nodes={nodes}
+        nodes={flowNodes}
         edges={edges}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
-        nodesDraggable={false}
+        nodesDraggable
         nodesConnectable={false}
         elementsSelectable
+        onNodesChange={(changes) => {
+          setFlowNodes((current) => applyNodeChanges(changes, current));
+        }}
+        onNodeDragStop={onNodeDragStop}
+        onEdgeMouseEnter={(_, edge) => {
+          const link = (edge.data as EdgeData | undefined)?.link;
+          if (link) setHoveredLinkId(link.link_id);
+        }}
+        onEdgeMouseLeave={() => setHoveredLinkId(null)}
         panOnDrag
         zoomOnScroll
         minZoom={0.35}
         maxZoom={1.6}
         proOptions={{ hideAttribution: true }}
       >
-        <FitViewOnLayout layoutKey={layoutKey} />
+        <FitViewOnLayout layoutKey={graphKey} skip={hasSavedLayout} />
         <Background gap={24} size={1} color="#e2e8f0" />
         <Controls showInteractive={false} position="bottom-right" />
         <MiniMap

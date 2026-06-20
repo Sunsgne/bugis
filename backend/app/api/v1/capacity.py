@@ -211,6 +211,27 @@ def topology(db: Session = Depends(get_db), _: User = Depends(get_current_user))
     return capacity_service.topology(db)
 
 
+@router.get("/topology/layout")
+def topology_layout(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+    return {"positions": capacity_service.get_topology_layout(db)}
+
+
+@router.put("/topology/layout")
+def save_topology_layout(
+    payload: dict,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
+    positions = payload.get("positions")
+    if not isinstance(positions, dict):
+        raise HTTPException(status_code=400, detail="positions object required")
+    try:
+        saved = capacity_service.save_topology_layout(db, positions)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"positions": saved}
+
+
 @router.post("/links/sync-bandwidth")
 def sync_link_bandwidth(
     db: Session = Depends(get_db), _: User = Depends(require_operator)

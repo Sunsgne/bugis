@@ -1,7 +1,7 @@
 """Platform-wide settings (singleton row): operational params and branding."""
 from __future__ import annotations
 
-from sqlalchemy import Boolean, Float, Integer, String, Text
+from sqlalchemy import Boolean, Float, Integer, JSON, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -120,3 +120,6 @@ class PlatformSettings(Base, TimestampMixin):
     )
 
     alarm_notification_templates: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Saved device positions for the physical topology graph (device id -> {x, y}).
+    topology_layout: Mapped[dict | None] = mapped_column(JSON, nullable=True)
