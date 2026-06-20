@@ -16,6 +16,7 @@ import {
   UploadOutlined,
 } from "@ant-design/icons";
 import {
+  Alert,
   App as AntApp,
   Button,
   Card,
@@ -55,6 +56,7 @@ import { PageCard } from "@/components";
 import ListToolbar from "../components/ListToolbar";
 import DeviceFormDialog, { type DeviceFormValues } from "@/components/DeviceFormDialog";
 import DevicePortDrawer from "@/components/DevicePortDrawer";
+import { useInterfaceDescJobs } from "@/hooks/useInterfaceDescJobs";
 import { useTc } from "@/i18n/useTc";
 import { useTranslation } from "react-i18next";
 import { deviceStatusLabel } from "../i18n/helpers";
@@ -122,6 +124,7 @@ export default function Devices() {
   const { tc } = useTc();
   const { t } = useTranslation();
   const { message, modal } = AntApp.useApp();
+  const descJobs = useInterfaceDescJobs(message);
   const [rows, setRows] = useState<Device[]>([]);
   const [total, setTotal] = useState(0);
   const [summary, setSummary] = useState({ total: 0, online: 0, offline: 0 });
@@ -493,6 +496,15 @@ export default function Devices() {
         </Col>
       </Row>
 
+      {descJobs.activeSaveCount > 0 ? (
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 12 }}
+          message={`${descJobs.activeSaveCount} 台设备接口描述正在后台下发，可继续编辑其他设备`}
+        />
+      ) : null}
+
       <Table
         rowKey="id"
         loading={loading}
@@ -510,7 +522,9 @@ export default function Devices() {
             dataIndex: "name",
             width: "22%",
             ellipsis: true,
-            render: (name: string, d: Device) => (
+            render: (name: string, d: Device) => {
+              const job = descJobs.getJob(d.id);
+              return (
               <Tooltip
                 title={
                   [d.hostname, d.loopback_ip && `Loopback ${d.loopback_ip}`, d.bgp_asn && `AS ${d.bgp_asn}`]
@@ -519,9 +533,14 @@ export default function Devices() {
                 }
               >
                 <div style={{ minWidth: 0 }}>
-                  <Button type="link" size="small" style={{ padding: 0, height: "auto" }} onClick={() => openEditModal(d)}>
-                    <span style={{ fontWeight: 500 }}>{name}</span>
-                  </Button>
+                  <Space size={6} wrap>
+                    <Button type="link" size="small" style={{ padding: 0, height: "auto" }} onClick={() => openEditModal(d)}>
+                      <span style={{ fontWeight: 500 }}>{name}</span>
+                    </Button>
+                    {job?.status === "saving" ? <Tag color="processing">下发中</Tag> : null}
+                    {job?.status === "success" ? <Tag color="success">已下发</Tag> : null}
+                    {job?.status === "error" ? <Tag color="error">下发失败</Tag> : null}
+                  </Space>
                   {d.model ? (
                     <Typography.Text type="secondary" ellipsis style={{ fontSize: 12, display: "block" }}>
                       {d.model}
@@ -529,7 +548,8 @@ export default function Devices() {
                   ) : null}
                 </div>
               </Tooltip>
-            ),
+            );
+            },
           },
           {
             title: tc('厂商'),
@@ -695,6 +715,13 @@ export default function Devices() {
         onCheck={check}
         onDiscover={discover}
         onLearn={learnConfig}
+        editingDesc={drawerDevice ? descJobs.isEditing(drawerDevice.id) : false}
+        descDraft={drawerDevice ? descJobs.getDraft(drawerDevice.id) : {}}
+        saveJob={drawerDevice ? descJobs.getJob(drawerDevice.id) : null}
+        onBeginEdit={(ports) => drawerDevice && descJobs.beginEdit(drawerDevice.id, ports)}
+        onCancelEdit={() => drawerDevice && descJobs.cancelEdit(drawerDevice.id)}
+        onDraftChange={(name, value) => drawerDevice && descJobs.updateDraft(drawerDevice.id, name, value)}
+        onEnqueueSave={(ports) => drawerDevice && descJobs.enqueueSave(drawerDevice, ports)}
       />
 
       <DeviceFormDialog

@@ -75,6 +75,23 @@ class InterfaceDescriptionBulkOut(BaseModel):
     results: list[InterfaceDescriptionResult] = []
 
 
+class DeviceInterfaceDescriptionBatchItem(BaseModel):
+    device_id: int
+    items: list[InterfaceDescriptionItem]
+
+
+class InterfaceDescriptionMultiBulkIn(BaseModel):
+    devices: list[DeviceInterfaceDescriptionBatchItem]
+    push: bool = True
+
+
+class InterfaceDescriptionMultiBulkOut(BaseModel):
+    results: list[InterfaceDescriptionBulkOut]
+    total_updated: int
+    all_pushed: bool
+    dry_run: bool
+
+
 class DevicePortBindingOut(BaseModel):
     interface_name: str
     binding_type: str  # platform | device

@@ -22,7 +22,7 @@ import {
   Tooltip,
   Typography,
 } from "antd";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api/client";
 import type {
@@ -34,6 +34,7 @@ import type {
 } from "../api/types";
 import SvidUsageCell from "./SvidUsageCell";
 import AdoptBindingModal from "./AdoptBindingModal";
+import type { InterfaceDescSaveJob, InterfaceDescSaveStatus } from "@/hooks/useInterfaceDescJobs";
 import InterfaceNameCell from "./InterfaceNameCell";
 import {
   formatDiscoveredVia,
@@ -89,6 +90,13 @@ interface DevicePortDrawerProps {
   onCheck: (deviceId: number) => Promise<void>;
   onDiscover: (deviceId: number) => Promise<DeviceInterface[] | void>;
   onLearn: (device: Device) => Promise<void>;
+  editingDesc?: boolean;
+  descDraft?: Record<string, string>;
+  saveJob?: InterfaceDescSaveJob | null;
+  onBeginEdit?: (physicalPorts: DeviceInterface[]) => void;
+  onCancelEdit?: () => void;
+  onDraftChange?: (name: string, value: string) => void;
+  onEnqueueSave?: (physicalPorts: DeviceInterface[]) => void;
 }
 
 export default function DevicePortDrawer({
@@ -98,6 +106,13 @@ export default function DevicePortDrawer({
   onCheck,
   onDiscover,
   onLearn,
+  editingDesc = false,
+  descDraft = {},
+  saveJob = null,
+  onBeginEdit,
+  onCancelEdit,
+  onDraftChange,
+  onEnqueueSave,
 }: DevicePortDrawerProps) {
   const [ifaces, setIfaces] = useState<DeviceInterface[]>([]);
   const [bindings, setBindings] = useState<DevicePortBindings | null>(null);
@@ -114,9 +129,7 @@ export default function DevicePortDrawer({
   const [discoverError, setDiscoverError] = useState<string | null>(null);
 
   const { message } = AntApp.useApp();
-  const [editingDesc, setEditingDesc] = useState(false);
-  const [descDraft, setDescDraft] = useState<Record<string, string>>({});
-  const [savingDesc, setSavingDesc] = useState(false);
+  const savingDesc = saveJob?.status === "saving";
 
   async function loadBindings(deviceId: number, refresh = false) {
     if (refresh) {
@@ -160,8 +173,6 @@ export default function DevicePortDrawer({
       setIfaceStatus("all");
       setIfaceSvidOnly(false);
       setActiveTab("ports");
-      setEditingDesc(false);
-      setDescDraft({});
       return;
     }
 
@@ -197,6 +208,16 @@ export default function DevicePortDrawer({
       cancelled = true;
     };
   }, [device?.id, refreshVersion]);
+
+  const prevSaveStatus = useRef<InterfaceDescSaveStatus>("idle");
+  useEffect(() => {
+    if (!device) return;
+    const status = saveJob?.status ?? "idle";
+    if (prevSaveStatus.current === "saving" && status === "success") {
+      void loadIfaces(device.id, false);
+    }
+    prevSaveStatus.current = status;
+  }, [device, saveJob?.status]);
 
   const physicalPorts = useMemo(() => {
     if (device?.vendor !== "huawei") return ifaces;
@@ -234,49 +255,20 @@ export default function DevicePortDrawer({
   }
 
   function startEditDesc() {
-    const draft: Record<string, string> = {};
-    for (const i of physicalPorts) draft[i.name] = i.description || "";
-    setDescDraft(draft);
-    setEditingDesc(true);
+    onBeginEdit?.(physicalPorts);
   }
 
   function cancelEditDesc() {
-    setEditingDesc(false);
-    setDescDraft({});
+    onCancelEdit?.();
   }
 
-  async function saveDescriptions() {
+  function saveDescriptions() {
     if (!device) return;
-    const items = physicalPorts
-      .map((i) => ({ name: i.name, description: (descDraft[i.name] ?? "").trim() }))
-      .filter((i) => i.description !== (physicalPorts.find((p) => p.name === i.name)?.description || ""));
-    if (items.length === 0) {
-      message.info("没有需要保存的描述变更");
-      setEditingDesc(false);
+    if (onEnqueueSave) {
+      onEnqueueSave(physicalPorts);
       return;
     }
-    setSavingDesc(true);
-    try {
-      const { data } = await api.post<{ updated: number; pushed: boolean; dry_run: boolean }>(
-        `/devices/${device.id}/interfaces/descriptions`,
-        { items, push: true },
-      );
-      if (data.dry_run) {
-        message.success(`已保存 ${data.updated} 个接口描述（Dry-run：未真实下发）`);
-      } else if (data.pushed) {
-        message.success(`已保存并下发 ${data.updated} 个接口描述`);
-      } else {
-        message.warning(`已保存 ${data.updated} 个接口描述，但下发失败，请检查设备连通性`);
-      }
-      setEditingDesc(false);
-      setDescDraft({});
-      await loadIfaces(device.id, false);
-    } catch (e: unknown) {
-      const err = e as { response?: { data?: { detail?: string } } };
-      message.error(err?.response?.data?.detail || "保存接口描述失败");
-    } finally {
-      setSavingDesc(false);
-    }
+    message.error("保存队列未就绪");
   }
 
   return (
@@ -285,7 +277,7 @@ export default function DevicePortDrawer({
       width="min(96vw, 1320px)"
       open={!!device}
       onClose={onClose}
-      destroyOnClose
+      destroyOnClose={false}
       extra={
         device ? (
           <Space wrap>
@@ -325,12 +317,16 @@ export default function DevicePortDrawer({
                   loading={savingDesc}
                   onClick={saveDescriptions}
                 >
-                  保存并下发
+                  {savingDesc ? "下发中…" : "保存并下发"}
                 </Button>
-                <Button size="small" icon={<CloseOutlined />} onClick={cancelEditDesc}>
+                <Button size="small" icon={<CloseOutlined />} onClick={cancelEditDesc} disabled={savingDesc}>
                   取消
                 </Button>
               </>
+            ) : saveJob?.status === "saving" ? (
+              <Button size="small" loading disabled>
+                后台下发中…
+              </Button>
             ) : (
               <Button size="small" icon={<EditOutlined />} onClick={startEditDesc}>
                 编辑描述
@@ -518,9 +514,7 @@ export default function DevicePortDrawer({
                                 : "客户ID 如 SDWAN-BACKBONE"
                             }
                             maxLength={255}
-                            onChange={(e) =>
-                              setDescDraft((prev) => ({ ...prev, [row.name]: e.target.value }))
-                            }
+                            onChange={(e) => onDraftChange?.(row.name, e.target.value)}
                           />
                         ) : d ? (
                           <Tooltip title={d}>

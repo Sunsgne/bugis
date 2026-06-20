@@ -103,3 +103,74 @@ def apply_descriptions(
         "rendered": rendered or None,
         "results": results,
     }
+
+
+def apply_descriptions_parallel(
+    jobs: list[tuple[int, list[tuple[str, str | None]]]],
+    *,
+    push: bool = True,
+    max_workers: int = 4,
+) -> list[dict]:
+    """Push interface descriptions to multiple devices concurrently."""
+    from app.core.database import SessionLocal
+    from app.services import device_management
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    seen: set[int] = set()
+    unique_jobs: list[tuple[int, list[tuple[str, str | None]]]] = []
+    for device_id, items in jobs:
+        if device_id in seen:
+            continue
+        seen.add(device_id)
+        unique_jobs.append((device_id, items))
+    if not unique_jobs:
+        return []
+
+    def _one(device_id: int, items: list[tuple[str, str | None]]) -> dict:
+        db = SessionLocal()
+        try:
+            device = db.get(Device, device_id)
+            if not device:
+                return {
+                    "device": str(device_id),
+                    "updated": 0,
+                    "pushed": False,
+                    "dry_run": settings.dry_run,
+                    "output": None,
+                    "rendered": None,
+                    "results": [],
+                    "error": "device not found",
+                }
+            if push and not settings.dry_run:
+                try:
+                    device_management.ensure_reachable_mgmt_ip(db, device)
+                except device_management.MgmtUnreachableError as exc:
+                    return {
+                        "device": device.name,
+                        "updated": 0,
+                        "pushed": False,
+                        "dry_run": settings.dry_run,
+                        "output": None,
+                        "rendered": None,
+                        "results": [],
+                        "error": str(exc),
+                    }
+            return apply_descriptions(db, device, items, push=push)
+        finally:
+            db.close()
+
+    if len(unique_jobs) == 1:
+        device_id, items = unique_jobs[0]
+        return [_one(device_id, items)]
+
+    workers = min(max_workers, len(unique_jobs))
+    ordered: list[dict | None] = [None] * len(unique_jobs)
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        future_map = {
+            pool.submit(_one, device_id, items): idx
+            for idx, (device_id, items) in enumerate(unique_jobs)
+        }
+        for fut in as_completed(future_map):
+            idx = future_map[fut]
+            ordered[idx] = fut.result()
+    return [r for r in ordered if r is not None]
