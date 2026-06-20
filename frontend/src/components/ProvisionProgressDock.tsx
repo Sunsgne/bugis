@@ -5,6 +5,7 @@ import {
   CloseOutlined,
   LoadingOutlined,
 } from "@ant-design/icons";
+import { useTranslation } from "react-i18next";
 import type { Circuit, ProvisionResult } from "../api/types";
 import { useTc } from "@/i18n/useTc";
 
@@ -18,13 +19,8 @@ type Props = {
   onClose: () => void;
 };
 
-const STATUS_LABEL: Record<string, string> = {
-  scheduled: "排队中",
-  running: "执行中",
-  completed: "已完成",
-  failed: "失败",
+const WO_STATUS_TC: Record<string, string> = {
   rolled_back: "已回滚",
-  cancelled: "已取消",
 };
 
 /**
@@ -43,10 +39,18 @@ export default function ProvisionProgressDock({
   onClose,
 }: Props) {
   const { tc } = useTc();
+  const { t } = useTranslation();
   if (!circuit) return null;
 
+  const woStatusLabel = (s: string) => {
+    if (WO_STATUS_TC[s]) return tc(WO_STATUS_TC[s]);
+    const key = `status.workOrder.${s}`;
+    const tr = t(key);
+    return tr !== key ? tr : s;
+  };
+
   const isTeardown = woType === "decommission";
-  const opLabel = isTeardown ? "拆除回收" : "开通下发";
+  const opLabel = isTeardown ? tc("拆除回收") : tc("开通下发");
   const status = result?.status;
   const inProgress = loading || status === "running" || status === "scheduled";
   const failed = !!error || status === "failed";
@@ -54,17 +58,17 @@ export default function ProvisionProgressDock({
 
   const stage = inProgress
     ? status === "scheduled"
-      ? "已加入后台队列，等待执行…"
+      ? tc("已加入后台队列，等待执行…")
       : isTeardown
-        ? "正在回收各端设备配置…"
-        : "正在向各端设备下发配置…"
+        ? tc("正在回收各端设备配置…")
+        : tc("正在向各端设备下发配置…")
     : success
       ? isTeardown
-        ? "资源已释放，拆除完成"
-        : "配置已下发完成"
+        ? tc("资源已释放，拆除完成")
+        : tc("配置已下发完成")
       : failed
-        ? "执行失败，点击查看详情"
-        : "等待结果";
+        ? tc("执行失败，点击查看详情")
+        : tc("等待结果");
 
   const jobs = result?.config_jobs || [];
   const okJobs = jobs.filter((j) => j.status === "succeeded" || j.status === "dry_run").length;
@@ -110,7 +114,7 @@ export default function ProvisionProgressDock({
             </Typography.Text>
             {status ? (
               <Tag style={{ marginLeft: 8 }} color={failed ? "red" : success ? "green" : "processing"}>
-                {STATUS_LABEL[status] || status}
+                {woStatusLabel(status)}
               </Tag>
             ) : null}
           </div>
@@ -132,9 +136,11 @@ export default function ProvisionProgressDock({
 
       <Space style={{ width: "100%", justifyContent: "space-between", marginTop: 8 }}>
         <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-          {jobs.length ? `设备作业 ${okJobs}/${jobs.length}` : circuit.name}
+          {jobs.length ? `${okJobs}/${jobs.length} ${tc("设备")}` : circuit.name}
         </Typography.Text>
-        <Button type="link" size="small" onClick={onOpenDetails}>{tc('查看详情')}</Button>
+        <Button type="link" size="small" onClick={onOpenDetails}>
+          {tc("查看详情")}
+        </Button>
       </Space>
     </div>
   );

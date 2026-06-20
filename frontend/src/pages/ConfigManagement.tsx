@@ -7,7 +7,7 @@ import { api } from "../api/client";
 import { configPreviewModalProps, ConfigPreviewPre } from "../utils/configPreview";
 import { usePlatformSettings } from "../hooks/usePlatformSettings";
 import { useTc } from "@/i18n/useTc";
-import { translateApiText } from "@/i18n/translateApiText";
+import { translateApiText, translateConfigSnapshotNote } from "@/i18n/translateApiText";
 import { VENDOR_OPTIONS } from "@/constants/formOptions";
 import { dataTableProps, TABLE_SCROLL } from "../utils/table";
 
@@ -410,7 +410,10 @@ export default function ConfigManagement() {
                         defaultPageSize: 15,
                         showSizeChanger: true,
                         pageSizeOptions: ["10", "15", "20", "50"],
-                        showTotal: (total) => `共 ${total} 个版本`,
+                        showTotal: (total) =>
+                          isEn
+                            ? `${total.toLocaleString()} versions total`
+                            : `共 ${total} 个版本`,
                       }}
                       dataSource={snaps}
                       locale={{ emptyText: <Empty description={tc('暂无快照，点击「备份现网配置」')} /> }}
@@ -442,8 +445,10 @@ export default function ConfigManagement() {
                           dataIndex: "note",
                           ellipsis: true,
                           render: (v?: string) => (
-                            <Tooltip title={v}>
-                              <span className="config-note-cell">{v || "—"}</span>
+                            <Tooltip title={translateConfigSnapshotNote(v, tc, isEn)}>
+                              <span className="config-note-cell">
+                                {translateConfigSnapshotNote(v, tc, isEn)}
+                              </span>
                             </Tooltip>
                           ),
                         },

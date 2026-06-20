@@ -18,8 +18,7 @@ import { formModalProps } from "../utils/formModal";
 import { action, empty, page, toast } from "../constants/uiCopy";
 import { WORK_ORDER_STATUS, WORK_ORDER_TYPE, statusMeta } from "../constants/statusLabels";
 import { useTc } from "@/i18n/useTc";
-import { translateWorkOrderMessage } from "@/i18n/translateApiText";
-import { useTranslation } from "react-i18next";
+import { translateWorkOrderMessage, translateWorkOrderTitle } from "@/i18n/translateApiText";
 
 const { RangePicker } = DatePicker;
 
@@ -40,8 +39,7 @@ function fmtTs(ts?: string | null) {
 }
 
 export default function WorkOrders() {
-  const { tc, isEn } = useTc();
-  const { t } = useTranslation();
+  const { tc, isEn, t } = useTc();
   const { message } = AntApp.useApp();
   const [rows, setRows] = useState<WorkOrder[]>([]);
   const [loading, setLoading] = useState(false);
@@ -79,7 +77,7 @@ export default function WorkOrders() {
         if (ts.isBefore(from) || ts.isAfter(to)) return false;
       }
       if (kw) {
-        const hay = [r.code, r.title, r.requested_by, r.approved_by]
+        const hay = [r.code, r.circuit_code, r.title, r.requested_by, r.approved_by]
           .filter(Boolean)
           .join(" ")
           .toLowerCase();
@@ -233,8 +231,17 @@ export default function WorkOrders() {
         onRow={(r) => ({ onClick: () => openDetail(r.id), style: { cursor: "pointer" } })}
         columns={withMobileHide(
           [
-          { title: tc("工单号"), dataIndex: "code", width: "12%", ellipsis: true },
-          { title: tc("标题"), dataIndex: "title", width: "22%", ellipsis: true },
+          { title: tc("工单号"), dataIndex: "code", width: "11%", ellipsis: true },
+          {
+            title: tc("专线"),
+            key: "circuit_code",
+            width: "11%",
+            ellipsis: true,
+            render: (_, r) => r.circuit_code || (r.circuit_id != null ? `#${r.circuit_id}` : tc("已删除")),
+          },
+          { title: tc("标题"), dataIndex: "title", width: "18%", ellipsis: true,
+            render: (title: string) => translateWorkOrderTitle(title, t, isEn),
+          },
           {
             title: tc('类型'),
             dataIndex: "type",
@@ -291,7 +298,7 @@ export default function WorkOrders() {
             ),
           },
         ],
-          ["requested_by", "approved_by", "config_jobs"],
+          ["requested_by", "approved_by", "config_jobs", "circuit_code"],
         )}
       />
 

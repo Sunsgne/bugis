@@ -3,23 +3,37 @@ import {
   BaseEdge,
   Controls,
   EdgeLabelRenderer,
-  MarkerType,
   MiniMap,
   ReactFlow,
   getBezierPath,
+  useEdgesState,
+  useNodesInitialized,
+  useNodesState,
   useReactFlow,
   type Edge,
   type EdgeProps,
   type Node,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Tooltip } from "antd";
 import { labelForOption, DEVICE_ROLE_OPTIONS } from "@/constants/formOptions";
 import { vendorColors } from "@/charts/theme";
-import type { Topology } from "@/api/types";
+import type { LinkUsage, Topology } from "@/api/types";
 import { useTc } from "@/i18n/useTc";
 import { backboneUtilColor, fmtLinkBw } from "@/utils/linkUtilization";
-import { layoutDeviceGraph, siteLabelForNode } from "@/utils/deviceGraphLayout";
+import { layoutDeviceGraph, siteLabelForNode, edgeHandlePairForLayout, layoutEdgeCurvature } from "@/utils/deviceGraphLayout";
+import {
+  curvatureForEdge,
+  linkEdgeShortLabel,
+  mergeTopologyEdges,
+} from "@/utils/topologyEdges";
+import LinkUtilizationTooltipContent from "./LinkUtilizationTooltipContent";
+import LogicalPeerEdge from "./LogicalPeerEdge";
+import DeviceGraphNode, {
+  DEVICE_GRAPH_NODE_HEIGHT,
+  DEVICE_GRAPH_NODE_WIDTH,
+} from "./DeviceGraphNode";
 
 const EDGE_STYLE: Record<string, { dash?: string; weight: number }> = {
   dci: { dash: "6 4", weight: 3 },
@@ -28,11 +42,15 @@ const EDGE_STYLE: Record<string, { dash?: string; weight: number }> = {
   uplink: { weight: 2 },
 };
 
+export type TopologyNodePositions = Record<string, { x: number; y: number }>;
+
 type EdgeData = {
+  link?: LinkUsage;
   utilization_pct: number;
   shortLabel: string;
-  title: string;
   linkType: string;
+  highlighted?: boolean;
+  curvature?: number;
 };
 
 function fmtG(mbps: number): string {
@@ -46,45 +64,7 @@ function shortHost(name: string, max = 28): string {
   return `${name.slice(0, head)}…${name.slice(-tail)}`;
 }
 
-function DeviceNode({
-  data,
-}: {
-  data: {
-    label: string;
-    fullName: string;
-    meta: string;
-    siteLabel?: string | null;
-    border: string;
-    online: boolean;
-    dimmed?: boolean;
-  };
-}) {
-  return (
-    <div
-      className="device-graph-node rounded-xl border-2 bg-white px-3 py-2.5 shadow-sm transition-all hover:shadow-md"
-      style={{
-        borderColor: data.border,
-        width: 220,
-        opacity: data.dimmed ? 0.35 : 1,
-      }}
-      title={data.fullName}
-    >
-      <div className="flex items-center gap-2">
-        <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${data.online ? "bg-emerald-500" : "bg-slate-300"}`} />
-        <span className="truncate text-sm font-semibold text-slate-800">{data.label}</span>
-        {data.siteLabel && (
-          <span className="ml-auto shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
-            {data.siteLabel}
-          </span>
-        )}
-      </div>
-      <div className="mt-1 truncate text-[11px] text-slate-500">{data.meta}</div>
-    </div>
-  );
-}
-
 function UtilizationEdge({
-  id,
   sourceX,
   sourceY,
   targetX,
@@ -93,12 +73,17 @@ function UtilizationEdge({
   targetPosition,
   data,
   selected,
-  markerEnd,
+  ...props
 }: EdgeProps) {
+  const { tc } = useTc();
   const d = data as EdgeData | undefined;
   const pct = d?.utilization_pct ?? 0;
   const color = backboneUtilColor(pct);
+  const link = d?.link;
   const style = EDGE_STYLE[d?.linkType || "intra_dc"] || EDGE_STYLE.intra_dc;
+  const [labelHover, setLabelHover] = useState(false);
+  const showTooltip = labelHover;
+  const showLabel = labelHover || d?.highlighted;
   const [edgePath, labelX, labelY] = getBezierPath({
     sourceX,
     sourceY,
@@ -106,66 +91,83 @@ function UtilizationEdge({
     targetY,
     sourcePosition,
     targetPosition,
+    curvature: d?.curvature ?? 0.18,
   });
 
   return (
     <>
       <BaseEdge
-        id={id}
         path={edgePath}
-        markerEnd={markerEnd}
+        {...props}
+        interactionWidth={20}
         style={{
+          ...props.style,
           stroke: color,
-          strokeWidth: selected ? style.weight + 1.5 : style.weight,
+          strokeWidth: selected || d?.highlighted ? style.weight + 1.5 : style.weight,
           strokeDasharray: style.dash,
+          strokeLinecap: "round",
+          opacity: d?.highlighted ? 1 : 0.88,
         }}
       />
-      {d?.shortLabel && (
+      {d?.shortLabel && showLabel ? (
         <EdgeLabelRenderer>
-          <div
-            className="physical-topology-edge-label"
-            style={{
-              transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
-              borderColor: color,
-            }}
-            title={d.title}
+          <Tooltip
+            open={showTooltip}
+            placement="top"
+            mouseEnterDelay={0.15}
+            overlayClassName="link-util-tooltip-overlay"
+            title={link ? <LinkUtilizationTooltipContent link={link} pct={pct} tc={tc} /> : undefined}
           >
-            {d.shortLabel}
-          </div>
+            <div
+              className="physical-topology-edge-label backbone-edge-label nodrag nopan is-visible"
+              style={{
+                transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
+                borderColor: color,
+              }}
+              onMouseEnter={() => setLabelHover(true)}
+              onMouseLeave={() => setLabelHover(false)}
+            >
+              {d.shortLabel}
+            </div>
+          </Tooltip>
         </EdgeLabelRenderer>
-      )}
+      ) : null}
     </>
   );
 }
 
-const nodeTypes = { device: DeviceNode };
-const edgeTypes = { utilization: UtilizationEdge };
+const nodeTypes = { device: DeviceGraphNode };
+const edgeTypes = { utilization: UtilizationEdge, logicalPeer: LogicalPeerEdge };
 
 function FitViewOnLayout({ layoutKey }: { layoutKey: string }) {
   const { fitView } = useReactFlow();
+  const nodesInitialized = useNodesInitialized({ includeHiddenNodes: false });
   useEffect(() => {
+    if (!nodesInitialized) return;
     const timer = window.setTimeout(() => {
-      fitView({ padding: 0.12, maxZoom: 1.15, duration: 320 });
-    }, 80);
+      fitView({ padding: 0.06, maxZoom: 1.35, duration: 280 });
+    }, 120);
     return () => window.clearTimeout(timer);
-  }, [fitView, layoutKey]);
+  }, [fitView, layoutKey, nodesInitialized]);
   return null;
 }
 
 function buildDeviceGraph(
   topo: Topology,
   size: { w: number; h: number },
-  tc: (s: string) => string,
+  linksById: Map<number, LinkUsage>,
+  savedPositions: TopologyNodePositions,
+  tc: (zh: string) => string,
   highlightDeviceIds?: Set<number> | null,
+  hoveredLinkId?: number | null,
 ): { nodes: Node[]; edges: Edge[] } {
-  const positions = layoutDeviceGraph(
+  const autoPositions = layoutDeviceGraph(
     topo.nodes.map((n) => ({ id: n.id, site_id: n.site_id })),
     topo.edges.map((e) => ({ source: e.source, target: e.target })),
     size.w,
     size.h,
   );
 
-  const nodeById = new Map(topo.nodes.map((n) => [n.id, n]));
   const connected = new Set<number>();
   for (const e of topo.edges) {
     connected.add(e.source);
@@ -173,8 +175,14 @@ function buildDeviceGraph(
   }
   const dimUnconnected = highlightDeviceIds != null && highlightDeviceIds.size > 0;
 
+  const posById = new Map<number, { x: number; y: number }>();
+  for (const n of topo.nodes) {
+    const saved = savedPositions[String(n.id)];
+    posById.set(n.id, saved ?? autoPositions.get(n.id) ?? { x: 0, y: 0 });
+  }
+
   const nodes: Node[] = topo.nodes.map((n) => {
-    const pos = positions.get(n.id) ?? { x: 0, y: 0 };
+    const pos = posById.get(n.id)!;
     const siteLabel = siteLabelForNode(n.site_id, topo.sites);
     const vendorColor = vendorColors[n.vendor] || "#64748b";
     const dimmed = dimUnconnected
@@ -185,6 +193,8 @@ function buildDeviceGraph(
       id: String(n.id),
       type: "device",
       position: pos,
+      width: DEVICE_GRAPH_NODE_WIDTH,
+      height: DEVICE_GRAPH_NODE_HEIGHT,
       data: {
         label: shortHost(n.name),
         fullName: n.name,
@@ -198,21 +208,13 @@ function buildDeviceGraph(
   });
 
   const nodeIds = new Set(topo.nodes.map((n) => String(n.id)));
-  const edges: Edge[] = topo.edges
+  const utilizationEdges: Edge[] = topo.edges
     .filter((e) => nodeIds.has(String(e.source)) && nodeIds.has(String(e.target)))
     .map((e, i) => {
-      const util = e.utilization_pct ?? (e.capacity_mbps ? (e.reserved_mbps / e.capacity_mbps) * 100 : 0);
-      const src = nodeById.get(e.source);
-      const tgt = nodeById.get(e.target);
-      const color = backboneUtilColor(util);
-      const title = [
-        src && tgt ? `${src.name} ↔ ${tgt.name}` : "",
-        `${tc("峰值利用率")} ${util.toFixed(1)}%`,
-        `${tc("合同带宽")} ${fmtLinkBw(e.capacity_mbps)}`,
-        e.type === "dci" ? tc("DCI 互联") : tc("Fabric 内链路"),
-      ]
-        .filter(Boolean)
-        .join("\n");
+      const link = linksById.get(e.id);
+      const util = link?.utilization_pct ?? e.utilization_pct ?? (e.capacity_mbps ? (e.reserved_mbps / e.capacity_mbps) * 100 : 0);
+      const highlighted = hoveredLinkId != null && link?.link_id === hoveredLinkId;
+      const handles = edgeHandlePairForLayout(e.source, e.target, posById);
 
       return {
         id: `e-${e.id ?? i}`,
@@ -220,28 +222,60 @@ function buildDeviceGraph(
         target: String(e.target),
         type: "utilization",
         animated: e.type === "dci",
+        interactionWidth: 20,
+        sourceHandle: handles.sourceHandle,
+        targetHandle: handles.targetHandle,
         data: {
+          link,
           utilization_pct: util,
-          shortLabel: `${fmtG(e.capacity_mbps)} · ${util.toFixed(0)}%`,
-          title,
+          shortLabel: link
+            ? linkEdgeShortLabel(link, util)
+            : `${fmtG(e.capacity_mbps)} · ${util.toFixed(0)}%`,
           linkType: e.type,
+          highlighted,
+          curvature: layoutEdgeCurvature(
+            e.source,
+            e.target,
+            posById,
+            curvatureForEdge(topo.edges, e.id),
+            handles,
+          ),
         } satisfies EdgeData,
-        markerEnd: { type: MarkerType.ArrowClosed, color },
       };
     });
+
+  const links = [...linksById.values()];
+  const edges = mergeTopologyEdges(utilizationEdges, links, nodeIds, tc);
 
   return { nodes, edges };
 }
 
 type Props = {
   topo: Topology;
+  links: LinkUsage[];
+  savedPositions: TopologyNodePositions;
+  autoSave?: boolean;
+  onPositionsChange?: (positions: TopologyNodePositions, options?: { autoSave?: boolean }) => void;
   className?: string;
 };
 
-export default function PhysicalTopologyFlow({ topo, className }: Props) {
+export default function PhysicalTopologyFlow({
+  topo,
+  links,
+  savedPositions,
+  autoSave = false,
+  onPositionsChange,
+  className,
+}: Props) {
   const { tc } = useTc();
   const hostRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 960, h: 560 });
+  const [positions, setPositions] = useState<TopologyNodePositions>(savedPositions);
+  const [hoveredLinkId, setHoveredLinkId] = useState<number | null>(null);
+
+  useEffect(() => {
+    setPositions(savedPositions);
+  }, [savedPositions]);
 
   useEffect(() => {
     const el = hostRef.current;
@@ -258,29 +292,63 @@ export default function PhysicalTopologyFlow({ topo, className }: Props) {
     return () => ro.disconnect();
   }, []);
 
-  const { nodes, edges } = useMemo(
-    () => buildDeviceGraph(topo, size, tc),
-    [topo, size, tc],
+  const linksById = useMemo(() => new Map(links.map((l) => [l.link_id, l])), [links]);
+
+  const graphKey = `${size.w}x${size.h}-${topo.nodes.length}-${topo.edges.length}-${links.length}-${Object.keys(positions).length}`;
+
+  const { nodes: layoutNodes, edges: layoutEdges } = useMemo(
+    () => buildDeviceGraph(topo, size, linksById, positions, tc, null, hoveredLinkId),
+    [topo, size, linksById, positions, tc, hoveredLinkId],
   );
-  const layoutKey = `${size.w}x${size.h}-${topo.nodes.length}-${topo.edges.length}`;
+
+  const onNodeDragStop = useCallback(
+    (_: unknown, node: Node) => {
+      setPositions((prev) => {
+        const next = { ...prev, [node.id]: node.position };
+        onPositionsChange?.(next, { autoSave });
+        return next;
+      });
+    },
+    [onPositionsChange, autoSave],
+  );
+
+  const [flowNodes, setFlowNodes, onNodesChange] = useNodesState<Node>(layoutNodes);
+  const [flowEdges, setFlowEdges, onEdgesChange] = useEdgesState<Edge>(layoutEdges);
+
+  useEffect(() => {
+    setFlowNodes(layoutNodes);
+  }, [layoutNodes, setFlowNodes]);
+
+  useEffect(() => {
+    setFlowEdges(layoutEdges);
+  }, [layoutEdges, setFlowEdges]);
 
   return (
     <div ref={hostRef} className={["physical-topology-flow device-graph-flow", className].filter(Boolean).join(" ")}>
       <ReactFlow
-        nodes={nodes}
-        edges={edges}
+        nodes={flowNodes}
+        edges={flowEdges}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
-        nodesDraggable={false}
+        nodesDraggable
         nodesConnectable={false}
         elementsSelectable
+        elevateEdgesOnSelect
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        onNodeDragStop={onNodeDragStop}
+        onEdgeMouseEnter={(_, edge) => {
+          const link = (edge.data as EdgeData | undefined)?.link;
+          if (link) setHoveredLinkId(link.link_id);
+        }}
+        onEdgeMouseLeave={() => setHoveredLinkId(null)}
         panOnDrag
         zoomOnScroll
         minZoom={0.35}
         maxZoom={1.6}
         proOptions={{ hideAttribution: true }}
       >
-        <FitViewOnLayout layoutKey={layoutKey} />
+        <FitViewOnLayout layoutKey={graphKey} />
         <Background gap={24} size={1} color="#e2e8f0" />
         <Controls showInteractive={false} position="bottom-right" />
         <MiniMap
@@ -314,6 +382,13 @@ export default function PhysicalTopologyFlow({ topo, className }: Props) {
         <span className="physical-topology-legend-item">
           <span className="physical-topology-legend-line" style={{ background: "#ef4444" }} />
           ≥85%
+        </span>
+        <span className="physical-topology-legend-item">
+          <span
+            className="physical-topology-legend-line"
+            style={{ background: "transparent", borderTop: "2px dashed #64748b", width: 18, height: 0 }}
+          />
+          {tc("同链路对端")}
         </span>
       </div>
     </div>

@@ -19,9 +19,10 @@ import { DeleteOutlined, EditOutlined, PlusOutlined, SearchOutlined, SyncOutline
 import { api } from "../api/client";
 import BackboneTopologyPanel from "../components/BackboneTopologyPanel";
 import type { Device, LinkUsage, SiteCapacity, Topology } from "../api/types";
-import { fmtLinkBw, linkUtilizationLines } from "../utils/linkUtilization";
+import { fmtLinkBw } from "../utils/linkUtilization";
 import BackboneLinkModal from "../components/BackboneLinkModal";
 import InterfaceNameCell from "../components/InterfaceNameCell";
+import LinkUtilizationTooltipContent from "../components/LinkUtilizationTooltipContent";
 import { utilColor } from "../charts/options";
 import { fetchAllPages } from "../utils/pagination";
 import { useTc } from "@/i18n/useTc";
@@ -50,16 +51,6 @@ function siteRouteKey(r: LinkUsage) {
   return `${r.site_a_id ?? ""}:${r.site_z_id ?? ""}`;
 }
 
-function utilizationTooltip(r: LinkUsage, pct: number, tc: (s: string) => string) {
-  return (
-    <div style={{ lineHeight: 1.6 }}>
-      {linkUtilizationLines(r, pct, tc).map((line) => (
-        <div key={line}>{line}</div>
-      ))}
-    </div>
-  );
-}
-
 export default function Capacity() {
   const { tc } = useTc();
   const { message } = AntApp.useApp();
@@ -79,18 +70,21 @@ export default function Capacity() {
   const [devicesLoaded, setDevicesLoaded] = useState(false);
   const [linkModalOpen, setLinkModalOpen] = useState(false);
   const [editingLink, setEditingLink] = useState<LinkUsage | null>(null);
+  const [activeCircuitBw, setActiveCircuitBw] = useState(0);
 
   async function load(showSpinner = false) {
     if (showSpinner) setLoading(true);
     try {
-      const [s, l, t] = await Promise.all([
+      const [s, l, t, dash] = await Promise.all([
         api.get<SiteCapacity[]>("/capacity/sites"),
         api.get<LinkUsage[]>("/capacity/links/usage"),
         api.get<Topology>("/capacity/topology"),
+        api.get<{ total_active_bandwidth_mbps: number }>("/telemetry/dashboard"),
       ]);
       setSites(s.data);
       setLinks(l.data);
       setTopo(t.data);
+      setActiveCircuitBw(dash.data.total_active_bandwidth_mbps ?? 0);
     } catch {
       message.error(tc('容量数据加载失败，请稍后重试'));
     } finally {
@@ -146,9 +140,13 @@ export default function Capacity() {
     return () => clearInterval(t);
   }, []);
 
-  const totalCap = useMemo(() => sites.reduce((a, s) => a + s.capacity_mbps, 0), [sites]);
-  const totalUsed = useMemo(() => sites.reduce((a, s) => a + s.used_mbps, 0), [sites]);
-  const utilPct = totalCap ? Math.round((totalUsed / totalCap) * 1000) / 10 : 0;
+  const totalBackboneCap = useMemo(
+    () => links.reduce((a, l) => a + (l.capacity_mbps || 0), 0),
+    [links],
+  );
+  const utilPct = totalBackboneCap
+    ? Math.round((activeCircuitBw / totalBackboneCap) * 1000) / 10
+    : 0;
 
   const filteredSites = useMemo(() => {
     const q = siteSearch.trim().toLowerCase();
@@ -210,19 +208,28 @@ export default function Capacity() {
     <div className="capacity-page">
       <div className="capacity-kpi-row">
         <Card className="capacity-kpi-card">
-          <Statistic title={tc('Fabric 总容量')} value={gbps(totalCap)} suffix="Gbps" />
+          <Statistic
+            title={tc("骨干线路的总容量")}
+            value={totalBackboneCap}
+            formatter={(v) => fmtLinkBw(Number(v))}
+          />
         </Card>
         <Card className="capacity-kpi-card">
           <Statistic
-            title={tc('已分配带宽')}
-            value={gbps(totalUsed)}
-            suffix="Gbps"
+            title={tc("开通出去的专线的总带宽")}
+            value={activeCircuitBw}
+            formatter={(v) => fmtLinkBw(Number(v))}
             valueStyle={{ color: "#ff6600" }}
           />
         </Card>
         <Card className="capacity-kpi-card capacity-kpi-util">
-          <div className="capacity-kpi-util-label">{tc('全域带宽分配率')}</div>
-          <Progress percent={utilPct} strokeColor={utilColor(utilPct)} strokeWidth={10} />
+          <div className="capacity-kpi-util-label">{tc("全域带宽分配率")}</div>
+          <Progress
+            percent={Math.min(utilPct, 100)}
+            strokeColor={utilColor(Math.min(utilPct, 100))}
+            strokeWidth={10}
+            format={() => `${utilPct}%`}
+          />
         </Card>
       </div>
 
@@ -264,7 +271,7 @@ export default function Capacity() {
           </Space>
         }
       >
-        <BackboneTopologyPanel topo={topo} links={filteredLinks} loading={loading} />
+        <BackboneTopologyPanel topo={topo} links={links} loading={loading} />
         <Alert
           type="info"
           showIcon
@@ -373,7 +380,10 @@ export default function Capacity() {
               defaultSortOrder: "descend",
               sorter: (a, b) => a.utilization_pct - b.utilization_pct,
               render: (v: number, r) => (
-                <Tooltip title={utilizationTooltip(r, v, tc)}>
+                <Tooltip
+                  overlayClassName="link-util-tooltip-overlay"
+                  title={<LinkUtilizationTooltipContent link={r} pct={v} tc={tc} />}
+                >
                   <Progress
                     percent={Math.round(v)}
                     size="small"
@@ -487,7 +497,9 @@ export default function Capacity() {
         devices={devices}
         editLink={editingLink}
         onClose={closeLinkModal}
-        onSaved={load}
+        onSaved={async () => {
+          await load(false);
+        }}
       />
     </div>
   );

@@ -48,10 +48,40 @@ class AlarmTemplatesOut(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+class GlobalTemplatePatch(BaseModel):
+    """Partial global template overlay for live preview (unspecified fields keep saved values)."""
+
+    banner: str | None = None
+    footer: str | None = None
+    email_subject: str | None = None
+    detail_heading: str | None = None
+    impact_heading: str | None = None
+    action_heading: str | None = None
+    meta_line: str | None = None
+    type_line: str | None = None
+    html_enabled: bool | None = None
+
+
+class KindTemplatePatch(BaseModel):
+    """Partial kind template overlay for live preview."""
+
+    kind_label: str | None = None
+    category: str | None = None
+    priority: str | None = None
+    title: str | None = None
+    detail: str | None = None
+    impact: str | None = None
+    action: str | None = None
+
+
 class AlarmTemplatePreviewIn(BaseModel):
     kind: str = "sla_loss"
     severity: str = "major"
     product_name: str | None = None
+    global_: GlobalTemplatePatch | None = Field(default=None, alias="global")
+    kinds: dict[str, KindTemplatePatch] | None = None
+
+    model_config = {"populate_by_name": True}
 
 
 class AlarmTemplatePreviewOut(BaseModel):

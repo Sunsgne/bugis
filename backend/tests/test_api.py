@@ -256,6 +256,25 @@ def test_capacity_and_topology(client, auth_headers):
     assert "nodes" in topo and "edges" in topo
     assert len(topo["nodes"]) >= 2
 
+    layout = client.get("/api/v1/capacity/topology/layout", headers=auth_headers).json()
+    assert layout["positions"] == {}
+
+    saved = client.put(
+        "/api/v1/capacity/topology/layout",
+        headers=auth_headers,
+        json={"positions": {str(dev_a["id"]): {"x": 120, "y": 80}}},
+    )
+    assert saved.status_code == 200
+    assert saved.json()["positions"][str(dev_a["id"])] == {"x": 120.0, "y": 80.0}
+
+    cleared = client.put(
+        "/api/v1/capacity/topology/layout",
+        headers=auth_headers,
+        json={"positions": {}},
+    )
+    assert cleared.status_code == 200
+    assert cleared.json()["positions"] == {}
+
 
 def test_validation_blocks_collision(client, auth_headers):
     _, tenant, dev_a, dev_z = _bootstrap_topology(client, auth_headers)

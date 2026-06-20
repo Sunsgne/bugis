@@ -45,7 +45,8 @@ class WorkOrderCreate(BaseModel):
 class WorkOrderOut(TimestampedSchema):
     id: int
     code: str
-    circuit_id: int
+    circuit_id: int | None = None
+    circuit_code: str | None = None
     type: WorkOrderType
     status: WorkOrderStatus
     title: str

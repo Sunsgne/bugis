@@ -92,6 +92,33 @@ function matchPatterns(text: string, patterns: typeof WO_PATTERNS, isEn: boolean
   return null;
 }
 
+const CONFIG_NOTE_PATTERNS: Array<{ re: RegExp; en: (...m: string[]) => string }> = [
+  { re: /^现网配置自动学习$/, en: () => "Live network auto-learn" },
+  { re: /^现网 running-config 备份$/, en: () => "Live running-config backup" },
+  { re: /^开通前-(.+)$/, en: (code) => `Before provision · ${code}` },
+  { re: /^拆除前-(.+)$/, en: (code) => `Before teardown · ${code}` },
+];
+
+function matchConfigNote(text: string, isEn: boolean): string | null {
+  if (!isEn) return null;
+  for (const { re, en } of CONFIG_NOTE_PATTERNS) {
+    const m = text.match(re);
+    if (m) return en(...m.slice(1));
+  }
+  return null;
+}
+
+export function translateConfigSnapshotNote(
+  note: string | undefined | null,
+  tc: TcFn,
+  isEn: boolean,
+): string {
+  if (!note) return "—";
+  const fromPattern = matchConfigNote(note, isEn);
+  if (fromPattern) return fromPattern;
+  return translateApiText(note, tc, isEn);
+}
+
 export function translateApiText(text: string, tc: TcFn, isEn: boolean): string {
   if (!text || !isEn) return text;
   const fromPattern =
@@ -103,4 +130,32 @@ export function translateApiText(text: string, tc: TcFn, isEn: boolean): string 
 
 export function translateWorkOrderMessage(message: string, tc: TcFn, isEn: boolean): string {
   return translateApiText(message, tc, isEn);
+}
+
+const DEFAULT_WO_TITLE_PATTERNS: Array<{ re: RegExp; type: string }> = [
+  { re: /^provision circuit (.+)$/i, type: "provision" },
+  { re: /^modify circuit (.+)$/i, type: "modify" },
+  { re: /^decommission circuit (.+)$/i, type: "decommission" },
+  { re: /^migrate circuit (.+)$/i, type: "migrate" },
+  { re: /^开通专线\s*(.+)$/, type: "provision" },
+  { re: /^变更专线\s*(.+)$/, type: "modify" },
+  { re: /^拆除专线\s*(.+)$/, type: "decommission" },
+  { re: /^迁移专线\s*(.+)$/, type: "migrate" },
+];
+
+/** Localize auto-generated work order titles (legacy English/Chinese rows). */
+export function translateWorkOrderTitle(
+  title: string,
+  t: (key: string, opts?: { defaultValue?: string }) => string,
+  isEn: boolean,
+): string {
+  if (!title) return title;
+  for (const { re, type } of DEFAULT_WO_TITLE_PATTERNS) {
+    const m = title.match(re);
+    if (!m) continue;
+    const code = m[1].trim();
+    const typeLabel = t(`status.workOrderType.${type}`, { defaultValue: type });
+    return isEn ? `${typeLabel} circuit ${code}` : `${typeLabel}专线 ${code}`;
+  }
+  return title;
 }

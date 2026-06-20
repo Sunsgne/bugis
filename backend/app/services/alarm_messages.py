@@ -67,68 +67,74 @@ def _copy_from_kind(
 
 
 def build_circuit_tunnel_down(
-    circuit_code: str, status: str, templates: AlarmTemplates | None = None
+    circuit_code: str, status: str, templates: AlarmTemplates | None = None, **extra: Any
 ) -> AlarmCopy:
-    return _copy_from_kind("tunnel_down", {"circuit_code": circuit_code, "status": status}, templates)
+    return _copy_from_kind(
+        "tunnel_down", {"circuit_code": circuit_code, "status": status, **extra}, templates
+    )
 
 
 def build_circuit_loss(
-    circuit_code: str, loss_pct: float, threshold_pct: float, templates: AlarmTemplates | None = None
+    circuit_code: str, loss_pct: float, threshold_pct: float,
+    templates: AlarmTemplates | None = None, **extra: Any,
 ) -> AlarmCopy:
     return _copy_from_kind(
         "sla_loss",
-        {"circuit_code": circuit_code, "loss_pct": loss_pct, "threshold_pct": threshold_pct},
+        {"circuit_code": circuit_code, "loss_pct": loss_pct, "threshold_pct": threshold_pct, **extra},
         templates,
     )
 
 
 def build_circuit_latency(
-    circuit_code: str, latency_ms: float, threshold_ms: float, templates: AlarmTemplates | None = None
+    circuit_code: str, latency_ms: float, threshold_ms: float,
+    templates: AlarmTemplates | None = None, **extra: Any,
 ) -> AlarmCopy:
     return _copy_from_kind(
         "sla_latency",
-        {"circuit_code": circuit_code, "latency_ms": latency_ms, "threshold_ms": threshold_ms},
+        {"circuit_code": circuit_code, "latency_ms": latency_ms, "threshold_ms": threshold_ms, **extra},
         templates,
     )
 
 
 def build_circuit_utilization(
-    circuit_code: str, peak_pct: float, threshold_pct: float, templates: AlarmTemplates | None = None
+    circuit_code: str, peak_pct: float, threshold_pct: float,
+    templates: AlarmTemplates | None = None, **extra: Any,
 ) -> AlarmCopy:
     return _copy_from_kind(
         "utilization",
-        {"circuit_code": circuit_code, "peak_pct": peak_pct, "threshold_pct": threshold_pct},
+        {"circuit_code": circuit_code, "peak_pct": peak_pct, "threshold_pct": threshold_pct, **extra},
         templates,
     )
 
 
 def build_circuit_health(
-    circuit_code: str, score: float, threshold: float, templates: AlarmTemplates | None = None
+    circuit_code: str, score: float, threshold: float,
+    templates: AlarmTemplates | None = None, **extra: Any,
 ) -> AlarmCopy:
     return _copy_from_kind(
         "health",
-        {"circuit_code": circuit_code, "score": score, "threshold": threshold},
+        {"circuit_code": circuit_code, "score": score, "threshold": threshold, **extra},
         templates,
     )
 
 
 def build_circuit_interruption(
-    circuit_code: str, event_detail: str | None, templates: AlarmTemplates | None = None
+    circuit_code: str, event_detail: str | None, templates: AlarmTemplates | None = None, **extra: Any,
 ) -> AlarmCopy:
     detail = event_detail or "端到端探测判定链路持续中断"
     return _copy_from_kind(
         "circuit_interruption",
-        {"circuit_code": circuit_code, "event_detail": detail},
+        {"circuit_code": circuit_code, "event_detail": detail, **extra},
         templates,
     )
 
 
 def build_circuit_flap(
-    circuit_code: str, flaps: int, window_min: int, templates: AlarmTemplates | None = None
+    circuit_code: str, flaps: int, window_min: int, templates: AlarmTemplates | None = None, **extra: Any,
 ) -> AlarmCopy:
     return _copy_from_kind(
         "circuit_flap",
-        {"circuit_code": circuit_code, "flaps": flaps, "window_min": window_min},
+        {"circuit_code": circuit_code, "flaps": flaps, "window_min": window_min, **extra},
         templates,
     )
 
@@ -141,6 +147,7 @@ def build_link_utilization(
     capacity_mbps: int,
     traffic_mbps: float,
     templates: AlarmTemplates | None = None,
+    **extra: Any,
 ) -> AlarmCopy:
     cap_g = capacity_mbps / 1000 if capacity_mbps >= 1000 else capacity_mbps
     cap_unit = "Gbps" if capacity_mbps >= 1000 else "Mbps"
@@ -154,6 +161,7 @@ def build_link_utilization(
             "threshold_pct": threshold_pct,
             "cap_display": f"{cap_g:.0f}{cap_unit}",
             "traffic_display": f"{traffic_g:.1f}{traffic_unit}",
+            **extra,
         },
         templates,
     )
