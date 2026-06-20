@@ -370,7 +370,30 @@ function nodeCenter(pos: { x: number; y: number }): { cx: number; cy: number } {
   return { cx: pos.x + NODE_W / 2, cy: pos.y + NODE_H / 2 };
 }
 
-/** Pick the rectangle side that best faces the other node. */
+/** Closest rectangle side toward a delta vector (uses node aspect ratio). */
+export function sideFacingDelta(dx: number, dy: number): EdgeHandleSide {
+  const ax = Math.abs(dx) * NODE_H;
+  const ay = Math.abs(dy) * NODE_W;
+  if (ax >= ay) {
+    return dx >= 0 ? "right" : "left";
+  }
+  return dy >= 0 ? "bottom" : "top";
+}
+
+function oppositeSide(side: EdgeHandleSide): EdgeHandleSide {
+  switch (side) {
+    case "top":
+      return "bottom";
+    case "bottom":
+      return "top";
+    case "left":
+      return "right";
+    default:
+      return "left";
+  }
+}
+
+/** Pick exit/entry sides so each edge uses the shortest-facing pair on both rectangles. */
 export function edgeSidesForLayout(
   sourceId: number,
   targetId: number,
@@ -386,31 +409,86 @@ export function edgeSidesForLayout(
   const { cx: tgtCx, cy: tgtCy } = nodeCenter(tgt);
   const dx = tgtCx - srcCx;
   const dy = tgtCy - srcCy;
-  const absDx = Math.abs(dx);
-  const absDy = Math.abs(dy);
 
-  // Staggered spokes (e.g. TYO2/TYO3): route through left/right gap when horizontally offset.
-  if (absDx >= NODE_W * 0.12) {
-    return dx > 0
-      ? { sourceSide: "right", targetSide: "left" }
-      : { sourceSide: "left", targetSide: "right" };
+  const sourceSide = sideFacingDelta(dx, dy);
+  const targetSide = sideFacingDelta(-dx, -dy);
+
+  // Same-side degenerate (overlapping nodes): use opposite sides on the dominant axis.
+  if (sourceSide === targetSide) {
+    return { sourceSide, targetSide: oppositeSide(sourceSide) };
   }
 
-  if (absDy >= NODE_H * 0.2) {
-    return dy > 0
-      ? { sourceSide: "bottom", targetSide: "top" }
-      : { sourceSide: "top", targetSide: "bottom" };
+  return { sourceSide, targetSide };
+}
+
+type HandleLayoutEdge = { source: number; target: number; key?: number | string };
+
+/** Spread handles across four sides when a node fans out to many peers (mesh). */
+export function edgeHandlePairsForGraph(
+  edges: HandleLayoutEdge[],
+  positions: Map<number, { x: number; y: number }>,
+): Map<string, EdgeHandlePair> {
+  const result = new Map<string, EdgeHandlePair>();
+  const bySource = new Map<number, HandleLayoutEdge[]>();
+
+  for (const e of edges) {
+    if (e.source === e.target) continue;
+    const key = String(e.key ?? `${e.source}-${e.target}`);
+    if (!bySource.has(e.source)) bySource.set(e.source, []);
+    bySource.get(e.source)!.push({ ...e, key });
   }
 
-  if (absDx >= absDy) {
-    return dx >= 0
-      ? { sourceSide: "right", targetSide: "left" }
-      : { sourceSide: "left", targetSide: "right" };
+  for (const e of edges) {
+    if (e.source === e.target) continue;
+    const key = String(e.key ?? `${e.source}-${e.target}`);
+    const base = edgeSidesForLayout(e.source, e.target, positions);
+    result.set(key, {
+      sourceSide: base.sourceSide,
+      targetSide: base.targetSide,
+      sourceHandle: `${base.sourceSide}-out`,
+      targetHandle: `${base.targetSide}-in`,
+    });
   }
 
-  return dy >= 0
-    ? { sourceSide: "bottom", targetSide: "top" }
-    : { sourceSide: "top", targetSide: "bottom" };
+  for (const [, outEdges] of bySource) {
+    if (outEdges.length < 3) continue;
+
+    const nodeId = outEdges[0]?.source;
+    if (nodeId == null) continue;
+    const pos = positions.get(nodeId);
+    if (!pos) continue;
+    const { cx, cy } = nodeCenter(pos);
+
+    const ranked = outEdges
+      .map((e) => {
+        const tgt = positions.get(e.target);
+        if (!tgt) return null;
+        const { cx: tx, cy: ty } = nodeCenter(tgt);
+        return { edge: e, angle: Math.atan2(ty - cy, tx - cx) };
+      })
+      .filter((x): x is { edge: HandleLayoutEdge; angle: number } => x != null)
+      .sort((a, b) => a.angle - b.angle);
+
+    const sides: EdgeHandleSide[] = ["right", "bottom", "left", "top"];
+    ranked.forEach(({ edge, angle }) => {
+      const key = String(edge.key ?? `${edge.source}-${edge.target}`);
+      const sector = Math.floor(((angle + Math.PI) / (2 * Math.PI)) * 4) % 4;
+      const spreadSide = sides[sector];
+      const tgtPos = positions.get(edge.target);
+      if (!tgtPos) return;
+      const { cx: tx, cy: ty } = nodeCenter(tgtPos);
+      const targetSide = sideFacingDelta(cx - tx, cy - ty);
+
+      result.set(key, {
+        sourceSide: spreadSide,
+        targetSide,
+        sourceHandle: `${spreadSide}-out`,
+        targetHandle: `${targetSide}-in`,
+      });
+    });
+  }
+
+  return result;
 }
 
 export function edgeHandlesForLayout(
@@ -458,21 +536,24 @@ export function layoutEdgeCurvature(
   const absDy = Math.abs(dy);
 
   const sides = handlePair ?? edgeSidesForLayout(sourceId, targetId, positions);
-  const horizontal = sides.sourceSide === "left" || sides.sourceSide === "right";
+  const vertical = sides.sourceSide === "top" || sides.sourceSide === "bottom";
 
-  if (horizontal) {
-    if (absDy > NODE_H * 0.45) {
-      return dy > 0 ? 0.32 : -0.32;
+  if (vertical) {
+    if (absDx > NODE_W * 0.35) {
+      return dx > 0 ? 0.24 : -0.24;
     }
-    if (absDy > NODE_H * 0.15) {
+    if (absDy > NODE_H * 0.45) {
       return dy > 0 ? 0.22 : -0.22;
     }
-    return baseCurvature * 0.85;
+    return baseCurvature * 0.75;
   }
 
-  if (absDx < NODE_W * 0.2 && absDy > NODE_H * 0.45) {
+  if (absDy > NODE_H * 0.45) {
     return dy > 0 ? 0.28 : -0.28;
   }
+  if (absDy > NODE_H * 0.15) {
+    return dy > 0 ? 0.18 : -0.18;
+  }
 
-  return baseCurvature;
+  return baseCurvature * 0.85;
 }

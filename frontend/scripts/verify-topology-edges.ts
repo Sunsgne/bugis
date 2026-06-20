@@ -4,6 +4,7 @@
  */
 import type { LinkUsage, Topology } from "../src/api/types";
 import { buildBackboneTopologyLayout, buildFilteredTopo } from "../src/utils/backboneTopologyLayout";
+import { edgeHandlePairsForGraph } from "../src/utils/deviceGraphLayout";
 
 const tc = (s: string) => s;
 
@@ -166,9 +167,14 @@ if (!peerEdge) {
   process.exit(1);
 }
 const peerHandles = new Set([peerEdge.sourceHandle, peerEdge.targetHandle]);
-if (peerHandles.has("top-out") || peerHandles.has("bottom-out") || peerHandles.has("top-in") || peerHandles.has("bottom-in")) {
+const verticalPeer =
+  peerHandles.has("top-out") ||
+  peerHandles.has("bottom-out") ||
+  peerHandles.has("top-in") ||
+  peerHandles.has("bottom-in");
+if (!verticalPeer) {
   console.error(
-    `TYO2-TYO3 should use horizontal side handles, got ${peerEdge.sourceHandle} → ${peerEdge.targetHandle}`,
+    `TYO2-TYO3 vertically stacked — expected top/bottom handles, got ${peerEdge.sourceHandle} → ${peerEdge.targetHandle}`,
   );
   process.exit(1);
 }
@@ -176,3 +182,27 @@ if (peerHandles.has("top-out") || peerHandles.has("bottom-out") || peerHandles.h
 console.log(`peer separation: ${Math.round(peerSeparation)}px`);
 console.log(`peer handles: ${peerEdge.sourceHandle} → ${peerEdge.targetHandle}`);
 console.log("direct link replaces logical peer — passed");
+
+// Mesh hub: high-degree node should spread exits across multiple sides
+const meshPairs = edgeHandlePairsForGraph(
+  [
+    { source: 10, target: 20, key: "a" },
+    { source: 10, target: 30, key: "b" },
+    { source: 10, target: 40, key: "c" },
+  ],
+  new Map([
+    [10, { x: 100, y: 400 }],
+    [20, { x: 500, y: 200 }],
+    [30, { x: 520, y: 400 }],
+    [40, { x: 480, y: 620 }],
+  ]),
+);
+const meshSides = new Set(
+  ["a", "b", "c"].map((k) => meshPairs.get(k)?.sourceSide).filter(Boolean),
+);
+if (meshSides.size < 2) {
+  console.error(`Mesh hub should use multiple exit sides, got ${[...meshSides].join(",")}`);
+  process.exit(1);
+}
+console.log(`mesh side spread: ${[...meshSides].join(", ")}`);
+console.log("mesh handle spread — passed");

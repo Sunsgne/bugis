@@ -22,7 +22,7 @@ import { vendorColors } from "@/charts/theme";
 import type { LinkUsage, Topology } from "@/api/types";
 import { useTc } from "@/i18n/useTc";
 import { backboneUtilColor, fmtLinkBw } from "@/utils/linkUtilization";
-import { layoutDeviceGraph, siteLabelForNode, edgeHandlePairForLayout, layoutEdgeCurvature } from "@/utils/deviceGraphLayout";
+import { layoutDeviceGraph, siteLabelForNode, edgeHandlePairForLayout, edgeHandlePairsForGraph, layoutEdgeCurvature, findHubNodeId, applySpokePeerSeparation } from "@/utils/deviceGraphLayout";
 import {
   curvatureForEdge,
   linkEdgeShortLabel,
@@ -181,6 +181,16 @@ function buildDeviceGraph(
     posById.set(n.id, saved ?? autoPositions.get(n.id) ?? { x: 0, y: 0 });
   }
 
+  const graphNodes = topo.nodes.map((n) => ({ id: n.id, site_id: n.site_id }));
+  const graphEdges = topo.edges.map((e) => ({ source: e.source, target: e.target }));
+  const hubId = findHubNodeId(graphNodes, graphEdges);
+  applySpokePeerSeparation(hubId, graphEdges, posById);
+
+  const handlePairs = edgeHandlePairsForGraph(
+    topo.edges.map((e) => ({ source: e.source, target: e.target, key: e.id })),
+    posById,
+  );
+
   const nodes: Node[] = topo.nodes.map((n) => {
     const pos = posById.get(n.id)!;
     const siteLabel = siteLabelForNode(n.site_id, topo.sites);
@@ -214,7 +224,10 @@ function buildDeviceGraph(
       const link = linksById.get(e.id);
       const util = link?.utilization_pct ?? e.utilization_pct ?? (e.capacity_mbps ? (e.reserved_mbps / e.capacity_mbps) * 100 : 0);
       const highlighted = hoveredLinkId != null && link?.link_id === hoveredLinkId;
-      const handles = edgeHandlePairForLayout(e.source, e.target, posById);
+      const handles =
+        handlePairs.get(String(e.id)) ??
+        handlePairs.get(`${e.source}-${e.target}`) ??
+        edgeHandlePairForLayout(e.source, e.target, posById);
 
       return {
         id: `e-${e.id ?? i}`,

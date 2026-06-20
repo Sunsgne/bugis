@@ -3,7 +3,7 @@ import { labelForOption, DEVICE_ROLE_OPTIONS } from "@/constants/formOptions";
 import { vendorColors } from "@/charts/theme";
 import type { LinkUsage, Topology } from "@/api/types";
 import { backboneUtilColor, fmtLinkBw } from "@/utils/linkUtilization";
-import { layoutDeviceGraph, siteLabelForNode, edgeHandlePairForLayout, layoutEdgeCurvature, findHubNodeId, applySpokePeerSeparation } from "@/utils/deviceGraphLayout";
+import { layoutDeviceGraph, siteLabelForNode, edgeHandlePairForLayout, edgeHandlePairsForGraph, layoutEdgeCurvature, findHubNodeId, applySpokePeerSeparation } from "@/utils/deviceGraphLayout";
 import {
   curvatureForEdge,
   linkEdgeShortLabel,
@@ -105,6 +105,11 @@ export function buildBackboneTopologyLayout(
   const hubId = findHubNodeId(graphNodes, graphEdges);
   applySpokePeerSeparation(hubId, graphEdges, posById);
 
+  const handlePairs = edgeHandlePairsForGraph(
+    topo.edges.map((e) => ({ source: e.source, target: e.target, key: e.id })),
+    posById,
+  );
+
   const nodes: Node[] = topo.nodes.map((n) => {
     const pos = posById.get(n.id)!;
     const vendorColor = vendorColors[n.vendor] || "#64748b";
@@ -136,7 +141,10 @@ export function buildBackboneTopologyLayout(
       const pct = link?.utilization_pct ?? e.utilization_pct ?? 0;
       const selected = highlightLinkId != null && link?.link_id === highlightLinkId;
       const color = backboneUtilColor(pct);
-      const handles = edgeHandlePairForLayout(e.source, e.target, posById);
+      const handles =
+        handlePairs.get(String(e.id)) ??
+        handlePairs.get(`${e.source}-${e.target}`) ??
+        edgeHandlePairForLayout(e.source, e.target, posById);
       return {
         id: `e-${link?.link_id ?? i}`,
         source: String(e.source),
@@ -169,7 +177,9 @@ export function buildBackboneTopologyLayout(
     if (e.type !== "logicalPeer") return e;
     const srcId = Number(e.source);
     const tgtId = Number(e.target);
-    const handles = edgeHandlePairForLayout(srcId, tgtId, posById);
+    const handles =
+      handlePairs.get(`${srcId}-${tgtId}`) ??
+      edgeHandlePairForLayout(srcId, tgtId, posById);
     return {
       ...e,
       sourceHandle: handles.sourceHandle,
