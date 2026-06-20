@@ -122,7 +122,15 @@ def _recent_interface_samples(
     ).scalars().all()
 
 
+def _sample_utilization_pct(sample, capacity_mbps: int) -> float:
+    """Recompute utilization from live counters and current contract bandwidth."""
+    cap = max(capacity_mbps, 1)
+    peak_mbps = max(sample.rx_mbps or 0.0, sample.tx_mbps or 0.0)
+    return round(peak_mbps / cap * 100, 2)
+
+
 def compute_link_health(db: Session, link: Link, limit: int = 20) -> LinkHealth:
+    cap = max(link.capacity_mbps, 1)
     utils: list[float] = []
     traffic = 0.0
     peak_sample = None
@@ -135,12 +143,12 @@ def compute_link_health(db: Session, link: Link, limit: int = 20) -> LinkHealth:
             continue
         for s in _recent_interface_samples(db, device_id, ifname, limit):
             if s.source in ("snmp-link", "simulated"):
-                utils.append(s.utilization_pct)
+                util = _sample_utilization_pct(s, cap)
+                utils.append(util)
                 traffic = max(traffic, s.rx_mbps + s.tx_mbps)
-                if s.utilization_pct >= peak_util:
-                    peak_util = s.utilization_pct
+                if util >= peak_util:
+                    peak_util = util
                     peak_sample = s
-    cap = max(link.capacity_mbps, 1)
     if not utils:
         return LinkHealth(
             link_id=link.id,
