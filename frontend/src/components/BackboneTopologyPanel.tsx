@@ -333,7 +333,7 @@ export default function BackboneTopologyPanel({ topo, links, loading }: Props) {
   const { tc } = useTc();
   const layout = useTopologyLayout();
   const hostRef = useRef<HTMLDivElement>(null);
-  const [size, setSize] = useState({ w: 960, h: 480 });
+  const [size, setSize] = useState({ w: 960, h: 960 });
   const [panelSearch, setPanelSearch] = useState("");
   const [utilTier, setUtilTier] = useState<UtilTier>("all");
   const [typeFilter, setTypeFilter] = useState<string | undefined>();
