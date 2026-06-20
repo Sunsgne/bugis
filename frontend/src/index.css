@@ -1218,8 +1218,9 @@ body {
   pointer-events: stroke;
 }
 
+/* Edges above nodes so inter-spoke links (e.g. TYO2–TYO3) are not hidden under cards */
 .device-graph-flow .react-flow__edges {
-  z-index: 2;
+  z-index: 4;
 }
 
 .device-graph-flow .react-flow__nodes {
