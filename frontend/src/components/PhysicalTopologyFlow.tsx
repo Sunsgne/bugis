@@ -22,7 +22,14 @@ import type { LinkUsage, Topology } from "@/api/types";
 import { useTc } from "@/i18n/useTc";
 import { backboneUtilColor, fmtLinkBw } from "@/utils/linkUtilization";
 import { layoutDeviceGraph, siteLabelForNode } from "@/utils/deviceGraphLayout";
+import {
+  curvatureForEdge,
+  linkEdgeShortLabel,
+  mergeTopologyEdges,
+  utilizationMarker,
+} from "@/utils/topologyEdges";
 import LinkUtilizationTooltipContent from "./LinkUtilizationTooltipContent";
+import LogicalPeerEdge from "./LogicalPeerEdge";
 
 const EDGE_STYLE: Record<string, { dash?: string; weight: number }> = {
   dci: { dash: "6 4", weight: 3 },
@@ -39,6 +46,7 @@ type EdgeData = {
   shortLabel: string;
   linkType: string;
   highlighted?: boolean;
+  curvature?: number;
 };
 
 function fmtG(mbps: number): string {
@@ -117,6 +125,7 @@ function UtilizationEdge({
     targetY,
     sourcePosition,
     targetPosition,
+    curvature: d?.curvature ?? 0.25,
   });
 
   return (
@@ -168,7 +177,7 @@ function UtilizationEdge({
 }
 
 const nodeTypes = { device: DeviceNode };
-const edgeTypes = { utilization: UtilizationEdge };
+const edgeTypes = { utilization: UtilizationEdge, logicalPeer: LogicalPeerEdge };
 
 function FitViewOnLayout({ layoutKey, skip }: { layoutKey: string; skip?: boolean }) {
   const { fitView } = useReactFlow();
@@ -187,6 +196,7 @@ function buildDeviceGraph(
   size: { w: number; h: number },
   linksById: Map<number, LinkUsage>,
   savedPositions: TopologyNodePositions,
+  tc: (zh: string) => string,
   highlightDeviceIds?: Set<number> | null,
   hoveredLinkId?: number | null,
 ): { nodes: Node[]; edges: Edge[] } {
@@ -232,12 +242,11 @@ function buildDeviceGraph(
   });
 
   const nodeIds = new Set(topo.nodes.map((n) => String(n.id)));
-  const edges: Edge[] = topo.edges
+  const utilizationEdges: Edge[] = topo.edges
     .filter((e) => nodeIds.has(String(e.source)) && nodeIds.has(String(e.target)))
     .map((e, i) => {
       const link = linksById.get(e.id);
       const util = link?.utilization_pct ?? e.utilization_pct ?? (e.capacity_mbps ? (e.reserved_mbps / e.capacity_mbps) * 100 : 0);
-      const color = backboneUtilColor(util);
       const highlighted = hoveredLinkId != null && link?.link_id === hoveredLinkId;
 
       return {
@@ -251,14 +260,18 @@ function buildDeviceGraph(
           link,
           utilization_pct: util,
           shortLabel: link
-            ? `${fmtLinkBw(link.capacity_mbps)} · ${Math.round(util)}%`
+            ? linkEdgeShortLabel(link, util)
             : `${fmtG(e.capacity_mbps)} · ${util.toFixed(0)}%`,
           linkType: e.type,
           highlighted,
+          curvature: curvatureForEdge(topo.edges, e.id),
         } satisfies EdgeData,
-        markerEnd: { type: MarkerType.ArrowClosed, color },
+        markerEnd: utilizationMarker(util),
       };
     });
+
+  const links = [...linksById.values()];
+  const edges = mergeTopologyEdges(utilizationEdges, links, nodeIds, tc);
 
   return { nodes, edges };
 }
@@ -311,8 +324,8 @@ export default function PhysicalTopologyFlow({
   const graphKey = `${size.w}x${size.h}-${topo.nodes.length}-${topo.edges.length}-${links.length}`;
 
   const { nodes, edges } = useMemo(
-    () => buildDeviceGraph(topo, size, linksById, positions, null, hoveredLinkId),
-    [topo, size, linksById, positions, hoveredLinkId],
+    () => buildDeviceGraph(topo, size, linksById, positions, tc, null, hoveredLinkId),
+    [topo, size, linksById, positions, tc, hoveredLinkId],
   );
 
   const onNodeDragStop = useCallback(
@@ -390,6 +403,13 @@ export default function PhysicalTopologyFlow({
         <span className="physical-topology-legend-item">
           <span className="physical-topology-legend-line" style={{ background: "#ef4444" }} />
           ≥85%
+        </span>
+        <span className="physical-topology-legend-item">
+          <span
+            className="physical-topology-legend-line"
+            style={{ background: "transparent", borderTop: "2px dashed #64748b", width: 18, height: 0 }}
+          />
+          {tc("同链路对端")}
         </span>
       </div>
     </div>

@@ -39,8 +39,15 @@ import type { LinkUsage, Topology } from "@/api/types";
 import { useTc } from "@/i18n/useTc";
 import { backboneUtilColor, fmtLinkBw, linkUtilizationLines } from "@/utils/linkUtilization";
 import { layoutDeviceGraph, siteLabelForNode } from "@/utils/deviceGraphLayout";
+import {
+  curvatureForEdge,
+  linkEdgeShortLabel,
+  mergeTopologyEdges,
+  utilizationMarker,
+} from "@/utils/topologyEdges";
 import LinkUtilizationTooltipContent from "./LinkUtilizationTooltipContent";
 import InterfaceNameCell from "./InterfaceNameCell";
+import LogicalPeerEdge from "./LogicalPeerEdge";
 import TopologyLayoutControls from "./TopologyLayoutControls";
 import { useTopologyLayout } from "@/hooks/useTopologyLayout";
 import type { TopologyNodePositions } from "./PhysicalTopologyFlow";
@@ -52,6 +59,7 @@ type EdgeData = {
   utilization_pct: number;
   shortLabel: string;
   highlighted?: boolean;
+  curvature?: number;
 };
 
 function shortHost(name: string, max = 26): string {
@@ -125,6 +133,7 @@ function UtilizationEdge({
     targetY,
     sourcePosition,
     targetPosition,
+    curvature: d?.curvature ?? 0.25,
   });
 
   return (
@@ -174,7 +183,7 @@ function UtilizationEdge({
 }
 
 const nodeTypes = { device: DeviceNode };
-const edgeTypes = { utilization: UtilizationEdge };
+const edgeTypes = { utilization: UtilizationEdge, logicalPeer: LogicalPeerEdge };
 
 function FitViewOnLayout({ layoutKey, skip }: { layoutKey: string; skip?: boolean }) {
   const { fitView } = useReactFlow();
@@ -218,6 +227,7 @@ function buildLayout(
   size: { w: number; h: number },
   linksById: Map<number, LinkUsage>,
   savedPositions: TopologyNodePositions,
+  tc: (zh: string) => string,
   highlightLinkId?: number | null,
   highlightDeviceId?: number | null,
 ): { nodes: Node[]; edges: Edge[] } {
@@ -274,7 +284,7 @@ function buildLayout(
   });
 
   const nodeIds = new Set(topo.nodes.map((n) => String(n.id)));
-  const edges: Edge[] = topo.edges
+  const utilizationEdges: Edge[] = topo.edges
     .filter((e) => nodeIds.has(String(e.source)) && nodeIds.has(String(e.target)))
     .map((e, i) => {
       const link = linksById.get(e.id) ?? linksById.get(Number(e.id));
@@ -288,15 +298,20 @@ function buildLayout(
         type: "utilization",
         animated: pct >= 85,
         selected,
+        interactionWidth: 24,
         data: {
           link,
           utilization_pct: pct,
-          shortLabel: `${fmtLinkBw(e.capacity_mbps)} · ${Math.round(pct)}%`,
+          shortLabel: link ? linkEdgeShortLabel(link, pct) : `${fmtLinkBw(e.capacity_mbps)} · ${Math.round(pct)}%`,
+          curvature: curvatureForEdge(topo.edges, e.id),
         } satisfies EdgeData,
-        markerEnd: { type: MarkerType.ArrowClosed, color },
+        markerEnd: utilizationMarker(pct),
         style: { stroke: color },
       };
     });
+
+  const links = [...linksById.values()];
+  const edges = mergeTopologyEdges(utilizationEdges, links, nodeIds, tc);
 
   return { nodes, edges };
 }
@@ -376,11 +391,12 @@ export default function BackboneTopologyPanel({ topo, links, loading }: Props) {
             size,
             linksById,
             layout.draftPositions,
+            tc,
             selectedLinkId,
             selectedDeviceId,
           )
         : { nodes: [], edges: [] },
-    [graphTopo, size, linksById, layout.draftPositions, selectedLinkId, selectedDeviceId],
+    [graphTopo, size, linksById, layout.draftPositions, tc, selectedLinkId, selectedDeviceId],
   );
 
   const [flowNodes, setFlowNodes] = useState<Node[]>(layoutNodes);
@@ -537,6 +553,13 @@ export default function BackboneTopologyPanel({ topo, links, loading }: Props) {
               <span className="backbone-legend-item">
                 <span className="backbone-legend-dot" style={{ background: "#ef4444" }} />
                 ≥85%
+              </span>
+              <span className="backbone-legend-item">
+                <span
+                  className="backbone-legend-line"
+                  style={{ background: "transparent", borderTop: "2px dashed #64748b", width: 18, height: 0 }}
+                />
+                {tc("同链路对端")}
               </span>
             </div>
           </div>

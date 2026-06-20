@@ -1501,6 +1501,29 @@ body {
   padding: 2px 6px;
   box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
   white-space: nowrap;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.backbone-logical-edge-label {
+  position: absolute;
+  pointer-events: none;
+  font-size: 9px;
+  font-weight: 500;
+  color: #64748b;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px dashed #94a3b8;
+  border-radius: 999px;
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+
+.backbone-legend-line {
+  display: inline-block;
+  width: 18px;
+  height: 3px;
+  border-radius: 2px;
 }
 
 .backbone-topology-sidebar {
