@@ -1211,6 +1211,11 @@ body {
 
 .device-graph-flow .react-flow__edge-path {
   filter: drop-shadow(0 1px 2px rgba(15, 23, 42, 0.12));
+  stroke-linecap: round;
+}
+
+.device-graph-flow .react-flow__edge .react-flow__edge-path {
+  pointer-events: stroke;
 }
 
 .device-graph-flow .react-flow__edges {

@@ -3,15 +3,16 @@ import {
   BaseEdge,
   Controls,
   EdgeLabelRenderer,
-  MarkerType,
   MiniMap,
   ReactFlow,
   getBezierPath,
+  useEdgesState,
+  useNodesInitialized,
+  useNodesState,
   useReactFlow,
   type Edge,
   type EdgeProps,
   type Node,
-  applyNodeChanges,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -30,6 +31,10 @@ import {
 } from "@/utils/topologyEdges";
 import LinkUtilizationTooltipContent from "./LinkUtilizationTooltipContent";
 import LogicalPeerEdge from "./LogicalPeerEdge";
+import DeviceGraphNode, {
+  DEVICE_GRAPH_NODE_HEIGHT,
+  DEVICE_GRAPH_NODE_WIDTH,
+} from "./DeviceGraphNode";
 
 const EDGE_STYLE: Record<string, { dash?: string; weight: number }> = {
   dci: { dash: "6 4", weight: 3 },
@@ -60,45 +65,7 @@ function shortHost(name: string, max = 28): string {
   return `${name.slice(0, head)}…${name.slice(-tail)}`;
 }
 
-function DeviceNode({
-  data,
-}: {
-  data: {
-    label: string;
-    fullName: string;
-    meta: string;
-    siteLabel?: string | null;
-    border: string;
-    online: boolean;
-    dimmed?: boolean;
-  };
-}) {
-  return (
-    <div
-      className="device-graph-node rounded-xl border-2 bg-white px-3 py-2.5 shadow-sm transition-all hover:shadow-md"
-      style={{
-        borderColor: data.border,
-        width: 220,
-        opacity: data.dimmed ? 0.35 : 1,
-      }}
-      title={data.fullName}
-    >
-      <div className="flex items-center gap-2">
-        <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${data.online ? "bg-emerald-500" : "bg-slate-300"}`} />
-        <span className="truncate text-sm font-semibold text-slate-800">{data.label}</span>
-        {data.siteLabel && (
-          <span className="ml-auto shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
-            {data.siteLabel}
-          </span>
-        )}
-      </div>
-      <div className="mt-1 truncate text-[11px] text-slate-500">{data.meta}</div>
-    </div>
-  );
-}
-
 function UtilizationEdge({
-  id,
   sourceX,
   sourceY,
   targetX,
@@ -107,7 +74,7 @@ function UtilizationEdge({
   targetPosition,
   data,
   selected,
-  markerEnd,
+  ...props
 }: EdgeProps) {
   const { tc } = useTc();
   const d = data as EdgeData | undefined;
@@ -116,8 +83,7 @@ function UtilizationEdge({
   const link = d?.link;
   const style = EDGE_STYLE[d?.linkType || "intra_dc"] || EDGE_STYLE.intra_dc;
   const [labelHover, setLabelHover] = useState(false);
-  const [edgeHover, setEdgeHover] = useState(false);
-  const showTooltip = Boolean(link && (edgeHover || labelHover || d?.highlighted));
+  const showTooltip = Boolean(link && (labelHover || d?.highlighted));
   const [edgePath, labelX, labelY] = getBezierPath({
     sourceX,
     sourceY,
@@ -130,20 +96,12 @@ function UtilizationEdge({
 
   return (
     <>
-      <path
-        d={edgePath}
-        fill="none"
-        stroke="transparent"
-        strokeWidth={24}
-        className="react-flow__edge-interaction backbone-edge-hit"
-        onMouseEnter={() => setEdgeHover(true)}
-        onMouseLeave={() => setEdgeHover(false)}
-      />
       <BaseEdge
-        id={id}
         path={edgePath}
-        markerEnd={markerEnd}
+        {...props}
+        interactionWidth={24}
         style={{
+          ...props.style,
           stroke: color,
           strokeWidth: selected ? style.weight + 1.5 : style.weight,
           strokeDasharray: style.dash,
@@ -176,18 +134,19 @@ function UtilizationEdge({
   );
 }
 
-const nodeTypes = { device: DeviceNode };
+const nodeTypes = { device: DeviceGraphNode };
 const edgeTypes = { utilization: UtilizationEdge, logicalPeer: LogicalPeerEdge };
 
-function FitViewOnLayout({ layoutKey, skip }: { layoutKey: string; skip?: boolean }) {
+function FitViewOnLayout({ layoutKey }: { layoutKey: string }) {
   const { fitView } = useReactFlow();
+  const nodesInitialized = useNodesInitialized({ includeHiddenNodes: false });
   useEffect(() => {
-    if (skip) return;
+    if (!nodesInitialized) return;
     const timer = window.setTimeout(() => {
       fitView({ padding: 0.12, maxZoom: 1.15, duration: 320 });
-    }, 80);
+    }, 120);
     return () => window.clearTimeout(timer);
-  }, [fitView, layoutKey, skip]);
+  }, [fitView, layoutKey, nodesInitialized]);
   return null;
 }
 
@@ -229,6 +188,8 @@ function buildDeviceGraph(
       id: String(n.id),
       type: "device",
       position: pos,
+      width: DEVICE_GRAPH_NODE_WIDTH,
+      height: DEVICE_GRAPH_NODE_HEIGHT,
       data: {
         label: shortHost(n.name),
         fullName: n.name,
@@ -298,7 +259,6 @@ export default function PhysicalTopologyFlow({
   const [size, setSize] = useState({ w: 960, h: 560 });
   const [positions, setPositions] = useState<TopologyNodePositions>(savedPositions);
   const [hoveredLinkId, setHoveredLinkId] = useState<number | null>(null);
-  const hasSavedLayout = Object.keys(savedPositions).length > 0;
 
   useEffect(() => {
     setPositions(savedPositions);
@@ -321,9 +281,9 @@ export default function PhysicalTopologyFlow({
 
   const linksById = useMemo(() => new Map(links.map((l) => [l.link_id, l])), [links]);
 
-  const graphKey = `${size.w}x${size.h}-${topo.nodes.length}-${topo.edges.length}-${links.length}`;
+  const graphKey = `${size.w}x${size.h}-${topo.nodes.length}-${topo.edges.length}-${links.length}-${Object.keys(positions).length}`;
 
-  const { nodes, edges } = useMemo(
+  const { nodes: layoutNodes, edges: layoutEdges } = useMemo(
     () => buildDeviceGraph(topo, size, linksById, positions, tc, null, hoveredLinkId),
     [topo, size, linksById, positions, tc, hoveredLinkId],
   );
@@ -339,24 +299,30 @@ export default function PhysicalTopologyFlow({
     [onPositionsChange, autoSave],
   );
 
-  const [flowNodes, setFlowNodes] = useState<Node[]>(nodes);
+  const [flowNodes, setFlowNodes, onNodesChange] = useNodesState<Node>(layoutNodes);
+  const [flowEdges, setFlowEdges, onEdgesChange] = useEdgesState<Edge>(layoutEdges);
+
   useEffect(() => {
-    setFlowNodes(nodes);
-  }, [nodes]);
+    setFlowNodes(layoutNodes);
+  }, [layoutNodes, setFlowNodes]);
+
+  useEffect(() => {
+    setFlowEdges(layoutEdges);
+  }, [layoutEdges, setFlowEdges]);
 
   return (
     <div ref={hostRef} className={["physical-topology-flow device-graph-flow", className].filter(Boolean).join(" ")}>
       <ReactFlow
         nodes={flowNodes}
-        edges={edges}
+        edges={flowEdges}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         nodesDraggable
         nodesConnectable={false}
         elementsSelectable
-        onNodesChange={(changes) => {
-          setFlowNodes((current) => applyNodeChanges(changes, current));
-        }}
+        elevateEdgesOnSelect
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
         onNodeDragStop={onNodeDragStop}
         onEdgeMouseEnter={(_, edge) => {
           const link = (edge.data as EdgeData | undefined)?.link;
@@ -369,7 +335,7 @@ export default function PhysicalTopologyFlow({
         maxZoom={1.6}
         proOptions={{ hideAttribution: true }}
       >
-        <FitViewOnLayout layoutKey={graphKey} skip={hasSavedLayout} />
+        <FitViewOnLayout layoutKey={graphKey} />
         <Background gap={24} size={1} color="#e2e8f0" />
         <Controls showInteractive={false} position="bottom-right" />
         <MiniMap

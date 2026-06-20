@@ -3,16 +3,16 @@ import {
   BaseEdge,
   Controls,
   EdgeLabelRenderer,
-  MarkerType,
   MiniMap,
   ReactFlow,
   getBezierPath,
+  useEdgesState,
+  useNodesInitialized,
+  useNodesState,
   useReactFlow,
   type Edge,
   type EdgeProps,
   type Node,
-  applyNodeChanges,
-  type NodeChange,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -33,22 +33,18 @@ import {
   Typography,
 } from "antd";
 import { ClearOutlined, SearchOutlined } from "@ant-design/icons";
-import { labelForOption, DEVICE_ROLE_OPTIONS } from "@/constants/formOptions";
-import { vendorColors } from "@/charts/theme";
 import type { LinkUsage, Topology } from "@/api/types";
 import { useTc } from "@/i18n/useTc";
-import { backboneUtilColor, fmtLinkBw, linkUtilizationLines } from "@/utils/linkUtilization";
-import { layoutDeviceGraph, siteLabelForNode } from "@/utils/deviceGraphLayout";
+import { backboneUtilColor, linkUtilizationLines } from "@/utils/linkUtilization";
 import {
-  curvatureForEdge,
-  linkEdgeShortLabel,
-  mergeTopologyEdges,
-  utilizationMarker,
-} from "@/utils/topologyEdges";
+  buildBackboneTopologyLayout as buildLayout,
+  buildFilteredTopo,
+} from "@/utils/backboneTopologyLayout";
 import LinkUtilizationTooltipContent from "./LinkUtilizationTooltipContent";
 import InterfaceNameCell from "./InterfaceNameCell";
 import LogicalPeerEdge from "./LogicalPeerEdge";
 import TopologyLayoutControls from "./TopologyLayoutControls";
+import DeviceGraphNode from "./DeviceGraphNode";
 import { useTopologyLayout } from "@/hooks/useTopologyLayout";
 import type { TopologyNodePositions } from "./PhysicalTopologyFlow";
 
@@ -69,45 +65,7 @@ function shortHost(name: string, max = 26): string {
   return `${name.slice(0, head)}…${name.slice(-tail)}`;
 }
 
-function DeviceNode({
-  data,
-}: {
-  data: {
-    label: string;
-    fullName: string;
-    meta: string;
-    siteLabel?: string | null;
-    border: string;
-    online: boolean;
-    dimmed?: boolean;
-  };
-}) {
-  return (
-    <div
-      className="device-graph-node rounded-xl border-2 bg-white px-3 py-2.5 shadow-sm transition-all hover:shadow-md"
-      style={{
-        borderColor: data.border,
-        width: 220,
-        opacity: data.dimmed ? 0.35 : 1,
-      }}
-      title={data.fullName}
-    >
-      <div className="flex items-center gap-2">
-        <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${data.online ? "bg-emerald-500" : "bg-slate-300"}`} />
-        <span className="truncate text-sm font-semibold text-slate-800">{data.label}</span>
-        {data.siteLabel && (
-          <span className="ml-auto shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
-            {data.siteLabel}
-          </span>
-        )}
-      </div>
-      <div className="mt-1 truncate text-[11px] text-slate-500">{data.meta}</div>
-    </div>
-  );
-}
-
 function UtilizationEdge({
-  id,
   sourceX,
   sourceY,
   targetX,
@@ -116,7 +74,7 @@ function UtilizationEdge({
   targetPosition,
   data,
   selected,
-  markerEnd,
+  ...props
 }: EdgeProps) {
   const { tc } = useTc();
   const d = data as EdgeData | undefined;
@@ -124,8 +82,7 @@ function UtilizationEdge({
   const color = backboneUtilColor(pct);
   const link = d?.link;
   const [labelHover, setLabelHover] = useState(false);
-  const [edgeHover, setEdgeHover] = useState(false);
-  const showTooltip = Boolean(link && (edgeHover || labelHover || d?.highlighted));
+  const showTooltip = Boolean(link && (labelHover || d?.highlighted));
   const [edgePath, labelX, labelY] = getBezierPath({
     sourceX,
     sourceY,
@@ -138,20 +95,12 @@ function UtilizationEdge({
 
   return (
     <>
-      <path
-        d={edgePath}
-        fill="none"
-        stroke="transparent"
-        strokeWidth={24}
-        className="react-flow__edge-interaction backbone-edge-hit"
-        onMouseEnter={() => setEdgeHover(true)}
-        onMouseLeave={() => setEdgeHover(false)}
-      />
       <BaseEdge
-        id={id}
         path={edgePath}
-        markerEnd={markerEnd}
+        {...props}
+        interactionWidth={24}
         style={{
+          ...props.style,
           stroke: color,
           strokeWidth: selected ? 4 : 2 + Math.min(pct / 40, 2.5),
           opacity: selected ? 1 : 0.92,
@@ -182,138 +131,20 @@ function UtilizationEdge({
   );
 }
 
-const nodeTypes = { device: DeviceNode };
+const nodeTypes = { device: DeviceGraphNode };
 const edgeTypes = { utilization: UtilizationEdge, logicalPeer: LogicalPeerEdge };
 
-function FitViewOnLayout({ layoutKey, skip }: { layoutKey: string; skip?: boolean }) {
+function FitViewOnLayout({ layoutKey }: { layoutKey: string }) {
   const { fitView } = useReactFlow();
+  const nodesInitialized = useNodesInitialized({ includeHiddenNodes: false });
   useEffect(() => {
-    if (skip) return;
+    if (!nodesInitialized) return;
     const timer = window.setTimeout(() => {
-      fitView({ padding: 0.1, maxZoom: 1.05, duration: 320 });
-    }, 80);
+      fitView({ padding: 0.14, maxZoom: 1.05, duration: 320 });
+    }, 120);
     return () => window.clearTimeout(timer);
-  }, [fitView, layoutKey, skip]);
+  }, [fitView, layoutKey, nodesInitialized]);
   return null;
-}
-
-function buildFilteredTopo(topo: Topology, links: LinkUsage[]): Topology {
-  if (!links.length) {
-    return { ...topo, edges: [] };
-  }
-  const deviceIds = new Set<number>();
-  for (const l of links) {
-    deviceIds.add(l.device_a_id);
-    deviceIds.add(l.device_z_id);
-  }
-  return {
-    sites: topo.sites,
-    nodes: topo.nodes.filter((n) => deviceIds.has(n.id)),
-    edges: links.map((l) => ({
-      id: l.link_id,
-      name: l.name,
-      type: l.type,
-      source: l.device_a_id,
-      target: l.device_z_id,
-      capacity_mbps: l.capacity_mbps,
-      reserved_mbps: l.reserved_mbps,
-      utilization_pct: l.utilization_pct,
-    })),
-  };
-}
-
-function buildLayout(
-  topo: Topology,
-  size: { w: number; h: number },
-  linksById: Map<number, LinkUsage>,
-  savedPositions: TopologyNodePositions,
-  tc: (zh: string) => string,
-  highlightLinkId?: number | null,
-  highlightDeviceId?: number | null,
-): { nodes: Node[]; edges: Edge[] } {
-  const autoPositions = layoutDeviceGraph(
-    topo.nodes.map((n) => ({ id: n.id, site_id: n.site_id })),
-    topo.edges.map((e) => ({ source: e.source, target: e.target })),
-    size.w,
-    size.h,
-  );
-
-  const connectedDevices = new Set<number>();
-  for (const e of topo.edges) {
-    connectedDevices.add(e.source);
-    connectedDevices.add(e.target);
-  }
-  if (highlightLinkId != null) {
-    const link = linksById.get(highlightLinkId);
-    if (link) {
-      connectedDevices.add(link.device_a_id);
-      connectedDevices.add(link.device_z_id);
-    }
-  }
-
-  const highlightSet = new Set<number>();
-  if (highlightDeviceId != null) {
-    highlightSet.add(highlightDeviceId);
-    for (const id of connectedDevices) highlightSet.add(id);
-  } else if (highlightLinkId != null) {
-    for (const id of connectedDevices) highlightSet.add(id);
-  }
-
-  const dimActive = highlightSet.size > 0;
-
-  const nodes: Node[] = topo.nodes.map((n) => {
-    const saved = savedPositions[String(n.id)];
-    const pos = saved ?? autoPositions.get(n.id) ?? { x: 0, y: 0 };
-    const vendorColor = vendorColors[n.vendor] || "#64748b";
-    const dimmed = dimActive ? !highlightSet.has(n.id) : false;
-
-    return {
-      id: String(n.id),
-      type: "device",
-      position: pos,
-      data: {
-        label: shortHost(n.name),
-        fullName: n.name,
-        siteLabel: siteLabelForNode(n.site_id, topo.sites),
-        meta: `${n.vendor.toUpperCase()} · ${labelForOption(DEVICE_ROLE_OPTIONS, n.role)}`,
-        border: vendorColor,
-        online: n.status === "online",
-        dimmed,
-      },
-    };
-  });
-
-  const nodeIds = new Set(topo.nodes.map((n) => String(n.id)));
-  const utilizationEdges: Edge[] = topo.edges
-    .filter((e) => nodeIds.has(String(e.source)) && nodeIds.has(String(e.target)))
-    .map((e, i) => {
-      const link = linksById.get(e.id) ?? linksById.get(Number(e.id));
-      const pct = link?.utilization_pct ?? e.utilization_pct ?? 0;
-      const selected = highlightLinkId != null && link?.link_id === highlightLinkId;
-      const color = backboneUtilColor(pct);
-      return {
-        id: `e-${link?.link_id ?? i}`,
-        source: String(e.source),
-        target: String(e.target),
-        type: "utilization",
-        animated: pct >= 85,
-        selected,
-        interactionWidth: 24,
-        data: {
-          link,
-          utilization_pct: pct,
-          shortLabel: link ? linkEdgeShortLabel(link, pct) : `${fmtLinkBw(e.capacity_mbps)} · ${Math.round(pct)}%`,
-          curvature: curvatureForEdge(topo.edges, e.id),
-        } satisfies EdgeData,
-        markerEnd: utilizationMarker(pct),
-        style: { stroke: color },
-      };
-    });
-
-  const links = [...linksById.values()];
-  const edges = mergeTopologyEdges(utilizationEdges, links, nodeIds, tc);
-
-  return { nodes, edges };
 }
 
 function tierMatch(pct: number, tier: UtilTier): boolean {
@@ -399,16 +230,20 @@ export default function BackboneTopologyPanel({ topo, links, loading }: Props) {
     [graphTopo, size, linksById, layout.draftPositions, tc, selectedLinkId, selectedDeviceId],
   );
 
-  const [flowNodes, setFlowNodes] = useState<Node[]>(layoutNodes);
+  const [flowNodes, setFlowNodes, onNodesChange] = useNodesState<Node>(layoutNodes);
+  const [flowEdges, setFlowEdges, onEdgesChange] = useEdgesState<Edge>(layoutEdges);
+
   useEffect(() => {
     setFlowNodes(layoutNodes);
-  }, [layoutNodes]);
+  }, [layoutNodes, setFlowNodes]);
 
-  const hasSavedLayout = Object.keys(layout.draftPositions).length > 0;
+  useEffect(() => {
+    setFlowEdges(layoutEdges);
+  }, [layoutEdges, setFlowEdges]);
 
-  const edges = useMemo(
+  const displayEdges = useMemo(
     () =>
-      layoutEdges.map((e) => {
+      flowEdges.map((e) => {
         const link = (e.data as EdgeData | undefined)?.link;
         return {
           ...e,
@@ -419,10 +254,10 @@ export default function BackboneTopologyPanel({ topo, links, loading }: Props) {
           },
         };
       }),
-    [layoutEdges, hoveredLink],
+    [flowEdges, hoveredLink],
   );
 
-  const layoutKey = `${size.w}x${size.h}-${layoutNodes.length}-${edges.length}-${selectedLinkId}-${selectedDeviceId}`;
+  const layoutKey = `${size.w}x${size.h}-${layoutNodes.length}-${displayEdges.length}-${selectedLinkId}-${selectedDeviceId}-${Object.keys(layout.draftPositions).length}`;
 
   const selectedLink = selectedLinkId != null ? linksById.get(selectedLinkId) : null;
   const detailLink = hoveredLink ?? selectedLink;
@@ -455,15 +290,15 @@ export default function BackboneTopologyPanel({ topo, links, loading }: Props) {
             {graphTopo && graphTopo.nodes.length > 0 ? (
               <ReactFlow
                 nodes={flowNodes}
-                edges={edges}
+                edges={displayEdges}
                 nodeTypes={nodeTypes}
                 edgeTypes={edgeTypes}
                 nodesDraggable
                 nodesConnectable={false}
                 elementsSelectable
-                onNodesChange={(changes: NodeChange[]) => {
-                  setFlowNodes((current) => applyNodeChanges(changes, current));
-                }}
+                elevateEdgesOnSelect
+                onNodesChange={onNodesChange}
+                onEdgesChange={onEdgesChange}
                 onNodeDragStop={(_, node) => {
                   setFlowNodes((current) => {
                     const next: TopologyNodePositions = {};
@@ -500,7 +335,7 @@ export default function BackboneTopologyPanel({ topo, links, loading }: Props) {
                 maxZoom={1.5}
                 proOptions={{ hideAttribution: true }}
               >
-                <FitViewOnLayout layoutKey={layoutKey} skip={hasSavedLayout} />
+                <FitViewOnLayout layoutKey={layoutKey} />
                 <Background gap={20} size={1} color="#e2e8f0" />
                 <Controls showInteractive={false} position="bottom-right" />
                 <MiniMap
