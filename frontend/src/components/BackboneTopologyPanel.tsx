@@ -113,9 +113,9 @@ function UtilizationEdge({
           <Tooltip
             open={showTooltip}
             placement="top"
-            mouseEnterDelay={0.15}
-            overlayStyle={{ maxWidth: 420 }}
-            title={link ? <LinkUtilizationTooltipContent link={link} pct={pct} tc={tc} /> : undefined}
+          mouseEnterDelay={0.15}
+          overlayClassName="link-util-tooltip-overlay"
+          title={link ? <LinkUtilizationTooltipContent link={link} pct={pct} tc={tc} /> : undefined}
           >
             <div
               className="backbone-edge-label nodrag nopan is-visible"

@@ -115,7 +115,7 @@ function UtilizationEdge({
             open={showTooltip}
             placement="top"
             mouseEnterDelay={0.15}
-            overlayStyle={{ maxWidth: 420 }}
+            overlayClassName="link-util-tooltip-overlay"
             title={link ? <LinkUtilizationTooltipContent link={link} pct={pct} tc={tc} /> : undefined}
           >
             <div

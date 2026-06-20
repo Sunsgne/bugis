@@ -380,7 +380,10 @@ export default function Capacity() {
               defaultSortOrder: "descend",
               sorter: (a, b) => a.utilization_pct - b.utilization_pct,
               render: (v: number, r) => (
-                <Tooltip title={<LinkUtilizationTooltipContent link={r} pct={v} tc={tc} />}>
+                <Tooltip
+                  overlayClassName="link-util-tooltip-overlay"
+                  title={<LinkUtilizationTooltipContent link={r} pct={v} tc={tc} />}
+                >
                   <Progress
                     percent={Math.round(v)}
                     size="small"
