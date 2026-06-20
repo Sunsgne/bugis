@@ -1428,6 +1428,23 @@ body {
   height: 100%;
 }
 
+.backbone-topology-layout-bar {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  z-index: 6;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 999px;
+  backdrop-filter: blur(6px);
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
+}
+
 .backbone-topology-hint {
   position: absolute;
   top: 12px;

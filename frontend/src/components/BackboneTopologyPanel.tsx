@@ -11,6 +11,8 @@ import {
   type Edge,
   type EdgeProps,
   type Node,
+  applyNodeChanges,
+  type NodeChange,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -39,6 +41,9 @@ import { backboneUtilColor, fmtLinkBw, linkUtilizationLines } from "@/utils/link
 import { layoutDeviceGraph, siteLabelForNode } from "@/utils/deviceGraphLayout";
 import LinkUtilizationTooltipContent from "./LinkUtilizationTooltipContent";
 import InterfaceNameCell from "./InterfaceNameCell";
+import TopologyLayoutControls from "./TopologyLayoutControls";
+import { useTopologyLayout } from "@/hooks/useTopologyLayout";
+import type { TopologyNodePositions } from "./PhysicalTopologyFlow";
 
 type UtilTier = "all" | "healthy" | "warning" | "critical";
 
@@ -171,14 +176,15 @@ function UtilizationEdge({
 const nodeTypes = { device: DeviceNode };
 const edgeTypes = { utilization: UtilizationEdge };
 
-function FitViewOnLayout({ layoutKey }: { layoutKey: string }) {
+function FitViewOnLayout({ layoutKey, skip }: { layoutKey: string; skip?: boolean }) {
   const { fitView } = useReactFlow();
   useEffect(() => {
+    if (skip) return;
     const timer = window.setTimeout(() => {
       fitView({ padding: 0.1, maxZoom: 1.05, duration: 320 });
     }, 80);
     return () => window.clearTimeout(timer);
-  }, [fitView, layoutKey]);
+  }, [fitView, layoutKey, skip]);
   return null;
 }
 
@@ -211,10 +217,11 @@ function buildLayout(
   topo: Topology,
   size: { w: number; h: number },
   linksById: Map<number, LinkUsage>,
+  savedPositions: TopologyNodePositions,
   highlightLinkId?: number | null,
   highlightDeviceId?: number | null,
 ): { nodes: Node[]; edges: Edge[] } {
-  const positions = layoutDeviceGraph(
+  const autoPositions = layoutDeviceGraph(
     topo.nodes.map((n) => ({ id: n.id, site_id: n.site_id })),
     topo.edges.map((e) => ({ source: e.source, target: e.target })),
     size.w,
@@ -245,7 +252,8 @@ function buildLayout(
   const dimActive = highlightSet.size > 0;
 
   const nodes: Node[] = topo.nodes.map((n) => {
-    const pos = positions.get(n.id) ?? { x: 0, y: 0 };
+    const saved = savedPositions[String(n.id)];
+    const pos = saved ?? autoPositions.get(n.id) ?? { x: 0, y: 0 };
     const vendorColor = vendorColors[n.vendor] || "#64748b";
     const dimmed = dimActive ? !highlightSet.has(n.id) : false;
 
@@ -308,6 +316,7 @@ type Props = {
 
 export default function BackboneTopologyPanel({ topo, links, loading }: Props) {
   const { tc } = useTc();
+  const layout = useTopologyLayout();
   const hostRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 960, h: 480 });
   const [panelSearch, setPanelSearch] = useState("");
@@ -316,6 +325,10 @@ export default function BackboneTopologyPanel({ topo, links, loading }: Props) {
   const [selectedLinkId, setSelectedLinkId] = useState<number | null>(null);
   const [selectedDeviceId, setSelectedDeviceId] = useState<number | null>(null);
   const [hoveredLink, setHoveredLink] = useState<LinkUsage | null>(null);
+
+  useEffect(() => {
+    void layout.loadLayout();
+  }, []);
 
   useEffect(() => {
     const el = hostRef.current;
@@ -355,13 +368,27 @@ export default function BackboneTopologyPanel({ topo, links, loading }: Props) {
     [topo, panelFilteredLinks],
   );
 
-  const { nodes, edges: layoutEdges } = useMemo(
+  const { nodes: layoutNodes, edges: layoutEdges } = useMemo(
     () =>
       graphTopo
-        ? buildLayout(graphTopo, size, linksById, selectedLinkId, selectedDeviceId)
+        ? buildLayout(
+            graphTopo,
+            size,
+            linksById,
+            layout.draftPositions,
+            selectedLinkId,
+            selectedDeviceId,
+          )
         : { nodes: [], edges: [] },
-    [graphTopo, size, linksById, selectedLinkId, selectedDeviceId],
+    [graphTopo, size, linksById, layout.draftPositions, selectedLinkId, selectedDeviceId],
   );
+
+  const [flowNodes, setFlowNodes] = useState<Node[]>(layoutNodes);
+  useEffect(() => {
+    setFlowNodes(layoutNodes);
+  }, [layoutNodes]);
+
+  const hasSavedLayout = Object.keys(layout.draftPositions).length > 0;
 
   const edges = useMemo(
     () =>
@@ -379,7 +406,7 @@ export default function BackboneTopologyPanel({ topo, links, loading }: Props) {
     [layoutEdges, hoveredLink],
   );
 
-  const layoutKey = `${size.w}x${size.h}-${nodes.length}-${edges.length}-${selectedLinkId}-${selectedDeviceId}`;
+  const layoutKey = `${size.w}x${size.h}-${layoutNodes.length}-${edges.length}-${selectedLinkId}-${selectedDeviceId}`;
 
   const selectedLink = selectedLinkId != null ? linksById.get(selectedLinkId) : null;
   const detailLink = hoveredLink ?? selectedLink;
@@ -411,13 +438,27 @@ export default function BackboneTopologyPanel({ topo, links, loading }: Props) {
           <div ref={hostRef} className="backbone-topology-canvas device-graph-flow">
             {graphTopo && graphTopo.nodes.length > 0 ? (
               <ReactFlow
-                nodes={nodes}
+                nodes={flowNodes}
                 edges={edges}
                 nodeTypes={nodeTypes}
                 edgeTypes={edgeTypes}
-                nodesDraggable={false}
+                nodesDraggable
                 nodesConnectable={false}
                 elementsSelectable
+                onNodesChange={(changes: NodeChange[]) => {
+                  setFlowNodes((current) => applyNodeChanges(changes, current));
+                }}
+                onNodeDragStop={(_, node) => {
+                  setFlowNodes((current) => {
+                    const next: TopologyNodePositions = {};
+                    for (const n of current) {
+                      next[n.id] = n.id === node.id ? node.position : n.position;
+                    }
+                    next[node.id] = node.position;
+                    layout.handlePositionsChange(next, { autoSave: layout.autoSave });
+                    return current.map((n) => (n.id === node.id ? { ...n, position: node.position } : n));
+                  });
+                }}
                 onNodeClick={(_, node) => {
                   if (node.type === "device") {
                     setSelectedDeviceId(Number(node.id));
@@ -443,7 +484,7 @@ export default function BackboneTopologyPanel({ topo, links, loading }: Props) {
                 maxZoom={1.5}
                 proOptions={{ hideAttribution: true }}
               >
-                <FitViewOnLayout layoutKey={layoutKey} />
+                <FitViewOnLayout layoutKey={layoutKey} skip={hasSavedLayout} />
                 <Background gap={20} size={1} color="#e2e8f0" />
                 <Controls showInteractive={false} position="bottom-right" />
                 <MiniMap
@@ -466,6 +507,18 @@ export default function BackboneTopologyPanel({ topo, links, loading }: Props) {
                 />
               </div>
             )}
+
+            <div className="backbone-topology-layout-bar">
+              <TopologyLayoutControls
+                compact
+                layoutDirty={layout.layoutDirty}
+                saving={layout.saving}
+                autoSave={layout.autoSave}
+                onAutoSaveChange={layout.toggleAutoSave}
+                onSave={() => layout.saveLayout()}
+                onReset={() => layout.resetLayout()}
+              />
+            </div>
 
             <div className="backbone-topology-hint">
               {tc("滚轮缩放 · 拖拽平移")} · {graphTopo?.nodes.length ?? 0} {tc("台设备")} ·{" "}

@@ -267,7 +267,8 @@ type Props = {
   topo: Topology;
   links: LinkUsage[];
   savedPositions: TopologyNodePositions;
-  onPositionsChange?: (positions: TopologyNodePositions) => void;
+  autoSave?: boolean;
+  onPositionsChange?: (positions: TopologyNodePositions, options?: { autoSave?: boolean }) => void;
   className?: string;
 };
 
@@ -275,6 +276,7 @@ export default function PhysicalTopologyFlow({
   topo,
   links,
   savedPositions,
+  autoSave = false,
   onPositionsChange,
   className,
 }: Props) {
@@ -317,11 +319,11 @@ export default function PhysicalTopologyFlow({
     (_: unknown, node: Node) => {
       setPositions((prev) => {
         const next = { ...prev, [node.id]: node.position };
-        onPositionsChange?.(next);
+        onPositionsChange?.(next, { autoSave });
         return next;
       });
     },
-    [onPositionsChange],
+    [onPositionsChange, autoSave],
   );
 
   const [flowNodes, setFlowNodes] = useState<Node[]>(nodes);
