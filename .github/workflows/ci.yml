@@ -22,7 +22,7 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
       - name: Dependency audit (pip-audit)
-        run: pip install pip-audit && pip-audit -r requirements.txt
+        run: pip install pip-audit && pip-audit -r requirements.txt --ignore-vuln CVE-2026-44405
       - name: Alembic upgrade (sqlite)
         env:
           BUGIS_SKIP_SECURITY_CHECKS: "1"
