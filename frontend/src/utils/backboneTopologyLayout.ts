@@ -8,7 +8,6 @@ import {
   curvatureForEdge,
   linkEdgeShortLabel,
   mergeTopologyEdges,
-  utilizationMarker,
 } from "@/utils/topologyEdges";
 import {
   DEVICE_GRAPH_NODE_HEIGHT,
@@ -148,7 +147,6 @@ export function buildBackboneTopologyLayout(
           shortLabel: link ? linkEdgeShortLabel(link, pct) : `${fmtLinkBw(e.capacity_mbps)} · ${Math.round(pct)}%`,
           curvature: curvatureForEdge(topo.edges, e.id),
         } satisfies EdgeData,
-        markerEnd: utilizationMarker(pct),
         style: { stroke: color },
       };
     });

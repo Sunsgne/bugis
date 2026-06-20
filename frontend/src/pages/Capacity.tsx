@@ -271,7 +271,7 @@ export default function Capacity() {
           </Space>
         }
       >
-        <BackboneTopologyPanel topo={topo} links={filteredLinks} loading={loading} />
+        <BackboneTopologyPanel topo={topo} links={links} loading={loading} />
         <Alert
           type="info"
           showIcon
@@ -494,7 +494,9 @@ export default function Capacity() {
         devices={devices}
         editLink={editingLink}
         onClose={closeLinkModal}
-        onSaved={load}
+        onSaved={async () => {
+          await load(false);
+        }}
       />
     </div>
   );

@@ -27,7 +27,6 @@ import {
   curvatureForEdge,
   linkEdgeShortLabel,
   mergeTopologyEdges,
-  utilizationMarker,
 } from "@/utils/topologyEdges";
 import LinkUtilizationTooltipContent from "./LinkUtilizationTooltipContent";
 import LogicalPeerEdge from "./LogicalPeerEdge";
@@ -235,7 +234,6 @@ function buildDeviceGraph(
           highlighted,
           curvature: curvatureForEdge(topo.edges, e.id),
         } satisfies EdgeData,
-        markerEnd: utilizationMarker(util),
       };
     });
 

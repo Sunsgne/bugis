@@ -1,8 +1,19 @@
 import type { Edge } from "@xyflow/react";
-import { MarkerType } from "@xyflow/react";
 import type { LinkUsage } from "@/api/types";
-import { backboneUtilColor, fmtLinkBw } from "@/utils/linkUtilization";
+import { fmtLinkBw } from "@/utils/linkUtilization";
 import { formatInterfaceShort } from "@/utils/networkDisplay";
+
+export function devicePairKey(a: number, b: number): string {
+  return `${Math.min(a, b)}-${Math.max(a, b)}`;
+}
+
+export function realLinkPairKeys(links: LinkUsage[]): Set<string> {
+  const pairs = new Set<string>();
+  for (const l of links) {
+    pairs.add(devicePairKey(l.device_a_id, l.device_z_id));
+  }
+  return pairs;
+}
 
 export function linkVlanLabel(iface?: string | null): string | null {
   if (!iface) return null;
@@ -60,6 +71,7 @@ export function buildLogicalPeerEdges(
   links: LinkUsage[],
   nodeIds: Set<string>,
   tc: (zh: string) => string,
+  realPairs: Set<string> = realLinkPairKeys(links),
 ): Edge[] {
   const byName = new Map<string, LinkUsage[]>();
   for (const l of links) {
@@ -77,10 +89,13 @@ export function buildLogicalPeerEdges(
 
     for (let i = 0; i < zIds.length; i += 1) {
       for (let j = i + 1; j < zIds.length; j += 1) {
-        const a = String(zIds[i]);
-        const b = String(zIds[j]);
+        const aId = zIds[i];
+        const bId = zIds[j];
+        if (realPairs.has(devicePairKey(aId, bId))) continue;
+        const a = String(aId);
+        const b = String(bId);
         if (!nodeIds.has(a) || !nodeIds.has(b)) continue;
-        const id = `logical-${Math.min(zIds[i], zIds[j])}-${Math.max(zIds[i], zIds[j])}-${name}`;
+        const id = `logical-${Math.min(aId, bId)}-${Math.max(aId, bId)}-${name}`;
         edges.push({
           id,
           source: a,
@@ -107,10 +122,9 @@ export function mergeTopologyEdges(
   nodeIds: Set<string>,
   tc: (zh: string) => string,
 ): Edge[] {
-  return [...buildLogicalPeerEdges(links, nodeIds, tc), ...utilizationEdges.map((e) => ({ ...e, zIndex: 1 }))];
-}
-
-export function utilizationMarker(pct: number) {
-  const color = backboneUtilColor(pct);
-  return { type: MarkerType.ArrowClosed, color };
+  const realPairs = realLinkPairKeys(links);
+  return [
+    ...buildLogicalPeerEdges(links, nodeIds, tc, realPairs),
+    ...utilizationEdges.map((e) => ({ ...e, zIndex: 1 })),
+  ];
 }

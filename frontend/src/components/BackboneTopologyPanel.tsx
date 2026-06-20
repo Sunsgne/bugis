@@ -195,8 +195,6 @@ export default function BackboneTopologyPanel({ topo, links, loading }: Props) {
     return () => ro.disconnect();
   }, []);
 
-  const linksById = useMemo(() => new Map(links.map((l) => [l.link_id, l])), [links]);
-
   const panelFilteredLinks = useMemo(() => {
     const q = panelSearch.trim().toLowerCase();
     return links.filter((l) => {
@@ -212,6 +210,11 @@ export default function BackboneTopologyPanel({ topo, links, loading }: Props) {
       );
     });
   }, [links, panelSearch, utilTier, typeFilter]);
+
+  const linksById = useMemo(
+    () => new Map(panelFilteredLinks.map((l) => [l.link_id, l])),
+    [panelFilteredLinks],
+  );
 
   const graphTopo = useMemo(
     () => (topo ? buildFilteredTopo(topo, panelFilteredLinks) : null),
@@ -245,6 +248,11 @@ export default function BackboneTopologyPanel({ topo, links, loading }: Props) {
     setFlowEdges(layoutEdges);
   }, [layoutEdges, setFlowEdges]);
 
+  const graphRevision = useMemo(
+    () => layoutEdges.map((e) => e.id).sort().join("|"),
+    [layoutEdges],
+  );
+
   const displayEdges = useMemo(
     () =>
       flowEdges.map((e) => {
@@ -261,7 +269,7 @@ export default function BackboneTopologyPanel({ topo, links, loading }: Props) {
     [flowEdges, hoveredLink],
   );
 
-  const layoutKey = `${size.w}x${size.h}-${layoutNodes.length}-${displayEdges.length}-${selectedLinkId}-${selectedDeviceId}-${Object.keys(layout.draftPositions).length}`;
+  const layoutKey = `${size.w}x${size.h}-${layoutNodes.length}-${graphRevision}-${selectedLinkId}-${selectedDeviceId}-${Object.keys(layout.draftPositions).length}`;
 
   const selectedLink = selectedLinkId != null ? linksById.get(selectedLinkId) : null;
   const detailLink = hoveredLink ?? selectedLink;
@@ -293,6 +301,7 @@ export default function BackboneTopologyPanel({ topo, links, loading }: Props) {
           <div ref={hostRef} className="backbone-topology-canvas device-graph-flow">
             {graphTopo && graphTopo.nodes.length > 0 ? (
               <ReactFlow
+                key={graphRevision}
                 nodes={flowNodes}
                 edges={displayEdges}
                 nodeTypes={nodeTypes}

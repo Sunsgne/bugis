@@ -103,3 +103,47 @@ if (spreadX < 280) {
 }
 
 console.log("topology edge verification passed");
+
+// Real TYO2↔TYO3 link replaces dashed logical peer edge
+const linksWithDirect: LinkUsage[] = [
+  ...links,
+  {
+    link_id: 3,
+    name: "TYO-TYO",
+    type: "dci",
+    supplier: "ZENLAYER",
+    device_a_id: 20,
+    device_z_id: 30,
+    device_a: "cs-1.tyo2",
+    device_z: "cs-2.tyo3",
+    site_a_id: 2,
+    site_z_id: 3,
+    site_a_code: "TYO2",
+    site_z_code: "TYO3",
+    capacity_mbps: 1000,
+    reserved_mbps: 0,
+    utilization_pct: 5,
+  },
+];
+
+const filteredDirect = buildFilteredTopo(topo, linksWithDirect);
+const layoutDirect = buildBackboneTopologyLayout(
+  filteredDirect,
+  { w: 960, h: 1040 },
+  new Map(linksWithDirect.map((l) => [l.link_id, l])),
+  {},
+  tc,
+);
+const utilDirect = layoutDirect.edges.filter((e) => e.type === "utilization");
+const peerDirect = layoutDirect.edges.filter((e) => e.type === "logicalPeer");
+
+if (utilDirect.length !== 3) {
+  console.error(`Expected 3 utilization edges with direct TYO2-TYO3 link, got ${utilDirect.length}`);
+  process.exit(1);
+}
+if (peerDirect.length !== 0) {
+  console.error("Logical peer edge should be omitted when a real link exists between TYO2 and TYO3");
+  process.exit(1);
+}
+
+console.log("direct link replaces logical peer — passed");
