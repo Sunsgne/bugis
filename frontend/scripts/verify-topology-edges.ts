@@ -87,4 +87,19 @@ for (const e of utilEdges) {
   }
 }
 
+const xs = nodes.map((n) => n.position.x);
+const ys = nodes.map((n) => n.position.y);
+const spreadX = Math.max(...xs) - Math.min(...xs);
+const spreadY = Math.max(...ys) - Math.min(...ys);
+console.log(`layout spread: ${Math.round(spreadX)}x${Math.round(spreadY)}`);
+
+if (spreadX > 900 || spreadY > 900) {
+  console.error("Layout too sparse — nodes spread too far apart");
+  process.exit(1);
+}
+if (spreadX < 280) {
+  console.error("Layout too tight — nodes overlapping");
+  process.exit(1);
+}
+
 console.log("topology edge verification passed");

@@ -22,7 +22,7 @@ import { vendorColors } from "@/charts/theme";
 import type { LinkUsage, Topology } from "@/api/types";
 import { useTc } from "@/i18n/useTc";
 import { backboneUtilColor, fmtLinkBw } from "@/utils/linkUtilization";
-import { layoutDeviceGraph, siteLabelForNode } from "@/utils/deviceGraphLayout";
+import { layoutDeviceGraph, siteLabelForNode, edgeHandlesForLayout } from "@/utils/deviceGraphLayout";
 import {
   curvatureForEdge,
   linkEdgeShortLabel,
@@ -83,7 +83,8 @@ function UtilizationEdge({
   const link = d?.link;
   const style = EDGE_STYLE[d?.linkType || "intra_dc"] || EDGE_STYLE.intra_dc;
   const [labelHover, setLabelHover] = useState(false);
-  const showTooltip = Boolean(link && (labelHover || d?.highlighted));
+  const showTooltip = labelHover;
+  const showLabel = labelHover || d?.highlighted;
   const [edgePath, labelX, labelY] = getBezierPath({
     sourceX,
     sourceY,
@@ -91,7 +92,7 @@ function UtilizationEdge({
     targetY,
     sourcePosition,
     targetPosition,
-    curvature: d?.curvature ?? 0.25,
+    curvature: d?.curvature ?? 0.18,
   });
 
   return (
@@ -99,27 +100,29 @@ function UtilizationEdge({
       <BaseEdge
         path={edgePath}
         {...props}
-        interactionWidth={24}
+        interactionWidth={20}
         style={{
           ...props.style,
           stroke: color,
-          strokeWidth: selected ? style.weight + 1.5 : style.weight,
+          strokeWidth: selected || d?.highlighted ? style.weight + 1.5 : style.weight,
           strokeDasharray: style.dash,
+          strokeLinecap: "round",
+          opacity: d?.highlighted ? 1 : 0.88,
         }}
       />
-      {d?.shortLabel && (
+      {d?.shortLabel && showLabel ? (
         <EdgeLabelRenderer>
           <Tooltip
             open={showTooltip}
             placement="top"
-            mouseEnterDelay={0.12}
+            mouseEnterDelay={0.15}
             overlayStyle={{ maxWidth: 420 }}
             title={link ? <LinkUtilizationTooltipContent link={link} pct={pct} tc={tc} /> : undefined}
           >
             <div
-              className="physical-topology-edge-label backbone-edge-label nodrag nopan"
+              className="physical-topology-edge-label backbone-edge-label nodrag nopan is-visible"
               style={{
-                transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
+                transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
                 borderColor: color,
               }}
               onMouseEnter={() => setLabelHover(true)}
@@ -129,7 +132,7 @@ function UtilizationEdge({
             </div>
           </Tooltip>
         </EdgeLabelRenderer>
-      )}
+      ) : null}
     </>
   );
 }
@@ -143,7 +146,7 @@ function FitViewOnLayout({ layoutKey }: { layoutKey: string }) {
   useEffect(() => {
     if (!nodesInitialized) return;
     const timer = window.setTimeout(() => {
-      fitView({ padding: 0.12, maxZoom: 1.15, duration: 320 });
+      fitView({ padding: 0.06, maxZoom: 1.35, duration: 280 });
     }, 120);
     return () => window.clearTimeout(timer);
   }, [fitView, layoutKey, nodesInitialized]);
@@ -166,7 +169,6 @@ function buildDeviceGraph(
     size.h,
   );
 
-  const nodeById = new Map(topo.nodes.map((n) => [n.id, n]));
   const connected = new Set<number>();
   for (const e of topo.edges) {
     connected.add(e.source);
@@ -174,10 +176,14 @@ function buildDeviceGraph(
   }
   const dimUnconnected = highlightDeviceIds != null && highlightDeviceIds.size > 0;
 
-  const nodes: Node[] = topo.nodes.map((n) => {
+  const posById = new Map<number, { x: number; y: number }>();
+  for (const n of topo.nodes) {
     const saved = savedPositions[String(n.id)];
-    const auto = autoPositions.get(n.id) ?? { x: 0, y: 0 };
-    const pos = saved ?? auto;
+    posById.set(n.id, saved ?? autoPositions.get(n.id) ?? { x: 0, y: 0 });
+  }
+
+  const nodes: Node[] = topo.nodes.map((n) => {
+    const pos = posById.get(n.id)!;
     const siteLabel = siteLabelForNode(n.site_id, topo.sites);
     const vendorColor = vendorColors[n.vendor] || "#64748b";
     const dimmed = dimUnconnected
@@ -209,6 +215,7 @@ function buildDeviceGraph(
       const link = linksById.get(e.id);
       const util = link?.utilization_pct ?? e.utilization_pct ?? (e.capacity_mbps ? (e.reserved_mbps / e.capacity_mbps) * 100 : 0);
       const highlighted = hoveredLinkId != null && link?.link_id === hoveredLinkId;
+      const handles = edgeHandlesForLayout(e.source, e.target, posById);
 
       return {
         id: `e-${e.id ?? i}`,
@@ -216,7 +223,8 @@ function buildDeviceGraph(
         target: String(e.target),
         type: "utilization",
         animated: e.type === "dci",
-        interactionWidth: 24,
+        interactionWidth: 20,
+        ...handles,
         data: {
           link,
           utilization_pct: util,

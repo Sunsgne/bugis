@@ -29,22 +29,30 @@ type TopoEdge = { id: number; source: number; target: number };
 
 export function curvatureForEdge(edges: TopoEdge[], edgeId: number): number {
   const edge = edges.find((e) => e.id === edgeId);
-  if (!edge) return 0.25;
+  if (!edge) return 0.22;
 
   const samePair = edges.filter((e) => e.source === edge.source && e.target === edge.target);
   if (samePair.length > 1) {
     const idx = samePair.findIndex((e) => e.id === edgeId);
-    return 0.18 + idx * 0.22;
+    const sign = idx % 2 === 0 ? 1 : -1;
+    return sign * (0.22 + Math.floor(idx / 2) * 0.14);
   }
 
   const fromSource = edges.filter((e) => e.source === edge.source);
   if (fromSource.length > 1) {
     const idx = fromSource.findIndex((e) => e.id === edgeId);
-    const spread = (fromSource.length - 1) * 0.1;
-    return 0.2 + idx * 0.16 - spread;
+    const sign = idx % 2 === 0 ? 1 : -1;
+    return sign * (0.3 + Math.floor(idx / 2) * 0.12);
   }
 
-  return 0.25;
+  const toTarget = edges.filter((e) => e.target === edge.target);
+  if (toTarget.length > 1) {
+    const idx = toTarget.findIndex((e) => e.id === edgeId);
+    const sign = idx % 2 === 0 ? 1 : -1;
+    return sign * (0.26 + Math.floor(idx / 2) * 0.1);
+  }
+
+  return 0.18;
 }
 
 /** Dashed peer link between Z-end devices when multiple rows share the same link name. */
@@ -82,8 +90,9 @@ export function buildLogicalPeerEdges(
           focusable: false,
           data: {
             label: `${name} · ${tc("对端互联")}`,
+            curvature: -0.42,
           },
-          style: { stroke: "#64748b", strokeWidth: 1.5, strokeDasharray: "6 4", opacity: 0.8 },
+          style: { stroke: "#94a3b8", strokeWidth: 1.5, strokeDasharray: "8 5", opacity: 0.75 },
           zIndex: 0,
         });
       }

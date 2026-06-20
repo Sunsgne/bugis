@@ -24,18 +24,23 @@ export default function LogicalPeerEdge({
     targetY,
     sourcePosition,
     targetPosition,
-    curvature: d?.curvature ?? 0.08,
+    curvature: d?.curvature ?? -0.35,
   });
 
   return (
     <>
-      <BaseEdge id={id} path={edgePath} style={style} />
+      <BaseEdge
+        id={id}
+        path={edgePath}
+        style={style}
+        interactionWidth={12}
+      />
       {d?.label ? (
         <EdgeLabelRenderer>
           <div
             className="backbone-logical-edge-label nodrag nopan"
             style={{
-              transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
+              transform: `translate(-50%, -50%) translate(${labelX}px,${labelY + 14}px)`,
             }}
           >
             {d.label}

@@ -82,7 +82,8 @@ function UtilizationEdge({
   const color = backboneUtilColor(pct);
   const link = d?.link;
   const [labelHover, setLabelHover] = useState(false);
-  const showTooltip = Boolean(link && (labelHover || d?.highlighted));
+  const showTooltip = labelHover;
+  const showLabel = labelHover || d?.highlighted;
   const [edgePath, labelX, labelY] = getBezierPath({
     sourceX,
     sourceY,
@@ -90,7 +91,7 @@ function UtilizationEdge({
     targetY,
     sourcePosition,
     targetPosition,
-    curvature: d?.curvature ?? 0.25,
+    curvature: d?.curvature ?? 0.18,
   });
 
   return (
@@ -98,34 +99,37 @@ function UtilizationEdge({
       <BaseEdge
         path={edgePath}
         {...props}
-        interactionWidth={24}
+        interactionWidth={20}
         style={{
           ...props.style,
           stroke: color,
-          strokeWidth: selected ? 4 : 2 + Math.min(pct / 40, 2.5),
-          opacity: selected ? 1 : 0.92,
+          strokeWidth: selected || d?.highlighted ? 3.5 : 2.5,
+          opacity: d?.highlighted ? 1 : 0.88,
+          strokeLinecap: "round",
         }}
       />
       <EdgeLabelRenderer>
-        <Tooltip
-          open={showTooltip}
-          placement="top"
-          mouseEnterDelay={0.12}
-          overlayStyle={{ maxWidth: 420 }}
-          title={link ? <LinkUtilizationTooltipContent link={link} pct={pct} tc={tc} /> : undefined}
-        >
-          <div
-            className="backbone-edge-label nodrag nopan"
-            style={{
-              transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
-              borderColor: color,
-            }}
-            onMouseEnter={() => setLabelHover(true)}
-            onMouseLeave={() => setLabelHover(false)}
+        {showLabel && d?.shortLabel ? (
+          <Tooltip
+            open={showTooltip}
+            placement="top"
+            mouseEnterDelay={0.15}
+            overlayStyle={{ maxWidth: 420 }}
+            title={link ? <LinkUtilizationTooltipContent link={link} pct={pct} tc={tc} /> : undefined}
           >
-            {d?.shortLabel ?? ""}
-          </div>
-        </Tooltip>
+            <div
+              className="backbone-edge-label nodrag nopan is-visible"
+              style={{
+                transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
+                borderColor: color,
+              }}
+              onMouseEnter={() => setLabelHover(true)}
+              onMouseLeave={() => setLabelHover(false)}
+            >
+              {d.shortLabel}
+            </div>
+          </Tooltip>
+        ) : null}
       </EdgeLabelRenderer>
     </>
   );
@@ -140,7 +144,7 @@ function FitViewOnLayout({ layoutKey }: { layoutKey: string }) {
   useEffect(() => {
     if (!nodesInitialized) return;
     const timer = window.setTimeout(() => {
-      fitView({ padding: 0.14, maxZoom: 1.05, duration: 320 });
+      fitView({ padding: 0.06, maxZoom: 1.35, duration: 280 });
     }, 120);
     return () => window.clearTimeout(timer);
   }, [fitView, layoutKey, nodesInitialized]);

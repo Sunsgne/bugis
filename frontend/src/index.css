@@ -1500,15 +1500,21 @@ body {
   font-size: 10px;
   font-weight: 600;
   color: #334155;
-  background: rgba(255, 255, 255, 0.94);
+  background: rgba(255, 255, 255, 0.96);
   border: 1px solid;
   border-radius: 6px;
-  padding: 2px 6px;
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+  padding: 2px 8px;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.1);
   white-space: nowrap;
-  max-width: 220px;
+  max-width: 240px;
   overflow: hidden;
   text-overflow: ellipsis;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.backbone-edge-label.is-visible {
+  opacity: 1;
 }
 
 .backbone-logical-edge-label {
@@ -1517,11 +1523,12 @@ body {
   font-size: 9px;
   font-weight: 500;
   color: #64748b;
-  background: rgba(255, 255, 255, 0.9);
-  border: 1px dashed #94a3b8;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px dashed #cbd5e1;
   border-radius: 999px;
-  padding: 1px 6px;
+  padding: 1px 8px;
   white-space: nowrap;
+  opacity: 0.85;
 }
 
 .backbone-legend-line {

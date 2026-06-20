@@ -3,7 +3,7 @@ import { labelForOption, DEVICE_ROLE_OPTIONS } from "@/constants/formOptions";
 import { vendorColors } from "@/charts/theme";
 import type { LinkUsage, Topology } from "@/api/types";
 import { backboneUtilColor, fmtLinkBw } from "@/utils/linkUtilization";
-import { layoutDeviceGraph, siteLabelForNode } from "@/utils/deviceGraphLayout";
+import { layoutDeviceGraph, siteLabelForNode, edgeHandlesForLayout } from "@/utils/deviceGraphLayout";
 import {
   curvatureForEdge,
   linkEdgeShortLabel,
@@ -95,9 +95,14 @@ export function buildBackboneTopologyLayout(
 
   const dimActive = highlightSet.size > 0;
 
-  const nodes: Node[] = topo.nodes.map((n) => {
+  const posById = new Map<number, { x: number; y: number }>();
+  for (const n of topo.nodes) {
     const saved = savedPositions[String(n.id)];
-    const pos = saved ?? autoPositions.get(n.id) ?? { x: 0, y: 0 };
+    posById.set(n.id, saved ?? autoPositions.get(n.id) ?? { x: 0, y: 0 });
+  }
+
+  const nodes: Node[] = topo.nodes.map((n) => {
+    const pos = posById.get(n.id)!;
     const vendorColor = vendorColors[n.vendor] || "#64748b";
     const dimmed = dimActive ? !highlightSet.has(n.id) : false;
 
@@ -127,6 +132,7 @@ export function buildBackboneTopologyLayout(
       const pct = link?.utilization_pct ?? e.utilization_pct ?? 0;
       const selected = highlightLinkId != null && link?.link_id === highlightLinkId;
       const color = backboneUtilColor(pct);
+      const handles = edgeHandlesForLayout(e.source, e.target, posById);
       return {
         id: `e-${link?.link_id ?? i}`,
         source: String(e.source),
@@ -135,6 +141,7 @@ export function buildBackboneTopologyLayout(
         animated: pct >= 85,
         selected,
         interactionWidth: 24,
+        ...handles,
         data: {
           link,
           utilization_pct: pct,
