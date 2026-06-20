@@ -38,6 +38,7 @@ export default function DeviceGraphNode({ data }: { data: DeviceGraphNodeData })
       <Handle type="target" position={Position.Top} id="top" className="!border-0 !bg-transparent !opacity-0 !min-w-0 !min-h-0 !w-1 !h-1" />
       <Handle type="source" position={Position.Bottom} id="bottom" className="!border-0 !bg-transparent !opacity-0 !min-w-0 !min-h-0 !w-1 !h-1" />
       <Handle type="target" position={Position.Left} id="left" className="!border-0 !bg-transparent !opacity-0 !min-w-0 !min-h-0 !w-1 !h-1" />
+      <Handle type="source" position={Position.Left} id="left-out" className="!border-0 !bg-transparent !opacity-0 !min-w-0 !min-h-0 !w-1 !h-1" />
       <Handle type="source" position={Position.Right} id="right" className="!border-0 !bg-transparent !opacity-0 !min-w-0 !min-h-0 !w-1 !h-1" />
       <div className="flex items-center gap-2">
         <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${data.online ? "bg-emerald-500" : "bg-slate-300"}`} />

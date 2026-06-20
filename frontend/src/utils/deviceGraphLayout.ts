@@ -12,6 +12,73 @@ function siteKey(siteId?: number | null): number {
   return siteId ?? -1;
 }
 
+/** Nodes that connect to each other without going through the hub. */
+export function spokePeerNodeIds(hubId: number, edges: LayoutGraphEdge[]): Set<number> {
+  const ids = new Set<number>();
+  for (const e of edges) {
+    if (e.source === e.target) continue;
+    if (e.source !== hubId && e.target !== hubId) {
+      ids.add(e.source);
+      ids.add(e.target);
+    }
+  }
+  return ids;
+}
+
+export function findHubNodeId(nodes: LayoutGraphNode[], edges: LayoutGraphEdge[]): number {
+  const outDegree = new Map<number, number>();
+  const degree = new Map<number, number>();
+  for (const n of nodes) {
+    outDegree.set(n.id, 0);
+    degree.set(n.id, 0);
+  }
+  for (const e of edges) {
+    if (e.source === e.target) continue;
+    degree.set(e.source, (degree.get(e.source) ?? 0) + 1);
+    degree.set(e.target, (degree.get(e.target) ?? 0) + 1);
+    outDegree.set(e.source, (outDegree.get(e.source) ?? 0) + 1);
+  }
+  let hubId = nodes[0]?.id ?? 0;
+  let hubScore = -1;
+  for (const n of nodes) {
+    const score = (outDegree.get(n.id) ?? 0) * 10 + (degree.get(n.id) ?? 0);
+    if (score > hubScore) {
+      hubScore = score;
+      hubId = n.id;
+    }
+  }
+  return hubId;
+}
+
+/** Stagger spoke nodes with direct peer links so edges are not hidden under cards. */
+export function applySpokePeerSeparation(
+  hubId: number,
+  edges: LayoutGraphEdge[],
+  positions: Map<number, { x: number; y: number }>,
+  anchorRightX?: number,
+): void {
+  const peerIds = spokePeerNodeIds(hubId, edges);
+  if (peerIds.size < 2) return;
+
+  const sorted = [...peerIds].sort((a, b) => {
+    const ya = positions.get(a)?.y ?? 0;
+    const yb = positions.get(b)?.y ?? 0;
+    return ya - yb || a - b;
+  });
+
+  const baseX = anchorRightX ?? Math.max(...sorted.map((id) => positions.get(id)?.x ?? 0));
+  const offset = Math.round(NODE_W * 0.58);
+
+  sorted.forEach((id, idx) => {
+    const pos = positions.get(id);
+    if (!pos) return;
+    positions.set(id, {
+      x: baseX - (idx % 2) * offset,
+      y: pos.y,
+    });
+  });
+}
+
 /** Hub on the left, spokes stacked on the right — compact for small backbone graphs. */
 function layoutCompactHub(
   nodes: LayoutGraphNode[],
@@ -87,6 +154,8 @@ function layoutCompactHub(
   rightNodes.forEach((n, i) => {
     result.set(n.id, { x: rightX, y: startY + step * i });
   });
+
+  applySpokePeerSeparation(hubId, edges, result, rightX);
 
   // Two-column fallback for many detached nodes
   if (detached.length > 2 && spokes.length > 0) {
@@ -288,6 +357,27 @@ export function siteLabelForNode(
   return s ? s.code : null;
 }
 
+export function layoutEdgeCurvature(
+  sourceId: number,
+  targetId: number,
+  positions: Map<number, { x: number; y: number }>,
+  baseCurvature: number,
+): number {
+  const src = positions.get(sourceId);
+  const tgt = positions.get(targetId);
+  if (src && tgt) {
+    const dx = Math.abs(src.x + NODE_W / 2 - (tgt.x + NODE_W / 2));
+    const dy = Math.abs(src.y + NODE_H / 2 - (tgt.y + NODE_H / 2));
+    if (dx < NODE_W * 0.4 && dy > NODE_H * 0.5) {
+      return src.y < tgt.y ? -0.38 : 0.38;
+    }
+    if (dx < NODE_W * 0.25) {
+      return src.y < tgt.y ? -0.45 : 0.45;
+    }
+  }
+  return baseCurvature;
+}
+
 /** Prefer horizontal handles when source is left of target. */
 export function edgeHandlesForLayout(
   sourceId: number,
@@ -299,14 +389,19 @@ export function edgeHandlesForLayout(
   if (!src || !tgt) return {};
   const srcCx = src.x + NODE_W / 2;
   const tgtCx = tgt.x + NODE_W / 2;
+  const srcCy = src.y + NODE_H / 2;
+  const tgtCy = tgt.y + NODE_H / 2;
+  const sameColumn = Math.abs(tgtCx - srcCx) < NODE_W * 0.42;
+
+  if (sameColumn && Math.abs(tgtCy - srcCy) > NODE_H * 0.4) {
+    return { sourceHandle: "left-out", targetHandle: "left" };
+  }
   if (tgtCx - srcCx > NODE_W * 0.4) {
     return { sourceHandle: "right", targetHandle: "left" };
   }
   if (srcCx - tgtCx > NODE_W * 0.4) {
-    return { sourceHandle: "left", targetHandle: "right" };
+    return { sourceHandle: "left-out", targetHandle: "right" };
   }
-  const srcCy = src.y + NODE_H / 2;
-  const tgtCy = tgt.y + NODE_H / 2;
   if (tgtCy > srcCy + NODE_H * 0.25) {
     return { sourceHandle: "bottom", targetHandle: "top" };
   }

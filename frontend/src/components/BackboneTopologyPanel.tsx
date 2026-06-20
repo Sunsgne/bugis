@@ -6,7 +6,6 @@ import {
   MiniMap,
   ReactFlow,
   getBezierPath,
-  useEdgesState,
   useNodesInitialized,
   useNodesState,
   useReactFlow,
@@ -237,25 +236,9 @@ export default function BackboneTopologyPanel({ topo, links, loading }: Props) {
     [graphTopo, size, linksById, layout.draftPositions, tc, selectedLinkId, selectedDeviceId],
   );
 
-  const [flowNodes, setFlowNodes, onNodesChange] = useNodesState<Node>(layoutNodes);
-  const [flowEdges, setFlowEdges, onEdgesChange] = useEdgesState<Edge>(layoutEdges);
-
-  useEffect(() => {
-    setFlowNodes(layoutNodes);
-  }, [layoutNodes, setFlowNodes]);
-
-  useEffect(() => {
-    setFlowEdges(layoutEdges);
-  }, [layoutEdges, setFlowEdges]);
-
-  const graphRevision = useMemo(
-    () => layoutEdges.map((e) => e.id).sort().join("|"),
-    [layoutEdges],
-  );
-
   const displayEdges = useMemo(
     () =>
-      flowEdges.map((e) => {
+      layoutEdges.map((e) => {
         const link = (e.data as EdgeData | undefined)?.link;
         return {
           ...e,
@@ -266,7 +249,18 @@ export default function BackboneTopologyPanel({ topo, links, loading }: Props) {
           },
         };
       }),
-    [flowEdges, hoveredLink],
+    [layoutEdges, hoveredLink],
+  );
+
+  const [flowNodes, setFlowNodes, onNodesChange] = useNodesState<Node>(layoutNodes);
+
+  useEffect(() => {
+    setFlowNodes(layoutNodes);
+  }, [layoutNodes, setFlowNodes]);
+
+  const graphRevision = useMemo(
+    () => layoutEdges.map((e) => e.id).sort().join("|"),
+    [layoutEdges],
   );
 
   const layoutKey = `${size.w}x${size.h}-${layoutNodes.length}-${graphRevision}-${selectedLinkId}-${selectedDeviceId}-${Object.keys(layout.draftPositions).length}`;
@@ -311,7 +305,6 @@ export default function BackboneTopologyPanel({ topo, links, loading }: Props) {
                 elementsSelectable
                 elevateEdgesOnSelect
                 onNodesChange={onNodesChange}
-                onEdgesChange={onEdgesChange}
                 onNodeDragStop={(_, node) => {
                   setFlowNodes((current) => {
                     const next: TopologyNodePositions = {};

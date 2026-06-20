@@ -3,7 +3,7 @@ import { labelForOption, DEVICE_ROLE_OPTIONS } from "@/constants/formOptions";
 import { vendorColors } from "@/charts/theme";
 import type { LinkUsage, Topology } from "@/api/types";
 import { backboneUtilColor, fmtLinkBw } from "@/utils/linkUtilization";
-import { layoutDeviceGraph, siteLabelForNode, edgeHandlesForLayout } from "@/utils/deviceGraphLayout";
+import { layoutDeviceGraph, siteLabelForNode, edgeHandlesForLayout, layoutEdgeCurvature, findHubNodeId, applySpokePeerSeparation } from "@/utils/deviceGraphLayout";
 import {
   curvatureForEdge,
   linkEdgeShortLabel,
@@ -100,6 +100,11 @@ export function buildBackboneTopologyLayout(
     posById.set(n.id, saved ?? autoPositions.get(n.id) ?? { x: 0, y: 0 });
   }
 
+  const graphNodes = topo.nodes.map((n) => ({ id: n.id, site_id: n.site_id }));
+  const graphEdges = topo.edges.map((e) => ({ source: e.source, target: e.target }));
+  const hubId = findHubNodeId(graphNodes, graphEdges);
+  applySpokePeerSeparation(hubId, graphEdges, posById);
+
   const nodes: Node[] = topo.nodes.map((n) => {
     const pos = posById.get(n.id)!;
     const vendorColor = vendorColors[n.vendor] || "#64748b";
@@ -145,7 +150,12 @@ export function buildBackboneTopologyLayout(
           link,
           utilization_pct: pct,
           shortLabel: link ? linkEdgeShortLabel(link, pct) : `${fmtLinkBw(e.capacity_mbps)} · ${Math.round(pct)}%`,
-          curvature: curvatureForEdge(topo.edges, e.id),
+          curvature: layoutEdgeCurvature(
+            e.source,
+            e.target,
+            posById,
+            curvatureForEdge(topo.edges, e.id),
+          ),
         } satisfies EdgeData,
         style: { stroke: color },
       };

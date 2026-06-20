@@ -112,10 +112,10 @@ const linksWithDirect: LinkUsage[] = [
     name: "TYO-TYO",
     type: "dci",
     supplier: "ZENLAYER",
-    device_a_id: 20,
-    device_z_id: 30,
-    device_a: "cs-1.tyo2",
-    device_z: "cs-2.tyo3",
+    device_a_id: 30,
+    device_z_id: 20,
+    device_a: "cs-2.tyo3",
+    device_z: "cs-1.tyo2",
     site_a_id: 2,
     site_z_id: 3,
     site_a_code: "TYO2",
@@ -146,4 +146,25 @@ if (peerDirect.length !== 0) {
   process.exit(1);
 }
 
+const tyo2 = layoutDirect.nodes.find((n) => n.id === "20");
+const tyo3 = layoutDirect.nodes.find((n) => n.id === "30");
+if (!tyo2 || !tyo3) {
+  console.error("Missing TYO2/TYO3 nodes in layout");
+  process.exit(1);
+}
+const peerSeparation = Math.abs(tyo2.position.x - tyo3.position.x);
+if (peerSeparation < 80) {
+  console.error(`TYO2-TYO3 nodes should be horizontally separated, got ${peerSeparation}px`);
+  process.exit(1);
+}
+const peerEdge = utilDirect.find(
+  (e) =>
+    (e.source === "20" && e.target === "30") || (e.source === "30" && e.target === "20"),
+);
+if (!peerEdge) {
+  console.error("Missing utilization edge between TYO2 and TYO3");
+  process.exit(1);
+}
+
+console.log(`peer separation: ${Math.round(peerSeparation)}px`);
 console.log("direct link replaces logical peer — passed");
