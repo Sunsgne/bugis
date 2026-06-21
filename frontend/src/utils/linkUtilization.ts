@@ -1,5 +1,5 @@
 import type { LinkUsage } from "@/api/types";
-import dayjs from "dayjs";
+import { formatUserDateTime } from "./datetime";
 
 export function fmtLinkBw(mbps?: number) {
   if (!mbps) return "—";
@@ -8,7 +8,7 @@ export function fmtLinkBw(mbps?: number) {
 
 export function formatPeakAt(iso?: string | null) {
   if (!iso) return "—";
-  return dayjs(iso).format("YYYY-MM-DD HH:mm:ss");
+  return formatUserDateTime(iso);
 }
 
 /** Backbone link utilization color: green &lt;50%, amber 50–84%, red ≥85%. */

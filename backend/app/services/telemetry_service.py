@@ -140,7 +140,7 @@ def _window_hours(
 
 def _bucket_traffic_sample(circuit_id: int, bucket: dict) -> dict:
     ts = bucket["bucket"]
-    if ts.tzinfo is None:
+    if ts is not None and ts.tzinfo is None:
         ts = ts.replace(tzinfo=timezone.utc)
     return {
         "id": 0,
@@ -160,7 +160,7 @@ def _bucket_traffic_sample(circuit_id: int, bucket: dict) -> dict:
 
 def _bucket_qos_sample(circuit_id: int, bucket: dict) -> dict:
     ts = bucket["bucket"]
-    if ts.tzinfo is None:
+    if ts is not None and ts.tzinfo is None:
         ts = ts.replace(tzinfo=timezone.utc)
     return {
         "id": 0,
