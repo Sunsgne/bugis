@@ -3,6 +3,11 @@
 Periodically collects SNMP telemetry, rotates on-demand circuit probes for QoS
 metrics, re-evaluates SLA/capacity alarms, and refreshes live-network inventory.
 
+Scheduled config pull (auto-learn) uses ``auto_learn_interval_seconds`` from
+platform settings and persists its schedule via ``device_learn_runs`` so restarts
+do not reset the interval. Learn runs in a background thread so SNMP ticks are
+not blocked for minutes while SSH/NETCONF fetches complete.
+
 At ~10k active circuits, SNMP and probe work is batched per tick (round-robin)
 so each tick stays bounded; alarm evaluation runs only for circuits touched
 in that tick.
@@ -11,14 +16,15 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import time
-from datetime import datetime, timezone
+import threading
+from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.core.config import settings
 from app.core.database import SessionLocal
 from app.models.circuit import Circuit
+from app.models.device_learn_run import DeviceLearnRun
 from app.models.enums import CircuitStatus
 from app.models.link import Link
 from app.services import alarm_service, config_learn, health_snapshot_service, link_monitor, platform_settings, telemetry_service
@@ -27,9 +33,10 @@ from app.controller import bgp_peering, ha
 logger = logging.getLogger("bugis.scheduler")
 
 _task: asyncio.Task | None = None
+_learn_task: asyncio.Task | None = None
+_learn_lock = threading.Lock()
 _probe_cursor = 0
 _collect_cursor = 0
-_last_learn_monotonic = 0.0
 _state: dict = {
     "running": False,
     "ticks": 0,
@@ -39,10 +46,115 @@ _state: dict = {
     "last_learn": None,
     "last_learn_devices": 0,
     "last_learn_conflicts": 0,
+    "learn_running": False,
     "interval": settings.scheduler_interval_seconds,
     "collect_batch_size": settings.telemetry_collect_batch_size,
     "probe_batch_size": settings.telemetry_probe_batch_size,
 }
+
+
+def _last_scheduled_learn_at(db) -> datetime | None:
+    """Latest scheduler-driven learn timestamp (persisted, survives restarts)."""
+    return db.execute(
+        select(func.max(DeviceLearnRun.created_at)).where(
+            DeviceLearnRun.created_by == "scheduler"
+        )
+    ).scalar_one_or_none()
+
+
+def _learn_interval_elapsed(db, interval: int) -> bool:
+    last = _last_scheduled_learn_at(db)
+    if last is None:
+        return True
+    if last.tzinfo is None:
+        last = last.replace(tzinfo=timezone.utc)
+    elapsed = (datetime.now(timezone.utc) - last).total_seconds()
+    return elapsed >= interval
+
+
+def _auto_learn_interval_seconds(db) -> int:
+    plat = platform_settings.get_or_create(db)
+    return max(30, int(plat.auto_learn_interval_seconds or 60))
+
+
+def _is_scheduled_learn_due(db) -> bool:
+    plat = platform_settings.get_or_create(db)
+    if not plat.auto_learn_enabled:
+        return False
+    return _learn_interval_elapsed(db, _auto_learn_interval_seconds(db))
+
+
+def _update_learn_state(summary: dict) -> None:
+    _state["last_learn"] = datetime.now(timezone.utc).isoformat()
+    _state["last_learn_devices"] = summary.get("devices", 0)
+    _state["last_learn_conflicts"] = summary.get("conflicts", 0)
+
+
+def _execute_scheduled_learn() -> dict | None:
+    """Run one scheduled learn cycle (blocking — intended for background thread)."""
+    if not _learn_lock.acquire(blocking=False):
+        return None
+    _state["learn_running"] = True
+    db = SessionLocal()
+    try:
+        if not _is_scheduled_learn_due(db):
+            return None
+        summary = config_learn.scheduled_learn_all_online(db, created_by="scheduler")
+        if summary.get("skipped"):
+            return summary
+        db.commit()
+        _update_learn_state(summary)
+        return summary
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        _state["learn_running"] = False
+        db.close()
+        _learn_lock.release()
+
+
+def _try_scheduled_learn_sync() -> dict | None:
+    """Run scheduled learn synchronously when due (manual tick / tests)."""
+    try:
+        summary = _execute_scheduled_learn()
+        if summary and not summary.get("skipped"):
+            logger.info(
+                "scheduled learn: %s/%s devices, %s conflicts",
+                summary.get("success"),
+                summary.get("devices"),
+                summary.get("conflicts"),
+            )
+        return summary
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("scheduled learn failed: %s", exc)
+        return None
+
+
+async def _maybe_start_learn_task() -> None:
+    global _learn_task
+    if _state.get("learn_running"):
+        return
+    if _learn_task is not None and not _learn_task.done():
+        return
+
+    def _due_check() -> bool:
+        db = SessionLocal()
+        try:
+            return _is_scheduled_learn_due(db)
+        finally:
+            db.close()
+
+    if not await asyncio.to_thread(_due_check):
+        return
+
+    async def _job() -> None:
+        try:
+            await asyncio.to_thread(_try_scheduled_learn_sync)
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("scheduled learn task failed: %s", exc)
+
+    _learn_task = asyncio.create_task(_job())
 
 
 def _probe_one_circuit(db, circuits: list[Circuit]) -> tuple[int, set[int]]:
@@ -94,35 +206,11 @@ def _collect_circuit_batch(
     return collected, touched
 
 
-def _maybe_learn_inventory(db) -> dict | None:
-    """Run scheduled auto-learn when the configured interval has elapsed."""
-    global _last_learn_monotonic
-    plat = platform_settings.get_or_create(db)
-    if not plat.auto_learn_enabled:
-        return None
-    interval = max(30, int(plat.auto_learn_interval_seconds or 60))
-    now = time.monotonic()
-    if _last_learn_monotonic and (now - _last_learn_monotonic) < interval:
-        return None
-    summary = config_learn.scheduled_learn_all_online(db, created_by="scheduler")
-    _last_learn_monotonic = now
-    _state["last_learn"] = datetime.now(timezone.utc).isoformat()
-    _state["last_learn_devices"] = summary.get("devices", 0)
-    _state["last_learn_conflicts"] = summary.get("conflicts", 0)
-    return summary
-
-
-def _tick() -> int:
+def _tick(*, include_learn: bool = False) -> int:
     db = SessionLocal()
     try:
-        learn_summary = _maybe_learn_inventory(db)
-        if learn_summary and not learn_summary.get("skipped"):
-            logger.info(
-                "scheduled learn: %s/%s devices, %s conflicts",
-                learn_summary.get("success"),
-                learn_summary.get("devices"),
-                learn_summary.get("conflicts"),
-            )
+        if include_learn:
+            _try_scheduled_learn_sync()
         circuits = db.execute(
             select(Circuit).where(Circuit.status == CircuitStatus.ACTIVE)
         ).scalars().all()
@@ -168,6 +256,7 @@ async def _run() -> None:
         while True:
             await asyncio.sleep(_state["interval"])
             try:
+                await _maybe_start_learn_task()
                 count = await asyncio.to_thread(_tick)
                 _state["ticks"] += 1
                 _state["last_samples"] = count
@@ -209,12 +298,37 @@ def set_interval(seconds: int) -> None:
 
 
 def status() -> dict:
-    return {**_state, "enabled": settings.scheduler_enabled}
+    base = {**_state, "enabled": settings.scheduler_enabled}
+    db = SessionLocal()
+    try:
+        plat = platform_settings.get_or_create(db)
+        interval = _auto_learn_interval_seconds(db)
+        last = _last_scheduled_learn_at(db)
+        if last is not None:
+            if last.tzinfo is None:
+                last = last.replace(tzinfo=timezone.utc)
+            base["last_learn"] = last.isoformat()
+            elapsed = (datetime.now(timezone.utc) - last).total_seconds()
+            if plat.auto_learn_enabled:
+                remaining = max(0, int(interval - elapsed))
+                base["next_learn_in_seconds"] = remaining
+                base["next_learn_at"] = (
+                    datetime.now(timezone.utc) + timedelta(seconds=remaining)
+                ).isoformat()
+            else:
+                base["next_learn_in_seconds"] = None
+        else:
+            base["next_learn_in_seconds"] = 0 if plat.auto_learn_enabled else None
+        base["auto_learn_enabled"] = plat.auto_learn_enabled
+        base["auto_learn_interval_seconds"] = interval
+    finally:
+        db.close()
+    return base
 
 
 def run_once() -> int:
     """Synchronously run a single tick (for manual trigger / tests)."""
-    count = _tick()
+    count = _tick(include_learn=True)
     _state["ticks"] += 1
     _state["last_samples"] = count
     _state["last_tick"] = datetime.now(timezone.utc).isoformat()

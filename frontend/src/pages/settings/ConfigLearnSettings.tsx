@@ -6,6 +6,7 @@ import {
   Form,
   InputNumber,
   Row,
+  Select,
   Space,
   App as AntApp,
   Typography,
@@ -28,7 +29,27 @@ type SchedulerStatus = {
   last_learn_devices?: number;
   last_learn_conflicts?: number;
   last_tick?: string | null;
+  auto_learn_enabled?: boolean;
+  auto_learn_interval_seconds?: number;
+  next_learn_in_seconds?: number | null;
+  next_learn_at?: string | null;
+  learn_running?: boolean;
 };
+
+const INTERVAL_PRESETS = [
+  { value: 300, labelKey: "5 分钟 (300)" },
+  { value: 600, labelKey: "10 分钟 (600)" },
+  { value: 1800, labelKey: "30 分钟 (1800)" },
+  { value: 3600, labelKey: "1 小时 (3600)" },
+] as const;
+
+function formatDuration(seconds: number, tc: (s: string) => string): string {
+  if (seconds < 60) return `${seconds} ${tc("秒")}`;
+  if (seconds < 3600) return `${Math.round(seconds / 60)} ${tc("分钟")}`;
+  const h = Math.floor(seconds / 3600);
+  const m = Math.round((seconds % 3600) / 60);
+  return m > 0 ? `${h} ${tc("小时")} ${m} ${tc("分钟")}` : `${h} ${tc("小时")}`;
+}
 
 export default function ConfigLearnSettings() {
   const { tc } = useTc();
@@ -78,7 +99,12 @@ export default function ConfigLearnSettings() {
   }
 
   const timedPullOn = Form.useWatch("auto_learn_enabled", form);
+  const intervalSec = Form.useWatch("auto_learn_interval_seconds", form);
   const schedulerOn = platform?.scheduler_enabled !== false;
+
+  const intervalPreset = INTERVAL_PRESETS.some((p) => p.value === intervalSec)
+    ? intervalSec
+    : "custom";
 
   return (
     <div className="settings-panel">
@@ -116,8 +142,22 @@ export default function ConfigLearnSettings() {
           <Descriptions.Item label={tc('调度器')}>
             {scheduler.enabled ? (scheduler.running ? tc("运行中") : tc("已启用")) : tc("已关闭")}
           </Descriptions.Item>
+          <Descriptions.Item label={tc('拉取间隔')}>
+            {scheduler.auto_learn_interval_seconds != null
+              ? formatDuration(scheduler.auto_learn_interval_seconds, tc)
+              : "—"}
+          </Descriptions.Item>
           <Descriptions.Item label={tc('最近拉取')}>
             {scheduler.last_learn ? scheduler.last_learn.replace("T", " ").slice(0, 19) : "—"}
+          </Descriptions.Item>
+          <Descriptions.Item label={tc('下次拉取')}>
+            {scheduler.learn_running
+              ? tc("拉取进行中…")
+              : scheduler.next_learn_in_seconds != null
+                ? scheduler.next_learn_in_seconds <= 0
+                  ? tc("即将开始")
+                  : formatDuration(scheduler.next_learn_in_seconds, tc)
+                : "—"}
           </Descriptions.Item>
           <Descriptions.Item label={tc('最近设备数')}>
             {scheduler.last_learn_devices ?? "—"}
@@ -153,22 +193,54 @@ export default function ConfigLearnSettings() {
         </Row>
 
         <Row gutter={16}>
-          <Col xs={12} md={6}>
+          <Col xs={24} md={8}>
+            <Form.Item label={tc('拉取间隔')}>
+              <Select
+                value={intervalPreset}
+                disabled={!timedPullOn}
+                style={{ width: "100%" }}
+                options={[
+                  ...INTERVAL_PRESETS.map((p) => ({
+                    value: p.value,
+                    label: tc(p.labelKey),
+                  })),
+                  { value: "custom", label: tc("自定义") },
+                ]}
+                onChange={(v) => {
+                  if (v !== "custom") {
+                    form.setFieldValue("auto_learn_interval_seconds", v);
+                  }
+                }}
+              />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={6}>
             <Form.Item
               name="auto_learn_interval_seconds"
-              label={tc('拉取间隔 (秒)')}
-              tooltip={tc('与 SNMP/拨测调度独立计时，建议 60–300 秒')}
+              label={tc('间隔 (秒)')}
+              tooltip={tc('与 SNMP/拨测调度独立；大规模现网建议 1800–3600 秒')}
               rules={[{ required: timedPullOn, message: "请填写拉取间隔" }]}
             >
               <InputNumber
                 min={30}
                 max={3600}
+                step={60}
                 style={{ width: "100%" }}
                 disabled={!timedPullOn}
               />
             </Form.Item>
           </Col>
         </Row>
+
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message={tc("与 SNMP 采集独立")}
+          description={tc(
+            "定时拉取仅更新 running-config 与 S-VID 占用，不影响流量 SNMP 采样。后台调度器 tick 间隔（平台运行页）控制 SNMP/告警频率。",
+          )}
+        />
 
         <Alert
           type="info"
