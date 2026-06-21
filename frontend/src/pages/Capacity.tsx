@@ -23,6 +23,7 @@ import { fmtLinkBw } from "../utils/linkUtilization";
 import BackboneLinkModal from "../components/BackboneLinkModal";
 import InterfaceNameCell from "../components/InterfaceNameCell";
 import LinkUtilizationTooltipContent from "../components/LinkUtilizationTooltipContent";
+import { linkUtilTooltipProps } from "../utils/linkUtilTooltip";
 import { utilColor } from "../charts/options";
 import { fetchAllPages } from "../utils/pagination";
 import { useTc } from "@/i18n/useTc";
@@ -381,7 +382,7 @@ export default function Capacity() {
               sorter: (a, b) => a.utilization_pct - b.utilization_pct,
               render: (v: number, r) => (
                 <Tooltip
-                  overlayClassName="link-util-tooltip-overlay"
+                  {...linkUtilTooltipProps}
                   title={<LinkUtilizationTooltipContent link={r} pct={v} tc={tc} />}
                 >
                   <Progress

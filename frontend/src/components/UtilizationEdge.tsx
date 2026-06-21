@@ -5,6 +5,7 @@ import type { LinkUsage } from "@/api/types";
 import { useTc } from "@/i18n/useTc";
 import { backboneUtilColor } from "@/utils/linkUtilization";
 import LinkUtilizationTooltipContent from "./LinkUtilizationTooltipContent";
+import { linkUtilTooltipProps } from "@/utils/linkUtilTooltip";
 
 const EDGE_STYLE: Record<string, { dash?: string; weight: number }> = {
   dci: { dash: "6 4", weight: 3 },
@@ -83,13 +84,13 @@ export default function UtilizationEdge({
       {active && d?.shortLabel ? (
         <EdgeLabelRenderer>
           <Tooltip
+            {...linkUtilTooltipProps}
             open={showTooltip}
             placement="top"
             mouseEnterDelay={0}
             zIndex={2100}
             getPopupContainer={() => document.body}
             align={{ offset: [0, -8] }}
-            overlayClassName="link-util-tooltip-overlay"
             title={link ? <LinkUtilizationTooltipContent link={link} pct={pct} tc={tc} /> : undefined}
           >
             <div

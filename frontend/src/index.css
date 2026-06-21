@@ -1605,17 +1605,46 @@ body {
   pointer-events: all;
 }
 
-.ant-tooltip.link-util-tooltip-overlay {
+.ant-tooltip.link-util-tooltip-overlay,
+.ant-tooltip.link-util-tooltip-root {
   z-index: 2100;
   pointer-events: none;
+  filter: none !important;
+  max-width: none !important;
+  --ant-tooltip-arrow-background-color: #1e293b;
 }
 
-.ant-tooltip.link-util-tooltip-overlay .ant-tooltip-inner {
+.ant-tooltip.link-util-tooltip-overlay .ant-tooltip-container,
+.ant-tooltip.link-util-tooltip-root .ant-tooltip-container {
   pointer-events: auto;
-  padding: 0;
-  background: transparent;
-  box-shadow: none;
+  padding: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  color: inherit !important;
+  border-radius: 0 !important;
+}
+
+.ant-tooltip.link-util-tooltip-overlay .ant-tooltip-content,
+.ant-tooltip.link-util-tooltip-root .ant-tooltip-content {
+  background: transparent !important;
+}
+
+.ant-tooltip.link-util-tooltip-overlay .ant-tooltip-inner,
+.ant-tooltip.link-util-tooltip-root .ant-tooltip-inner {
+  pointer-events: auto;
+  padding: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
   min-height: 0;
+  border-radius: 0 !important;
+}
+
+.ant-tooltip.link-util-tooltip-overlay .ant-tooltip-arrow::before,
+.ant-tooltip.link-util-tooltip-root .ant-tooltip-arrow::before {
+  background: #1e293b !important;
 }
 
 /* Link utilization tooltip (capacity table + topology) */
