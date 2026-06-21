@@ -1,16 +1,12 @@
 import {
   Background,
-  BaseEdge,
   Controls,
-  EdgeLabelRenderer,
   MiniMap,
   ReactFlow,
-  getBezierPath,
   useNodesInitialized,
   useNodesState,
   useReactFlow,
   type Edge,
-  type EdgeProps,
   type Node,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
@@ -28,7 +24,6 @@ import {
   Space,
   Statistic,
   Tag,
-  Tooltip,
   Typography,
 } from "antd";
 import { ClearOutlined, SearchOutlined } from "@ant-design/icons";
@@ -39,9 +34,9 @@ import {
   buildBackboneTopologyLayout as buildLayout,
   buildFilteredTopo,
 } from "@/utils/backboneTopologyLayout";
-import LinkUtilizationTooltipContent from "./LinkUtilizationTooltipContent";
 import InterfaceNameCell from "./InterfaceNameCell";
 import LogicalPeerEdge from "./LogicalPeerEdge";
+import UtilizationEdge from "./UtilizationEdge";
 import TopologyLayoutControls from "./TopologyLayoutControls";
 import DeviceGraphNode from "./DeviceGraphNode";
 import { useTopologyLayout } from "@/hooks/useTopologyLayout";
@@ -62,76 +57,6 @@ function shortHost(name: string, max = 26): string {
   const head = Math.ceil((max - 1) / 2);
   const tail = max - head - 1;
   return `${name.slice(0, head)}…${name.slice(-tail)}`;
-}
-
-function UtilizationEdge({
-  sourceX,
-  sourceY,
-  targetX,
-  targetY,
-  sourcePosition,
-  targetPosition,
-  data,
-  selected,
-  ...props
-}: EdgeProps) {
-  const { tc } = useTc();
-  const d = data as EdgeData | undefined;
-  const pct = d?.utilization_pct ?? 0;
-  const color = backboneUtilColor(pct);
-  const link = d?.link;
-  const [labelHover, setLabelHover] = useState(false);
-  const showTooltip = labelHover;
-  const showLabel = labelHover || d?.highlighted;
-  const [edgePath, labelX, labelY] = getBezierPath({
-    sourceX,
-    sourceY,
-    targetX,
-    targetY,
-    sourcePosition,
-    targetPosition,
-    curvature: d?.curvature ?? 0.18,
-  });
-
-  return (
-    <>
-      <BaseEdge
-        path={edgePath}
-        {...props}
-        interactionWidth={20}
-        style={{
-          ...props.style,
-          stroke: color,
-          strokeWidth: selected || d?.highlighted ? 3.5 : 2.5,
-          opacity: d?.highlighted ? 1 : 0.88,
-          strokeLinecap: "round",
-        }}
-      />
-      <EdgeLabelRenderer>
-        {showLabel && d?.shortLabel ? (
-          <Tooltip
-            open={showTooltip}
-            placement="top"
-          mouseEnterDelay={0.15}
-          overlayClassName="link-util-tooltip-overlay"
-          title={link ? <LinkUtilizationTooltipContent link={link} pct={pct} tc={tc} /> : undefined}
-          >
-            <div
-              className="backbone-edge-label nodrag nopan is-visible"
-              style={{
-                transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
-                borderColor: color,
-              }}
-              onMouseEnter={() => setLabelHover(true)}
-              onMouseLeave={() => setLabelHover(false)}
-            >
-              {d.shortLabel}
-            </div>
-          </Tooltip>
-        ) : null}
-      </EdgeLabelRenderer>
-    </>
-  );
 }
 
 const nodeTypes = { device: DeviceGraphNode };

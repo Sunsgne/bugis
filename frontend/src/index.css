@@ -1293,6 +1293,11 @@ body {
   z-index: 4;
 }
 
+.device-graph-flow .react-flow__edgelabel-renderer {
+  z-index: 8;
+  pointer-events: none;
+}
+
 .device-graph-flow .react-flow__nodes {
   z-index: 3;
 }
@@ -1586,16 +1591,34 @@ body {
 
 .backbone-edge-label.is-visible {
   opacity: 1;
+  z-index: 9;
 }
 
-/* Link utilization tooltip (capacity table + topology) */
+.backbone-edge-label.is-tooltip-anchor {
+  opacity: 0;
+  background: transparent;
+  border-color: transparent !important;
+  box-shadow: none;
+  padding: 10px 16px;
+  min-width: 28px;
+  min-height: 20px;
+  pointer-events: all;
+}
+
+.ant-tooltip.link-util-tooltip-overlay {
+  z-index: 2100;
+  pointer-events: none;
+}
+
 .ant-tooltip.link-util-tooltip-overlay .ant-tooltip-inner {
+  pointer-events: auto;
   padding: 0;
   background: transparent;
   box-shadow: none;
   min-height: 0;
 }
 
+/* Link utilization tooltip (capacity table + topology) */
 .link-util-tooltip {
   min-width: 340px;
   max-width: 440px;

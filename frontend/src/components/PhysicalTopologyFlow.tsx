@@ -1,57 +1,37 @@
 import {
   Background,
-  BaseEdge,
   Controls,
-  EdgeLabelRenderer,
   MiniMap,
   ReactFlow,
-  getBezierPath,
   useEdgesState,
   useNodesInitialized,
   useNodesState,
   useReactFlow,
   type Edge,
-  type EdgeProps,
   type Node,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Tooltip } from "antd";
 import { labelForOption, DEVICE_ROLE_OPTIONS } from "@/constants/formOptions";
 import { vendorColors } from "@/charts/theme";
 import type { LinkUsage, Topology } from "@/api/types";
 import { useTc } from "@/i18n/useTc";
-import { backboneUtilColor, fmtLinkBw } from "@/utils/linkUtilization";
 import { layoutDeviceGraph, siteLabelForNode, edgeHandlePairForLayout, edgeHandlePairsForGraph, layoutEdgeCurvature, findHubNodeId, applySpokePeerSeparation } from "@/utils/deviceGraphLayout";
 import {
   curvatureForEdge,
   linkEdgeShortLabel,
   mergeTopologyEdges,
 } from "@/utils/topologyEdges";
-import LinkUtilizationTooltipContent from "./LinkUtilizationTooltipContent";
 import LogicalPeerEdge from "./LogicalPeerEdge";
+import UtilizationEdge, { type UtilizationEdgeData } from "./UtilizationEdge";
 import DeviceGraphNode, {
   DEVICE_GRAPH_NODE_HEIGHT,
   DEVICE_GRAPH_NODE_WIDTH,
 } from "./DeviceGraphNode";
 
-const EDGE_STYLE: Record<string, { dash?: string; weight: number }> = {
-  dci: { dash: "6 4", weight: 3 },
-  intra_dc: { weight: 2.5 },
-  access: { weight: 1.5 },
-  uplink: { weight: 2 },
-};
-
 export type TopologyNodePositions = Record<string, { x: number; y: number }>;
 
-type EdgeData = {
-  link?: LinkUsage;
-  utilization_pct: number;
-  shortLabel: string;
-  linkType: string;
-  highlighted?: boolean;
-  curvature?: number;
-};
+type EdgeData = UtilizationEdgeData;
 
 function fmtG(mbps: number): string {
   return mbps >= 1000 ? `${(mbps / 1000).toFixed(0)}G` : `${mbps}M`;
@@ -62,78 +42,6 @@ function shortHost(name: string, max = 28): string {
   const head = Math.ceil((max - 1) / 2);
   const tail = max - head - 1;
   return `${name.slice(0, head)}…${name.slice(-tail)}`;
-}
-
-function UtilizationEdge({
-  sourceX,
-  sourceY,
-  targetX,
-  targetY,
-  sourcePosition,
-  targetPosition,
-  data,
-  selected,
-  ...props
-}: EdgeProps) {
-  const { tc } = useTc();
-  const d = data as EdgeData | undefined;
-  const pct = d?.utilization_pct ?? 0;
-  const color = backboneUtilColor(pct);
-  const link = d?.link;
-  const style = EDGE_STYLE[d?.linkType || "intra_dc"] || EDGE_STYLE.intra_dc;
-  const [labelHover, setLabelHover] = useState(false);
-  const showTooltip = labelHover;
-  const showLabel = labelHover || d?.highlighted;
-  const [edgePath, labelX, labelY] = getBezierPath({
-    sourceX,
-    sourceY,
-    targetX,
-    targetY,
-    sourcePosition,
-    targetPosition,
-    curvature: d?.curvature ?? 0.18,
-  });
-
-  return (
-    <>
-      <BaseEdge
-        path={edgePath}
-        {...props}
-        interactionWidth={20}
-        style={{
-          ...props.style,
-          stroke: color,
-          strokeWidth: selected || d?.highlighted ? style.weight + 1.5 : style.weight,
-          strokeDasharray: style.dash,
-          strokeLinecap: "round",
-          opacity: d?.highlighted ? 1 : 0.88,
-        }}
-      />
-      {d?.shortLabel && showLabel ? (
-        <EdgeLabelRenderer>
-          <Tooltip
-            open={showTooltip}
-            placement="top"
-            mouseEnterDelay={0.15}
-            overlayClassName="link-util-tooltip-overlay"
-            title={link ? <LinkUtilizationTooltipContent link={link} pct={pct} tc={tc} /> : undefined}
-          >
-            <div
-              className="physical-topology-edge-label backbone-edge-label nodrag nopan is-visible"
-              style={{
-                transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
-                borderColor: color,
-              }}
-              onMouseEnter={() => setLabelHover(true)}
-              onMouseLeave={() => setLabelHover(false)}
-            >
-              {d.shortLabel}
-            </div>
-          </Tooltip>
-        </EdgeLabelRenderer>
-      ) : null}
-    </>
-  );
 }
 
 const nodeTypes = { device: DeviceGraphNode };
