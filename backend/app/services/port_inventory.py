@@ -175,6 +175,7 @@ def list_vlan_interfaces_from_config(config: str, vendor: Vendor) -> list[dict]:
         description: str | None = None
         ip_address: str | None = None
         prefix_len: int | None = None
+        ospf_process: int | None = None
         idx += 1
         while idx < len(lines):
             stripped = lines[idx].strip()
@@ -196,6 +197,13 @@ def list_vlan_interfaces_from_config(config: str, vendor: Vendor) -> list[dict]:
             if ip_match:
                 ip_address = ip_match.group(1)
                 prefix_len = _dotted_mask_to_prefix_len(ip_match.group(2))
+            ospf_enable = re.match(r"^ospf\s+enable\s+(\d+)", stripped, re.IGNORECASE)
+            if ospf_enable:
+                ospf_process = int(ospf_enable.group(1))
+            else:
+                ospf_plain = re.match(r"^ospf\s+(\d+)\s", stripped, re.IGNORECASE)
+                if ospf_plain:
+                    ospf_process = int(ospf_plain.group(1))
             idx += 1
         vlan_id: int | None = None
         vlan_match = re.match(
@@ -211,6 +219,7 @@ def list_vlan_interfaces_from_config(config: str, vendor: Vendor) -> list[dict]:
             "ip_address": ip_address,
             "prefix_len": prefix_len,
             "vlan_id": vlan_id,
+            "ospf_process": ospf_process,
         })
     return results
 

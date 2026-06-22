@@ -109,6 +109,7 @@ def test_plan_link_matches_same_vlan_and_30_peer():
         assert plan["interface_z"] == "Vlanif1068"
         assert plan["vlan_id"] == 1068
         assert "/30" in plan["reason"]
+        assert "OSPF 100" in plan["reason"]
     finally:
         db.close()
 
@@ -150,6 +151,69 @@ def test_plan_link_prefers_non_vlan_1_over_vlan_1():
         assert plan["interface_a"] == "Vlan-interface1068"
         assert plan["interface_z"] == "Vlanif1068"
         assert plan["vlan_id"] == 1068
+    finally:
+        db.close()
+
+
+def test_suggest_backbone_links_requires_ospf_30_and_same_vlan():
+    db = SessionLocal()
+    try:
+        site_a = _site(db)
+        site_z = _site(db)
+        dev_a = _device(db, site_a, "gw-suggest-a", DeviceRole.DCI_GW)
+        dev_z = _device(db, site_z, "gw-suggest-z", DeviceRole.DCI_GW)
+        _iface(db, dev_a, "Vlan-interface1068", 500, "DCI peer", "up")
+        _iface(db, dev_z, "Vlanif1068", 500, "DCI peer", "up")
+        _learn(db, dev_a, H3C_DCI_CONFIG_A)
+        _learn(db, dev_z, HUAWEI_DCI_CONFIG_Z)
+        db.commit()
+
+        suggestions = link_planner.suggest_backbone_links(db)
+        pair = (min(dev_a.id, dev_z.id), max(dev_a.id, dev_z.id))
+        matched = [
+            row for row in suggestions
+            if (min(row["device_a_id"], row["device_z_id"]), max(row["device_a_id"], row["device_z_id"])) == pair
+        ]
+        assert len(matched) == 1
+        assert matched[0]["interface_a"] == "Vlan-interface1068"
+        assert matched[0]["interface_z"] == "Vlanif1068"
+        assert "OSPF 100" in matched[0]["reason"]
+    finally:
+        db.close()
+
+
+def test_suggest_backbone_links_skips_vlan_without_ospf_or_30():
+    db = SessionLocal()
+    try:
+        site_a = _site(db)
+        site_z = _site(db)
+        dev_a = _device(db, site_a, "gw-skip-a", DeviceRole.DCI_GW)
+        dev_z = _device(db, site_z, "gw-skip-z", DeviceRole.DCI_GW)
+        _iface(db, dev_a, "Vlan-interface1066", 500, "no ospf", "up")
+        _iface(db, dev_z, "Vlanif1066", 500, "no ospf", "up")
+        config_a = """\
+interface Vlan-interface1066
+ ip address 10.255.106.5 255.255.255.252
+#
+return
+"""
+        config_z = """\
+interface Vlanif1066
+ ip address 10.255.106.6 255.255.255.252
+#
+return
+"""
+        _learn(db, dev_a, config_a)
+        _learn(db, dev_z, config_z)
+        db.commit()
+
+        assert link_planner.plan_backbone_suggestion(db, dev_a, dev_z) is None
+        suggestions = link_planner.suggest_backbone_links(db)
+        pair = (min(dev_a.id, dev_z.id), max(dev_a.id, dev_z.id))
+        assert not any(
+            (min(row["device_a_id"], row["device_z_id"]), max(row["device_a_id"], row["device_z_id"])) == pair
+            for row in suggestions
+        )
     finally:
         db.close()
 
@@ -293,6 +357,9 @@ def test_suggest_skips_existing_pairs():
 
 
 def test_link_suggestions_api(client, auth_headers):
+    from app.core.database import SessionLocal
+    from app.models.device import Device, DeviceInterface
+
     n = next(_seq)
     site_a = client.post(
         "/api/v1/sites",
@@ -330,6 +397,34 @@ def test_link_suggestions_api(client, auth_headers):
     ).json()
     client.post(f"/api/v1/devices/{dev_a['id']}/discover-interfaces", headers=auth_headers)
     client.post(f"/api/v1/devices/{dev_z['id']}/discover-interfaces", headers=auth_headers)
+
+    db = SessionLocal()
+    try:
+        dev_a_obj = db.get(Device, dev_a["id"])
+        dev_z_obj = db.get(Device, dev_z["id"])
+        _learn(db, dev_a_obj, H3C_DCI_CONFIG_A)
+        _learn(db, dev_z_obj, HUAWEI_DCI_CONFIG_Z)
+        db.add(
+            DeviceInterface(
+                device_id=dev_a_obj.id,
+                name="Vlan-interface1068",
+                speed_mbps=500,
+                oper_status="up",
+                discovered_via="snmp",
+            )
+        )
+        db.add(
+            DeviceInterface(
+                device_id=dev_z_obj.id,
+                name="Vlanif1068",
+                speed_mbps=500,
+                oper_status="up",
+                discovered_via="snmp",
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
 
     suggestions = client.get("/api/v1/capacity/links/suggestions", headers=auth_headers).json()
     pair = {dev_a["id"], dev_z["id"]}
