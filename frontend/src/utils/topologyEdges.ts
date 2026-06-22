@@ -42,28 +42,38 @@ export function curvatureForEdge(edges: TopoEdge[], edgeId: number): number {
   const edge = edges.find((e) => e.id === edgeId);
   if (!edge) return 0.22;
 
-  const samePair = edges.filter((e) => e.source === edge.source && e.target === edge.target);
-  if (samePair.length > 1) {
-    const idx = samePair.findIndex((e) => e.id === edgeId);
+  const undirectedKey = (e: TopoEdge) => devicePairKey(e.source, e.target);
+  const edgeKey = undirectedKey(edge);
+
+  const sameUndirected = edges.filter((e) => undirectedKey(e) === edgeKey);
+  if (sameUndirected.length > 1) {
+    const idx = sameUndirected.findIndex((e) => e.id === edgeId);
     const sign = idx % 2 === 0 ? 1 : -1;
-    return sign * (0.22 + Math.floor(idx / 2) * 0.14);
+    return sign * (0.32 + Math.floor(idx / 2) * 0.2);
+  }
+
+  const sameDirected = edges.filter((e) => e.source === edge.source && e.target === edge.target);
+  if (sameDirected.length > 1) {
+    const idx = sameDirected.findIndex((e) => e.id === edgeId);
+    const sign = idx % 2 === 0 ? 1 : -1;
+    return sign * (0.28 + Math.floor(idx / 2) * 0.16);
   }
 
   const fromSource = edges.filter((e) => e.source === edge.source);
   if (fromSource.length > 1) {
     const idx = fromSource.findIndex((e) => e.id === edgeId);
     const sign = idx % 2 === 0 ? 1 : -1;
-    return sign * (0.3 + Math.floor(idx / 2) * 0.12);
+    return sign * (0.36 + Math.floor(idx / 2) * 0.14);
   }
 
   const toTarget = edges.filter((e) => e.target === edge.target);
   if (toTarget.length > 1) {
     const idx = toTarget.findIndex((e) => e.id === edgeId);
     const sign = idx % 2 === 0 ? 1 : -1;
-    return sign * (0.26 + Math.floor(idx / 2) * 0.1);
+    return sign * (0.32 + Math.floor(idx / 2) * 0.12);
   }
 
-  return 0.18;
+  return 0.22;
 }
 
 /** Dashed peer link between Z-end devices when multiple rows share the same link name. */

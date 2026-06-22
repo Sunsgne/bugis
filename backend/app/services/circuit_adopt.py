@@ -7,8 +7,9 @@ from sqlalchemy.orm import Session
 
 from app.models.circuit import Circuit, CircuitEndpoint
 from app.models.device import Device
-from app.models.enums import AccessMode, CircuitStatus, ServiceType
+from app.models.enums import AccessMode, CircuitStatus, ServiceType, Vendor
 from app.models.tenant import Tenant
+from app.services.port_inventory import is_huawei_subinterface
 from app.schemas.circuit import (
     CircuitAdoptBinding,
     CircuitAdoptCreate,
@@ -272,6 +273,18 @@ def _adoptability_reason(
     return "未发现可纳管的现网绑定（请先执行现网学习）"
 
 
+def _is_vendor_vni_access_binding(device: Device, raw: dict) -> bool:
+    """Vendor-specific AC shape: H3C service-instance, Huawei L2 sub-interface."""
+    iface = str(raw.get("interface") or "").strip()
+    if not iface:
+        return False
+    if device.vendor == Vendor.HUAWEI:
+        return is_huawei_subinterface(iface)
+    if device.vendor == Vendor.H3C:
+        return raw.get("service_instance") is not None
+    return True
+
+
 def _append_vni_endpoint_candidate(
     db: Session,
     device: Device,
@@ -285,6 +298,8 @@ def _append_vni_endpoint_candidate(
 ) -> None:
     iface = str(raw.get("interface") or "").strip()
     if not iface:
+        return
+    if not _is_vendor_vni_access_binding(device, raw):
         return
     if not _binding_matches_vni(raw, vni, inventory):
         return
@@ -368,10 +383,6 @@ def find_adoptable_endpoints_by_vni(
         if not inventory:
             continue
         l2_svc = _l2_service_for_vni(inventory, vni)
-        bindings_by_iface = {
-            str(raw.get("interface") or "").strip(): raw
-            for raw in inventory.get("access_bindings") or []
-        }
         for raw in inventory.get("access_bindings") or []:
             _append_vni_endpoint_candidate(
                 db,
@@ -383,34 +394,6 @@ def find_adoptable_endpoints_by_vni(
                 seen=seen,
                 results=results,
             )
-
-        if l2_svc:
-            for iface in l2_svc.get("interfaces") or []:
-                iface = str(iface).strip()
-                if not iface:
-                    continue
-                raw = bindings_by_iface.get(iface)
-                if raw:
-                    continue
-                vlans = l2_svc.get("vlans") or [None]
-                for svid in vlans:
-                    synthetic = {
-                        "interface": iface,
-                        "access_mode": "dot1q",
-                        "s_vid": svid,
-                        "vsi_name": l2_svc.get("name"),
-                        "vni": vni,
-                    }
-                    _append_vni_endpoint_candidate(
-                        db,
-                        device,
-                        vni=vni,
-                        inventory=inventory,
-                        raw=synthetic,
-                        l2_svc=l2_svc,
-                        seen=seen,
-                        results=results,
-                    )
 
     results.sort(
         key=lambda row: (row["device_name"], row["interface_name"], row.get("vlan_id") or 0)

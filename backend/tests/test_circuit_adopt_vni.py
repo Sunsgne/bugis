@@ -34,7 +34,8 @@ HUAWEI_VNI_1666_CONFIG = """\
 sysname leaf-z
 bridge-domain 1666
  vxlan vni 1666
-interface GE1/0/10
+interface GE1/0/10.1666
+ mode l2
  encapsulation dot1q vid 1666
  bridge-domain 1666
 return
@@ -121,6 +122,60 @@ def test_find_adoptable_endpoints_resolves_cli_interface_alias():
         db.close()
 
 
+def test_find_adoptable_endpoints_skips_huawei_physical_interface():
+    db = SessionLocal()
+    try:
+        site = _site(db)
+        dev = _device(db, site, "hw-phys")
+        dev.vendor = Vendor.HUAWEI
+        _learn(
+            db,
+            dev,
+            """\
+interface GE1/0/10
+ encapsulation dot1q vid 1666
+ bridge-domain 1666
+""",
+        )
+        db.commit()
+        endpoints = [
+            row
+            for row in circuit_adopt.find_adoptable_endpoints_by_vni(db, 1666)
+            if row["device_id"] == dev.id
+        ]
+        assert endpoints == []
+    finally:
+        db.rollback()
+        db.close()
+
+
+def test_find_adoptable_endpoints_skips_h3c_without_service_instance():
+    db = SessionLocal()
+    try:
+        site = _site(db)
+        dev = _device(db, site, "h3c-legacy")
+        _learn(
+            db,
+            dev,
+            """\
+vsi sdwan-bb
+ vxlan 1666
+interface Twenty-FiveGigE1/0/51
+ xconnect vsi sdwan-bb
+""",
+        )
+        db.commit()
+        endpoints = [
+            row
+            for row in circuit_adopt.find_adoptable_endpoints_by_vni(db, 1666)
+            if row["device_id"] == dev.id
+        ]
+        assert endpoints == []
+    finally:
+        db.rollback()
+        db.close()
+
+
 def test_find_adoptable_endpoints_discovers_huawei_bridge_domain_vni():
     db = SessionLocal()
     try:
@@ -130,7 +185,7 @@ def test_find_adoptable_endpoints_discovers_huawei_bridge_domain_vni():
         db.add(
             DeviceInterface(
                 device_id=dev.id,
-                name="GE1/0/10",
+                name="GE1/0/10.1666",
                 discovered_via="snmp",
                 ifindex=10,
                 used_s_vids=[
@@ -175,7 +230,7 @@ def test_find_adoptable_endpoints_across_two_devices():
         db.add(
             DeviceInterface(
                 device_id=dev_z.id,
-                name="GE1/0/10",
+                name="GE1/0/10.1666",
                 discovered_via="snmp",
                 ifindex=10,
                 used_s_vids=[

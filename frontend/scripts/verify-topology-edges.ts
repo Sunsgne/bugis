@@ -167,11 +167,12 @@ if (!peerEdge) {
   process.exit(1);
 }
 const peerHandles = new Set([peerEdge.sourceHandle, peerEdge.targetHandle]);
+const sideHandle = (h?: string) => h?.replace(/-(in|out)-\d+$/, "") ?? "";
 const verticalPeer =
-  peerHandles.has("top-out") ||
-  peerHandles.has("bottom-out") ||
-  peerHandles.has("top-in") ||
-  peerHandles.has("bottom-in");
+  sideHandle(peerEdge.sourceHandle) === "top" ||
+  sideHandle(peerEdge.sourceHandle) === "bottom" ||
+  sideHandle(peerEdge.targetHandle) === "top" ||
+  sideHandle(peerEdge.targetHandle) === "bottom";
 if (!verticalPeer) {
   console.error(
     `TYO2-TYO3 vertically stacked — expected top/bottom handles, got ${peerEdge.sourceHandle} → ${peerEdge.targetHandle}`,
