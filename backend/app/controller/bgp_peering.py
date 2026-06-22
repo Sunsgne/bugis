@@ -36,8 +36,13 @@ def render_peer_config(device: Device) -> str:
 
 
 def ensure_sessions(db: Session, devices: list[Device]) -> list[BgpEvpnSession]:
-    sessions: list[BgpEvpnSession] = []
+    """Ensure one BGP EVPN session row per fabric device (dedupe endpoint list)."""
+    unique_devices: dict[int, Device] = {}
     for device in devices:
+        unique_devices[device.id] = device
+
+    sessions: list[BgpEvpnSession] = []
+    for device in unique_devices.values():
         peer_ip = device.loopback_ip or device.mgmt_ip
         sess = db.execute(
             select(BgpEvpnSession).where(BgpEvpnSession.device_id == device.id)
