@@ -122,6 +122,14 @@ export default function PortalCircuitMonitorPanel({
         t: timeLabel(s.created_at, spanHours),
         rx: s.rx_mbps,
         tx: s.tx_mbps,
+      })),
+    [traffic, spanHours],
+  );
+
+  const qosChartData = useMemo(
+    () =>
+      (traffic?.qos_samples || []).map((s) => ({
+        t: timeLabel(s.created_at, spanHours),
         latency: s.latency_ms,
         jitter: s.jitter_ms,
         loss: s.packet_loss_pct,
@@ -133,8 +141,9 @@ export default function PortalCircuitMonitorPanel({
     () => trafficWithP95Option(chartData, "t", traffic?.p95),
     [chartData, traffic?.p95],
   );
-  const latencyOpt = useMemo(() => latencyJitterOption(chartData, "t"), [chartData]);
+  const latencyOpt = useMemo(() => latencyJitterOption(qosChartData, "t"), [qosChartData]);
   const chartKey = chartRangeKey(circuitId, rangeMode, hours, customRange, chartData.length);
+  const qosChartKey = chartRangeKey(circuitId, rangeMode, hours, customRange, qosChartData.length);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -224,10 +233,10 @@ export default function PortalCircuitMonitorPanel({
 
       {latencyProbeEnabled && (
         <Card size="small" title={t("monitor.latencyChart", { window: windowLabel })} loading={loading}>
-          {chartData.length ? (
-            <EChart key={`latency-${chartKey}`} option={latencyOpt} height={compact ? 180 : 220} />
+          {qosChartData.length ? (
+            <EChart key={`latency-${qosChartKey}`} option={latencyOpt} height={compact ? 180 : 220} />
           ) : (
-            <Empty description={empty.traffic} />
+            <Empty description={tc("暂无拨测数据 · 调度器轮询或手动「端到端拨测」后显示")} />
           )}
         </Card>
       )}

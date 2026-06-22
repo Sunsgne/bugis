@@ -184,6 +184,10 @@ def _sample_field(sample: TelemetrySample | dict, field: str, default: float = 0
     return float(getattr(sample, field, default) or default)
 
 
+def _series_traffic_total(rows: list[TelemetrySample] | list[dict]) -> float:
+    return sum(_sample_field(s, "rx_mbps") + _sample_field(s, "tx_mbps") for s in rows)
+
+
 def chart_p95(samples: list[TelemetrySample] | list[dict]) -> dict:
     traffic = [
         s for s in samples
@@ -250,10 +254,27 @@ def traffic_summary_payload(
                 )
             ]
         # Newly provisioned circuits may have raw samples before the 5m CA refreshes.
+        # Also fall back when CA buckets exist but carry no SNMP counters (stale view).
         used_raw_fallback = False
-        if not traffic_rows or (circuit.latency_probe_enabled and not qos_rows):
+        raw_traffic: list = []
+        raw_qos: list = []
+        agg_traffic_total = _series_traffic_total(traffic_rows)
+        need_raw = (
+            not traffic_rows
+            or agg_traffic_total == 0
+            or (circuit.latency_probe_enabled and not qos_rows)
+        )
+        if need_raw:
             raw_traffic, raw_qos = _raw_summary()
             if not traffic_rows and raw_traffic:
+                traffic_rows = raw_traffic
+                used_raw_fallback = True
+            elif (
+                traffic_rows
+                and agg_traffic_total == 0
+                and raw_traffic
+                and _series_traffic_total(raw_traffic) > 0
+            ):
                 traffic_rows = raw_traffic
                 used_raw_fallback = True
             if circuit.latency_probe_enabled and not qos_rows and raw_qos:

@@ -209,6 +209,81 @@ def test_traffic_summary_falls_back_to_raw_when_aggregate_empty(db_session, monk
     assert payload["qos_samples"][0].latency_ms == 21.0
 
 
+def test_traffic_summary_falls_back_when_aggregate_zeros(db_session, monkeypatch):
+    circuit = _make_circuit(db_session)
+    base = datetime.now(timezone.utc) - timedelta(minutes=5)
+    db_session.add(
+        TelemetrySample(
+            circuit_id=circuit.id,
+            rx_mbps=45.0,
+            tx_mbps=30.0,
+            latency_ms=0.0,
+            utilization_pct=45.0,
+            tunnel_state="up",
+            source="snmp",
+            created_at=base,
+        )
+    )
+    db_session.add(
+        TelemetrySample(
+            circuit_id=circuit.id,
+            rx_mbps=0.0,
+            tx_mbps=0.0,
+            latency_ms=18.0,
+            jitter_ms=0.2,
+            packet_loss_pct=0.0,
+            utilization_pct=0.0,
+            tunnel_state="up",
+            source="probe",
+            created_at=base + timedelta(seconds=10),
+        )
+    )
+    db_session.commit()
+
+    zero_bucket = {
+        "bucket": base.replace(second=0, microsecond=0),
+        "rx_mbps": 0.0,
+        "tx_mbps": 0.0,
+        "sample_count": 1,
+    }
+    latency_bucket = {
+        "bucket": base.replace(second=0, microsecond=0),
+        "latency_ms": 18.0,
+        "avg_latency_ms": 18.0,
+        "sample_count": 1,
+    }
+
+    monkeypatch.setattr(
+        telemetry_service.telemetry_timescale,
+        "continuous_aggregate_available",
+        lambda _db: True,
+    )
+    monkeypatch.setattr(
+        telemetry_service.telemetry_timescale,
+        "should_use_continuous_aggregate",
+        lambda _hours: True,
+    )
+    monkeypatch.setattr(
+        telemetry_service.telemetry_timescale,
+        "fetch_traffic_buckets",
+        lambda *_args, **_kwargs: [zero_bucket],
+    )
+    monkeypatch.setattr(
+        telemetry_service.telemetry_timescale,
+        "fetch_latency_buckets",
+        lambda *_args, **_kwargs: [latency_bucket],
+    )
+
+    payload = telemetry_service.traffic_summary_payload(
+        db_session, circuit, hours=24, limit=20
+    )
+    assert payload["resolution"] == "raw"
+    assert len(payload["samples"]) == 1
+    assert payload["samples"][0].rx_mbps == 45.0
+    assert len(payload["qos_samples"]) == 1
+    assert payload["qos_samples"][0]["latency_ms"] == 18.0
+
+
 def test_billing_95th_scopes_to_selected_month(db_session):
     circuit = _make_circuit(db_session)
     old = datetime(2026, 5, 15, 12, 0, tzinfo=timezone.utc)
