@@ -115,9 +115,9 @@ class BugisController:
         peer.asn = device.bgp_asn
         peer.status = VtepStatus.UP
         peer.last_seen = datetime.now(timezone.utc)
-        vset = {v for v in peer.vnis.split(",") if v}
+        vset = {v.strip() for v in peer.vnis.split(",") if v.strip()}
         vset.add(str(vni))
-        peer.vnis = ",".join(sorted(vset, key=int))
+        peer.vnis = ",".join(sorted(vset, key=lambda x: int(x) if x.isdigit() else 0))
         return peer
 
     def _deregister_vni(self, db: Session, device_id: int, vni: int) -> None:
@@ -126,8 +126,8 @@ class BugisController:
         ).scalar_one_or_none()
         if not peer:
             return
-        vset = {v for v in peer.vnis.split(",") if v and v != str(vni)}
-        peer.vnis = ",".join(sorted(vset, key=int))
+        vset = {v.strip() for v in peer.vnis.split(",") if v.strip() and v.strip() != str(vni)}
+        peer.vnis = ",".join(sorted(vset, key=lambda x: int(x) if x.isdigit() else 0))
 
     def sync_circuit_overlay(
         self,

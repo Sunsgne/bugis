@@ -118,8 +118,6 @@ interface TenantOverview {
 
 const DELETABLE = new Set(["decommissioned", "draft", "failed"]);
 
-type CircuitConfirmAction = "decommission" | "delete";
-
 export default function Circuits() {
   const { tc } = useTc();
   const { t } = useTranslation();
@@ -161,10 +159,6 @@ export default function Circuits() {
   const [provisioningId, setProvisioningId] = useState<number | null>(null);
   const [provisionType, setProvisionType] = useState<string>("provision");
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const [circuitConfirm, setCircuitConfirm] = useState<{
-    circuit: Circuit;
-    action: CircuitConfirmAction;
-  } | null>(null);
   const [expandedRowKeys, setExpandedRowKeys] = useState<React.Key[]>([]);
   const handledCircuitLink = useRef<number | null>(null);
 
@@ -1130,14 +1124,28 @@ export default function Circuits() {
                   icon: <MinusCircleOutlined />,
                   danger: true,
                   label: tc("拆除专线"),
-                  onClick: () => setCircuitConfirm({ circuit: r, action: "decommission" }),
+                  onClick: () =>
+                    modal.confirm({
+                      title: tc("确认拆除该专线?"),
+                      okText: tc("确定"),
+                      cancelText: tc("取消"),
+                      okButtonProps: { danger: true },
+                      onOk: () => decommission(r),
+                    }),
                 },
                 DELETABLE.has(r.status) && deleteJobs.getJob(r.id)?.status !== "deleting" && {
                   key: "delete",
                   icon: <DeleteOutlined />,
                   danger: true,
                   label: tc("永久删除记录"),
-                  onClick: () => setCircuitConfirm({ circuit: r, action: "delete" }),
+                  onClick: () =>
+                    modal.confirm({
+                      title: tc("确认永久删除该专线记录?"),
+                      okText: tc("确定"),
+                      cancelText: tc("取消"),
+                      okButtonProps: { danger: true },
+                      onOk: () => removeCircuit(r),
+                    }),
                 },
               ].filter(Boolean) as { key: string }[];
 
@@ -1186,36 +1194,9 @@ export default function Circuits() {
                     )
                   )}
                   {moreItems.length > 0 && (
-                    <Popconfirm
-                      title={
-                        circuitConfirm?.action === "delete"
-                          ? tc("确认永久删除该专线记录?")
-                          : tc("确认拆除该专线?")
-                      }
-                      placement="topRight"
-                      okText={tc("确定")}
-                      cancelText={tc("取消")}
-                      open={circuitConfirm?.circuit.id === r.id}
-                      onOpenChange={(nextOpen) => {
-                        if (!nextOpen && circuitConfirm?.circuit.id === r.id) {
-                          setCircuitConfirm(null);
-                        }
-                      }}
-                      onConfirm={() => {
-                        const target = circuitConfirm;
-                        setCircuitConfirm(null);
-                        if (!target) return;
-                        if (target.action === "delete") {
-                          void removeCircuit(target.circuit);
-                        } else {
-                          void decommission(target.circuit);
-                        }
-                      }}
-                    >
-                      <Dropdown menu={{ items: moreItems }} trigger={["click"]}>
-                        <Button size="small" icon={<MoreOutlined />}>{tc("更多")}</Button>
-                      </Dropdown>
-                    </Popconfirm>
+                    <Dropdown menu={{ items: moreItems }} trigger={["click"]}>
+                      <Button size="small" icon={<MoreOutlined />}>{tc("更多")}</Button>
+                    </Dropdown>
                   )}
                 </Space>
               );

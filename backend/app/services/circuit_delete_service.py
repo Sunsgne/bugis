@@ -2,11 +2,13 @@
 from __future__ import annotations
 
 from fastapi import HTTPException
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.controller import controller as bugis_controller
 from app.models.circuit import Circuit
 from app.models.enums import CircuitStatus
+from app.models.workorder import WorkOrder
 from app.services.circuit_cleanup import purge_circuit_dependencies
 
 DELETABLE_STATUSES = frozenset({
@@ -14,6 +16,20 @@ DELETABLE_STATUSES = frozenset({
     CircuitStatus.DRAFT,
     CircuitStatus.FAILED,
 })
+
+
+def _detach_work_orders(db: Session, circuit: Circuit) -> None:
+    """Snapshot circuit code and detach work orders before deleting the circuit row."""
+    db.execute(
+        update(WorkOrder)
+        .where(WorkOrder.circuit_id == circuit.id, WorkOrder.circuit_code.is_(None))
+        .values(circuit_code=circuit.code)
+    )
+    db.execute(
+        update(WorkOrder)
+        .where(WorkOrder.circuit_id == circuit.id)
+        .values(circuit_id=None)
+    )
 
 
 def delete_circuit_record(db: Session, circuit: Circuit) -> dict:
@@ -26,6 +42,7 @@ def delete_circuit_record(db: Session, circuit: Circuit) -> dict:
                 "请先执行拆除工单后再删除"
             ),
         )
+    _detach_work_orders(db, circuit)
     bugis_controller.purge_circuit(db, circuit)
     purged = purge_circuit_dependencies(db, circuit.id)
     code = circuit.code

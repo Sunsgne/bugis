@@ -138,6 +138,13 @@ class CircuitDeleteScheduledOut(BaseModel):
     circuit_code: str
 
 
+class CircuitDeleteStatusOut(BaseModel):
+    circuit_id: int
+    circuit_code: str | None = None
+    status: str
+    error: str | None = None
+
+
 class CircuitCreate(CircuitBase):
     code: str | None = None  # auto-generated when omitted
     endpoints: list[CircuitEndpointCreate] = []

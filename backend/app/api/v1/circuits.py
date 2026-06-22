@@ -23,6 +23,7 @@ from app.schemas.circuit import (
     CircuitAdoptVniPreview,
     CircuitCreate,
     CircuitDeleteScheduledOut,
+    CircuitDeleteStatusOut,
     CircuitEndpointCreate,
     CircuitEndpointOut,
     CircuitEndpointsReplace,
@@ -573,7 +574,7 @@ def delete_circuit(
         )
     if background:
         code = circuit.code
-        concurrent_circuit_delete.schedule_circuit_delete(circuit_id)
+        concurrent_circuit_delete.schedule_circuit_delete(circuit_id, circuit_code=code)
         body = CircuitDeleteScheduledOut(
             scheduled=True,
             circuit_id=circuit_id,
@@ -583,6 +584,24 @@ def delete_circuit(
     circuit_delete_service.delete_circuit_record(db, circuit)
     db.commit()
     return Response(status_code=204)
+
+
+@router.get("/{circuit_id}/delete-status", response_model=CircuitDeleteStatusOut)
+def circuit_delete_status(
+    circuit_id: int,
+    _: User = Depends(get_current_user),
+):
+    from app.services import concurrent_circuit_delete
+
+    job = concurrent_circuit_delete.get_delete_job(circuit_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="no delete job for circuit")
+    return CircuitDeleteStatusOut(
+        circuit_id=circuit_id,
+        circuit_code=job.get("circuit_code"),
+        status=str(job.get("status") or "pending"),
+        error=job.get("error"),
+    )
 
 
 @router.put("/{circuit_id}/endpoints", response_model=CircuitOut)

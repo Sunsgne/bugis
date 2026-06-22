@@ -16,21 +16,42 @@ type DeleteScheduled = {
   circuit_code: string;
 };
 
-async function pollCircuitDeleted(circuitId: number): Promise<boolean> {
+type DeleteStatus = {
+  circuit_id: number;
+  circuit_code: string | null;
+  status: "pending" | "running" | "succeeded" | "failed";
+  error: string | null;
+};
+
+async function pollCircuitDelete(circuitId: number): Promise<{ ok: true } | { ok: false; message: string }> {
   const maxAttempts = 90;
   for (let i = 0; i < maxAttempts; i += 1) {
     await new Promise((resolve) => setTimeout(resolve, 2000));
     try {
-      await api.get(`/circuits/${circuitId}`);
+      const { data } = await api.get<DeleteStatus>(`/circuits/${circuitId}/delete-status`);
+      if (data.status === "succeeded") {
+        return { ok: true };
+      }
+      if (data.status === "failed") {
+        return { ok: false, message: data.error || "删除失败" };
+      }
     } catch (e: unknown) {
       const status = (e as { response?: { status?: number } })?.response?.status;
       if (status === 404) {
-        return true;
+        try {
+          await api.get(`/circuits/${circuitId}`);
+        } catch (inner: unknown) {
+          const innerStatus = (inner as { response?: { status?: number } })?.response?.status;
+          if (innerStatus === 404) {
+            return { ok: true };
+          }
+        }
+        return { ok: false, message: "删除任务已结束但记录仍存在，请刷新后重试" };
       }
       throw e;
     }
   }
-  return false;
+  return { ok: false, message: "timeout" };
 }
 
 export function useCircuitDeleteJobs(notify: {
@@ -59,17 +80,20 @@ export function useCircuitDeleteJobs(notify: {
         await api.delete<DeleteScheduled>(`/circuits/${circuit.id}`, {
           params: { background: true },
         });
-        const deleted = await pollCircuitDeleted(circuit.id);
-        if (!deleted) {
+        const result = await pollCircuitDelete(circuit.id);
+        if (!result.ok) {
+          const message = result.message === "timeout"
+            ? "删除超时，请稍后刷新列表确认"
+            : result.message;
           setJobs((prev) => ({
             ...prev,
             [circuit.id]: {
               status: "error",
               circuitCode: circuit.code,
-              message: "timeout",
+              message,
             },
           }));
-          notify.error(`${circuit.code} 删除超时，请稍后刷新列表确认`);
+          notify.error(`${circuit.code} ${message}`);
           onDone?.();
           return false;
         }
