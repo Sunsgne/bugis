@@ -141,10 +141,94 @@ export function useLearnJobs(notify: {
     [notify],
   );
 
+  const watchScheduledLearn = useCallback(
+    (deviceId: number, deviceName: string, onDone?: () => void) => {
+      setJobs((prev) => ({
+        ...prev,
+        [deviceId]: { status: "learning", deviceName },
+      }));
+
+      const poll = async () => {
+        const maxAttempts = 120;
+        for (let i = 0; i < maxAttempts; i += 1) {
+          await new Promise((r) => setTimeout(r, 2000));
+          try {
+            const { data } = await api.get<{
+              has_learned_config?: boolean;
+              last_run_status?: string | null;
+              latest_snapshot_version?: number | null;
+              inventory?: { service_count?: number };
+            }>(`/devices/${deviceId}/learned-state`);
+            if (data.has_learned_config) {
+              const ver = data.latest_snapshot_version;
+              const svc = data.inventory?.service_count ?? 0;
+              setJobs((prev) => ({
+                ...prev,
+                [deviceId]: {
+                  status: "success",
+                  deviceName,
+                  message: ver != null ? `v${ver} · ${svc} 业务` : undefined,
+                },
+              }));
+              notify.success(`${deviceName} 现网学习完成${ver != null ? ` · v${ver}` : ""}`);
+              onDone?.();
+              return;
+            }
+            if (data.last_run_status === "failed") {
+              setJobs((prev) => ({
+                ...prev,
+                [deviceId]: {
+                  status: "error",
+                  deviceName,
+                  message: "learn failed",
+                },
+              }));
+              notify.error(`${deviceName} 现网学习失败`);
+              onDone?.();
+              return;
+            }
+          } catch {
+            /* keep polling */
+          }
+        }
+        setJobs((prev) => ({
+          ...prev,
+          [deviceId]: {
+            status: "error",
+            deviceName,
+            message: "timeout",
+          },
+        }));
+        notify.warning(`${deviceName} 现网学习超时，请稍后在设备页手动重试`);
+        onDone?.();
+      };
+
+      void poll();
+    },
+    [notify],
+  );
+
+  const watchScheduledLearnBatch = useCallback(
+    (devices: Array<{ id: number; name: string }>, onDone?: () => void) => {
+      if (!devices.length) return;
+      let remaining = devices.length;
+      const doneOne = () => {
+        remaining -= 1;
+        if (remaining <= 0) onDone?.();
+      };
+      for (const d of devices) {
+        watchScheduledLearn(d.id, d.name, doneOne);
+      }
+    },
+    [watchScheduledLearn],
+  );
+
   return {
     getJob,
     learnOne,
     learnBatch,
+    watchScheduledLearn,
+    watchScheduledLearnBatch,
     activeLearnCount,
   };
 }

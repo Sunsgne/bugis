@@ -134,6 +134,8 @@ def test_device_learn_api(client, auth_headers):
 
 
 def test_bulk_import_with_learn(client, auth_headers):
+    import time
+
     site = _site(client, auth_headers)
     csv_body = (
         "name,vendor,model,role,overlay_tech,status,mgmt_ip,loopback_ip,bgp_asn,sr_node_sid,site_code\n"
@@ -148,13 +150,20 @@ def test_bulk_import_with_learn(client, auth_headers):
     body = resp.json()
     assert body["created"] == 1
     assert body["learn_enabled"] is True
-    assert body["learn"]["success"] == 1
+    assert body["learn"]["scheduled"] is True
 
     devices = client.get("/api/v1/devices", headers=auth_headers).json()
     dev = next(d for d in devices["items"] if d["name"] == f"LAB-LEAF-{site['code']}")
-    state = client.get(
-        f"/api/v1/devices/{dev['id']}/learned-state", headers=auth_headers
-    ).json()
+
+    state = None
+    for _ in range(40):
+        state = client.get(
+            f"/api/v1/devices/{dev['id']}/learned-state", headers=auth_headers
+        ).json()
+        if state["has_learned_config"]:
+            break
+        time.sleep(0.25)
+    assert state is not None
     assert state["has_learned_config"] is True
 
 

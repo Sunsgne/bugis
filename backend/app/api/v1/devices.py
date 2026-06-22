@@ -15,6 +15,7 @@ from app.models.enums import CircuitStatus, DeviceStatus, Vendor
 from app.models.user import User
 from app.schemas.device import (
     DeviceCreate,
+    DeviceCreateOut,
     DeviceInterfaceCreate,
     DeviceInterfaceOut,
     DeviceListOut,
@@ -94,7 +95,7 @@ def device_summary(db: Session = Depends(get_db), _: User = Depends(get_current_
     }
 
 
-@router.post("", response_model=DeviceListOut, status_code=201)
+@router.post("", response_model=DeviceCreateOut, status_code=201)
 def create_device(
     payload: DeviceCreate,
     learn: bool | None = Query(default=None, description="导入后立即现网配置学习；省略则跟随平台设置"),
@@ -112,11 +113,18 @@ def create_device(
     else:
         plat = platform_cfg.get_or_create(db)
         should_learn = plat.auto_learn_on_import
-    if should_learn:
-        config_learn.learn_device(db, device, created_by=user.username)
     db.commit()
     db.refresh(device)
-    return device
+    if should_learn:
+        from app.services import concurrent_learn
+
+        concurrent_learn.schedule_learn_device(
+            device.id,
+            created_by=user.username,
+        )
+    out = DeviceCreateOut.model_validate(device)
+    out.learn_scheduled = should_learn
+    return out
 
 
 @router.get("/{device_id}", response_model=DeviceListOut)

@@ -273,6 +273,12 @@ class DeviceListOut(DeviceBase, TimestampedSchema):
         return data
 
 
+class DeviceCreateOut(DeviceListOut):
+    """Create response — learn may continue asynchronously after HTTP returns."""
+
+    learn_scheduled: bool = False
+
+
 class DeviceOut(DeviceBase, TimestampedSchema):
     id: int
     # Never expose stored credentials in API responses.
