@@ -242,8 +242,12 @@ interface 10GE1/0/3
     by_name = {row["name"]: row for row in vlans}
     assert "Vlanif4010" in by_name
     assert by_name["Vlanif4010"]["description"] == "DCI peer bw(10000M)"
+    assert by_name["Vlanif4010"]["ip_address"] == "10.10.10.1"
+    assert by_name["Vlanif4010"]["prefix_len"] == 30
+    assert by_name["Vlanif4010"]["vlan_id"] == 4010
     assert "Vlan-interface4001" in by_name
     assert by_name["Vlan-interface4001"]["description"] == "H3C DCI"
+    assert by_name["Vlan-interface4001"]["vlan_id"] == 4001
 
 
 def test_rollup_huawei_subif_usage_to_physical_port():

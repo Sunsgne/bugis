@@ -310,7 +310,7 @@ export default function BackboneLinkModal({ open, devices, editLink, onClose, on
         )
       }
     >
-      <Typography.Paragraph type="secondary">{tc('骨干 / DCI 链路优先选用 VLAN 子接口（H3C Vlan-interface、华为 Vlanif），其次聚合口与物理上联口。请确保已 SNMP 发现或现网学习。')}</Typography.Paragraph>
+      <Typography.Paragraph type="secondary">{tc('骨干 / DCI 链路按相同 VLAN 编号匹配 A/Z 端；优先使用现网学习到的 /30 互联地址对。其次聚合口与物理上联口。请确保已 SNMP 发现或现网学习。')}</Typography.Paragraph>
 
       {!isEdit ? (
         <Table<LinkPlan>
