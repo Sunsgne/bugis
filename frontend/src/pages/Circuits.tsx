@@ -48,6 +48,7 @@ import type { Circuit, Device, Paginated, ProvisionResult, Site, Tenant, WorkOrd
 import { configPreviewModalProps, ConfigPreviewPre, createCircuitModalProps } from "../utils/configPreview";
 import { formModalProps } from "../utils/formModal";
 import { TenantSearchSelect, useTenantSearch } from "../components/TenantSearchSelect";
+import { useCircuitDeleteJobs } from "@/hooks/useCircuitDeleteJobs";
 import { buildListQuery, dataTableProps, tablePagination } from "../utils/table";
 import { fetchAllPages } from "../utils/pagination";
 import PageCard from "../components/PageCard";
@@ -123,6 +124,7 @@ export default function Circuits() {
   const { tc } = useTc();
   const { t } = useTranslation();
   const { message, modal } = AntApp.useApp();
+  const deleteJobs = useCircuitDeleteJobs(message);
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const tenantFilter = searchParams.get("tenant");
@@ -163,7 +165,6 @@ export default function Circuits() {
     circuit: Circuit;
     action: CircuitConfirmAction;
   } | null>(null);
-  const [deletingId, setDeletingId] = useState<number | null>(null);
   const [expandedRowKeys, setExpandedRowKeys] = useState<React.Key[]>([]);
   const handledCircuitLink = useRef<number | null>(null);
 
@@ -355,25 +356,22 @@ export default function Circuits() {
   }
 
   async function removeCircuit(c: Circuit) {
-    setDeletingId(c.id);
-    try {
-      await api.delete(`/circuits/${c.id}`);
-      setRows((prev) => prev.filter((row) => row.id !== c.id));
-      setTotal((prev) => Math.max(0, prev - 1));
-      setExpandedRowKeys((prev) => prev.filter((k) => k !== c.id));
-      setDetailCache((prev) => {
-        const next = { ...prev };
-        delete next[c.id];
-        return next;
-      });
-      message.success(tc(`专线 ${c.code} 已删除`));
+    const ok = await deleteJobs.deleteOne(c, () => {
       loadTenantSummary();
-    } catch (e: any) {
-      message.error(e?.response?.data?.detail || tc("删除失败"));
+    });
+    if (!ok) {
       loadCircuits();
-    } finally {
-      setDeletingId(null);
+      return;
     }
+    setRows((prev) => prev.filter((row) => row.id !== c.id));
+    setTotal((prev) => Math.max(0, prev - 1));
+    setExpandedRowKeys((prev) => prev.filter((k) => k !== c.id));
+    setDetailCache((prev) => {
+      const next = { ...prev };
+      delete next[c.id];
+      return next;
+    });
+    deleteJobs.clearJob(c.id);
   }
 
   async function onCreate() {
@@ -946,6 +944,15 @@ export default function Circuits() {
       )}
 
 
+      {deleteJobs.activeDeleteCount > 0 ? (
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 12 }}
+          message={`${deleteJobs.activeDeleteCount} 条专线记录正在后台删除，可继续操作其他专线`}
+        />
+      ) : null}
+
       <Table
         rowKey="id"
         loading={loading}
@@ -1009,7 +1016,20 @@ export default function Circuits() {
           },
         }}
         columns={[
-          { title: tc("编码"), dataIndex: "code", width: 120, ellipsis: true },
+          { title: tc("编码"), dataIndex: "code", width: 120, ellipsis: true, render: (code: string, r: Circuit) => {
+            const deleteJob = deleteJobs.getJob(r.id);
+            return (
+              <Space size={4} wrap>
+                <span>{code}</span>
+                {deleteJob?.status === "deleting" ? (
+                  <Tag color="processing">{tc("删除中")}</Tag>
+                ) : null}
+                {deleteJob?.status === "error" ? (
+                  <Tag color="error">{tc("删除失败")}</Tag>
+                ) : null}
+              </Space>
+            );
+          } },
           { title: tc("名称"), dataIndex: "name", width: 160, ellipsis: true },
           ...(!selectedTenantId
             ? [{ title: tc("客户"), width: 100, ellipsis: true, render: (_: unknown, r: Circuit) => tenantName(r.tenant_id) }]
@@ -1112,7 +1132,7 @@ export default function Circuits() {
                   label: tc("拆除专线"),
                   onClick: () => setCircuitConfirm({ circuit: r, action: "decommission" }),
                 },
-                DELETABLE.has(r.status) && {
+                DELETABLE.has(r.status) && deleteJobs.getJob(r.id)?.status !== "deleting" && {
                   key: "delete",
                   icon: <DeleteOutlined />,
                   danger: true,
@@ -1175,25 +1195,20 @@ export default function Circuits() {
                       placement="topRight"
                       okText={tc("确定")}
                       cancelText={tc("取消")}
-                      okButtonProps={{
-                        loading:
-                          circuitConfirm?.action === "delete" &&
-                          deletingId === circuitConfirm.circuit.id,
-                      }}
                       open={circuitConfirm?.circuit.id === r.id}
                       onOpenChange={(nextOpen) => {
                         if (!nextOpen && circuitConfirm?.circuit.id === r.id) {
                           setCircuitConfirm(null);
                         }
                       }}
-                      onConfirm={async () => {
+                      onConfirm={() => {
                         const target = circuitConfirm;
                         setCircuitConfirm(null);
                         if (!target) return;
                         if (target.action === "delete") {
-                          await removeCircuit(target.circuit);
+                          void removeCircuit(target.circuit);
                         } else {
-                          await decommission(target.circuit);
+                          void decommission(target.circuit);
                         }
                       }}
                     >

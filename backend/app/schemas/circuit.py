@@ -132,6 +132,12 @@ class CircuitAdoptVniCreate(BaseModel):
     refresh_inventory: bool = True
 
 
+class CircuitDeleteScheduledOut(BaseModel):
+    scheduled: bool = True
+    circuit_id: int
+    circuit_code: str
+
+
 class CircuitCreate(CircuitBase):
     code: str | None = None  # auto-generated when omitted
     endpoints: list[CircuitEndpointCreate] = []

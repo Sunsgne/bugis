@@ -1245,6 +1245,36 @@ def test_delete_decommissioned_circuit(client, auth_headers):
     assert client.get(f"/api/v1/circuits/{circuit['id']}", headers=auth_headers).status_code == 404
 
 
+def test_delete_decommissioned_circuit_background(client, auth_headers):
+    import time
+
+    _, tenant, dev_a, _ = _bootstrap_topology(client, auth_headers)
+    circuit = client.post(
+        "/api/v1/circuits", headers=auth_headers,
+        json={"name": "bg-delete", "tenant_id": tenant["id"], "service_type": "l2vpn_evpn",
+              "endpoints": [{"label": "A", "device_id": dev_a["id"], "interface_name": "GE1/0/1"}]},
+    ).json()
+    client.post(
+        f"/api/v1/work-orders/provision/{circuit['id']}?wo_type=decommission",
+        headers=auth_headers,
+    )
+    resp = client.delete(
+        f"/api/v1/circuits/{circuit['id']}",
+        headers=auth_headers,
+        params={"background": "true"},
+    )
+    assert resp.status_code == 202, resp.text
+    body = resp.json()
+    assert body["scheduled"] is True
+    assert body["circuit_id"] == circuit["id"]
+    for _ in range(30):
+        if client.get(f"/api/v1/circuits/{circuit['id']}", headers=auth_headers).status_code == 404:
+            break
+        time.sleep(0.2)
+    else:
+        raise AssertionError("background delete did not complete in time")
+
+
 def test_delete_active_circuit_forbidden(client, auth_headers):
     _, tenant, dev_a, _ = _bootstrap_topology(client, auth_headers)
     circuit = client.post(
