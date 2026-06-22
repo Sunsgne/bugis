@@ -67,6 +67,7 @@ function buildDeviceGraph(
   savedPositions: TopologyNodePositions,
   tc: (zh: string) => string,
   highlightDeviceIds?: Set<number> | null,
+  highlightLinkIds?: Set<number> | null,
   hoveredLinkId?: number | null,
 ): { nodes: Node[]; edges: Edge[] } {
   const autoPositions = layoutDeviceGraph(
@@ -136,6 +137,7 @@ function buildDeviceGraph(
     .map((e, i) => {
       const link = linksById.get(e.id);
       const util = link?.utilization_pct ?? e.utilization_pct ?? (e.capacity_mbps ? (e.reserved_mbps / e.capacity_mbps) * 100 : 0);
+      const pathHighlighted = highlightLinkIds != null && highlightLinkIds.size > 0 && highlightLinkIds.has(e.id);
       const highlighted = hoveredLinkId != null && link?.link_id === hoveredLinkId;
       const handles =
         handlePairs.get(String(e.id)) ??
@@ -159,6 +161,7 @@ function buildDeviceGraph(
             : `${fmtG(e.capacity_mbps)} · ${util.toFixed(0)}%`,
           linkType: e.type,
           highlighted,
+          pathHighlighted,
           curvature: layoutEdgeCurvature(
             e.source,
             e.target,
@@ -183,6 +186,7 @@ type Props = {
   autoSave?: boolean;
   onPositionsChange?: (positions: TopologyNodePositions, options?: { autoSave?: boolean }) => void;
   className?: string;
+  highlightPath?: { deviceIds?: number[]; linkIds?: number[] };
 };
 
 export default function PhysicalTopologyFlow({
@@ -192,6 +196,7 @@ export default function PhysicalTopologyFlow({
   autoSave = false,
   onPositionsChange,
   className,
+  highlightPath,
 }: Props) {
   const { tc } = useTc();
   const hostRef = useRef<HTMLDivElement>(null);
@@ -220,11 +225,23 @@ export default function PhysicalTopologyFlow({
 
   const linksById = useMemo(() => new Map(links.map((l) => [l.link_id, l])), [links]);
 
-  const graphKey = `${size.w}x${size.h}-${topo.nodes.length}-${topo.edges.length}-${links.length}-${Object.keys(positions).length}`;
+  const highlightDeviceSet = useMemo(() => {
+    const ids = highlightPath?.deviceIds;
+    if (!ids?.length) return null;
+    return new Set(ids);
+  }, [highlightPath?.deviceIds]);
+
+  const highlightLinkSet = useMemo(() => {
+    const ids = highlightPath?.linkIds;
+    if (!ids?.length) return null;
+    return new Set(ids);
+  }, [highlightPath?.linkIds]);
+
+  const graphKey = `${size.w}x${size.h}-${topo.nodes.length}-${topo.edges.length}-${links.length}-${Object.keys(positions).length}-${highlightPath?.deviceIds?.join(",") || ""}-${highlightPath?.linkIds?.join(",") || ""}`;
 
   const { nodes: layoutNodes, edges: layoutEdges } = useMemo(
-    () => buildDeviceGraph(topo, size, linksById, positions, tc, null, hoveredLinkId),
-    [topo, size, linksById, positions, tc, hoveredLinkId],
+    () => buildDeviceGraph(topo, size, linksById, positions, tc, highlightDeviceSet, highlightLinkSet, hoveredLinkId),
+    [topo, size, linksById, positions, tc, highlightDeviceSet, highlightLinkSet, hoveredLinkId],
   );
 
   const onNodeDragStop = useCallback(

@@ -53,6 +53,7 @@ import { fetchAllPages } from "../utils/pagination";
 import PageCard from "../components/PageCard";
 import ListToolbar from "../components/ListToolbar";
 import CircuitExpandDetail from "../components/CircuitExpandDetail";
+import CircuitForwardingPathPanel from "../components/CircuitForwardingPathPanel";
 import CircuitAlarmThresholdFields from "../components/CircuitAlarmThresholdFields";
 import { formatOperStatus } from "../utils/networkDisplay";
 import CircuitMonitorPanel from "../components/CircuitMonitorPanel";
@@ -974,6 +975,13 @@ export default function Circuits() {
                         canEditEndpoints={r.status !== "decommissioned"}
                         onEditEndpoints={() => openEditEndpoints(r, detail)}
                       />
+                    ),
+                  },
+                  {
+                    key: "forwarding-path",
+                    label: tc("转发路径"),
+                    children: (
+                      <CircuitForwardingPathPanel circuitId={r.id} circuitCode={detail.code || r.code} />
                     ),
                   },
                   {
