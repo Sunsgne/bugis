@@ -4,7 +4,24 @@
  */
 import type { LinkUsage, Topology } from "../src/api/types";
 import { buildBackboneTopologyLayout, buildFilteredTopo } from "../src/utils/backboneTopologyLayout";
-import { edgeHandlePairsForGraph } from "../src/utils/deviceGraphLayout";
+import { edgeHandlePairsForGraph, layoutPathChain } from "../src/utils/deviceGraphLayout";
+
+const NODE_W = 220;
+const NODE_H = 72;
+
+function layoutHasOverlaps(positions: Map<number, { x: number; y: number }>): boolean {
+  const ids = [...positions.keys()];
+  for (let i = 0; i < ids.length; i += 1) {
+    for (let j = i + 1; j < ids.length; j += 1) {
+      const a = positions.get(ids[i])!;
+      const b = positions.get(ids[j])!;
+      if (a.x + NODE_W > b.x && b.x + NODE_W > a.x && a.y + NODE_H > b.y && b.y + NODE_H > a.y) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
 
 const tc = (s: string) => s;
 
@@ -206,3 +223,23 @@ if (meshSides.size < 2) {
 }
 console.log(`mesh side spread: ${[...meshSides].join(", ")}`);
 console.log("mesh handle spread — passed");
+
+// Circuit path chain: adjacent path hops must not collapse (spoke-peer separation skipped)
+const pathIds = [101, 102, 103, 104];
+const pathLayout = layoutPathChain(pathIds, 720, 320);
+if (pathLayout.size !== pathIds.length) {
+  console.error("Path chain layout missing nodes");
+  process.exit(1);
+}
+if (layoutHasOverlaps(pathLayout)) {
+  console.error("Path chain layout has overlapping nodes");
+  process.exit(1);
+}
+const pathXs = pathIds.map((id) => pathLayout.get(id)!.x);
+for (let i = 1; i < pathXs.length; i += 1) {
+  if (pathXs[i] <= pathXs[i - 1]) {
+    console.error("Path chain nodes must progress left-to-right");
+    process.exit(1);
+  }
+}
+console.log("path chain layout — passed");
