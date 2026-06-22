@@ -31,6 +31,10 @@ from app.schemas.device import (
     DeviceCheckBatchIn,
     DeviceCheckBatchOut,
     DeviceCheckScheduledOut,
+    SnmpDiscoverBatchIn,
+    SnmpDiscoverBatchOut,
+    SnmpDiscoverResultOut,
+    SnmpDiscoverScheduledOut,
 )
 from app.schemas.pagination import PaginatedResponse, paginate_query, paginated
 from app.services import baseline, config_learn, config_mgmt, port_inventory, snmp, snmp_settings as snmp_cfg
@@ -188,6 +192,28 @@ def delete_device(
         )
     db.delete(device)
     db.commit()
+
+
+@router.post("/discover-interfaces-batch", response_model=SnmpDiscoverBatchOut)
+def discover_interfaces_batch(
+    payload: SnmpDiscoverBatchIn,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
+    """SNMP IF-MIB discovery for multiple devices concurrently (background)."""
+    if not payload.device_ids:
+        raise HTTPException(status_code=400, detail="device_ids required")
+    plat = platform_cfg.get_or_create(db)
+    max_workers = max(1, int(plat.provision_max_concurrency or 4))
+    unique = list(dict.fromkeys(payload.device_ids))
+    from app.services import concurrent_snmp_discover
+
+    concurrent_snmp_discover.schedule_snmp_discovers(unique, max_workers=max_workers)
+    return SnmpDiscoverBatchOut(
+        scheduled=len(unique),
+        device_ids=unique,
+        max_workers=min(max_workers, len(unique)),
+    )
 
 
 @router.post("/check-batch", response_model=DeviceCheckBatchOut)
@@ -421,9 +447,13 @@ def initialize_device(
     }
 
 
-@router.post("/{device_id}/discover-interfaces", response_model=list[DeviceInterfaceOut])
+@router.post("/{device_id}/discover-interfaces")
 def discover_interfaces(
     device_id: int,
+    background: bool = Query(
+        default=True,
+        description="true：后台 SNMP 扫描，HTTP 立即返回；false：同步等待完整结果",
+    ),
     db: Session = Depends(get_db),
     _: User = Depends(require_operator),
 ):
@@ -431,24 +461,33 @@ def discover_interfaces(
     device = db.get(Device, device_id)
     if not device:
         raise HTTPException(status_code=404, detail="device not found")
-    from app.services import snmp_device
 
-    cfg = snmp_device.effective_snmp(device)
-    if not cfg["enabled"]:
-        raise HTTPException(status_code=400, detail="该设备未启用 SNMP，请在设备设置中开启")
-    try:
-        ifaces = snmp.discover_interfaces(db, device)
-    except device_management.MgmtUnreachableError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
-    except (RuntimeError, ImportError, ModuleNotFoundError) as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
-    port_inventory.scan_device(db, device)
+    if background:
+        from app.services import concurrent_snmp_discover
+
+        concurrent_snmp_discover.schedule_snmp_discover(device_id)
+        return SnmpDiscoverScheduledOut(
+            scheduled=True,
+            device_id=device.id,
+            device=device.name,
+        )
+
+    from app.services import snmp_discover_service
+
+    result = snmp_discover_service.run_snmp_discover(db, device_id)
+    if not result.get("success"):
+        detail = result.get("error") or "SNMP 发现失败"
+        status = 404 if detail == "device not found" else 400 if "未启用 SNMP" in detail else 502
+        raise HTTPException(status_code=status, detail=detail)
     db.commit()
+
     all_ifaces = db.execute(
         select(DeviceInterface).where(DeviceInterface.device_id == device.id)
     ).scalars().all()
     if device.vendor == Vendor.HUAWEI:
-        all_ifaces = [r for r in all_ifaces if not port_inventory.is_huawei_subinterface(r.name)]
+        all_ifaces = [
+            row for row in all_ifaces if not port_inventory.is_huawei_subinterface(row.name)
+        ]
     return sorted(all_ifaces, key=lambda i: (i.ifindex or 0, i.name))
 
 

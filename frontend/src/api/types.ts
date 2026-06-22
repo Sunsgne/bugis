@@ -106,6 +106,7 @@ export interface DeviceInterface {
   ifindex?: number;
   oper_status?: string;
   discovered_via?: string;
+  updated_at?: string;
 }
 
 export interface SnmpDefaults {

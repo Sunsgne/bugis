@@ -121,6 +121,34 @@ class DeviceCheckBatchOut(BaseModel):
     max_workers: int
 
 
+class SnmpDiscoverBatchIn(BaseModel):
+    device_ids: list[int] = Field(..., min_length=1)
+
+
+class SnmpDiscoverScheduledOut(BaseModel):
+    scheduled: bool = True
+    device_id: int
+    device: str
+
+
+class SnmpDiscoverBatchOut(BaseModel):
+    scheduled: int
+    device_ids: list[int]
+    max_workers: int
+
+
+class SnmpDiscoverResultOut(BaseModel):
+    device_id: int
+    device: str | None = None
+    success: bool
+    interface_count: int | None = None
+    snmp_count: int | None = None
+    sim_count: int | None = None
+    config_count: int | None = None
+    svid_port_count: int | None = None
+    error: str | None = None
+
+
 class DevicePortBindingOut(BaseModel):
     interface_name: str
     binding_type: str  # platform | device

@@ -37,6 +37,7 @@ import AdoptBindingModal from "./AdoptBindingModal";
 import type { InterfaceDescSaveJob, InterfaceDescSaveStatus } from "@/hooks/useInterfaceDescJobs";
 import type { DeviceCheckJob } from "@/hooks/useDeviceCheckJobs";
 import type { LearnJob } from "@/hooks/useLearnJobs";
+import type { SnmpDiscoverJob } from "@/hooks/useSnmpDiscoverJobs";
 import InterfaceNameCell from "./InterfaceNameCell";
 import {
   formatDiscoveredVia,
@@ -90,13 +91,14 @@ interface DevicePortDrawerProps {
   refreshVersion?: number;
   onClose: () => void;
   onCheck: (device: Device) => void;
-  onDiscover: (deviceId: number) => Promise<DeviceInterface[] | void>;
+  onDiscover: (device: Device) => void;
   onLearn: (device: Device) => void | Promise<void>;
   editingDesc?: boolean;
   descDraft?: Record<string, string>;
   saveJob?: InterfaceDescSaveJob | null;
   learnJob?: LearnJob | null;
   checkJob?: DeviceCheckJob | null;
+  discoverJob?: SnmpDiscoverJob | null;
   onBeginEdit?: (physicalPorts: DeviceInterface[]) => void;
   onCancelEdit?: () => void;
   onDraftChange?: (name: string, value: string) => void;
@@ -115,6 +117,7 @@ export default function DevicePortDrawer({
   saveJob = null,
   learnJob = null,
   checkJob = null,
+  discoverJob = null,
   onBeginEdit,
   onCancelEdit,
   onDraftChange,
@@ -129,12 +132,11 @@ export default function DevicePortDrawer({
   const [ifaceSearch, setIfaceSearch] = useState("");
   const [ifaceStatus, setIfaceStatus] = useState<"all" | "up" | "down" | "allocated">("all");
   const [activeTab, setActiveTab] = useState("ports");
-  const [discovering, setDiscovering] = useState(false);
+  const [discoverError, setDiscoverError] = useState<string | null>(null);
   const learning = learnJob?.status === "learning";
   const checking = checkJob?.status === "checking";
+  const discovering = discoverJob?.status === "discovering";
   const [adoptBinding, setAdoptBinding] = useState<DevicePortBinding | null>(null);
-
-  const [discoverError, setDiscoverError] = useState<string | null>(null);
 
   const { message } = AntApp.useApp();
   const savingDesc = saveJob?.status === "saving";
@@ -196,22 +198,8 @@ export default function DevicePortDrawer({
       const rows = await loadIfaces(device.id, false);
       if (cancelled) return;
       if (rows.length === 0) {
-        setDiscovering(true);
         setDiscoverError(null);
-        try {
-          const discovered = await onDiscover(device.id);
-          if (!cancelled && Array.isArray(discovered)) {
-            setDiscoverError(null);
-            setIfaces(discovered.filter((iface) => !isHuaweiSubinterface(iface.name) || device.vendor !== "huawei"));
-          }
-        } catch (e: unknown) {
-          if (!cancelled) {
-            const err = e as { response?: { data?: { detail?: string } } };
-            setDiscoverError(err?.response?.data?.detail || "SNMP 发现失败");
-          }
-        } finally {
-          if (!cancelled) setDiscovering(false);
-        }
+        onDiscover(device);
       }
     })();
 
@@ -219,6 +207,21 @@ export default function DevicePortDrawer({
       cancelled = true;
     };
   }, [device?.id, refreshVersion]);
+
+  const prevDiscoverStatus = useRef<SnmpDiscoverJob["status"] | "idle">("idle");
+  useEffect(() => {
+    if (!device) return;
+    const status = discoverJob?.status ?? "idle";
+    if (prevDiscoverStatus.current === "discovering" && status === "success") {
+      void loadIfaces(device.id, true);
+      void loadBindings(device.id, true);
+      setDiscoverError(null);
+    }
+    if (prevDiscoverStatus.current === "discovering" && status === "error") {
+      setDiscoverError(discoverJob?.message || "SNMP 发现失败");
+    }
+    prevDiscoverStatus.current = status;
+  }, [device, discoverJob?.status, discoverJob?.message]);
 
   const prevSaveStatus = useRef<InterfaceDescSaveStatus>("idle");
   useEffect(() => {
@@ -305,22 +308,13 @@ export default function DevicePortDrawer({
               size="small"
               icon={<NodeIndexOutlined />}
               loading={discovering}
-              onClick={async () => {
-                setDiscovering(true);
+              onClick={() => {
+                if (!device) return;
                 setDiscoverError(null);
-                try {
-                  const data = await onDiscover(device.id);
-                  if (Array.isArray(data)) setIfaces(data);
-                  await loadBindings(device.id);
-                } catch (e: unknown) {
-                  const err = e as { response?: { data?: { detail?: string } } };
-                  setDiscoverError(err?.response?.data?.detail || "SNMP 发现失败");
-                } finally {
-                  setDiscovering(false);
-                }
+                onDiscover(device);
               }}
             >
-              SNMP 发现
+              {discovering ? "扫描中…" : "SNMP 发现"}
             </Button>
             <Button
               size="small"

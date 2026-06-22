@@ -574,7 +574,9 @@ export default function CircuitEndpointsEditor({
     if (!deviceId) return;
     let { data } = await api.get<DeviceInterface[]>(`/devices/${deviceId}/interfaces`);
     if ((!data || data.length === 0) && autoDiscover) {
-      const r = await api.post<DeviceInterface[]>(`/devices/${deviceId}/discover-interfaces`);
+      const r = await api.post<DeviceInterface[]>(`/devices/${deviceId}/discover-interfaces`, null, {
+        params: { background: false },
+      });
       data = r.data;
     }
     setIfaceByDevice((p) => ({ ...p, [deviceId]: data }));
@@ -582,15 +584,36 @@ export default function CircuitEndpointsEditor({
 
   async function discover(deviceId: number) {
     if (!deviceId) return message.warning(tc("请先选择设备"));
-    const hide = message.loading(tc("SNMP 发现 + S-VID 扫描..."), 0);
+    message.info(tc("SNMP 接口扫描已在后台进行…"));
     try {
-      const { data } = await api.post<DeviceInterface[]>(`/devices/${deviceId}/discover-interfaces`);
-      setIfaceByDevice((p) => ({ ...p, [deviceId]: data }));
-      message.success(`${tc("已发现")} ${data.length} ${tc("个接口，并更新 VLAN 占用")}`);
-    } catch (e: any) {
-      message.error(e?.response?.data?.detail || tc("发现失败"));
-    } finally {
-      hide();
+      let baselineCount = 0;
+      try {
+        const existing = await api.get<DeviceInterface[]>(`/devices/${deviceId}/interfaces`);
+        baselineCount = existing.data.length;
+      } catch {
+        baselineCount = 0;
+      }
+      await api.post(`/devices/${deviceId}/discover-interfaces`, null, {
+        params: { background: true },
+      });
+      const startedAt = Date.now();
+      for (let i = 0; i < 90; i += 1) {
+        await new Promise((r) => setTimeout(r, 2000));
+        const { data } = await api.get<DeviceInterface[]>(`/devices/${deviceId}/interfaces`);
+        const maxUpdated = data.reduce((max, row) => {
+          const ts = row.updated_at ? new Date(row.updated_at).getTime() : 0;
+          return Math.max(max, ts);
+        }, 0);
+        if (data.length > baselineCount || (maxUpdated >= startedAt - 1500 && data.length > 0)) {
+          setIfaceByDevice((p) => ({ ...p, [deviceId]: data }));
+          message.success(`${tc("已发现")} ${data.length} ${tc("个接口，并更新 VLAN 占用")}`);
+          return;
+        }
+      }
+      message.error(tc("SNMP 接口扫描超时"));
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { detail?: string } } };
+      message.error(err?.response?.data?.detail || tc("发现失败"));
     }
   }
 
