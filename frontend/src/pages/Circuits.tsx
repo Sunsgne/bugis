@@ -58,6 +58,7 @@ import CircuitAlarmThresholdFields from "../components/CircuitAlarmThresholdFiel
 import { formatOperStatus } from "../utils/networkDisplay";
 import CircuitMonitorPanel from "../components/CircuitMonitorPanel";
 import CircuitEndpointsEditor from "../components/CircuitEndpointsEditor";
+import AdoptVniModal from "../components/AdoptVniModal";
 import ProvisionFeedbackModal from "../components/ProvisionFeedbackModal";
 import ProvisionProgressDock from "../components/ProvisionProgressDock";
 import { CIRCUIT_STATUS, SERVICE_TYPE, statusMeta } from "../constants/statusLabels";
@@ -141,6 +142,7 @@ export default function Circuits() {
   const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
+  const [adoptVniOpen, setAdoptVniOpen] = useState(false);
   const [form] = Form.useForm();
   const [modifyForm] = Form.useForm();
   const [modifyTarget, setModifyTarget] = useState<Circuit | null>(null);
@@ -862,6 +864,7 @@ export default function Circuits() {
           >
             {tc("导出 CSV")}
           </Button>
+          <Button onClick={() => setAdoptVniOpen(true)}>{tc("按 VNI 纳管")}</Button>
           <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>
             {tc("新建专线")}
           </Button>
@@ -1383,6 +1386,16 @@ export default function Circuits() {
         result={provisionResult}
         error={provisionError}
         onClose={() => setDetailsOpen(false)}
+      />
+
+      <AdoptVniModal
+        open={adoptVniOpen}
+        onClose={() => setAdoptVniOpen(false)}
+        onSuccess={(circuit) => {
+          message.success(tc("纳管成功，已登记到平台（未下发配置）"));
+          void loadCircuits(page, pageSize, search);
+          setExpandedRowKeys((prev) => [...prev, circuit.id]);
+        }}
       />
     </PageCard>
   );

@@ -25,6 +25,7 @@ import {
 } from "@ant-design/icons";
 import { api } from "../api/client";
 import OverlayTopologyPanel from "../components/OverlayTopologyPanel";
+import AdoptVniModal from "../components/AdoptVniModal";
 import { empty, page } from "../constants/uiCopy";
 import { useTc } from "@/i18n/useTc";
 import { OVERLAY_SOURCE } from "../constants/statusLabels";
@@ -165,6 +166,8 @@ export default function ControlPlane() {
   const [vni, setVni] = useState<number | undefined>(undefined);
   const [syncing, setSyncing] = useState(false);
   const [scanningOverlay, setScanningOverlay] = useState(false);
+  const [adoptVniOpen, setAdoptVniOpen] = useState(false);
+  const [adoptVniPreset, setAdoptVniPreset] = useState<number | undefined>(undefined);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
 
@@ -315,7 +318,12 @@ export default function ControlPlane() {
         title={tc('现网 VNI / VSI 占用扫描')}
         size="small"
         extra={
-          <Button loading={scanningOverlay} onClick={scanOverlay}>{tc('扫描现网标识')}</Button>
+          <Space>
+            <Button onClick={() => { setAdoptVniPreset(undefined); setAdoptVniOpen(true); }}>
+              {tc("按 VNI 纳管")}
+            </Button>
+            <Button loading={scanningOverlay} onClick={scanOverlay}>{tc('扫描现网标识')}</Button>
+          </Space>
         }
       >
         <Row gutter={[16, 16]}>
@@ -365,6 +373,25 @@ export default function ControlPlane() {
                   dataIndex: "interfaces",
                   width: 140,
                   render: (ifs: string[] | undefined) => (ifs?.length ? ifs.join(", ") : "—"),
+                },
+                {
+                  title: tc("操作"),
+                  width: 90,
+                  render: (_: unknown, row: { source?: string; vni?: number }) =>
+                    row.source === "network" && row.vni != null ? (
+                      <Button
+                        type="link"
+                        size="small"
+                        onClick={() => {
+                          setAdoptVniPreset(row.vni);
+                          setAdoptVniOpen(true);
+                        }}
+                      >
+                        {tc("纳管")}
+                      </Button>
+                    ) : (
+                      "—"
+                    ),
                 },
               ])}
             />
@@ -520,6 +547,19 @@ export default function ControlPlane() {
           ])}
         />
       </Card>
+
+      <AdoptVniModal
+        open={adoptVniOpen}
+        initialVni={adoptVniPreset}
+        onClose={() => {
+          setAdoptVniOpen(false);
+          setAdoptVniPreset(undefined);
+        }}
+        onSuccess={() => {
+          message.success(tc("纳管成功，已登记到平台（未下发配置）"));
+          void load();
+        }}
+      />
     </div>
   );
 }

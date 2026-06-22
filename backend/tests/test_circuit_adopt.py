@@ -25,7 +25,7 @@ def _bootstrap(client: TestClient, headers: dict):
         "/api/v1/devices",
         headers=headers,
         json={
-            "name": f"H3C-{n}",
+            "name": "BJ-LEAF-01",
             "vendor": "h3c",
             "role": "leaf",
             "overlay_tech": "vxlan_evpn",

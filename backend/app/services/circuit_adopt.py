@@ -2,14 +2,21 @@
 from __future__ import annotations
 
 from fastapi import HTTPException
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.circuit import Circuit, CircuitEndpoint
 from app.models.device import Device
 from app.models.enums import AccessMode, CircuitStatus, ServiceType
 from app.models.tenant import Tenant
-from app.schemas.circuit import CircuitAdoptBinding, CircuitAdoptCreate, CircuitEndpointCreate
-from app.services import allocation, concurrent_scan, port_inventory
+from app.schemas.circuit import (
+    CircuitAdoptBinding,
+    CircuitAdoptCreate,
+    CircuitAdoptVniCreate,
+    CircuitEndpointCreate,
+)
+from app.services import allocation, concurrent_scan, port_inventory, validation
+from app.services import igp_cost_service
 from app.controller import controller as bugis_controller
 
 
@@ -106,6 +113,286 @@ def _binding_key(
     cvid: int | None,
 ) -> tuple:
     return (port_inventory._normalize_iface(iface), mode, svid, cvid)
+
+
+def _coerce_access_mode(mode: str | None) -> AccessMode:
+    if not mode:
+        return AccessMode.DOT1Q
+    try:
+        return AccessMode(mode)
+    except ValueError:
+        return AccessMode.DOT1Q
+
+
+def _endpoint_selection_key(
+    device_id: int,
+    interface_name: str,
+    access_mode: AccessMode | str,
+    vlan_id: int | None,
+    inner_vlan_id: int | None,
+) -> str:
+    mode = access_mode.value if isinstance(access_mode, AccessMode) else access_mode
+    return (
+        f"{device_id}:{port_inventory._normalize_iface(interface_name)}:"
+        f"{mode}:{vlan_id or ''}:{inner_vlan_id or ''}"
+    )
+
+
+def _endpoint_labels(count: int) -> list[str]:
+    if count <= 0:
+        return []
+    if count == 1:
+        return ["A"]
+    if count == 2:
+        return ["A", "Z"]
+    return [chr(ord("A") + i) for i in range(count)]
+
+
+def _devices_for_vni_scan(db: Session, device_ids: list[int] | None) -> list[Device]:
+    stmt = select(Device).order_by(Device.id)
+    if device_ids:
+        stmt = stmt.where(Device.id.in_(device_ids))
+    return list(db.execute(stmt).scalars().all())
+
+
+def _l2_service_for_vni(inventory: dict, vni: int) -> dict | None:
+    for raw in inventory.get("l2_services") or []:
+        if raw.get("vni") == vni:
+            return raw
+    return None
+
+
+def _adoptability_reason(
+    db: Session,
+    device: Device,
+    *,
+    interface_name: str,
+    access_mode: AccessMode,
+    vlan_id: int | None,
+    inner_vlan_id: int | None,
+) -> str:
+    bindings = port_inventory.list_port_bindings(db, device)
+    mode = access_mode.value
+    key = _binding_key(interface_name, mode, vlan_id, inner_vlan_id)
+    for item in bindings.get("items") or []:
+        item_key = _binding_key(
+            item["interface_name"],
+            item.get("access_mode") or "dot1q",
+            item.get("s_vid"),
+            item.get("c_vid"),
+        )
+        if item_key != key:
+            continue
+        if item.get("circuit_id"):
+            code = item.get("circuit_code") or item.get("circuit_id")
+            return f"已被专线 {code} 纳管"
+        if item.get("binding_type") == "platform":
+            return "已被平台端点占用"
+        return "现网绑定状态不可纳管"
+    return "未发现可纳管的现网绑定（请先执行现网学习）"
+
+
+def find_adoptable_endpoints_by_vni(
+    db: Session,
+    vni: int,
+    *,
+    device_ids: list[int] | None = None,
+    refresh_inventory: bool = False,
+) -> list[dict]:
+    """Discover access bindings for a VNI across learned device inventories."""
+    devices = _devices_for_vni_scan(db, device_ids)
+    if refresh_inventory and devices:
+        concurrent_scan.scan_devices_parallel(
+            [d.id for d in devices], include_legacy=False
+        )
+        for dev in devices:
+            db.refresh(dev)
+
+    results: list[dict] = []
+    seen: set[tuple] = set()
+
+    for device in devices:
+        inventory = igp_cost_service._latest_inventory_dict(db, device.id)
+        if not inventory:
+            continue
+        l2_svc = _l2_service_for_vni(inventory, vni)
+        for raw in inventory.get("access_bindings") or []:
+            raw_vni = raw.get("vni")
+            if raw_vni is None or int(raw_vni) != int(vni):
+                continue
+            iface = str(raw.get("interface") or "").strip()
+            if not iface:
+                continue
+            mode = _coerce_access_mode(raw.get("access_mode"))
+            svid = raw.get("s_vid")
+            cvid = raw.get("c_vid")
+            dedup_key = (
+                device.id,
+                port_inventory._normalize_iface(iface),
+                mode.value,
+                svid,
+                cvid,
+            )
+            if dedup_key in seen:
+                continue
+            seen.add(dedup_key)
+
+            row = find_adoptable_binding(
+                db,
+                device,
+                interface_name=iface,
+                access_mode=mode,
+                vlan_id=svid,
+                inner_vlan_id=cvid,
+            )
+            adoptable = row is not None
+            reason = None if adoptable else _adoptability_reason(
+                db,
+                device,
+                interface_name=iface,
+                access_mode=mode,
+                vlan_id=svid,
+                inner_vlan_id=cvid,
+            )
+
+            vsi_name = raw.get("vsi_name") or raw.get("bridge_domain")
+            if not vsi_name and l2_svc:
+                vsi_name = l2_svc.get("name")
+
+            results.append({
+                "key": _endpoint_selection_key(device.id, iface, mode, svid, cvid),
+                "device_id": device.id,
+                "device_name": device.name,
+                "interface_name": port_inventory._normalize_iface(iface),
+                "access_mode": mode.value,
+                "vlan_id": svid,
+                "inner_vlan_id": cvid,
+                "vni": int(vni),
+                "vsi_name": vsi_name,
+                "description": raw.get("description"),
+                "rd": raw.get("rd") or (l2_svc.get("rd") if l2_svc else None),
+                "rt": raw.get("rt") or (l2_svc.get("rt") if l2_svc else None),
+                "adoptable": adoptable,
+                "reason": reason,
+            })
+
+    results.sort(
+        key=lambda row: (row["device_name"], row["interface_name"], row.get("vlan_id") or 0)
+    )
+    return results
+
+
+def preview_adopt_by_vni(
+    db: Session,
+    vni: int,
+    *,
+    device_ids: list[int] | None = None,
+    refresh_inventory: bool = False,
+) -> dict:
+    if not (validation.VNI_MIN <= vni <= validation.VNI_MAX):
+        raise HTTPException(status_code=400, detail=f"VNI {vni} 超出有效范围")
+
+    endpoints = find_adoptable_endpoints_by_vni(
+        db,
+        vni,
+        device_ids=device_ids,
+        refresh_inventory=refresh_inventory,
+    )
+    adoptable = [row for row in endpoints if row["adoptable"]]
+
+    vsi_name: str | None = None
+    rd: str | None = None
+    rt: str | None = None
+    for ep in endpoints:
+        if ep.get("vsi_name") and not vsi_name:
+            vsi_name = str(ep["vsi_name"])
+        if ep.get("rd") and not rd:
+            rd = ep["rd"]
+        if ep.get("rt") and not rt:
+            rt = ep["rt"]
+
+    existing = db.execute(select(Circuit).where(Circuit.vni == vni).limit(1)).scalar_one_or_none()
+    conflict_msg = allocation.vni_unavailable_message(db, vni, for_adopt=True)
+
+    return {
+        "vni": vni,
+        "vsi_name": allocation.normalize_vsi_name(vsi_name) if vsi_name else None,
+        "rd": rd,
+        "rt": rt,
+        "endpoints": endpoints,
+        "adoptable_count": len(adoptable),
+        "total_count": len(endpoints),
+        "existing_circuit_id": existing.id if existing else None,
+        "existing_circuit_code": existing.code if existing else None,
+        "existing_circuit_adopted": existing.adopted if existing else None,
+        "conflict_message": conflict_msg,
+        "can_adopt": bool(adoptable) and conflict_msg is None,
+    }
+
+
+def adopt_circuit_from_vni(
+    db: Session,
+    payload: CircuitAdoptVniCreate,
+    *,
+    created_by: str | None = None,
+) -> Circuit:
+    """Register all discovered access bindings for a VNI as one adopted circuit."""
+    if not (validation.VNI_MIN <= payload.vni <= validation.VNI_MAX):
+        raise HTTPException(status_code=400, detail=f"VNI {payload.vni} 超出有效范围")
+
+    msg = allocation.vni_unavailable_message(db, payload.vni, for_adopt=True)
+    if msg:
+        raise HTTPException(status_code=409, detail=msg)
+
+    endpoints = find_adoptable_endpoints_by_vni(
+        db,
+        payload.vni,
+        device_ids=payload.device_ids,
+        refresh_inventory=payload.refresh_inventory,
+    )
+    adoptable = [row for row in endpoints if row["adoptable"]]
+    if payload.endpoint_keys:
+        allowed = set(payload.endpoint_keys)
+        adoptable = [row for row in adoptable if row["key"] in allowed]
+    if not adoptable:
+        raise HTTPException(
+            status_code=409,
+            detail=f"VNI {payload.vni} 未发现可纳管的接入端点，请先执行现网学习",
+        )
+
+    labels = _endpoint_labels(len(adoptable))
+    bindings = [
+        CircuitAdoptBinding(
+            device_id=ep["device_id"],
+            label=labels[i],
+            interface_name=ep["interface_name"],
+            access_mode=_coerce_access_mode(ep["access_mode"]),
+            vlan_id=ep.get("vlan_id"),
+            inner_vlan_id=ep.get("inner_vlan_id"),
+        )
+        for i, ep in enumerate(adoptable)
+    ]
+
+    vsi = payload.vsi_name
+    if not vsi:
+        for ep in adoptable:
+            if ep.get("vsi_name"):
+                vsi = allocation.normalize_vsi_name(str(ep["vsi_name"]))
+                break
+
+    adopt_payload = CircuitAdoptCreate(
+        name=payload.name,
+        tenant_id=payload.tenant_id,
+        service_type=payload.service_type,
+        bindings=bindings,
+        vni=payload.vni,
+        vsi_name=vsi,
+        vlan_id=payload.vlan_id,
+        bandwidth_mbps=payload.bandwidth_mbps,
+        description=payload.description or "现网纳管（按 VNI · 不下发配置）",
+        refresh_inventory=False,
+    )
+    return adopt_circuit_from_inventory(db, adopt_payload, created_by=created_by)
 
 
 def find_adoptable_binding(
@@ -253,12 +540,14 @@ def adopt_circuit_from_inventory(
 
     allocation.auto_allocate_circuit_fields(db, circuit, asn)
     if circuit.vni is not None:
-        msg = allocation.vni_unavailable_message(db, circuit.vni, exclude_circuit_id=circuit.id)
+        msg = allocation.vni_unavailable_message(
+            db, circuit.vni, exclude_circuit_id=circuit.id, for_adopt=True
+        )
         if msg:
             raise HTTPException(status_code=409, detail=msg)
     if circuit.vsi_name:
         msg = allocation.vsi_unavailable_message(
-            db, circuit.vsi_name, exclude_circuit_id=circuit.id
+            db, circuit.vsi_name, exclude_circuit_id=circuit.id, for_adopt=True
         )
         if msg:
             raise HTTPException(status_code=409, detail=msg)
