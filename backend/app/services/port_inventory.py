@@ -8,6 +8,7 @@ Invoked during device check and SNMP interface discovery.
 """
 from __future__ import annotations
 
+import ipaddress
 import re
 from dataclasses import dataclass, field
 
@@ -172,6 +173,8 @@ def list_vlan_interfaces_from_config(config: str, vendor: Vendor) -> list[dict]:
             continue
         name = _normalize_iface(match.group(1))
         description: str | None = None
+        ip_address: str | None = None
+        prefix_len: int | None = None
         idx += 1
         while idx < len(lines):
             stripped = lines[idx].strip()
@@ -185,9 +188,42 @@ def list_vlan_interfaces_from_config(config: str, vendor: Vendor) -> list[dict]:
             desc_match = re.match(r"^description\s+(.+)$", stripped, re.IGNORECASE)
             if desc_match:
                 description = desc_match.group(1).strip()
+            ip_match = re.match(
+                r"^ip(?:v4)?\s+address\s+(\d+\.\d+\.\d+\.\d+)\s+(\S+)",
+                stripped,
+                re.IGNORECASE,
+            )
+            if ip_match:
+                ip_address = ip_match.group(1)
+                prefix_len = _dotted_mask_to_prefix_len(ip_match.group(2))
             idx += 1
-        results.append({"name": name, "description": description})
+        vlan_id: int | None = None
+        vlan_match = re.match(
+            r"^(?:Vlan-interface|Vlanif|VlanIF|Vlan)(\d+)$",
+            name,
+            re.IGNORECASE,
+        )
+        if vlan_match:
+            vlan_id = int(vlan_match.group(1))
+        results.append({
+            "name": name,
+            "description": description,
+            "ip_address": ip_address,
+            "prefix_len": prefix_len,
+            "vlan_id": vlan_id,
+        })
     return results
+
+
+def _dotted_mask_to_prefix_len(mask: str) -> int | None:
+    mask = mask.strip()
+    if re.fullmatch(r"\d+", mask):
+        value = int(mask)
+        return value if 0 <= value <= 32 else None
+    try:
+        return ipaddress.IPv4Network(f"0.0.0.0/{mask}", strict=False).prefixlen
+    except ValueError:
+        return None
 
 
 def list_physical_interfaces_from_config(config: str, vendor: Vendor) -> list[str]:

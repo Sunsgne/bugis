@@ -12,6 +12,34 @@ from app.services import link_planner
 
 _seq = itertools.count(1)
 
+H3C_DCI_CONFIG_A = """\
+sysname gw-a
+interface Vlan-interface1068
+ description PL:P1:isp(zenlayer):cm(hkg-fra):bw(500Mbps)
+ ip address 10.255.106.1 255.255.255.252
+ ospf 100 area 0.0.0.0
+ ospf cost 1000
+#
+interface Vlan-interface1066
+ ip address 10.255.106.5 255.255.255.252
+#
+return
+"""
+
+HUAWEI_DCI_CONFIG_Z = """\
+sysname gw-z
+interface Vlanif1068
+ description PL:P1:isp(zenlayer):cm(hkg-fra):bw(500Mbps)
+ ip address 10.255.106.2 255.255.255.252
+ ospf enable 100 area 0.0.0.0
+ ospf cost 1000
+#
+interface Vlanif1066
+ ip address 10.255.106.6 255.255.255.252
+#
+return
+"""
+
 
 def _site(db, code: str | None = None) -> Site:
     n = next(_seq)
@@ -45,6 +73,61 @@ def _iface(db, device: Device, name: str, speed: int, desc: str, oper: str = "up
             discovered_via="snmp",
         )
     )
+
+
+def _learn(db, device: Device, content: str) -> None:
+    from app.services import config_mgmt
+
+    config_mgmt.add_snapshot(
+        db,
+        device,
+        content,
+        source="learn",
+        note="test",
+        created_by="test",
+    )
+
+
+def test_plan_link_matches_same_vlan_and_30_peer():
+    db = SessionLocal()
+    try:
+        site_a = _site(db)
+        site_z = _site(db)
+        dev_a = _device(db, site_a, "gw-a", DeviceRole.DCI_GW)
+        dev_z = _device(db, site_z, "gw-z", DeviceRole.DCI_GW)
+        _iface(db, dev_a, "Vlan-interface1068", 500, "DCI peer", "up")
+        _iface(db, dev_a, "Vlan-interface1066", 500, "other vlan", "up")
+        _iface(db, dev_z, "Vlanif1068", 500, "DCI peer", "up")
+        _iface(db, dev_z, "Vlanif1066", 500, "other vlan", "up")
+        _learn(db, dev_a, H3C_DCI_CONFIG_A)
+        _learn(db, dev_z, HUAWEI_DCI_CONFIG_Z)
+        db.commit()
+
+        plan = link_planner.plan_link(db, dev_a, dev_z)
+        assert plan is not None
+        assert plan["interface_a"] == "Vlan-interface1068"
+        assert plan["interface_z"] == "Vlanif1068"
+        assert plan["vlan_id"] == 1068
+        assert "/30" in plan["reason"]
+    finally:
+        db.close()
+
+
+def test_plan_link_rejects_mismatched_vlan_when_both_have_vlan():
+    db = SessionLocal()
+    try:
+        site_a = _site(db)
+        site_z = _site(db)
+        dev_a = _device(db, site_a, "gw-a2", DeviceRole.DCI_GW)
+        dev_z = _device(db, site_z, "gw-z2", DeviceRole.DCI_GW)
+        _iface(db, dev_a, "Vlan-interface1068", 500, "DCI", "up")
+        _iface(db, dev_z, "Vlanif1066", 500, "DCI", "up")
+        db.commit()
+
+        plan = link_planner.plan_link(db, dev_a, dev_z)
+        assert plan is None
+    finally:
+        db.close()
 
 
 def test_plan_link_prefers_vlan_interface():

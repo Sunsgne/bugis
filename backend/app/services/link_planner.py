@@ -1,10 +1,12 @@
 """Suggest optimal backbone links between devices based on discovered interfaces.
 
 Backbone / DCI links use L3 VLAN interfaces (H3C Vlan-interface, Huawei Vlanif),
-not customer L2 sub-interfaces or access physical ports.
+not customer L2 sub-interfaces or access physical ports. Auto-planning matches A/Z
+only when the VLAN id is identical and learned /30 interconnect addresses form a pair.
 """
 from __future__ import annotations
 
+import ipaddress
 import re
 from dataclasses import dataclass
 
@@ -19,6 +21,15 @@ from app.services.bw_parser import parse_bw_mbps
 from app.services.igp_cost_service import _normalize_iface
 from app.services.link_monitor import capacity_from_interface
 from app.services.port_inventory import is_huawei_subinterface, is_vlan_interface_name
+
+_VLAN_NUM_RE = re.compile(
+    r"^(?:Vlan-interface|Vlanif|VlanIF|Vlan)(\d+)$",
+    re.IGNORECASE,
+)
+_IP_ADDRESS_LINE = re.compile(
+    r"^ip(?:v4)?\s+address\s+(\d+\.\d+\.\d+\.\d+)\s+(\S+)",
+    re.IGNORECASE,
+)
 
 _UPSTREAM_HINTS = re.compile(
     r"uplink|backbone|dci|trunk|core|peer|ix|transit|互联|上联|骨干|border|spine",
@@ -60,6 +71,69 @@ class ScoredInterface:
 
 def is_vlan_interface(name: str) -> bool:
     return is_vlan_interface_name(name)
+
+
+def vlan_id_from_interface(name: str) -> int | None:
+    """Extract numeric VLAN id from Vlanif / Vlan-interface names."""
+    match = _VLAN_NUM_RE.match(_normalize_iface(name))
+    return int(match.group(1)) if match else None
+
+
+def _mask_to_prefix_len(mask: str) -> int | None:
+    mask = mask.strip()
+    if re.fullmatch(r"\d+", mask):
+        value = int(mask)
+        return value if 0 <= value <= 32 else None
+    try:
+        return ipaddress.IPv4Network(f"0.0.0.0/{mask}", strict=False).prefixlen
+    except ValueError:
+        return None
+
+
+def _is_p2p_30_pair(
+    ip_a: str,
+    prefix_a: int | None,
+    ip_b: str,
+    prefix_b: int | None,
+) -> bool:
+    """True when two addresses are distinct hosts on the same /30."""
+    if not ip_a or not ip_b or ip_a == ip_b:
+        return False
+    if prefix_a != 30 or prefix_b != 30:
+        return False
+    try:
+        net_a = ipaddress.IPv4Network(f"{ip_a}/30", strict=False)
+        net_b = ipaddress.IPv4Network(f"{ip_b}/30", strict=False)
+    except ValueError:
+        return False
+    return net_a.network_address == net_b.network_address
+
+
+def _device_learned_config(db: Session, device: Device) -> str:
+    from app.services import config_fetch, config_mgmt
+
+    learned = config_mgmt.latest_learned(db, device.id)
+    if learned and learned.content.strip():
+        return learned.content
+    if config_mgmt.build_running_config(db, device).strip():
+        return config_mgmt.build_running_config(db, device)
+    ok, content, _err = config_fetch.fetch_running_config(device, db=db)
+    return content if ok else ""
+
+
+def _device_vlan_details(db: Session, device: Device) -> dict[str, dict]:
+    """Learned VLAN L3 interfaces keyed by normalized interface name."""
+    from app.services import port_inventory
+
+    config = _device_learned_config(db, device)
+    if not config.strip():
+        return {}
+    rows = port_inventory.list_vlan_interfaces_from_config(config, device.vendor)
+    out: dict[str, dict] = {}
+    for row in rows:
+        key = _normalize_iface(row["name"])
+        out[key] = row
+    return out
 
 
 def is_bridge_aggregation(name: str) -> bool:
@@ -208,6 +282,65 @@ def best_interface(db: Session, device_id: int) -> ScoredInterface | None:
     return ranked[0] if ranked else None
 
 
+def _best_matched_vlan_pair(
+    db: Session,
+    device_a: Device,
+    device_z: Device,
+) -> tuple[ScoredInterface, ScoredInterface] | None:
+    """Pick A/Z VLAN interfaces with the same VLAN id and optional /30 peer IPs."""
+    ranked_a = [row for row in rank_interfaces(db, device_a.id, limit=50) if row.kind == "vlan"]
+    ranked_b = [row for row in rank_interfaces(db, device_z.id, limit=50) if row.kind == "vlan"]
+    if not ranked_a or not ranked_b:
+        return None
+
+    details_a = _device_vlan_details(db, device_a)
+    details_b = _device_vlan_details(db, device_z)
+
+    best: tuple[ScoredInterface, ScoredInterface] | None = None
+    best_score = -1.0
+    best_reason = ""
+
+    for pick_a in ranked_a:
+        vlan_a = vlan_id_from_interface(pick_a.name)
+        if vlan_a is None:
+            continue
+        meta_a = details_a.get(_normalize_iface(pick_a.name), {})
+        ip_a = meta_a.get("ip_address")
+        prefix_a = meta_a.get("prefix_len")
+
+        for pick_b in ranked_b:
+            vlan_b = vlan_id_from_interface(pick_b.name)
+            if vlan_b != vlan_a:
+                continue
+
+            meta_b = details_b.get(_normalize_iface(pick_b.name), {})
+            ip_b = meta_b.get("ip_address")
+            prefix_b = meta_b.get("prefix_len")
+
+            if ip_a and ip_b:
+                if not _is_p2p_30_pair(ip_a, prefix_a, ip_b, prefix_b):
+                    continue
+                pair_reason = f"VLAN {vlan_a} · /30 {ip_a}↔{ip_b}"
+                pair_score = pick_a.score + pick_b.score + 120.0
+            elif ip_a or ip_b:
+                continue
+            else:
+                pair_reason = f"VLAN {vlan_a} · 同 VLAN 匹配"
+                pair_score = pick_a.score + pick_b.score + 40.0
+
+            if pair_score > best_score:
+                best_score = pair_score
+                best = (pick_a, pick_b)
+                best_reason = pair_reason
+
+    if best is None:
+        return None
+    pick_a, pick_b = best
+    pick_a.reason = f"{pick_a.reason} · {best_reason}" if pick_a.reason else best_reason
+    pick_b.reason = pick_b.reason
+    return best
+
+
 def _device_priority(device: Device) -> int:
     return _ROLE_PRIORITY.get(device.role, 9)
 
@@ -302,16 +435,40 @@ def plan_link(
     if device_a.id == device_z.id:
         return None
 
+    matched_reason: str | None = None
+    pick_z: ScoredInterface | None = None
+
     if interface_a:
         pick_a = _resolve_named_interface(db, device_a.id, interface_a)
-    else:
+    elif interface_z:
         pick_a = best_interface(db, device_a.id)
+    else:
+        matched = _best_matched_vlan_pair(db, device_a, device_z)
+        if matched:
+            pick_a, pick_z = matched
+            matched_reason = pick_a.reason
+        else:
+            pick_a = best_interface(db, device_a.id)
+
     if interface_z:
         pick_z = _resolve_named_interface(db, device_z.id, interface_z)
-    else:
+    elif pick_z is None:
         pick_z = best_interface(db, device_z.id)
+
     if pick_a is None or pick_z is None:
         return None
+
+    if (
+        not interface_a
+        and not interface_z
+        and pick_a.kind == "vlan"
+        and pick_z.kind == "vlan"
+        and not matched_reason
+    ):
+        vlan_a = vlan_id_from_interface(pick_a.name)
+        vlan_b = vlan_id_from_interface(pick_z.name)
+        if vlan_a is None or vlan_b is None or vlan_a != vlan_b:
+            return None
 
     link_type = _link_type(device_a, device_z)
     capacity = _capacity_for_pair(
@@ -321,6 +478,7 @@ def plan_link(
     site_a = db.get(Site, device_a.site_id) if device_a.site_id else None
     site_z = db.get(Site, device_z.site_id) if device_z.site_id else None
     score = round((pick_a.score + pick_z.score) / 2, 1)
+    reason = matched_reason or f"A:{pick_a.reason} · Z:{pick_z.reason}"
 
     return {
         "device_a_id": device_a.id,
@@ -345,7 +503,8 @@ def plan_link(
         "interface_z_reason": pick_z.reason,
         "capacity_mbps": capacity,
         "score": score,
-        "reason": f"A:{pick_a.reason} · Z:{pick_z.reason}",
+        "reason": reason,
+        "vlan_id": vlan_id_from_interface(pick_a.name),
     }
 
 
@@ -383,9 +542,9 @@ def suggest_backbone_links(db: Session) -> list[dict]:
                     -row["capacity_mbps"],
                 )
             )
-            best = candidates[0]
-            best["recommended"] = True
-            suggestions.append(best)
+            for plan in candidates:
+                plan["recommended"] = True
+                suggestions.append(plan)
 
     for site_id, members in by_site.items():
         if site_id is None or len(members) < 2:
