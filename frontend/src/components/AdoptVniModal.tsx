@@ -135,7 +135,7 @@ export default function AdoptVniModal({ open, initialVni, onClose, onSuccess }: 
         bandwidth_mbps: values.bandwidth_mbps,
         description: values.description || "现网纳管（按 VNI · 不下发配置）",
         endpoint_keys: selectedKeys,
-        refresh_inventory: false,
+        refresh_inventory: true,
       });
       onSuccess(data);
       onClose();
