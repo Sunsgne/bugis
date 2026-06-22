@@ -16,7 +16,7 @@ import { labelForOption, DEVICE_ROLE_OPTIONS } from "@/constants/formOptions";
 import { vendorColors } from "@/charts/theme";
 import type { LinkUsage, Topology } from "@/api/types";
 import { useTc } from "@/i18n/useTc";
-import { layoutDeviceGraph, siteLabelForNode, edgeHandlePairForLayout, edgeHandlePairsForGraph, layoutEdgeCurvature, findHubNodeId, applySpokePeerSeparation } from "@/utils/deviceGraphLayout";
+import { layoutDeviceGraph, layoutPathChain, siteLabelForNode, edgeHandlePairForLayout, edgeHandlePairsForGraph, layoutEdgeCurvature, findHubNodeId, applySpokePeerSeparation } from "@/utils/deviceGraphLayout";
 import {
   curvatureForEdge,
   linkEdgeShortLabel,
@@ -69,20 +69,29 @@ function buildDeviceGraph(
   highlightDeviceIds?: Set<number> | null,
   highlightLinkIds?: Set<number> | null,
   hoveredLinkId?: number | null,
+  pathDeviceOrder?: number[] | null,
 ): { nodes: Node[]; edges: Edge[] } {
-  const autoPositions = layoutDeviceGraph(
-    topo.nodes.map((n) => ({ id: n.id, site_id: n.site_id })),
-    topo.edges.map((e) => ({ source: e.source, target: e.target })),
-    size.w,
-    size.h,
-  );
+  const usePathChain =
+    pathDeviceOrder != null
+    && pathDeviceOrder.length >= 2
+    && pathDeviceOrder.length <= 8
+    && pathDeviceOrder.every((id) => topo.nodes.some((n) => n.id === id));
+
+  const autoPositions = usePathChain
+    ? layoutPathChain(pathDeviceOrder!, size.w, size.h)
+    : layoutDeviceGraph(
+      topo.nodes.map((n) => ({ id: n.id, site_id: n.site_id })),
+      topo.edges.map((e) => ({ source: e.source, target: e.target })),
+      size.w,
+      size.h,
+    );
 
   const connected = new Set<number>();
   for (const e of topo.edges) {
     connected.add(e.source);
     connected.add(e.target);
   }
-  const dimUnconnected = highlightDeviceIds != null && highlightDeviceIds.size > 0;
+  const dimUnconnected = !usePathChain && highlightDeviceIds != null && highlightDeviceIds.size > 0;
 
   const posById = new Map<number, { x: number; y: number }>();
   for (const n of topo.nodes) {
@@ -187,6 +196,10 @@ type Props = {
   onPositionsChange?: (positions: TopologyNodePositions, options?: { autoSave?: boolean }) => void;
   className?: string;
   highlightPath?: { deviceIds?: number[]; linkIds?: number[] };
+  /** Fill parent height (mini embedded views) instead of default min-height viewport sizing. */
+  fillContainer?: boolean;
+  /** Ordered device ids for left-to-right path chain layout. */
+  pathDeviceOrder?: number[];
 };
 
 export default function PhysicalTopologyFlow({
@@ -197,6 +210,8 @@ export default function PhysicalTopologyFlow({
   onPositionsChange,
   className,
   highlightPath,
+  fillContainer = false,
+  pathDeviceOrder,
 }: Props) {
   const { tc } = useTc();
   const hostRef = useRef<HTMLDivElement>(null);
@@ -220,7 +235,17 @@ export default function PhysicalTopologyFlow({
     apply();
     const ro = new ResizeObserver(apply);
     ro.observe(el);
-    return () => ro.disconnect();
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) apply();
+      },
+      { threshold: 0.01 },
+    );
+    io.observe(el);
+    return () => {
+      ro.disconnect();
+      io.disconnect();
+    };
   }, []);
 
   const linksById = useMemo(() => new Map(links.map((l) => [l.link_id, l])), [links]);
@@ -237,11 +262,21 @@ export default function PhysicalTopologyFlow({
     return new Set(ids);
   }, [highlightPath?.linkIds]);
 
-  const graphKey = `${size.w}x${size.h}-${topo.nodes.length}-${topo.edges.length}-${links.length}-${Object.keys(positions).length}-${highlightPath?.deviceIds?.join(",") || ""}-${highlightPath?.linkIds?.join(",") || ""}`;
+  const graphKey = `${size.w}x${size.h}-${topo.nodes.length}-${topo.edges.length}-${links.length}-${Object.keys(positions).length}-${highlightPath?.deviceIds?.join(",") || ""}-${highlightPath?.linkIds?.join(",") || ""}-${pathDeviceOrder?.join(",") || ""}`;
 
   const { nodes: layoutNodes, edges: layoutEdges } = useMemo(
-    () => buildDeviceGraph(topo, size, linksById, positions, tc, highlightDeviceSet, highlightLinkSet, hoveredLinkId),
-    [topo, size, linksById, positions, tc, highlightDeviceSet, highlightLinkSet, hoveredLinkId],
+    () => buildDeviceGraph(
+      topo,
+      size,
+      linksById,
+      positions,
+      tc,
+      highlightDeviceSet,
+      highlightLinkSet,
+      hoveredLinkId,
+      pathDeviceOrder,
+    ),
+    [topo, size, linksById, positions, tc, highlightDeviceSet, highlightLinkSet, hoveredLinkId, pathDeviceOrder],
   );
 
   const onNodeDragStop = useCallback(
@@ -267,7 +302,14 @@ export default function PhysicalTopologyFlow({
   }, [layoutEdges, setFlowEdges]);
 
   return (
-    <div ref={hostRef} className={["physical-topology-flow device-graph-flow", className].filter(Boolean).join(" ")}>
+    <div
+      ref={hostRef}
+      className={[
+        "physical-topology-flow device-graph-flow",
+        fillContainer ? "physical-topology-flow-fill" : "",
+        className,
+      ].filter(Boolean).join(" ")}
+    >
       <ReactFlow
         nodes={flowNodes}
         edges={flowEdges}

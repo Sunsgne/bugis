@@ -14,6 +14,7 @@ import { api } from "../api/client";
 import type { ForwardingPath, LinkUsage, Topology } from "../api/types";
 import PhysicalTopologyFlow from "./PhysicalTopologyFlow";
 import { useTc } from "@/i18n/useTc";
+import { filterLinksForPath, filterTopologyForPath } from "@/utils/topologyPathFilter";
 
 const COMPARISON_COLORS: Record<string, string> = {
   match: "green",
@@ -40,6 +41,8 @@ export default function CircuitForwardingPathPanel({ circuitId, circuitCode }: P
   const [error, setError] = useState<string | null>(null);
   const [topo, setTopo] = useState<Topology | null>(null);
   const [links, setLinks] = useState<LinkUsage[]>([]);
+  const [activeTab, setActiveTab] = useState("business");
+  const [topoLoading, setTopoLoading] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -60,8 +63,17 @@ export default function CircuitForwardingPathPanel({ circuitId, circuitCode }: P
   }, [load]);
 
   useEffect(() => {
-    if (!data?.underlay?.topology_highlight?.device_ids?.length) return;
+    setActiveTab("business");
+    setTopo(null);
+    setLinks([]);
+  }, [circuitId]);
+
+  useEffect(() => {
+    const hl = data?.underlay?.topology_highlight;
+    if (activeTab !== "underlay" || !hl?.device_ids?.length) return;
+
     let cancelled = false;
+    setTopoLoading(true);
     (async () => {
       try {
         const [topoRes, linksRes] = await Promise.all([
@@ -69,20 +81,28 @@ export default function CircuitForwardingPathPanel({ circuitId, circuitCode }: P
           api.get<LinkUsage[]>("/capacity/links/usage"),
         ]);
         if (!cancelled) {
-          setTopo(topoRes.data);
-          setLinks(linksRes.data);
+          setTopo(
+            filterTopologyForPath(topoRes.data, hl.device_ids, hl.link_ids || []),
+          );
+          setLinks(filterLinksForPath(linksRes.data, hl.link_ids || []));
         }
       } catch {
         if (!cancelled) {
           setTopo(null);
           setLinks([]);
         }
+      } finally {
+        if (!cancelled) setTopoLoading(false);
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [data?.underlay?.topology_highlight?.device_ids?.length, data?.underlay?.topology_highlight?.link_ids?.length]);
+  }, [
+    activeTab,
+    data?.underlay?.topology_highlight?.device_ids,
+    data?.underlay?.topology_highlight?.link_ids,
+  ]);
 
   const highlightPath = useMemo(
     () => ({
@@ -91,6 +111,12 @@ export default function CircuitForwardingPathPanel({ circuitId, circuitCode }: P
     }),
     [data?.underlay?.topology_highlight],
   );
+
+  const pathTopo = useMemo(() => {
+    if (!topo || !highlightPath.deviceIds?.length) return null;
+    if (topo.nodes.length === 0) return null;
+    return topo;
+  }, [topo, highlightPath.deviceIds?.length]);
 
   if (loading) {
     return (
@@ -145,6 +171,8 @@ export default function CircuitForwardingPathPanel({ circuitId, circuitCode }: P
 
       <Tabs
         size="small"
+        activeKey={activeTab}
+        onChange={setActiveTab}
         items={[
           {
             key: "business",
@@ -246,22 +274,35 @@ export default function CircuitForwardingPathPanel({ circuitId, circuitCode }: P
             label: tc("Underlay"),
             children: (
               <div>
-                {topo && highlightPath.deviceIds?.length ? (
+                {topoLoading ? (
+                  <div style={{ height: 320, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
+                    <Spin tip={tc("加载路径拓扑…")} />
+                  </div>
+                ) : pathTopo && highlightPath.deviceIds?.length ? (
                   <div style={{ marginBottom: 16 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                       <Typography.Text strong>{tc("拓扑路径高亮")}</Typography.Text>
                       <Link to={`/topology?highlight_circuit=${circuitId}`}>{tc("在拓扑页打开")}</Link>
                     </div>
-                    <div style={{ height: 320, border: "1px solid var(--border-color, #f0f0f0)", borderRadius: 8, overflow: "hidden" }}>
+                    <div className="circuit-path-topology-wrap">
                       <PhysicalTopologyFlow
-                        topo={topo}
+                        topo={pathTopo}
                         links={links}
                         savedPositions={{}}
                         highlightPath={highlightPath}
+                        pathDeviceOrder={highlightPath.deviceIds}
+                        fillContainer
                         className="circuit-path-topology-mini"
                       />
                     </div>
                   </div>
+                ) : highlightPath.deviceIds?.length ? (
+                  <Alert
+                    type="warning"
+                    showIcon
+                    style={{ marginBottom: 16 }}
+                    message={tc("路径设备未出现在容量拓扑中，请确认骨干链路已配置")}
+                  />
                 ) : null}
                 <Typography.Text strong style={{ display: "block", marginBottom: 8 }}>
                   {tc("IGP 计算路径")}
