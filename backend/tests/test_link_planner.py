@@ -113,6 +113,47 @@ def test_plan_link_matches_same_vlan_and_30_peer():
         db.close()
 
 
+def test_plan_link_ignores_vlan_1_match():
+    db = SessionLocal()
+    try:
+        site_a = _site(db)
+        site_z = _site(db)
+        dev_a = _device(db, site_a, "gw-a-v1", DeviceRole.DCI_GW)
+        dev_z = _device(db, site_z, "gw-z-v1", DeviceRole.DCI_GW)
+        _iface(db, dev_a, "Vlan-interface1", 1000, "default vlan", "up")
+        _iface(db, dev_z, "Vlanif1", 1000, "default vlan", "up")
+        db.commit()
+
+        plan = link_planner.plan_link(db, dev_a, dev_z)
+        assert plan is None
+    finally:
+        db.close()
+
+
+def test_plan_link_prefers_non_vlan_1_over_vlan_1():
+    db = SessionLocal()
+    try:
+        site_a = _site(db)
+        site_z = _site(db)
+        dev_a = _device(db, site_a, "gw-a-v1b", DeviceRole.DCI_GW)
+        dev_z = _device(db, site_z, "gw-z-v1b", DeviceRole.DCI_GW)
+        _iface(db, dev_a, "Vlan-interface1", 1000, "default vlan", "up")
+        _iface(db, dev_a, "Vlan-interface1068", 500, "DCI peer", "up")
+        _iface(db, dev_z, "Vlanif1", 1000, "default vlan", "up")
+        _iface(db, dev_z, "Vlanif1068", 500, "DCI peer", "up")
+        _learn(db, dev_a, H3C_DCI_CONFIG_A)
+        _learn(db, dev_z, HUAWEI_DCI_CONFIG_Z)
+        db.commit()
+
+        plan = link_planner.plan_link(db, dev_a, dev_z)
+        assert plan is not None
+        assert plan["interface_a"] == "Vlan-interface1068"
+        assert plan["interface_z"] == "Vlanif1068"
+        assert plan["vlan_id"] == 1068
+    finally:
+        db.close()
+
+
 def test_plan_link_rejects_mismatched_vlan_when_both_have_vlan():
     db = SessionLocal()
     try:
