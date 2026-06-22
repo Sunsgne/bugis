@@ -38,10 +38,6 @@ const LINK_TYPE_LABEL: Record<string, string> = {
   uplink: "上联",
 };
 
-function gbps(mbps: number) {
-  return Math.round((mbps || 0) / 1000);
-}
-
 function siteRouteLabel(r: LinkUsage) {
   const a = r.site_a_code || r.site_a || "—";
   const z = r.site_z_code || r.site_z || "—";
@@ -515,7 +511,7 @@ export default function Capacity() {
               width: 180,
               align: "right",
               sorter: (a, b) => a.used_mbps - b.used_mbps,
-              render: (_: unknown, r) => `${gbps(r.used_mbps)} / ${gbps(r.capacity_mbps)} Gbps`,
+              render: (_: unknown, r) => `${fmtLinkBw(r.used_mbps)} / ${fmtLinkBw(r.capacity_mbps)}`,
             },
             {
               title: tc('带宽分配率'),
