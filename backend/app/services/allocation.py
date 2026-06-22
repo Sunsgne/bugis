@@ -81,12 +81,16 @@ def vsi_in_use(db: Session, vsi_name: str, *, exclude_circuit_id: int | None = N
 
 
 def vni_unavailable_message(
-    db: Session, vni: int, *, exclude_circuit_id: int | None = None
+    db: Session,
+    vni: int,
+    *,
+    exclude_circuit_id: int | None = None,
+    for_adopt: bool = False,
 ) -> str | None:
     other = vni_in_use(db, vni, exclude_circuit_id=exclude_circuit_id)
     if other:
         return f"VNI {vni} 已被专线 {other.code} 占用"
-    if settings.smart_overlay_allocation:
+    if settings.smart_overlay_allocation and not for_adopt:
         from app.services.overlay_inventory import vni_conflict_on_network
 
         conflict = vni_conflict_on_network(db, vni, exclude_circuit_id=exclude_circuit_id)
@@ -96,12 +100,16 @@ def vni_unavailable_message(
 
 
 def vsi_unavailable_message(
-    db: Session, vsi_name: str, *, exclude_circuit_id: int | None = None
+    db: Session,
+    vsi_name: str,
+    *,
+    exclude_circuit_id: int | None = None,
+    for_adopt: bool = False,
 ) -> str | None:
     other = vsi_in_use(db, vsi_name, exclude_circuit_id=exclude_circuit_id)
     if other:
         return f"VSI {vsi_name} 已被专线 {other.code} 占用"
-    if settings.smart_overlay_allocation:
+    if settings.smart_overlay_allocation and not for_adopt:
         from app.services.overlay_inventory import vsi_conflict_on_network
 
         conflict = vsi_conflict_on_network(

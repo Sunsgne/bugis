@@ -86,6 +86,52 @@ class CircuitAdoptCreate(BaseModel):
     refresh_inventory: bool = False
 
 
+class CircuitAdoptVniEndpointPreview(BaseModel):
+    key: str
+    device_id: int
+    device_name: str
+    interface_name: str
+    access_mode: AccessMode = AccessMode.DOT1Q
+    vlan_id: int | None = None
+    inner_vlan_id: int | None = None
+    vni: int
+    vsi_name: str | None = None
+    description: str | None = None
+    rd: str | None = None
+    rt: str | None = None
+    adoptable: bool
+    reason: str | None = None
+
+
+class CircuitAdoptVniPreview(BaseModel):
+    vni: int
+    vsi_name: str | None = None
+    rd: str | None = None
+    rt: str | None = None
+    endpoints: list[CircuitAdoptVniEndpointPreview]
+    adoptable_count: int
+    total_count: int
+    existing_circuit_id: int | None = None
+    existing_circuit_code: str | None = None
+    existing_circuit_adopted: bool | None = None
+    conflict_message: str | None = None
+    can_adopt: bool
+
+
+class CircuitAdoptVniCreate(BaseModel):
+    name: str
+    tenant_id: int
+    vni: int
+    service_type: ServiceType = ServiceType.L2VPN_EVPN
+    device_ids: list[int] | None = None
+    endpoint_keys: list[str] | None = None
+    vsi_name: str | None = None
+    vlan_id: int | None = None
+    bandwidth_mbps: int | None = None
+    description: str | None = None
+    refresh_inventory: bool = True
+
+
 class CircuitCreate(CircuitBase):
     code: str | None = None  # auto-generated when omitted
     endpoints: list[CircuitEndpointCreate] = []

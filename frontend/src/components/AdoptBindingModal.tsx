@@ -119,7 +119,7 @@ export default function AdoptBindingModal({
       destroyOnClose
       maskClosable={!loading}
     >
-      <Typography.Paragraph type="secondary" style={{ marginBottom: 16 }}>{tc('将设备上已运行的 S-VID 业务登记到平台，')}<Typography.Text strong>{tc('不会向设备下发任何配置')}</Typography.Text>{tc('，现网流量不受影响。建议开启「定时现网自学习」以持续同步线下变更。')}</Typography.Paragraph>
+      <Typography.Paragraph type="secondary" style={{ marginBottom: 16 }}>{tc('将设备上已运行的业务登记到平台（推荐在控制面按 VNI 纳管以自动关联整网端点）。')}<Typography.Text strong>{tc('不会向设备下发任何配置')}</Typography.Text>{tc('，现网流量不受影响。建议开启「定时现网自学习」以持续同步线下变更。')}</Typography.Paragraph>
       {binding ? (
         <Typography.Paragraph style={{ marginBottom: 16 }}>
           接口 {binding.interface_name} ·{" "}

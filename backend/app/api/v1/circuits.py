@@ -18,6 +18,8 @@ from app.models.user import User
 from app.models.workorder import WorkOrder
 from app.schemas.circuit import (
     CircuitAdoptCreate,
+    CircuitAdoptVniCreate,
+    CircuitAdoptVniPreview,
     CircuitCreate,
     CircuitEndpointCreate,
     CircuitEndpointOut,
@@ -206,6 +208,44 @@ def create_circuit(
         if not ok:
             raise HTTPException(status_code=409, detail=msg)
 
+    db.commit()
+    db.refresh(circuit)
+    return _to_circuit_out(db, circuit)
+
+
+@router.get("/adopt-by-vni/preview", response_model=CircuitAdoptVniPreview)
+def preview_adopt_by_vni(
+    vni: int = Query(..., ge=1),
+    device_ids: str | None = Query(
+        None, description="Comma-separated device IDs to limit discovery"
+    ),
+    refresh_inventory: bool = False,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    """Preview endpoints discovered for a VNI from whole-network learned config."""
+    parsed_ids: list[int] | None = None
+    if device_ids:
+        parsed_ids = [int(part.strip()) for part in device_ids.split(",") if part.strip()]
+    data = circuit_adopt.preview_adopt_by_vni(
+        db,
+        vni,
+        device_ids=parsed_ids,
+        refresh_inventory=refresh_inventory,
+    )
+    return CircuitAdoptVniPreview(**data)
+
+
+@router.post("/adopt-from-vni", response_model=CircuitOut, status_code=201)
+def adopt_circuit_from_vni(
+    payload: CircuitAdoptVniCreate,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_operator),
+):
+    """Adopt an on-box VNI service by auto-associating learned devices and interfaces."""
+    circuit = circuit_adopt.adopt_circuit_from_vni(
+        db, payload, created_by=user.username
+    )
     db.commit()
     db.refresh(circuit)
     return _to_circuit_out(db, circuit)
