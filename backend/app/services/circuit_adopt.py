@@ -162,6 +162,83 @@ def _l2_service_for_vni(inventory: dict, vni: int) -> dict | None:
     return None
 
 
+def _l2_service_names(inventory: dict) -> dict[str, dict]:
+    """Map VSI/BD aliases (incl. Huawei bd_N) onto l2_service rows."""
+    out: dict[str, dict] = {}
+    for raw in inventory.get("l2_services") or []:
+        name = str(raw.get("name") or "").strip()
+        if not name:
+            continue
+        out[name] = raw
+        if name.startswith("bd_"):
+            out.setdefault(name[3:], raw)
+    return out
+
+
+def _service_name_matches(link_name: str, service_name: str | None) -> bool:
+    if not link_name or not service_name:
+        return False
+    link = str(link_name).strip()
+    svc = str(service_name).strip()
+    if link == svc:
+        return True
+    if svc.startswith("bd_") and link == svc[3:]:
+        return True
+    if link.startswith("bd_") and svc == link[3:]:
+        return True
+    return False
+
+
+def _binding_vni(raw: dict, inventory: dict) -> int | None:
+    raw_vni = raw.get("vni")
+    if raw_vni is not None:
+        return int(raw_vni)
+
+    l2_by_name = _l2_service_names(inventory)
+    for key in ("vsi_name", "bridge_domain"):
+        link = raw.get(key)
+        if not link:
+            continue
+        svc = l2_by_name.get(str(link))
+        if svc and svc.get("vni") is not None:
+            return int(svc["vni"])
+    return None
+
+
+def _binding_matches_vni(raw: dict, vni: int, inventory: dict) -> bool:
+    """True when an access binding belongs to the target EVPN VNI."""
+    target = int(vni)
+    resolved = _binding_vni(raw, inventory)
+    if resolved == target:
+        return True
+
+    link_names = [
+        str(raw[key]).strip()
+        for key in ("vsi_name", "bridge_domain")
+        if raw.get(key)
+    ]
+    l2_svc = _l2_service_for_vni(inventory, target)
+    if l2_svc:
+        svc_name = l2_svc.get("name")
+        if any(_service_name_matches(name, svc_name) for name in link_names):
+            return True
+        iface = str(raw.get("interface") or "").strip()
+        if iface and iface in (l2_svc.get("interfaces") or []):
+            return True
+
+    return False
+
+
+def _interface_name_candidates(db: Session, device: Device, interface_name: str) -> list[str]:
+    canonical = port_inventory.resolve_interface_name(db, device, interface_name)
+    names: list[str] = []
+    for candidate in (canonical, interface_name):
+        norm = port_inventory._normalize_iface(candidate)
+        if norm and norm not in names:
+            names.append(norm)
+    return names
+
+
 def _adoptability_reason(
     db: Session,
     device: Device,
@@ -173,7 +250,10 @@ def _adoptability_reason(
 ) -> str:
     bindings = port_inventory.list_port_bindings(db, device)
     mode = access_mode.value
-    key = _binding_key(interface_name, mode, vlan_id, inner_vlan_id)
+    keys = {
+        _binding_key(name, mode, vlan_id, inner_vlan_id)
+        for name in _interface_name_candidates(db, device, interface_name)
+    }
     for item in bindings.get("items") or []:
         item_key = _binding_key(
             item["interface_name"],
@@ -181,7 +261,7 @@ def _adoptability_reason(
             item.get("s_vid"),
             item.get("c_vid"),
         )
-        if item_key != key:
+        if item_key not in keys:
             continue
         if item.get("circuit_id"):
             code = item.get("circuit_code") or item.get("circuit_id")
@@ -190,6 +270,78 @@ def _adoptability_reason(
             return "已被平台端点占用"
         return "现网绑定状态不可纳管"
     return "未发现可纳管的现网绑定（请先执行现网学习）"
+
+
+def _append_vni_endpoint_candidate(
+    db: Session,
+    device: Device,
+    *,
+    vni: int,
+    inventory: dict,
+    raw: dict,
+    l2_svc: dict | None,
+    seen: set[tuple],
+    results: list[dict],
+) -> None:
+    iface = str(raw.get("interface") or "").strip()
+    if not iface:
+        return
+    if not _binding_matches_vni(raw, vni, inventory):
+        return
+
+    mode = _coerce_access_mode(raw.get("access_mode"))
+    svid = raw.get("s_vid")
+    cvid = raw.get("c_vid")
+    canonical_iface = port_inventory.resolve_interface_name(db, device, iface)
+    dedup_key = (
+        device.id,
+        port_inventory._normalize_iface(canonical_iface),
+        mode.value,
+        svid,
+        cvid,
+    )
+    if dedup_key in seen:
+        return
+    seen.add(dedup_key)
+
+    row = find_adoptable_binding(
+        db,
+        device,
+        interface_name=iface,
+        access_mode=mode,
+        vlan_id=svid,
+        inner_vlan_id=cvid,
+    )
+    adoptable = row is not None
+    reason = None if adoptable else _adoptability_reason(
+        db,
+        device,
+        interface_name=iface,
+        access_mode=mode,
+        vlan_id=svid,
+        inner_vlan_id=cvid,
+    )
+
+    vsi_name = raw.get("vsi_name") or raw.get("bridge_domain")
+    if not vsi_name and l2_svc:
+        vsi_name = l2_svc.get("name")
+
+    results.append({
+        "key": _endpoint_selection_key(device.id, canonical_iface, mode, svid, cvid),
+        "device_id": device.id,
+        "device_name": device.name,
+        "interface_name": port_inventory._normalize_iface(canonical_iface),
+        "access_mode": mode.value,
+        "vlan_id": svid,
+        "inner_vlan_id": cvid,
+        "vni": int(vni),
+        "vsi_name": vsi_name,
+        "description": raw.get("description"),
+        "rd": raw.get("rd") or (l2_svc.get("rd") if l2_svc else None),
+        "rt": raw.get("rt") or (l2_svc.get("rt") if l2_svc else None),
+        "adoptable": adoptable,
+        "reason": reason,
+    })
 
 
 def find_adoptable_endpoints_by_vni(
@@ -216,65 +368,49 @@ def find_adoptable_endpoints_by_vni(
         if not inventory:
             continue
         l2_svc = _l2_service_for_vni(inventory, vni)
+        bindings_by_iface = {
+            str(raw.get("interface") or "").strip(): raw
+            for raw in inventory.get("access_bindings") or []
+        }
         for raw in inventory.get("access_bindings") or []:
-            raw_vni = raw.get("vni")
-            if raw_vni is None or int(raw_vni) != int(vni):
-                continue
-            iface = str(raw.get("interface") or "").strip()
-            if not iface:
-                continue
-            mode = _coerce_access_mode(raw.get("access_mode"))
-            svid = raw.get("s_vid")
-            cvid = raw.get("c_vid")
-            dedup_key = (
-                device.id,
-                port_inventory._normalize_iface(iface),
-                mode.value,
-                svid,
-                cvid,
-            )
-            if dedup_key in seen:
-                continue
-            seen.add(dedup_key)
-
-            row = find_adoptable_binding(
+            _append_vni_endpoint_candidate(
                 db,
                 device,
-                interface_name=iface,
-                access_mode=mode,
-                vlan_id=svid,
-                inner_vlan_id=cvid,
-            )
-            adoptable = row is not None
-            reason = None if adoptable else _adoptability_reason(
-                db,
-                device,
-                interface_name=iface,
-                access_mode=mode,
-                vlan_id=svid,
-                inner_vlan_id=cvid,
+                vni=vni,
+                inventory=inventory,
+                raw=raw,
+                l2_svc=l2_svc,
+                seen=seen,
+                results=results,
             )
 
-            vsi_name = raw.get("vsi_name") or raw.get("bridge_domain")
-            if not vsi_name and l2_svc:
-                vsi_name = l2_svc.get("name")
-
-            results.append({
-                "key": _endpoint_selection_key(device.id, iface, mode, svid, cvid),
-                "device_id": device.id,
-                "device_name": device.name,
-                "interface_name": port_inventory._normalize_iface(iface),
-                "access_mode": mode.value,
-                "vlan_id": svid,
-                "inner_vlan_id": cvid,
-                "vni": int(vni),
-                "vsi_name": vsi_name,
-                "description": raw.get("description"),
-                "rd": raw.get("rd") or (l2_svc.get("rd") if l2_svc else None),
-                "rt": raw.get("rt") or (l2_svc.get("rt") if l2_svc else None),
-                "adoptable": adoptable,
-                "reason": reason,
-            })
+        if l2_svc:
+            for iface in l2_svc.get("interfaces") or []:
+                iface = str(iface).strip()
+                if not iface:
+                    continue
+                raw = bindings_by_iface.get(iface)
+                if raw:
+                    continue
+                vlans = l2_svc.get("vlans") or [None]
+                for svid in vlans:
+                    synthetic = {
+                        "interface": iface,
+                        "access_mode": "dot1q",
+                        "s_vid": svid,
+                        "vsi_name": l2_svc.get("name"),
+                        "vni": vni,
+                    }
+                    _append_vni_endpoint_candidate(
+                        db,
+                        device,
+                        vni=vni,
+                        inventory=inventory,
+                        raw=synthetic,
+                        l2_svc=l2_svc,
+                        seen=seen,
+                        results=results,
+                    )
 
     results.sort(
         key=lambda row: (row["device_name"], row["interface_name"], row.get("vlan_id") or 0)
@@ -412,7 +548,10 @@ def find_adoptable_binding(
     """
     bindings = port_inventory.list_port_bindings(db, device)
     mode = access_mode.value
-    key = _binding_key(interface_name, mode, vlan_id, inner_vlan_id)
+    keys = {
+        _binding_key(name, mode, vlan_id, inner_vlan_id)
+        for name in _interface_name_candidates(db, device, interface_name)
+    }
     for row in bindings.get("items") or []:
         row_key = _binding_key(
             row["interface_name"],
@@ -420,7 +559,7 @@ def find_adoptable_binding(
             row.get("s_vid"),
             row.get("c_vid"),
         )
-        if row_key != key:
+        if row_key not in keys:
             continue
         circuit_id = row.get("circuit_id")
         if circuit_id:

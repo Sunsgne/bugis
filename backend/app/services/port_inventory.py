@@ -282,6 +282,10 @@ def _iface_aliases(name: str) -> set[str]:
     if norm.lower().startswith("twenty-fivegige"):
         aliases.add(f"25GE{suffix}")
         aliases.add(f"GE{suffix}")
+    elif re.match(r"25g-\d", norm.lower()):
+        aliases.add(f"Twenty-FiveGigE{suffix}")
+        aliases.add(f"25GE{suffix}")
+        aliases.add(f"GE{suffix}")
     elif norm.lower().startswith("hundredgige"):
         aliases.add(f"100GE{suffix}")
         aliases.add(f"HE{suffix}")
@@ -1155,6 +1159,15 @@ def scan_device(db: Session, device: Device, *, include_legacy: bool = False) ->
         "conflicts": conflicts,
         "ports": port_summaries,
     }
+
+
+def resolve_interface_name(db: Session, device: Device, interface_name: str) -> str:
+    """Map config/CLI interface names onto canonical SNMP ifNames when possible."""
+    iface_rows = db.execute(
+        select(DeviceInterface).where(DeviceInterface.device_id == device.id)
+    ).scalars().all()
+    _, alias_to_canonical = _build_iface_resolver(iface_rows)
+    return _canonical_iface_for_device(device, interface_name, alias_to_canonical)
 
 
 def list_port_bindings(db: Session, device: Device) -> dict:
