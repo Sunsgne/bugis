@@ -29,8 +29,9 @@ from app.schemas.circuit import (
     CircuitUpdate,
 )
 from app.schemas.pagination import PaginatedResponse, paginate_query, paginated
+from app.schemas.forwarding_path import ForwardingPathResponse
 from app.schemas.path import PathPreviewRequest, PathPreviewResponse
-from app.services import allocation, circuit_adopt, concurrent_scan, path_service, port_inventory, probe, validation
+from app.services import allocation, circuit_adopt, concurrent_scan, forwarding_path_service, path_service, port_inventory, probe, validation
 from app.services import platform_settings as platform_cfg
 from app.services.circuit_alarm_settings import thresholds_out
 
@@ -246,6 +247,19 @@ def get_circuit_path(
     via_ids = [h.device_id for h in sorted(circuit.path_hops, key=lambda h: h.sequence)]
     data = path_service.preview_path(db, endpoint_ids, via_ids, circuit.path_mode)
     return PathPreviewResponse(**data)
+
+
+@router.get("/{circuit_id}/forwarding-path", response_model=ForwardingPathResponse)
+def get_forwarding_path(
+    circuit_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    """Business (EVPN) + control-plane RIB + underlay (IGP cost + probe) path view."""
+    circuit = db.get(Circuit, circuit_id)
+    if not circuit:
+        raise HTTPException(status_code=404, detail="circuit not found")
+    return ForwardingPathResponse(**forwarding_path_service.build_forwarding_path(db, circuit))
 
 
 @router.get("/{circuit_id}/validate")

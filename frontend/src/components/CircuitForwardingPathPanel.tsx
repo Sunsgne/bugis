@@ -1,0 +1,411 @@
+import {
+  Alert,
+  Descriptions,
+  Space,
+  Spin,
+  Table,
+  Tabs,
+  Tag,
+  Typography,
+} from "antd";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import { api } from "../api/client";
+import type { ForwardingPath, LinkUsage, Topology } from "../api/types";
+import PhysicalTopologyFlow from "./PhysicalTopologyFlow";
+import { useTc } from "@/i18n/useTc";
+
+const COMPARISON_COLORS: Record<string, string> = {
+  match: "green",
+  partial: "orange",
+  mismatch: "red",
+  no_probe: "default",
+};
+
+const LAYER_LABELS: Record<string, string> = {
+  access: "接入",
+  evpn_encap: "EVPN 封装",
+  evpn_tunnel: "EVPN 隧道",
+};
+
+type Props = {
+  circuitId: number;
+  circuitCode?: string;
+};
+
+export default function CircuitForwardingPathPanel({ circuitId, circuitCode }: Props) {
+  const { tc } = useTc();
+  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<ForwardingPath | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [topo, setTopo] = useState<Topology | null>(null);
+  const [links, setLinks] = useState<LinkUsage[]>([]);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const { data: body } = await api.get<ForwardingPath>(`/circuits/${circuitId}/forwarding-path`);
+      setData(body);
+    } catch (e: unknown) {
+      const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      setError(typeof detail === "string" ? detail : tc("加载转发路径失败"));
+    } finally {
+      setLoading(false);
+    }
+  }, [circuitId, tc]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  useEffect(() => {
+    if (!data?.underlay?.topology_highlight?.device_ids?.length) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const [topoRes, linksRes] = await Promise.all([
+          api.get<Topology>("/capacity/topology"),
+          api.get<LinkUsage[]>("/capacity/links/usage"),
+        ]);
+        if (!cancelled) {
+          setTopo(topoRes.data);
+          setLinks(linksRes.data);
+        }
+      } catch {
+        if (!cancelled) {
+          setTopo(null);
+          setLinks([]);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [data?.underlay?.topology_highlight?.device_ids?.length, data?.underlay?.topology_highlight?.link_ids?.length]);
+
+  const highlightPath = useMemo(
+    () => ({
+      deviceIds: data?.underlay?.topology_highlight?.device_ids,
+      linkIds: data?.underlay?.topology_highlight?.link_ids,
+    }),
+    [data?.underlay?.topology_highlight],
+  );
+
+  if (loading) {
+    return (
+      <div style={{ padding: 24, textAlign: "center" }}>
+        <Spin tip={tc("加载转发路径…")} />
+      </div>
+    );
+  }
+
+  if (error || !data) {
+    return <Alert type="error" showIcon message={error || tc("无数据")} />;
+  }
+
+  const underlay = data.underlay;
+  const comparison = underlay.comparison;
+  const comparisonColor = COMPARISON_COLORS[comparison?.status || "no_probe"] || "default";
+
+  return (
+    <div className="circuit-forwarding-path" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <Space wrap>
+        <Tag color="geekblue">{data.path_mode === "explicit_sr" ? "SR 显式" : "IGP 自动"}</Tag>
+        {underlay.igp_algorithm && (
+          <Tag>{underlay.igp_algorithm === "dijkstra_igp_cost" ? "IGP Cost 最短路" : underlay.igp_algorithm}</Tag>
+        )}
+        {underlay.total_igp_cost != null && (
+          <Tag color="purple">{tc("总 IGP Cost")}: {underlay.total_igp_cost}</Tag>
+        )}
+        {comparison && (
+          <Tag color={comparisonColor}>
+            {tc("算路/实测")}: {comparison.status}
+          </Tag>
+        )}
+      </Space>
+
+      {underlay.path_reason && (
+        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          {underlay.path_reason}
+        </Typography.Text>
+      )}
+
+      {comparison?.note && (
+        <Alert type="info" showIcon message={comparison.note} style={{ marginBottom: 4 }} />
+      )}
+
+      {underlay.connectivity_errors && underlay.connectivity_errors.length > 0 && (
+        <Alert
+          type="warning"
+          showIcon
+          message={underlay.connectivity_errors.join("；")}
+        />
+      )}
+
+      <Tabs
+        size="small"
+        items={[
+          {
+            key: "business",
+            label: tc("业务面 (EVPN)"),
+            children: (
+              <div>
+                <Descriptions size="small" bordered column={{ xs: 1, sm: 2, lg: 4 }} style={{ marginBottom: 12 }}>
+                  <Descriptions.Item label="VNI">{data.business_plane.vni ?? "—"}</Descriptions.Item>
+                  <Descriptions.Item label="VSI">{data.business_plane.vsi_name || "—"}</Descriptions.Item>
+                  <Descriptions.Item label="RD">{data.business_plane.rd || "—"}</Descriptions.Item>
+                  <Descriptions.Item label="RT">{data.business_plane.rt || "—"}</Descriptions.Item>
+                </Descriptions>
+                <Table
+                  size="small"
+                  rowKey={(r) => `${r.sequence}-${r.layer}`}
+                  pagination={false}
+                  dataSource={data.business_plane.hops || []}
+                  columns={[
+                    { title: "#", dataIndex: "sequence", width: 48 },
+                    {
+                      title: tc("层级"),
+                      dataIndex: "layer",
+                      width: 100,
+                      render: (v: string) => LAYER_LABELS[v] || v,
+                    },
+                    {
+                      title: tc("设备"),
+                      render: (_, r) => r.device_name || r.source_device || r.target_device || "—",
+                    },
+                    {
+                      title: tc("详情"),
+                      dataIndex: "detail",
+                      ellipsis: true,
+                    },
+                  ]}
+                />
+              </div>
+            ),
+          },
+          {
+            key: "control",
+            label: tc("控制面"),
+            children: (
+              <div>
+                <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 12 }}>
+                  {data.control_plane.note}
+                </Typography.Paragraph>
+                <Typography.Text strong style={{ display: "block", marginBottom: 8 }}>
+                  {tc("VTEP 注册")}
+                </Typography.Text>
+                <Table
+                  size="small"
+                  rowKey={(r) => String(r.device_id)}
+                  pagination={false}
+                  dataSource={data.control_plane.vteps || []}
+                  style={{ marginBottom: 16 }}
+                  columns={[
+                    { title: tc("端点"), dataIndex: "endpoint_label", width: 56 },
+                    { title: tc("设备"), dataIndex: "device_name" },
+                    { title: "VTEP IP", dataIndex: "vtep_ip" },
+                    {
+                      title: tc("状态"),
+                      dataIndex: "status",
+                      render: (s: string) => (
+                        <Tag color={s === "up" ? "green" : undefined}>{s}</Tag>
+                      ),
+                    },
+                    {
+                      title: tc("服务 VNI"),
+                      render: (_, r) => (
+                        <Tag color={r.serves_circuit_vni ? "blue" : undefined}>
+                          {r.serves_circuit_vni ? tc("是") : tc("否")}
+                        </Tag>
+                      ),
+                    },
+                  ]}
+                />
+                <Typography.Text strong style={{ display: "block", marginBottom: 8 }}>
+                  {tc("EVPN 路由")} ({data.control_plane.route_count ?? 0})
+                </Typography.Text>
+                <Table
+                  size="small"
+                  rowKey={(_, i) => String(i)}
+                  pagination={data.control_plane.routes?.length > 8 ? { pageSize: 8 } : false}
+                  dataSource={data.control_plane.routes || []}
+                  columns={[
+                    { title: tc("类型"), dataIndex: "route_type", width: 120 },
+                    { title: "VNI", dataIndex: "vni", width: 72 },
+                    { title: tc("下一跳"), dataIndex: "next_hop", ellipsis: true },
+                    { title: "VTEP", dataIndex: "vtep_ip", ellipsis: true },
+                    { title: "RD", dataIndex: "rd", ellipsis: true },
+                  ]}
+                />
+              </div>
+            ),
+          },
+          {
+            key: "underlay",
+            label: tc("Underlay"),
+            children: (
+              <div>
+                {topo && highlightPath.deviceIds?.length ? (
+                  <div style={{ marginBottom: 16 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                      <Typography.Text strong>{tc("拓扑路径高亮")}</Typography.Text>
+                      <Link to={`/topology?highlight_circuit=${circuitId}`}>{tc("在拓扑页打开")}</Link>
+                    </div>
+                    <div style={{ height: 320, border: "1px solid var(--border-color, #f0f0f0)", borderRadius: 8, overflow: "hidden" }}>
+                      <PhysicalTopologyFlow
+                        topo={topo}
+                        links={links}
+                        savedPositions={{}}
+                        highlightPath={highlightPath}
+                        className="circuit-path-topology-mini"
+                      />
+                    </div>
+                  </div>
+                ) : null}
+                <Typography.Text strong style={{ display: "block", marginBottom: 8 }}>
+                  {tc("IGP 计算路径")}
+                </Typography.Text>
+                <Space wrap style={{ marginBottom: 12 }}>
+                  {(underlay.computed?.hops || []).map((h, i) => (
+                    <Tag key={h.device_id} color={i === 0 ? "blue" : i === (underlay.computed?.hops?.length || 0) - 1 ? "purple" : "geekblue"}>
+                      {h.name}
+                      {h.igp_cost != null && i < (underlay.computed?.hops?.length || 0) - 1
+                        ? ` → cost ${h.igp_cost}`
+                        : ""}
+                    </Tag>
+                  ))}
+                  {underlay.segment_list && underlay.segment_list.length > 0 && (
+                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                      SID: {underlay.segment_list.join(" → ")}
+                    </Typography.Text>
+                  )}
+                </Space>
+                <Table
+                  size="small"
+                  rowKey={(r) => String(r.sequence)}
+                  pagination={false}
+                  dataSource={underlay.computed?.segments || []}
+                  style={{ marginBottom: 16 }}
+                  columns={[
+                    { title: "#", dataIndex: "sequence", width: 48, render: (v) => v + 1 },
+                    {
+                      title: tc("链路"),
+                      render: (_, r) => r.link_name || (r.connected ? tc("已连接") : tc("无链路")),
+                    },
+                    {
+                      title: tc("出接口"),
+                      dataIndex: "interface",
+                      render: (v) => v || "—",
+                    },
+                    {
+                      title: "IGP Cost",
+                      dataIndex: "igp_cost",
+                      render: (v, r) => (
+                        v != null ? (
+                          <span>
+                            {v}
+                            {!r.cost_learned && (
+                              <Typography.Text type="secondary" style={{ fontSize: 11, marginLeft: 4 }}>
+                                ({tc("默认")})
+                              </Typography.Text>
+                            )}
+                          </span>
+                        ) : "—"
+                      ),
+                    },
+                    {
+                      title: tc("实测 RTT"),
+                      dataIndex: "probe_segment_rtt_ms",
+                      render: (v, r) => {
+                        if (v == null) return "—";
+                        const loss = r.probe_loss_pct;
+                        return (
+                          <span>
+                            {v} ms
+                            {loss != null && loss > 0 && (
+                              <Tag color="red" style={{ marginLeft: 4 }}>{loss}%</Tag>
+                            )}
+                          </span>
+                        );
+                      },
+                    },
+                  ]}
+                />
+
+                <Typography.Text strong style={{ display: "block", marginBottom: 8 }}>
+                  {tc("拨测实测")}
+                </Typography.Text>
+                {underlay.probed?.available ? (
+                  <>
+                    <Space wrap style={{ marginBottom: 12 }}>
+                      <Tag color={underlay.probed.reachable ? "green" : "red"}>
+                        {underlay.probed.reachable ? tc("可达") : tc("不可达")}
+                      </Tag>
+                      {underlay.probed.rtt_ms != null && (
+                        <Tag>{tc("端到端 RTT")} {underlay.probed.rtt_ms} ms</Tag>
+                      )}
+                      {underlay.probed.probe_method && (
+                        <Tag>{underlay.probed.probe_method}</Tag>
+                      )}
+                      {underlay.probed.probed_at && (
+                        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                          {underlay.probed.probed_at}
+                        </Typography.Text>
+                      )}
+                    </Space>
+                    <Table
+                      size="small"
+                      rowKey="hop"
+                      pagination={false}
+                      dataSource={underlay.probed.hops || []}
+                      columns={[
+                        { title: tc("跳"), dataIndex: "hop", width: 48 },
+                        { title: tc("设备"), dataIndex: "device" },
+                        { title: tc("目标"), dataIndex: "target", ellipsis: true },
+                        {
+                          title: tc("段 RTT"),
+                          dataIndex: "segment_rtt_ms",
+                          render: (v) => (v != null ? `${v} ms` : "—"),
+                        },
+                        {
+                          title: tc("累计 RTT"),
+                          dataIndex: "rtt_ms",
+                          render: (v) => (v != null ? `${v} ms` : "—"),
+                        },
+                        {
+                          title: tc("丢包"),
+                          dataIndex: "packet_loss_pct",
+                          render: (v) => (v != null ? `${v}%` : "—"),
+                        },
+                        {
+                          title: tc("状态"),
+                          dataIndex: "status",
+                          render: (s: string) => (
+                            <Tag color={s === "up" ? "green" : "red"}>{s}</Tag>
+                          ),
+                        },
+                      ]}
+                    />
+                  </>
+                ) : (
+                  <Alert
+                    type="info"
+                    showIcon
+                    message={underlay.probed?.note || tc("尚无拨测记录")}
+                  />
+                )}
+              </div>
+            ),
+          },
+        ]}
+      />
+
+      {circuitCode && (
+        <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+          {tc("生成于")} {data.generated_at}
+        </Typography.Text>
+      )}
+    </div>
+  );
+}

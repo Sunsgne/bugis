@@ -62,6 +62,24 @@ class AccessBinding:
 
 
 @dataclass
+class IgpInterfaceCost:
+    """Per-interface IGP metric learned from running-config."""
+
+    interface: str
+    cost: int
+    protocol: str  # ospf | isis
+    level: str | None = None
+
+    def as_dict(self) -> dict:
+        return {
+            "interface": self.interface,
+            "cost": self.cost,
+            "protocol": self.protocol,
+            "level": self.level,
+        }
+
+
+@dataclass
 class LearnedInventory:
     loopback_ip: str | None = None
     bgp_asn: int | None = None
@@ -70,6 +88,8 @@ class LearnedInventory:
     access_bindings: list[AccessBinding] = field(default_factory=list)
     interface_count: int = 0
     vlan_ids: list[int] = field(default_factory=list)
+    igp_costs: list[IgpInterfaceCost] = field(default_factory=list)
+    igp_protocol: str | None = None
 
     def as_dict(self) -> dict:
         return {
@@ -82,6 +102,8 @@ class LearnedInventory:
             "vlan_ids": sorted(set(self.vlan_ids)),
             "service_count": len(self.l2_services),
             "binding_count": len(self.access_bindings),
+            "igp_costs": [c.as_dict() for c in self.igp_costs],
+            "igp_protocol": self.igp_protocol,
         }
 
 
@@ -439,6 +461,115 @@ def _collect_vlan_ids(config: str, vendor: Vendor) -> list[int]:
     return sorted(ids)
 
 
+def _parse_h3c_igp_costs(config: str) -> list[IgpInterfaceCost]:
+    costs: list[IgpInterfaceCost] = []
+    for m in re.finditer(
+        r"^interface\s+(\S+)\s*$(.+?)(?=^interface\s|\Z)",
+        config,
+        re.MULTILINE | re.DOTALL,
+    ):
+        iface = m.group(1)
+        block = m.group(2)
+        cost_m = re.search(r"^\s*ospf\s+cost\s+(\d+)", block, re.MULTILINE | re.IGNORECASE)
+        if cost_m:
+            costs.append(IgpInterfaceCost(
+                interface=iface, cost=int(cost_m.group(1)), protocol="ospf"
+            ))
+    return costs
+
+
+def _parse_huawei_igp_costs(config: str) -> list[IgpInterfaceCost]:
+    costs: list[IgpInterfaceCost] = []
+    for m in re.finditer(
+        r"^interface\s+(\S+)(?:\s+mode\s+\S+)?\s*$(.+?)(?=^interface\s|\Z|^#|\Z)",
+        config,
+        re.MULTILINE | re.DOTALL,
+    ):
+        iface = m.group(1)
+        block = m.group(2)
+        cost_m = re.search(r"^\s*ospf\s+cost\s+(\d+)", block, re.MULTILINE | re.IGNORECASE)
+        if cost_m:
+            costs.append(IgpInterfaceCost(
+                interface=iface, cost=int(cost_m.group(1)), protocol="ospf"
+            ))
+    return costs
+
+
+def _parse_cisco_arista_igp_costs(config: str) -> list[IgpInterfaceCost]:
+    costs: list[IgpInterfaceCost] = []
+    for m in re.finditer(
+        r"^interface\s+(\S+)\s*$(.+?)(?=^interface\s|\Z|^!|\Z)",
+        config,
+        re.MULTILINE | re.DOTALL,
+    ):
+        iface = m.group(1)
+        block = m.group(2)
+        for cost_m in re.finditer(
+            r"^\s*isis\s+metric(?:\s+value)?\s+(\d+)(?:\s+level-\d+)?",
+            block,
+            re.MULTILINE | re.IGNORECASE,
+        ):
+            costs.append(IgpInterfaceCost(
+                interface=iface, cost=int(cost_m.group(1)), protocol="isis"
+            ))
+            break
+        else:
+            ospf_m = re.search(
+                r"^\s*ip\s+ospf\s+\d+\s+cost\s+(\d+)", block, re.MULTILINE | re.IGNORECASE
+            )
+            if ospf_m:
+                costs.append(IgpInterfaceCost(
+                    interface=iface, cost=int(ospf_m.group(1)), protocol="ospf"
+                ))
+    return costs
+
+
+def _parse_juniper_igp_costs(config: str) -> list[IgpInterfaceCost]:
+    costs: list[IgpInterfaceCost] = []
+    for m in re.finditer(
+        r"^set protocols isis interface (\S+) .+ metric (\d+)",
+        config,
+        re.MULTILINE | re.IGNORECASE,
+    ):
+        costs.append(IgpInterfaceCost(
+            interface=m.group(1), cost=int(m.group(2)), protocol="isis"
+        ))
+    for m in re.finditer(
+        r"^set protocols ospf area \S+ interface (\S+) metric (\d+)",
+        config,
+        re.MULTILINE | re.IGNORECASE,
+    ):
+        costs.append(IgpInterfaceCost(
+            interface=m.group(1), cost=int(m.group(2)), protocol="ospf"
+        ))
+    return costs
+
+
+def _parse_igp_costs(config: str, vendor: Vendor) -> list[IgpInterfaceCost]:
+    if vendor == Vendor.H3C:
+        return _parse_h3c_igp_costs(config)
+    if vendor == Vendor.HUAWEI:
+        return _parse_huawei_igp_costs(config)
+    if vendor in (Vendor.CISCO, Vendor.ARISTA):
+        return _parse_cisco_arista_igp_costs(config)
+    if vendor == Vendor.JUNIPER:
+        return _parse_juniper_igp_costs(config)
+    return _parse_h3c_igp_costs(config) or _parse_cisco_arista_igp_costs(config)
+
+
+def _infer_igp_protocol(costs: list[IgpInterfaceCost], vendor: Vendor) -> str | None:
+    if not costs:
+        if vendor in (Vendor.H3C, Vendor.HUAWEI):
+            return "ospf"
+        if vendor in (Vendor.CISCO, Vendor.ARISTA, Vendor.JUNIPER):
+            return "isis"
+        return None
+    protos = {c.protocol for c in costs}
+    if len(protos) == 1:
+        return protos.pop()
+    return "mixed"
+
+
 def parse_inventory(config: str, vendor: Vendor) -> LearnedInventory:
     """Extract structured inventory from raw running-config text."""
     inv = LearnedInventory()
@@ -471,4 +602,6 @@ def parse_inventory(config: str, vendor: Vendor) -> LearnedInventory:
         if binding.s_vid is not None:
             inv.vlan_ids.append(binding.s_vid)
     inv.vlan_ids = sorted(set(inv.vlan_ids))
+    inv.igp_costs = _parse_igp_costs(config, vendor)
+    inv.igp_protocol = _infer_igp_protocol(inv.igp_costs, vendor)
     return inv

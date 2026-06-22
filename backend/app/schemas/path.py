@@ -28,6 +28,9 @@ class PathPreviewResponse(BaseModel):
     hops: list[PathHopOut] = []
     segment_list: list[int] = []
     connectivity_errors: list[str] = []
+    igp_algorithm: str | None = None
+    total_igp_cost: float | None = None
+    segments: list[dict] = []
 
 
 class CircuitPathHopOut(BaseModel):

@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Alert, Space } from "antd";
+import { useSearchParams } from "react-router-dom";
 import { api } from "../api/client";
-import type { LinkUsage, Topology as Topo } from "../api/types";
+import type { ForwardingPath, LinkUsage, Topology as Topo } from "../api/types";
 import PageCard from "@/components/PageCard";
 import PhysicalTopologyFlow from "@/components/PhysicalTopologyFlow";
 import TopologyLayoutControls from "@/components/TopologyLayoutControls";
@@ -12,10 +13,38 @@ import { useTopologyLayout } from "@/hooks/useTopologyLayout";
 
 export default function Topology() {
   const { tc } = useTc();
+  const [searchParams] = useSearchParams();
   const [topo, setTopo] = useState<Topo | null>(null);
   const [links, setLinks] = useState<LinkUsage[]>([]);
   const [error, setError] = useState(false);
+  const [highlightPath, setHighlightPath] = useState<{ deviceIds?: number[]; linkIds?: number[] }>();
   const layout = useTopologyLayout();
+
+  const highlightCircuitId = searchParams.get("highlight_circuit");
+
+  useEffect(() => {
+    if (!highlightCircuitId) {
+      setHighlightPath(undefined);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await api.get<ForwardingPath>(
+          `/circuits/${highlightCircuitId}/forwarding-path`,
+        );
+        if (!cancelled) {
+          const hl = data.underlay?.topology_highlight;
+          setHighlightPath(hl ? { deviceIds: hl.device_ids, linkIds: hl.link_ids } : undefined);
+        }
+      } catch {
+        if (!cancelled) setHighlightPath(undefined);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [highlightCircuitId]);
 
   async function load() {
     try {
@@ -77,6 +106,15 @@ export default function Topology() {
         </Space>
       }
     >
+      {highlightCircuitId && highlightPath?.deviceIds?.length ? (
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 12 }}
+          message={tc("正在高亮专线 Underlay 路径")}
+          description={tc(`电路 ID ${highlightCircuitId} 的计算路径已在拓扑中标注（靛蓝实线）`)}
+        />
+      ) : null}
       {topo.edges.length === 0 && (
         <Alert
           type="info"
@@ -93,6 +131,10 @@ export default function Topology() {
           savedPositions={layout.draftPositions}
           autoSave={layout.autoSave}
           onPositionsChange={layout.handlePositionsChange}
+          highlightPath={highlightPath ? {
+            deviceIds: highlightPath.deviceIds,
+            linkIds: highlightPath.linkIds,
+          } : undefined}
         />
       </div>
     </PageCard>

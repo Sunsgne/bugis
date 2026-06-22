@@ -19,6 +19,7 @@ export type UtilizationEdgeData = {
   utilization_pct: number;
   shortLabel: string;
   highlighted?: boolean;
+  pathHighlighted?: boolean;
   curvature?: number;
   labelOffsetY?: number;
   linkType?: string;
@@ -48,9 +49,10 @@ export default function UtilizationEdge({
   const link = d?.link;
   const style = EDGE_STYLE[d?.linkType || "intra_dc"] || EDGE_STYLE.intra_dc;
   const [labelHover, setLabelHover] = useState(false);
-  const active = Boolean(d?.highlighted || labelHover);
-  const showTooltip = Boolean(active && link);
+  const active = Boolean(d?.highlighted || d?.pathHighlighted || labelHover);
+  const showTooltip = Boolean(active && link && !d?.pathHighlighted);
   const showCompactLabel = Boolean(d?.shortLabel && active && !showTooltip);
+  const pathStroke = d?.pathHighlighted ? "#6366f1" : color;
   const curvature = d?.curvature ?? 0.18;
   const labelOffsetY = labelOffsetForEdge(curvature, d?.labelOffsetY);
 
@@ -74,11 +76,11 @@ export default function UtilizationEdge({
         interactionWidth={24}
         style={{
           ...props.style,
-          stroke: color,
-          strokeWidth: selected || d?.highlighted ? style.weight + 1.5 : style.weight,
-          strokeDasharray: style.dash,
+          stroke: pathStroke,
+          strokeWidth: selected || d?.highlighted || d?.pathHighlighted ? style.weight + 1.5 : style.weight,
+          strokeDasharray: d?.pathHighlighted ? undefined : style.dash,
           strokeLinecap: "round",
-          opacity: d?.highlighted ? 1 : 0.88,
+          opacity: d?.highlighted || d?.pathHighlighted ? 1 : 0.88,
         }}
       />
       {active && d?.shortLabel ? (

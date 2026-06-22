@@ -224,6 +224,121 @@ export interface Circuit {
   segment_list?: number[];
 }
 
+export interface ForwardingPathHop {
+  sequence: number;
+  layer?: string;
+  device_id?: number;
+  device_name?: string;
+  detail?: string;
+  source_device?: string;
+  target_device?: string;
+  igp_cost?: number;
+  name?: string;
+}
+
+export interface ForwardingPathSegment {
+  sequence: number;
+  from_device_id: number;
+  to_device_id: number;
+  from_device_name?: string;
+  to_device_name?: string;
+  link_id?: number | null;
+  link_name?: string;
+  interface?: string | null;
+  igp_cost?: number | null;
+  cost_learned?: boolean;
+  connected?: boolean;
+  probe_segment_rtt_ms?: number | null;
+  probe_loss_pct?: number | null;
+  probe_status?: string;
+}
+
+export interface ForwardingPath {
+  circuit_id: number;
+  circuit_code: string;
+  path_mode: string;
+  generated_at: string;
+  business_plane: {
+    service_type?: string;
+    vni?: number;
+    vsi_name?: string;
+    rd?: string;
+    rt?: string;
+    hops: ForwardingPathHop[];
+  };
+  control_plane: {
+    source: string;
+    note?: string;
+    vteps: Array<{
+      device_id: number;
+      device_name: string;
+      endpoint_label?: string;
+      vtep_ip?: string;
+      status: string;
+      serves_circuit_vni?: boolean;
+    }>;
+    routes: Array<{
+      route_type: string;
+      vni: number;
+      next_hop?: string;
+      vtep_ip?: string;
+      rd?: string;
+    }>;
+    route_count?: number;
+    next_hops?: string[];
+    bgp_sessions?: unknown[];
+  };
+  underlay: {
+    path_mode?: string;
+    path_reason?: string;
+    igp_algorithm?: string;
+    total_igp_cost?: number | null;
+    segment_list?: number[];
+    connectivity_errors?: string[];
+    computed: {
+      device_ids: number[];
+      hops: Array<{
+        device_id: number;
+        name: string;
+        hop_type?: string;
+        igp_cost?: number;
+        egress_interface?: string;
+        cost_learned?: boolean;
+        link_id?: number;
+        link_name?: string;
+      }>;
+      segments: ForwardingPathSegment[];
+    };
+    probed: {
+      available: boolean;
+      note?: string;
+      reachable?: boolean;
+      rtt_ms?: number;
+      probe_method?: string;
+      probed_at?: string;
+      hops?: Array<{
+        hop: number;
+        device: string;
+        target?: string;
+        segment_rtt_ms?: number;
+        rtt_ms?: number;
+        packet_loss_pct?: number;
+        status: string;
+      }>;
+    };
+    comparison: {
+      status: string;
+      note?: string;
+      computed_device_ids?: number[];
+      probed_device_names?: string[];
+    };
+    topology_highlight: {
+      device_ids: number[];
+      link_ids: number[];
+    };
+  };
+}
+
 export interface ConfigJob {
   id: number;
   work_order_id: number;
