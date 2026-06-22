@@ -33,6 +33,10 @@ const LINK_TYPE_LABEL: Record<string, string> = {
   uplink: "上联",
 };
 
+function linkPlanSelectionKey(row: LinkPlan): string {
+  return `${row.device_a_id}:${row.device_z_id}:${row.interface_a}:${row.interface_z}`;
+}
+
 function fmtBw(mbps: number) {
   return mbps >= 1000 ? `${Math.round(mbps / 1000)} Gbps` : `${mbps} Mbps`;
 }
@@ -114,7 +118,7 @@ export default function BackboneLinkModal({ open, devices, editLink, onClose, on
   const { platform } = usePlatformSettings();
   const isEdit = Boolean(editLink);
   const [suggestions, setSuggestions] = useState<LinkPlan[]>([]);
-  const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
+  const [selectedPlans, setSelectedPlans] = useState<LinkPlan[]>([]);
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const [saving, setSaving] = useState(false);
   const [manualPlan, setManualPlan] = useState<LinkPlan | null>(null);
@@ -141,7 +145,7 @@ export default function BackboneLinkModal({ open, devices, editLink, onClose, on
     try {
       const { data } = await api.get<LinkPlan[]>("/capacity/links/suggestions");
       setSuggestions(data);
-      setSelectedKeys(data.map((_, idx) => String(idx)));
+      setSelectedPlans(data);
     } finally {
       setLoadingSuggestions(false);
     }
@@ -206,7 +210,7 @@ export default function BackboneLinkModal({ open, devices, editLink, onClose, on
         });
         setManualPlan(null);
         setSuggestions([]);
-        setSelectedKeys([]);
+        setSelectedPlans([]);
         await Promise.all([
           loadCandidates(editLink.device_a_id, "a"),
           loadCandidates(editLink.device_z_id, "z"),
@@ -225,15 +229,14 @@ export default function BackboneLinkModal({ open, devices, editLink, onClose, on
   }, [open, editLink]);
 
   async function applySuggestions() {
-    const picks = suggestions.filter((_, idx) => selectedKeys.includes(String(idx)));
-    if (!picks.length) {
+    if (!selectedPlans.length) {
       message.warning(tc('请至少选择一条推荐链路'));
       return;
     }
     setSaving(true);
     try {
       await api.post("/capacity/links/bulk", {
-        links: picks.map((row) => ({
+        links: selectedPlans.map((row) => ({
           name: row.name,
           type: row.type,
           device_a_id: row.device_a_id,
@@ -243,7 +246,7 @@ export default function BackboneLinkModal({ open, devices, editLink, onClose, on
           capacity_mbps: row.capacity_mbps,
         })),
       });
-      message.success(`已创建 ${picks.length} 条骨干链路`);
+      message.success(`已创建 ${selectedPlans.length} 条骨干链路`);
       onSaved();
       onClose();
     } catch (e: any) {
@@ -301,10 +304,10 @@ export default function BackboneLinkModal({ open, devices, editLink, onClose, on
             <Button
               type="primary"
               loading={saving}
-              disabled={!selectedKeys.length}
+              disabled={!selectedPlans.length}
               onClick={applySuggestions}
             >
-              应用选中推荐 ({selectedKeys.length})
+              应用选中推荐 ({selectedPlans.length})
             </Button>
           </Space>
         )
@@ -316,13 +319,13 @@ export default function BackboneLinkModal({ open, devices, editLink, onClose, on
         <Table<LinkPlan>
           size="small"
           className="data-table"
-          rowKey={(_, idx) => String(idx)}
+          rowKey={linkPlanSelectionKey}
           loading={loadingSuggestions}
           dataSource={suggestions}
           pagination={false}
           rowSelection={{
-            selectedRowKeys: selectedKeys,
-            onChange: (keys) => setSelectedKeys(keys.map(String)),
+            selectedRowKeys: selectedPlans.map(linkPlanSelectionKey),
+            onChange: (_keys, rows) => setSelectedPlans(rows),
           }}
           style={{ marginBottom: 24 }}
           locale={{ emptyText: "暂无推荐 · 请确认设备已 SNMP 发现且跨站点存在未建链路" }}
