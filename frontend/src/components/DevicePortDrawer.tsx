@@ -35,6 +35,7 @@ import type {
 import SvidUsageCell from "./SvidUsageCell";
 import AdoptBindingModal from "./AdoptBindingModal";
 import type { InterfaceDescSaveJob, InterfaceDescSaveStatus } from "@/hooks/useInterfaceDescJobs";
+import type { LearnJob } from "@/hooks/useLearnJobs";
 import InterfaceNameCell from "./InterfaceNameCell";
 import {
   formatDiscoveredVia,
@@ -93,6 +94,7 @@ interface DevicePortDrawerProps {
   editingDesc?: boolean;
   descDraft?: Record<string, string>;
   saveJob?: InterfaceDescSaveJob | null;
+  learnJob?: LearnJob | null;
   onBeginEdit?: (physicalPorts: DeviceInterface[]) => void;
   onCancelEdit?: () => void;
   onDraftChange?: (name: string, value: string) => void;
@@ -109,6 +111,7 @@ export default function DevicePortDrawer({
   editingDesc = false,
   descDraft = {},
   saveJob = null,
+  learnJob = null,
   onBeginEdit,
   onCancelEdit,
   onDraftChange,
@@ -124,7 +127,7 @@ export default function DevicePortDrawer({
   const [ifaceStatus, setIfaceStatus] = useState<"all" | "up" | "down" | "allocated">("all");
   const [activeTab, setActiveTab] = useState("ports");
   const [discovering, setDiscovering] = useState(false);
-  const [learning, setLearning] = useState(false);
+  const learning = learnJob?.status === "learning";
   const [adoptBinding, setAdoptBinding] = useState<DevicePortBinding | null>(null);
 
   const [discoverError, setDiscoverError] = useState<string | null>(null);
@@ -314,15 +317,9 @@ export default function DevicePortDrawer({
               size="small"
               icon={<BookOutlined />}
               loading={learning}
-              onClick={async () => {
+              onClick={() => {
                 if (!device) return;
-                setLearning(true);
-                try {
-                  await onLearn(device);
-                  await refreshAll(true);
-                } finally {
-                  setLearning(false);
-                }
+                void onLearn(device);
               }}
             >
               {learning ? "学习中…" : "现网学习"}
