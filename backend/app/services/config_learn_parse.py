@@ -63,19 +63,23 @@ class AccessBinding:
 
 @dataclass
 class IgpInterfaceCost:
-    """Per-interface IGP metric learned from running-config."""
+    """Underlay backbone interface: IGP enabled on the interface + explicit metric."""
 
     interface: str
     cost: int
     protocol: str  # ospf | isis
+    igp_process: int | None = None
     level: str | None = None
+    backbone: bool = True
 
     def as_dict(self) -> dict:
         return {
             "interface": self.interface,
             "cost": self.cost,
             "protocol": self.protocol,
+            "igp_process": self.igp_process,
             "level": self.level,
+            "backbone": self.backbone,
         }
 
 
@@ -103,6 +107,7 @@ class LearnedInventory:
             "service_count": len(self.l2_services),
             "binding_count": len(self.access_bindings),
             "igp_costs": [c.as_dict() for c in self.igp_costs],
+            "backbone_interfaces": [c.as_dict() for c in self.igp_costs],
             "igp_protocol": self.igp_protocol,
         }
 
@@ -462,6 +467,7 @@ def _collect_vlan_ids(config: str, vendor: Vendor) -> list[int]:
 
 
 def _parse_h3c_igp_costs(config: str) -> list[IgpInterfaceCost]:
+    """Backbone = interface OSPF enabled (ospf <pid> area) AND explicit ospf cost."""
     costs: list[IgpInterfaceCost] = []
     for m in re.finditer(
         r"^interface\s+(\S+)\s*$(.+?)(?=^interface\s|\Z)",
@@ -470,15 +476,25 @@ def _parse_h3c_igp_costs(config: str) -> list[IgpInterfaceCost]:
     ):
         iface = m.group(1)
         block = m.group(2)
+        enable_m = re.search(
+            r"^\s*ospf\s+(\d+)\s+area\s+\S+",
+            block,
+            re.MULTILINE | re.IGNORECASE,
+        )
         cost_m = re.search(r"^\s*ospf\s+cost\s+(\d+)", block, re.MULTILINE | re.IGNORECASE)
-        if cost_m:
+        if enable_m and cost_m:
             costs.append(IgpInterfaceCost(
-                interface=iface, cost=int(cost_m.group(1)), protocol="ospf"
+                interface=iface,
+                cost=int(cost_m.group(1)),
+                protocol="ospf",
+                igp_process=int(enable_m.group(1)),
+                backbone=True,
             ))
     return costs
 
 
 def _parse_huawei_igp_costs(config: str) -> list[IgpInterfaceCost]:
+    """Backbone = ospf enable <pid> area … AND ospf cost … on the same interface."""
     costs: list[IgpInterfaceCost] = []
     for m in re.finditer(
         r"^interface\s+(\S+)(?:\s+mode\s+\S+)?\s*$(.+?)(?=^interface\s|\Z|^#|\Z)",
@@ -487,15 +503,25 @@ def _parse_huawei_igp_costs(config: str) -> list[IgpInterfaceCost]:
     ):
         iface = m.group(1)
         block = m.group(2)
+        enable_m = re.search(
+            r"^\s*ospf\s+enable\s+(\d+)\s+area\s+\S+",
+            block,
+            re.MULTILINE | re.IGNORECASE,
+        )
         cost_m = re.search(r"^\s*ospf\s+cost\s+(\d+)", block, re.MULTILINE | re.IGNORECASE)
-        if cost_m:
+        if enable_m and cost_m:
             costs.append(IgpInterfaceCost(
-                interface=iface, cost=int(cost_m.group(1)), protocol="ospf"
+                interface=iface,
+                cost=int(cost_m.group(1)),
+                protocol="ospf",
+                igp_process=int(enable_m.group(1)),
+                backbone=True,
             ))
     return costs
 
 
 def _parse_cisco_arista_igp_costs(config: str) -> list[IgpInterfaceCost]:
+    """Backbone = IS-IS enabled on interface + explicit metric (SR-MPLS fabrics)."""
     costs: list[IgpInterfaceCost] = []
     for m in re.finditer(
         r"^interface\s+(\S+)\s*$(.+?)(?=^interface\s|\Z|^!|\Z)",
@@ -504,22 +530,42 @@ def _parse_cisco_arista_igp_costs(config: str) -> list[IgpInterfaceCost]:
     ):
         iface = m.group(1)
         block = m.group(2)
+        isis_enabled = bool(
+            re.search(r"^\s*ip\s+router\s+isis\s+\S+", block, re.MULTILINE | re.IGNORECASE)
+            or re.search(r"^\s*isis\s+network\s+\S+", block, re.MULTILINE | re.IGNORECASE)
+        )
         for cost_m in re.finditer(
-            r"^\s*isis\s+metric(?:\s+value)?\s+(\d+)(?:\s+level-\d+)?",
+            r"^\s*isis\s+metric(?:\s+value)?\s+(\d+)(?:\s+level-(\d+))?",
             block,
             re.MULTILINE | re.IGNORECASE,
         ):
-            costs.append(IgpInterfaceCost(
-                interface=iface, cost=int(cost_m.group(1)), protocol="isis"
-            ))
+            if isis_enabled:
+                costs.append(IgpInterfaceCost(
+                    interface=iface,
+                    cost=int(cost_m.group(1)),
+                    protocol="isis",
+                    level=cost_m.group(2),
+                    backbone=True,
+                ))
             break
         else:
-            ospf_m = re.search(
-                r"^\s*ip\s+ospf\s+\d+\s+cost\s+(\d+)", block, re.MULTILINE | re.IGNORECASE
+            ospf_enable_m = re.search(
+                r"^\s*ip\s+ospf\s+(\d+)\s+area\s+\S+",
+                block,
+                re.MULTILINE | re.IGNORECASE,
             )
-            if ospf_m:
+            ospf_cost_m = re.search(
+                r"^\s*ip\s+ospf\s+(\d+)\s+cost\s+(\d+)",
+                block,
+                re.MULTILINE | re.IGNORECASE,
+            )
+            if ospf_enable_m and ospf_cost_m:
                 costs.append(IgpInterfaceCost(
-                    interface=iface, cost=int(ospf_m.group(1)), protocol="ospf"
+                    interface=iface,
+                    cost=int(ospf_cost_m.group(2)),
+                    protocol="ospf",
+                    igp_process=int(ospf_enable_m.group(1)),
+                    backbone=True,
                 ))
     return costs
 
@@ -532,7 +578,7 @@ def _parse_juniper_igp_costs(config: str) -> list[IgpInterfaceCost]:
         re.MULTILINE | re.IGNORECASE,
     ):
         costs.append(IgpInterfaceCost(
-            interface=m.group(1), cost=int(m.group(2)), protocol="isis"
+            interface=m.group(1), cost=int(m.group(2)), protocol="isis", backbone=True
         ))
     for m in re.finditer(
         r"^set protocols ospf area \S+ interface (\S+) metric (\d+)",
@@ -540,7 +586,7 @@ def _parse_juniper_igp_costs(config: str) -> list[IgpInterfaceCost]:
         re.MULTILINE | re.IGNORECASE,
     ):
         costs.append(IgpInterfaceCost(
-            interface=m.group(1), cost=int(m.group(2)), protocol="ospf"
+            interface=m.group(1), cost=int(m.group(2)), protocol="ospf", backbone=True
         ))
     return costs
 
