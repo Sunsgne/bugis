@@ -97,11 +97,13 @@ def site_capacity(db: Session) -> list[dict]:
 
 
 def link_capacity(db: Session) -> list[dict]:
-    from app.services import link_alarm_settings, link_monitor, link_planner, platform_settings
+    from app.services import igp_cost_service, link_alarm_settings, link_monitor, link_planner, platform_settings
 
     plat = platform_settings.get_or_create(db)
     links = db.execute(select(Link)).scalars().all()
     site_by_id = {s.id: s for s in db.execute(select(Site)).scalars().all()}
+    device_ids = {l.device_a_id for l in links} | {l.device_z_id for l in links}
+    backbone_cache = igp_cost_service.build_backbone_cache(db, device_ids)
     result = []
     for l in links:
         da = db.get(Device, l.device_a_id)
@@ -110,6 +112,7 @@ def link_capacity(db: Session) -> list[dict]:
         site_z = site_by_id.get(dz.site_id) if dz and dz.site_id else None
         health = link_monitor.compute_link_health(db, l)
         alarm = link_alarm_settings.thresholds_out(l, plat)
+        igp = igp_cost_service.link_backbone_igp(db, l, backbone_cache=backbone_cache)
         result.append({
             "link_id": l.id,
             "name": l.name,
@@ -146,6 +149,7 @@ def link_capacity(db: Session) -> list[dict]:
             "peak_at": health.peak_at,
             "utilization_pct": health.peak_utilization_pct,
             "samples": health.samples,
+            **igp,
         })
     return result
 
