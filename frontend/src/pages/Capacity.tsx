@@ -423,12 +423,17 @@ export default function Capacity() {
                   {...linkUtilTooltipProps}
                   title={<LinkUtilizationTooltipContent link={r} pct={v} tc={tc} />}
                 >
-                  <Progress
-                    percent={Math.round(v)}
-                    size="small"
-                    strokeColor={utilColor(v)}
-                    format={(p) => `${p}%`}
-                  />
+                  <div>
+                    <Progress
+                      percent={Math.round(v)}
+                      size="small"
+                      strokeColor={utilColor(v)}
+                      format={(p) => `${p}%`}
+                    />
+                    {r.samples === 0 ? (
+                      <span style={{ fontSize: 11, color: "#8a9099" }}>{tc("未采集")}</span>
+                    ) : null}
+                  </div>
                 </Tooltip>
               ),
             },

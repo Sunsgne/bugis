@@ -217,6 +217,7 @@ def portal_traffic_summary(
             serializable,
             settings.redis_traffic_summary_ttl_seconds,
         )
+        return serializable
     return payload
 
 
