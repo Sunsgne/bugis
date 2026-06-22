@@ -31,6 +31,7 @@ export default function Sites() {
   const [controllers, setControllers] = useState<Controller[]>([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
+  const [editingSite, setEditingSite] = useState<Site | null>(null);
   const [form] = Form.useForm();
   const deliveryMode = Form.useWatch("delivery_mode", form);
 
@@ -59,12 +60,56 @@ export default function Sites() {
     try {
       await api.post("/sites", values);
       message.success(toast.created);
-      setOpen(false);
-      form.resetFields();
+      closeModal();
       load();
     } catch (e: any) {
       message.error(e?.response?.data?.detail || toast.failed);
     }
+  }
+
+  async function onUpdate() {
+    const values = await form.validateFields();
+    if (!editingSite) return;
+    const payload = { ...values };
+    delete payload.code;
+    if (payload.delivery_mode !== "controller") {
+      payload.controller_id = null;
+    }
+    try {
+      await api.patch(`/sites/${editingSite.id}`, payload);
+      message.success(toast.saved);
+      closeModal();
+      load();
+    } catch (e: any) {
+      message.error(e?.response?.data?.detail || toast.failed);
+    }
+  }
+
+  function openCreate() {
+    setEditingSite(null);
+    form.resetFields();
+    form.setFieldsValue({ delivery_mode: "direct" });
+    setOpen(true);
+  }
+
+  function openEdit(site: Site) {
+    setEditingSite(site);
+    form.setFieldsValue({
+      name: site.name,
+      code: site.code,
+      region: site.region,
+      bgp_asn: site.bgp_asn,
+      underlay_prefix: site.underlay_prefix,
+      delivery_mode: site.delivery_mode || "direct",
+      controller_id: site.controller_id,
+    });
+    setOpen(true);
+  }
+
+  function closeModal() {
+    setOpen(false);
+    setEditingSite(null);
+    form.resetFields();
   }
 
   async function remove(id: number) {
@@ -77,7 +122,7 @@ export default function Sites() {
     <PageCard
       title={page.sites}
       extra={
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>{tc('新建站点')}</Button>
+        <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>{tc('新建站点')}</Button>
       }
     >
       <Table
@@ -126,21 +171,26 @@ export default function Sites() {
             width: "10%",
             className: "table-actions",
             render: (_, r) => (
-              <Popconfirm title={tc('确认删除该站点?')} onConfirm={() => remove(r.id)}>
-                <Button type="link" size="small" danger>
-                  {action.delete}
+              <Space size={4}>
+                <Button type="link" size="small" onClick={() => openEdit(r)}>
+                  {action.edit}
                 </Button>
-              </Popconfirm>
+                <Popconfirm title={tc('确认删除该站点?')} onConfirm={() => remove(r.id)}>
+                  <Button type="link" size="small" danger>
+                    {action.delete}
+                  </Button>
+                </Popconfirm>
+              </Space>
             ),
           },
         ]}
       />
       <Modal
-        title={tc('新建 Fabric 站点')}
+        title={editingSite ? tc('编辑 Fabric 站点') : tc('新建 Fabric 站点')}
         open={open}
-        onOk={onCreate}
-        onCancel={() => setOpen(false)}
-        okText={action.create}
+        onOk={editingSite ? onUpdate : onCreate}
+        onCancel={closeModal}
+        okText={editingSite ? action.save : action.create}
         {...formModalProps}
       >
         <Form form={form} layout="vertical" className="app-form">
@@ -148,7 +198,7 @@ export default function Sites() {
             <Input placeholder={tc('例如 北京 Fabric PoP')} />
           </Form.Item>
           <Form.Item name="code" label={tc('编码')} rules={[{ required: true }]}>
-            <Input placeholder={tc('例如 BJ-DC1')} />
+            <Input placeholder={tc('例如 BJ-DC1')} disabled={!!editingSite} />
           </Form.Item>
           <Form.Item name="region" label={tc('区域')}>
             <Input placeholder={tc('例如 华北')} />
