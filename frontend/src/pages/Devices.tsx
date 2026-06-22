@@ -231,11 +231,21 @@ export default function Devices() {
     }
 
     try {
-      await api.post("/devices", buildDevicePayload(values, snmpDefaults));
-      message.success(tc('设备已纳管'));
+      const payload = buildDevicePayload(values, snmpDefaults);
+      const { data } = await api.post<Device & { learn_scheduled?: boolean }>(
+        "/devices",
+        payload,
+      );
       setFormOpen(false);
+      setFormDevice(null);
       setPage(1);
       load(1);
+      if (data.learn_scheduled) {
+        message.success(`${data.name} 已纳管 · 现网学习已在后台进行`);
+        learnJobs.watchScheduledLearn(data.id, data.name, () => load());
+      } else {
+        message.success(tc("设备已纳管"));
+      }
     } catch (e: unknown) {
       const err = e as { response?: { data?: { detail?: string } } };
       message.error(err?.response?.data?.detail || toastCopy.failed);
@@ -268,9 +278,14 @@ export default function Devices() {
       });
       const learnMsg =
         data.learn_enabled && data.learn
-          ? ` · 现网学习 ${data.learn.success}/${data.learn.total} 成功`
+          ? data.learn.scheduled
+            ? ` · 现网学习已在后台进行 (${data.learn.total} 台)`
+            : ` · 现网学习 ${data.learn.success}/${data.learn.total} 成功`
           : "";
       message.success(`导入完成 · 新增 ${data.created} · 跳过 ${data.skipped}${learnMsg}`);
+      if (data.learn_enabled && data.learn?.scheduled) {
+        message.info(tc("导入设备的现网学习在后台并行执行，列表会显示「学习中」状态"));
+      }
       if (data.errors?.length) message.warning(`${data.errors.length} 行需修正`);
       setPage(1);
       load(1);

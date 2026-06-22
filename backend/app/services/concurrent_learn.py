@@ -1,11 +1,63 @@
 """Parallel live-network config learning — each worker uses its own DB session."""
 from __future__ import annotations
 
+import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+from app.core.config import settings
 from app.core.database import SessionLocal
 from app.models.device import Device
 from app.services import config_learn
+
+logger = logging.getLogger(__name__)
+
+_bg_pool: ThreadPoolExecutor | None = None
+
+
+def _background_pool() -> ThreadPoolExecutor:
+    global _bg_pool
+    if _bg_pool is None:
+        workers = max(1, int(getattr(settings, "provision_max_concurrency", 4) or 4))
+        _bg_pool = ThreadPoolExecutor(max_workers=workers, thread_name_prefix="config-learn-bg")
+    return _bg_pool
+
+
+def schedule_learn_devices(
+    device_ids: list[int],
+    *,
+    created_by: str | None = None,
+    discover_snmp: bool = True,
+    max_workers: int | None = None,
+) -> None:
+    """Fire-and-forget config learn (used after device create / CSV import)."""
+    unique = list(dict.fromkeys(device_ids))
+    if not unique:
+        return
+    workers = max_workers
+    if workers is None:
+        workers = max(1, int(getattr(settings, "provision_max_concurrency", 4) or 4))
+
+    def _run() -> None:
+        try:
+            learn_devices_parallel(
+                unique,
+                created_by=created_by,
+                discover_snmp=discover_snmp,
+                max_workers=workers,
+            )
+        except Exception:
+            logger.exception("background config learn failed for %s device(s)", len(unique))
+
+    _background_pool().submit(_run)
+
+
+def schedule_learn_device(
+    device_id: int,
+    *,
+    created_by: str | None = None,
+    discover_snmp: bool = True,
+) -> None:
+    schedule_learn_devices([device_id], created_by=created_by, discover_snmp=discover_snmp)
 
 
 def learn_devices_parallel(

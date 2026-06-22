@@ -152,12 +152,23 @@ def import_devices(
             errors.append(f"row {i}: {exc}")
 
     learn_summary = None
-    if do_learn and new_device_ids:
-        learn_summary = config_learn.learn_devices_batch(
-            db, new_device_ids, created_by=user.username
-        )
-
     db.commit()
+
+    if do_learn and new_device_ids:
+        from app.services import concurrent_learn
+
+        concurrent_learn.schedule_learn_devices(
+            new_device_ids,
+            created_by=user.username,
+        )
+        learn_summary = {
+            "scheduled": True,
+            "total": len(new_device_ids),
+            "success": 0,
+            "failed": 0,
+            "results": [],
+        }
+
     return {
         "created": created,
         "skipped": skipped,
