@@ -99,15 +99,19 @@ function buildDeviceGraph(
     posById.set(n.id, saved ?? autoPositions.get(n.id) ?? { x: 0, y: 0 });
   }
 
-  const graphNodes = topo.nodes.map((n) => ({ id: n.id, site_id: n.site_id }));
   const graphEdges = topo.edges.map((e) => ({ source: e.source, target: e.target }));
-  const hubId = findHubNodeId(graphNodes, graphEdges);
   const frozenLayoutIds = new Set(
     Object.keys(savedPositions)
       .map((id) => Number(id))
       .filter((id) => topo.nodes.some((n) => n.id === id)),
   );
-  applySpokePeerSeparation(hubId, graphEdges, posById, undefined, frozenLayoutIds);
+  if (!usePathChain) {
+    const hubId = findHubNodeId(
+      topo.nodes.map((n) => ({ id: n.id, site_id: n.site_id })),
+      graphEdges,
+    );
+    applySpokePeerSeparation(hubId, graphEdges, posById, undefined, frozenLayoutIds);
+  }
 
   const handlePairs = edgeHandlePairsForGraph(
     topo.edges.map((e) => ({ source: e.source, target: e.target, key: e.id })),
@@ -183,7 +187,9 @@ function buildDeviceGraph(
     });
 
   const links = [...linksById.values()];
-  const edges = mergeTopologyEdges(utilizationEdges, links, nodeIds, tc);
+  const edges = mergeTopologyEdges(utilizationEdges, links, nodeIds, tc, {
+    includeLogicalPeers: !usePathChain,
+  });
 
   return { nodes, edges };
 }

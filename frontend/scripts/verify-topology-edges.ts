@@ -207,3 +207,43 @@ if (meshSides.size < 2) {
 }
 console.log(`mesh side spread: ${[...meshSides].join(", ")}`);
 console.log("mesh handle spread — passed");
+
+// Circuit path mini view: hub-and-spoke IGP path must stay left-to-right without overlap
+import { layoutPathChain, applySpokePeerSeparation, findHubNodeId } from "../src/utils/deviceGraphLayout";
+
+const pathOrder = [1, 2, 3];
+const pathWidth = 720;
+const pathHeight = 320;
+const pathPositions = layoutPathChain(pathOrder, pathWidth, pathHeight);
+
+// Spoke separation must NOT run on path chain — it collapses hub spokes onto the same column
+const pathEdges = [
+  { source: 1, target: 2 },
+  { source: 3, target: 2 },
+];
+const hubId = findHubNodeId(
+  pathOrder.map((id) => ({ id })),
+  pathEdges,
+);
+const brokenPositions = new Map(pathPositions);
+applySpokePeerSeparation(hubId, pathEdges, brokenPositions);
+const brokenSep = Math.abs((brokenPositions.get(2)?.x ?? 0) - (brokenPositions.get(3)?.x ?? 0));
+if (brokenSep >= 180) {
+  console.error("Sanity check failed: spoke separation should collapse HKG3/FRA1 in star path");
+  process.exit(1);
+}
+
+const pathSeparation = Math.abs((pathPositions.get(2)?.x ?? 0) - (pathPositions.get(3)?.x ?? 0));
+if (pathSeparation < 180) {
+  console.error(`Path chain nodes overlap — HKG3/FRA1 separation ${pathSeparation}px`);
+  process.exit(1);
+}
+
+const chainXs = pathOrder.map((id) => pathPositions.get(id)?.x ?? 0);
+if (chainXs[0] >= chainXs[1] || chainXs[1] >= chainXs[2]) {
+  console.error(`Path chain X order broken: ${chainXs.join(", ")}`);
+  process.exit(1);
+}
+
+console.log(`path chain separation HKG3-FRA1: ${Math.round(pathSeparation)}px`);
+console.log("circuit path topology — passed");

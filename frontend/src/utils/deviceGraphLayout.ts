@@ -94,16 +94,27 @@ export function layoutPathChain(
   if (n === 0) return map;
 
   const padX = Math.max(24, width * 0.04);
-  const y = height / 2 - NODE_H / 2;
+  const yCenter = height / 2 - NODE_H / 2;
   if (n === 1) {
-    map.set(deviceIds[0], { x: width / 2 - NODE_W / 2, y });
+    map.set(deviceIds[0], { x: width / 2 - NODE_W / 2, y: yCenter });
     return map;
   }
 
-  const usable = Math.max(NODE_W, width - padX * 2 - NODE_W);
-  const gap = usable / (n - 1);
+  const margin = 40;
+  const minStep = NODE_W + margin;
+  const innerWidth = Math.max(NODE_W, width - padX * 2);
+  const packedStep = (innerWidth - NODE_W) / (n - 1);
+  const step = Math.max(minStep, packedStep);
+  const needsZigzag = packedStep < minStep;
+  const startX = padX + Math.max(0, (innerWidth - NODE_W - step * (n - 1)) / 2);
+  const yStagger = needsZigzag ? Math.min(NODE_H + 24, height * 0.22) : 0;
+
   deviceIds.forEach((id, i) => {
-    map.set(id, { x: padX + gap * i, y });
+    const y =
+      needsZigzag && yStagger > 0
+        ? yCenter + (i % 2 === 0 ? -yStagger * 0.35 : yStagger * 0.65)
+        : yCenter;
+    map.set(id, { x: startX + step * i, y });
   });
   return map;
 }

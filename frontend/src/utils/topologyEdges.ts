@@ -131,10 +131,12 @@ export function mergeTopologyEdges(
   links: LinkUsage[],
   nodeIds: Set<string>,
   tc: (zh: string) => string,
+  options?: { includeLogicalPeers?: boolean },
 ): Edge[] {
   const realPairs = realLinkPairKeys(links);
+  const includeLogicalPeers = options?.includeLogicalPeers !== false;
   return [
-    ...buildLogicalPeerEdges(links, nodeIds, tc, realPairs),
+    ...(includeLogicalPeers ? buildLogicalPeerEdges(links, nodeIds, tc, realPairs) : []),
     ...utilizationEdges.map((e) => ({ ...e, zIndex: 1 })),
   ];
 }
