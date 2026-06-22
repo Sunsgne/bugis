@@ -165,6 +165,14 @@ export default function LinkUtilizationTooltipContent({ link, pct, tc }: Props) 
             <span className="link-util-tooltip-metric-value">{link.effective_alarm_utilization_pct}%</span>
           </div>
         ) : null}
+        {link.samples != null ? (
+          <div className="link-util-tooltip-metric">
+            <span className="link-util-tooltip-metric-label">{tc("SNMP 样本")}</span>
+            <span className="link-util-tooltip-metric-value">
+              {link.samples > 0 ? link.samples : tc("暂无 · 请确认设备在线并对两端执行 SNMP 发现")}
+            </span>
+          </div>
+        ) : null}
         {link.backbone_link && link.igp_cost_a != null ? (
           <div className="link-util-tooltip-metric">
             <span className="link-util-tooltip-metric-label">{tc("IGP Cost")}</span>
