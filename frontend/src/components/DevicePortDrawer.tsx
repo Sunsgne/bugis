@@ -90,7 +90,7 @@ interface DevicePortDrawerProps {
   onClose: () => void;
   onCheck: (deviceId: number) => Promise<void>;
   onDiscover: (deviceId: number) => Promise<DeviceInterface[] | void>;
-  onLearn: (device: Device) => Promise<void>;
+  onLearn: (device: Device) => void | Promise<void>;
   editingDesc?: boolean;
   descDraft?: Record<string, string>;
   saveJob?: InterfaceDescSaveJob | null;

@@ -314,15 +314,11 @@ export default function Devices() {
     }
   }
 
-  async function learnConfig(d: Device) {
-    try {
-      await learnJobs.learnOne(d, () => {
-        bumpPortDrawer();
-        load();
-      });
-    } catch {
-      /* notified in hook */
-    }
+  function learnConfig(d: Device) {
+    void learnJobs.learnOne(d, () => {
+      bumpPortDrawer();
+      load();
+    });
   }
 
   async function learnSelected() {
