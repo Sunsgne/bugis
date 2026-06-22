@@ -83,6 +83,31 @@ export function applySpokePeerSeparation(
   });
 }
 
+/** Left-to-right chain for a known forwarding path (mini circuit path view). */
+export function layoutPathChain(
+  deviceIds: number[],
+  width: number,
+  height: number,
+): Map<number, { x: number; y: number }> {
+  const map = new Map<number, { x: number; y: number }>();
+  const n = deviceIds.length;
+  if (n === 0) return map;
+
+  const padX = Math.max(24, width * 0.04);
+  const y = height / 2 - NODE_H / 2;
+  if (n === 1) {
+    map.set(deviceIds[0], { x: width / 2 - NODE_W / 2, y });
+    return map;
+  }
+
+  const usable = Math.max(NODE_W, width - padX * 2 - NODE_W);
+  const gap = usable / (n - 1);
+  deviceIds.forEach((id, i) => {
+    map.set(id, { x: padX + gap * i, y });
+  });
+  return map;
+}
+
 /** Hub on the left, spokes stacked on the right — compact for small backbone graphs. */
 function layoutCompactHub(
   nodes: LayoutGraphNode[],
