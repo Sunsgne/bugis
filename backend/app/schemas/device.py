@@ -105,6 +105,22 @@ class DeviceLearnBatchOut(BaseModel):
     results: list[dict]
 
 
+class DeviceCheckBatchIn(BaseModel):
+    device_ids: list[int] = Field(..., min_length=1)
+
+
+class DeviceCheckScheduledOut(BaseModel):
+    scheduled: bool = True
+    device_id: int
+    device: str
+
+
+class DeviceCheckBatchOut(BaseModel):
+    scheduled: int
+    device_ids: list[int]
+    max_workers: int
+
+
 class DevicePortBindingOut(BaseModel):
     interface_name: str
     binding_type: str  # platform | device

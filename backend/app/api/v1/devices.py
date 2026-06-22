@@ -28,6 +28,9 @@ from app.schemas.device import (
     InterfaceDescriptionMultiBulkOut,
     DeviceLearnBatchIn,
     DeviceLearnBatchOut,
+    DeviceCheckBatchIn,
+    DeviceCheckBatchOut,
+    DeviceCheckScheduledOut,
 )
 from app.schemas.pagination import PaginatedResponse, paginate_query, paginated
 from app.services import baseline, config_learn, config_mgmt, port_inventory, snmp, snmp_settings as snmp_cfg
@@ -187,58 +190,58 @@ def delete_device(
     db.commit()
 
 
-@router.post("/{device_id}/check")
-def check_device(
-    device_id: int,
+@router.post("/check-batch", response_model=DeviceCheckBatchOut)
+def check_devices_batch(
+    payload: DeviceCheckBatchIn,
     db: Session = Depends(get_db),
     _: User = Depends(require_operator),
 ):
-    """Probe device reachability (NETCONF/SSH hello). Simulated in dry-run."""
+    """Reachability + S-VID scan for multiple devices concurrently (background)."""
+    if not payload.device_ids:
+        raise HTTPException(status_code=400, detail="device_ids required")
+    plat = platform_cfg.get_or_create(db)
+    max_workers = max(1, int(plat.provision_max_concurrency or 4))
+    unique = list(dict.fromkeys(payload.device_ids))
+    from app.services import concurrent_device_check
+
+    concurrent_device_check.schedule_device_checks(unique, max_workers=max_workers)
+    return DeviceCheckBatchOut(
+        scheduled=len(unique),
+        device_ids=unique,
+        max_workers=min(max_workers, len(unique)),
+    )
+
+
+@router.post("/{device_id}/check")
+def check_device(
+    device_id: int,
+    background: bool = Query(
+        default=True,
+        description="true：后台探测+S-VID 扫描，HTTP 立即返回；false：同步等待完整结果",
+    ),
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
+    """Probe device reachability and refresh S-VID inventory."""
     device = db.get(Device, device_id)
     if not device:
         raise HTTPException(status_code=404, detail="device not found")
 
-    probe = device_management.probe_reachability(db, device)
-    reachable = probe["reachable"]
-    latency = probe.get("latency_ms")
-    transport = device_management.effective_transport(device)
-    device.status = DeviceStatus.ONLINE if reachable else DeviceStatus.OFFLINE
-    svid_scan: dict | None = None
-    if reachable:
-        from app.core.config import settings
+    if background:
+        from app.services import concurrent_device_check
 
-        svid_scan = port_inventory.scan_device(
-            db, device, include_legacy=settings.dry_run
+        concurrent_device_check.schedule_device_check(device_id)
+        return DeviceCheckScheduledOut(
+            scheduled=True,
+            device_id=device.id,
+            device=device.name,
         )
-        cfg = snmp_cfg.get_or_create(db)
-        if cfg.auto_discover_on_check:
-            snmp.discover_interfaces(db, device)
+
+    from app.services import device_check_service
+
+    result = device_check_service.run_device_check(db, device_id)
     db.commit()
-    return {
-        "device": device.name,
-        "mgmt_ip": device.mgmt_ip,
-        "mgmt_ip_backup": device.mgmt_ip_backup,
-        "mgmt_ip_primary_label": device.mgmt_ip_primary_label or "管理网",
-        "mgmt_ip_backup_label": device.mgmt_ip_backup_label or "公网",
-        "mgmt_ip_active": device.mgmt_ip_active,
-        "mgmt_ip_active_role": device.mgmt_ip_active_role,
-        "mgmt_ip_active_label": (
-            (device.mgmt_ip_primary_label or "管理网")
-            if device.mgmt_ip_active_role == "primary"
-            else (device.mgmt_ip_backup_label or "公网")
-            if device.mgmt_ip_active_role == "backup"
-            else None
-        ),
-        "transport": transport,
-        "reachable": reachable,
-        "latency_ms": latency,
-        "method": probe.get("method"),
-        "probes": probe.get("probes") or [],
-        "status": device.status.value,
-        "dry_run": settings.dry_run,
-        "last_reachability_at": device.last_reachability_at,
-        "svid_scan": svid_scan,
-    }
+    return result
 
 
 @router.post("/{device_id}/interfaces", response_model=DeviceInterfaceOut, status_code=201)

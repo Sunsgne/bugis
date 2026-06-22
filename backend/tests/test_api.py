@@ -535,7 +535,7 @@ def test_snmp_interface_discovery(client, auth_headers):
 
 def test_device_check(client, auth_headers):
     _, _, dev_a, _ = _bootstrap_topology(client, auth_headers)
-    r = client.post(f"/api/v1/devices/{dev_a['id']}/check", headers=auth_headers)
+    r = client.post(f"/api/v1/devices/{dev_a['id']}/check?background=false", headers=auth_headers)
     assert r.status_code == 200
     body = r.json()
     assert "reachable" in body and body["status"] in ("online", "offline")
@@ -1475,7 +1475,7 @@ def test_device_check_svid_scan(client, auth_headers, monkeypatch):
     ).json()
     client.post(f"/api/v1/devices/{dev['id']}/discover-interfaces", headers=auth_headers)
 
-    r = client.post(f"/api/v1/devices/{dev['id']}/check", headers=auth_headers)
+    r = client.post(f"/api/v1/devices/{dev['id']}/check?background=false", headers=auth_headers)
     assert r.status_code == 200
     data = r.json()
     assert data["reachable"] is True
@@ -1486,7 +1486,7 @@ def test_device_check_svid_scan(client, auth_headers, monkeypatch):
         f"/api/v1/devices/{dev['id']}", headers=auth_headers,
         json={"name": "SH-PE-01"},
     )
-    r2 = client.post(f"/api/v1/devices/{dev['id']}/check", headers=auth_headers)
+    r2 = client.post(f"/api/v1/devices/{dev['id']}/check?background=false", headers=auth_headers)
     scan = r2.json()["svid_scan"]
     assert scan["total_s_vids"] >= 2
 

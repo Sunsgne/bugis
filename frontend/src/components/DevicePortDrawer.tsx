@@ -35,6 +35,7 @@ import type {
 import SvidUsageCell from "./SvidUsageCell";
 import AdoptBindingModal from "./AdoptBindingModal";
 import type { InterfaceDescSaveJob, InterfaceDescSaveStatus } from "@/hooks/useInterfaceDescJobs";
+import type { DeviceCheckJob } from "@/hooks/useDeviceCheckJobs";
 import type { LearnJob } from "@/hooks/useLearnJobs";
 import InterfaceNameCell from "./InterfaceNameCell";
 import {
@@ -88,13 +89,14 @@ interface DevicePortDrawerProps {
   device: Device | null;
   refreshVersion?: number;
   onClose: () => void;
-  onCheck: (deviceId: number) => Promise<void>;
+  onCheck: (device: Device) => void;
   onDiscover: (deviceId: number) => Promise<DeviceInterface[] | void>;
   onLearn: (device: Device) => void | Promise<void>;
   editingDesc?: boolean;
   descDraft?: Record<string, string>;
   saveJob?: InterfaceDescSaveJob | null;
   learnJob?: LearnJob | null;
+  checkJob?: DeviceCheckJob | null;
   onBeginEdit?: (physicalPorts: DeviceInterface[]) => void;
   onCancelEdit?: () => void;
   onDraftChange?: (name: string, value: string) => void;
@@ -112,6 +114,7 @@ export default function DevicePortDrawer({
   descDraft = {},
   saveJob = null,
   learnJob = null,
+  checkJob = null,
   onBeginEdit,
   onCancelEdit,
   onDraftChange,
@@ -128,6 +131,7 @@ export default function DevicePortDrawer({
   const [activeTab, setActiveTab] = useState("ports");
   const [discovering, setDiscovering] = useState(false);
   const learning = learnJob?.status === "learning";
+  const checking = checkJob?.status === "checking";
   const [adoptBinding, setAdoptBinding] = useState<DevicePortBinding | null>(null);
 
   const [discoverError, setDiscoverError] = useState<string | null>(null);
@@ -289,8 +293,13 @@ export default function DevicePortDrawer({
       extra={
         device ? (
           <Space wrap>
-            <Button size="small" icon={<RadarChartOutlined />} onClick={() => onCheck(device.id)}>
-              检测 S-VID
+            <Button
+              size="small"
+              icon={<RadarChartOutlined />}
+              loading={checking}
+              onClick={() => device && onCheck(device)}
+            >
+              {checking ? "探测中…" : "检测 S-VID"}
             </Button>
             <Button
               size="small"
