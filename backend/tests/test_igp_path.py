@@ -16,11 +16,19 @@ sysname LEAF-A
 interface LoopBack0
  ip address 10.1.255.1 255.255.255.255
 interface GE1/0/1
- ospf 1 area 0.0.0.0
+ ospf 100 area 0.0.0.0
  ospf cost 100
 interface GE1/0/2
- ospf 1 area 0.0.0.0
+ ospf 100 area 0.0.0.0
  ospf cost 10
+interface GE1/0/3
+ ospf cost 999
+return
+"""
+
+H3C_IGP_CONFIG_COST_ONLY = """\
+interface GE1/0/9
+ ospf cost 50
 return
 """
 
@@ -29,26 +37,43 @@ sysname PE-A
 interface LoopBack0
  ip address 10.2.255.1 255.255.255.255
 interface GE1/0/10
- ospf enable 1 area 0.0.0.0
+ ospf enable 100 area 0.0.0.0
  ospf cost 50
 return
 """
 
 CISCO_ISIS_CONFIG = """\
 interface GigabitEthernet0/0/0/1
+ ip router isis CORE
  isis metric 200 level-2
 interface GigabitEthernet0/0/0/2
+ ip router isis CORE
  isis metric 25 level-2
 !
+"""
+
+HUAWEI_VLANIF_BACKBONE = """\
+interface Vlanif2600
+ ospf enable 100 area 0.0.0.0
+ ospf cost 1000
+return
 """
 
 
 def test_parse_h3c_ospf_costs():
     inv = config_learn_parse.parse_inventory(H3C_IGP_CONFIG, Vendor.H3C)
     assert inv.igp_protocol == "ospf"
-    costs = {c.interface: c.cost for c in inv.igp_costs}
-    assert costs["GE1/0/1"] == 100
-    assert costs["GE1/0/2"] == 10
+    costs = {c.interface: c for c in inv.igp_costs}
+    assert set(costs) == {"GE1/0/1", "GE1/0/2"}
+    assert costs["GE1/0/1"].cost == 100
+    assert costs["GE1/0/1"].igp_process == 100
+    assert costs["GE1/0/2"].cost == 10
+    assert "GE1/0/3" not in costs
+
+
+def test_parse_h3c_ignores_cost_without_ospf_enable():
+    inv = config_learn_parse.parse_inventory(H3C_IGP_CONFIG_COST_ONLY, Vendor.H3C)
+    assert inv.igp_costs == []
 
 
 def test_parse_huawei_ospf_costs():
@@ -57,6 +82,17 @@ def test_parse_huawei_ospf_costs():
     assert len(inv.igp_costs) == 1
     assert inv.igp_costs[0].interface == "GE1/0/10"
     assert inv.igp_costs[0].cost == 50
+    assert inv.igp_costs[0].igp_process == 100
+
+
+def test_parse_huawei_vlanif_backbone():
+    inv = config_learn_parse.parse_inventory(HUAWEI_VLANIF_BACKBONE, Vendor.HUAWEI)
+    assert len(inv.igp_costs) == 1
+    c = inv.igp_costs[0]
+    assert c.interface == "Vlanif2600"
+    assert c.cost == 1000
+    assert c.igp_process == 100
+    assert c.backbone is True
 
 
 def test_parse_cisco_isis_costs():
@@ -162,7 +198,7 @@ def _triangle_topology(db):
             inventory={
                 "igp_protocol": "ospf",
                 "igp_costs": [
-                    {"interface": iface, "cost": cost, "protocol": "ospf"}
+                    {"interface": iface, "cost": cost, "protocol": "ospf", "igp_process": 100, "backbone": True}
                     for iface, cost in iface_costs.items()
                 ],
             },
@@ -197,7 +233,7 @@ def test_weighted_path_via_spine_when_direct_expensive(db_session):
     ).scalar_one()
     inv = dict(run.inventory or {})
     costs = list(inv.get("igp_costs") or [])
-    costs.append({"interface": "GE1/0/99", "cost": 500, "protocol": "ospf"})
+    costs.append({"interface": "GE1/0/99", "cost": 500, "protocol": "ospf", "igp_process": 100, "backbone": True})
     inv["igp_costs"] = costs
     run.inventory = inv
     db_session.commit()

@@ -550,6 +550,26 @@ export interface LinkUsage {
   peak_at?: string | null;
   utilization_pct: number;
   samples?: number;
+  /** Learned backbone IGP from config (ospf enable + ospf cost on interface). */
+  backbone_link?: boolean;
+  igp_cost_a?: number | null;
+  igp_cost_z?: number | null;
+  igp_process_a?: number | null;
+  igp_process_z?: number | null;
+  igp_a?: {
+    interface?: string | null;
+    backbone?: boolean;
+    igp_cost?: number | null;
+    igp_process?: number | null;
+    protocol?: string | null;
+  };
+  igp_z?: {
+    interface?: string | null;
+    backbone?: boolean;
+    igp_cost?: number | null;
+    igp_process?: number | null;
+    protocol?: string | null;
+  };
 }
 
 export interface LinkPlan {

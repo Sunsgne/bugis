@@ -16,6 +16,7 @@ from app.models.enums import DeviceRole, LinkType
 from app.models.link import Link
 from app.models.site import Site
 from app.services.bw_parser import parse_bw_mbps
+from app.services.igp_cost_service import _normalize_iface
 from app.services.link_monitor import capacity_from_interface
 from app.services.port_inventory import is_huawei_subinterface, is_vlan_interface_name
 
@@ -89,7 +90,12 @@ def _is_backbone_candidate(iface: DeviceInterface) -> bool:
     return kind in {"vlan", "lag", "physical"}
 
 
-def _score_interface(iface: DeviceInterface, *, prefer_vlan: bool) -> ScoredInterface:
+def _score_interface(
+    iface: DeviceInterface,
+    *,
+    prefer_vlan: bool,
+    backbone_keys: set[str] | None = None,
+) -> ScoredInterface:
     speed = iface.speed_mbps or 0
     kind = _interface_kind(iface.name)
     score = 0.0
@@ -109,6 +115,10 @@ def _score_interface(iface: DeviceInterface, *, prefer_vlan: bool) -> ScoredInte
     elif prefer_vlan:
         score -= 120
         reasons.append("物理口")
+
+    if backbone_keys and _normalize_iface(iface.name) in backbone_keys:
+        score += 350
+        reasons.append("IGP 骨干 (enable+cost)")
 
     score += min(speed / 1000.0, 120.0)
     if speed >= 100_000:
@@ -171,7 +181,13 @@ def list_interface_candidates(
     """
     rows = _device_interfaces(db, device_id)
     prefer_vlan = _prefer_vlan_on_device(rows)
-    scored = [_score_interface(row, prefer_vlan=prefer_vlan) for row in rows]
+    from app.services import igp_cost_service
+
+    backbone_keys = set(igp_cost_service.device_backbone_interfaces(db, device_id).keys())
+    scored = [
+        _score_interface(row, prefer_vlan=prefer_vlan, backbone_keys=backbone_keys)
+        for row in rows
+    ]
     scored.sort(key=lambda row: (-row.score, -row.speed_mbps, row.name))
     if all_interfaces:
         return scored

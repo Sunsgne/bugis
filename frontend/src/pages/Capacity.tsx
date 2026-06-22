@@ -277,7 +277,7 @@ export default function Capacity() {
           type="info"
           showIcon
           className="capacity-link-hint"
-          message={tc("选用 Vlan-interface / Vlanif 子接口；端口描述标注 bw(100Mbps) 可自动写入合同带宽；利用率超链路或平台阈值触发告警")}
+          message={tc("选用 Vlan-interface / Vlanif 子接口；端口描述标注 bw(100Mbps) 可自动写入合同带宽；利用率超链路或平台阈值触发告警。OSPF 骨干 cost 来自现网学习：接口须同时配置 ospf enable（如 ospf 100 area / ospf enable 100 area）与 ospf cost，且与链路端口号一致。")}
         />
         <Table<LinkUsage>
           {...dataTableProps(TABLE_SCROLL.xl)}
@@ -287,7 +287,7 @@ export default function Capacity() {
           loading={loading}
           dataSource={filteredLinks}
           pagination={pagination}
-          scroll={{ x: 1100 }}
+          scroll={{ x: 1220 }}
           locale={{ emptyText: linkSearch || supplierFilter || siteRouteFilter ? tc("无匹配链路") : tc("暂无骨干链路 · 点击「配置骨干链路」智能推荐或手动选配") }}
           columns={colsNowrap<LinkUsage>([
             {
@@ -373,6 +373,44 @@ export default function Capacity() {
               align: "right",
               sorter: (a, b) => a.capacity_mbps - b.capacity_mbps,
               render: (v: number) => fmtLinkBw(v),
+            },
+            {
+              title: tc('IGP Cost'),
+              key: "igp_cost",
+              width: 120,
+              align: "right",
+              sorter: (a, b) => (a.igp_cost_a ?? 99999) - (b.igp_cost_a ?? 99999),
+              render: (_: unknown, r) => {
+                const a = r.igp_a;
+                const z = r.igp_z;
+                if (r.backbone_link && r.igp_cost_a != null) {
+                  const proc = r.igp_process_a ?? a?.igp_process;
+                  return (
+                    <Tooltip title={tc(`OSPF 进程 ${proc ?? "—"} · A/Z 均已学习骨干接口`)}>
+                      <Tag color="purple">{r.igp_cost_a}</Tag>
+                    </Tooltip>
+                  );
+                }
+                const parts: string[] = [];
+                if (a?.backbone && a.igp_cost != null) {
+                  parts.push(`A:${a.igp_cost}`);
+                }
+                if (z?.backbone && z.igp_cost != null) {
+                  parts.push(`Z:${z.igp_cost}`);
+                }
+                if (parts.length) {
+                  return (
+                    <Tooltip title={tc("仅一端匹配现网学习的骨干接口（ospf enable + ospf cost）")}>
+                      <Tag color="orange">{parts.join(" ")}</Tag>
+                    </Tooltip>
+                  );
+                }
+                return (
+                  <Tooltip title={tc("未学习：请在设备上执行现网学习，且接口须 ospf enable + ospf cost")}>
+                    <span style={{ color: "#8a9099" }}>—</span>
+                  </Tooltip>
+                );
+              },
             },
             {
               title: tc('利用率'),

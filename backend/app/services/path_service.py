@@ -216,6 +216,11 @@ def path_segments(
         cost, iface, learned = igp_cost_service.link_transit_cost(
             db, link, a_id, cost_cache=cost_cache
         )
+        egress_iface = link.interface_a if a_id == link.device_a_id else link.interface_z
+        bb = igp_cost_service.lookup_backbone_interface(
+            igp_cost_service.device_backbone_interfaces(db, a_id),
+            egress_iface,
+        )
         segments.append({
             "sequence": i,
             "from_device_id": a_id,
@@ -223,8 +228,10 @@ def path_segments(
             "link_id": link.id,
             "link_name": link.name,
             "interface": iface,
-            "igp_cost": cost,
+            "igp_cost": cost if learned else None,
             "cost_learned": learned,
+            "backbone": bool(bb),
+            "igp_process": bb.get("igp_process") if bb else None,
             "connected": True,
         })
     return segments

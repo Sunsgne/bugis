@@ -165,6 +165,26 @@ export default function LinkUtilizationTooltipContent({ link, pct, tc }: Props) 
             <span className="link-util-tooltip-metric-value">{link.effective_alarm_utilization_pct}%</span>
           </div>
         ) : null}
+        {link.backbone_link && link.igp_cost_a != null ? (
+          <div className="link-util-tooltip-metric">
+            <span className="link-util-tooltip-metric-label">{tc("IGP Cost")}</span>
+            <span className="link-util-tooltip-metric-value">
+              OSPF {link.igp_process_a ?? "—"} · {link.igp_cost_a}
+            </span>
+          </div>
+        ) : link.igp_a?.backbone || link.igp_z?.backbone ? (
+          <div className="link-util-tooltip-metric">
+            <span className="link-util-tooltip-metric-label">{tc("IGP Cost")}</span>
+            <span className="link-util-tooltip-metric-value">
+              {[
+                link.igp_a?.backbone ? `A:${link.igp_a.igp_cost}` : null,
+                link.igp_z?.backbone ? `Z:${link.igp_z.igp_cost}` : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            </span>
+          </div>
+        ) : null}
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-"""Load IGP interface costs from learned device configs for underlay path weighting."""
+"""Load IGP backbone interface costs from learned device configs."""
 from __future__ import annotations
 
 from sqlalchemy import select
@@ -17,14 +17,17 @@ def _normalize_iface(name: str) -> str:
     return name.strip().lower().replace(" ", "")
 
 
-def _inventory_igp_map(inventory: dict) -> dict[str, int]:
-    out: dict[str, int] = {}
-    for raw in inventory.get("igp_costs") or []:
+def _inventory_backbone_map(inventory: dict) -> dict[str, dict]:
+    """Normalized interface name → backbone IGP entry (enable + cost)."""
+    out: dict[str, dict] = {}
+    for raw in inventory.get("igp_costs") or inventory.get("backbone_interfaces") or []:
+        if raw.get("backbone") is False:
+            continue
         iface = str(raw.get("interface") or "").strip()
         cost = raw.get("cost")
         if not iface or cost is None:
             continue
-        out[_normalize_iface(iface)] = int(cost)
+        out[_normalize_iface(iface)] = raw
     return out
 
 
@@ -49,12 +52,21 @@ def _latest_inventory_dict(db: Session, device_id: int) -> dict | None:
     return config_learn_parse.parse_inventory(snap.content, device.vendor).as_dict()
 
 
-def device_igp_costs(db: Session, device_id: int) -> dict[str, int]:
-    """Return normalized interface name → IGP cost for a device."""
+def device_backbone_interfaces(db: Session, device_id: int) -> dict[str, dict]:
+    """Return normalized interface name → backbone IGP metadata."""
     inv = _latest_inventory_dict(db, device_id)
     if not inv:
         return {}
-    return _inventory_igp_map(inv)
+    return _inventory_backbone_map(inv)
+
+
+def device_igp_costs(db: Session, device_id: int) -> dict[str, int]:
+    """Return normalized interface name → IGP cost (backbone interfaces only)."""
+    return {
+        k: int(v["cost"])
+        for k, v in device_backbone_interfaces(db, device_id).items()
+        if v.get("cost") is not None
+    }
 
 
 def device_igp_protocol(db: Session, device_id: int) -> str | None:
@@ -64,13 +76,22 @@ def device_igp_protocol(db: Session, device_id: int) -> str | None:
     return inv.get("igp_protocol")
 
 
+def lookup_backbone_interface(
+    backbone: dict[str, dict],
+    interface: str | None,
+) -> dict | None:
+    if not interface:
+        return None
+    return backbone.get(_normalize_iface(interface))
+
+
 def lookup_interface_cost(
     costs: dict[str, int],
     interface: str | None,
     *,
     default: int = DEFAULT_IGP_COST,
 ) -> tuple[int, bool]:
-    """Return (cost, learned) for an interface name."""
+    """Return (cost, learned) for a backbone interface name."""
     if not interface:
         return default, False
     key = _normalize_iface(interface)
@@ -105,5 +126,52 @@ def link_transit_cost(
     return cost, egress_iface, learned
 
 
+def link_backbone_igp(
+    db: Session,
+    link: Link,
+    *,
+    backbone_cache: dict[int, dict[str, dict]] | None = None,
+) -> dict:
+    """Per-end IGP backbone metadata for a platform Link row."""
+
+    def _side(device_id: int, iface: str | None) -> dict:
+        if backbone_cache is None:
+            bb = device_backbone_interfaces(db, device_id)
+        else:
+            bb = backbone_cache.get(device_id) or device_backbone_interfaces(db, device_id)
+        entry = lookup_backbone_interface(bb, iface)
+        if not entry:
+            return {
+                "interface": iface,
+                "backbone": False,
+                "igp_cost": None,
+                "igp_process": None,
+                "protocol": None,
+            }
+        return {
+            "interface": iface,
+            "backbone": True,
+            "igp_cost": entry.get("cost"),
+            "igp_process": entry.get("igp_process"),
+            "protocol": entry.get("protocol"),
+        }
+
+    a = _side(link.device_a_id, link.interface_a)
+    z = _side(link.device_z_id, link.interface_z)
+    return {
+        "igp_a": a,
+        "igp_z": z,
+        "backbone_link": a["backbone"] and z["backbone"],
+        "igp_cost_a": a["igp_cost"],
+        "igp_cost_z": z["igp_cost"],
+        "igp_process_a": a["igp_process"],
+        "igp_process_z": z["igp_process"],
+    }
+
+
 def build_cost_cache(db: Session, device_ids: set[int]) -> dict[int, dict[str, int]]:
     return {did: device_igp_costs(db, did) for did in device_ids}
+
+
+def build_backbone_cache(db: Session, device_ids: set[int]) -> dict[int, dict[str, dict]]:
+    return {did: device_backbone_interfaces(db, did) for did in device_ids}
