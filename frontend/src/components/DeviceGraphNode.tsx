@@ -1,5 +1,10 @@
 import { Handle, Position, useNodeId, useUpdateNodeInternals } from "@xyflow/react";
 import { useEffect } from "react";
+import {
+  EDGE_HANDLE_SLOT_COUNT,
+  EDGE_HANDLE_SLOT_OFFSETS,
+  type EdgeHandleSide,
+} from "@/utils/deviceGraphLayout";
 
 export type DeviceGraphNodeData = {
   label: string;
@@ -13,6 +18,21 @@ export type DeviceGraphNodeData = {
 
 export const DEVICE_GRAPH_NODE_WIDTH = 220;
 export const DEVICE_GRAPH_NODE_HEIGHT = 72;
+
+const SIDE_CONFIG: { side: EdgeHandleSide; position: Position }[] = [
+  { side: "top", position: Position.Top },
+  { side: "right", position: Position.Right },
+  { side: "bottom", position: Position.Bottom },
+  { side: "left", position: Position.Left },
+];
+
+function slotStyle(side: EdgeHandleSide, slot: number): React.CSSProperties {
+  const pct = `${Math.round(EDGE_HANDLE_SLOT_OFFSETS[slot] * 100)}%`;
+  if (side === "top" || side === "bottom") {
+    return { left: pct, transform: "translateX(-50%)" };
+  }
+  return { top: pct, transform: "translateY(-50%)" };
+}
 
 export default function DeviceGraphNode({ data }: { data: DeviceGraphNodeData }) {
   const nodeId = useNodeId();
@@ -35,14 +55,26 @@ export default function DeviceGraphNode({ data }: { data: DeviceGraphNodeData })
       }}
       title={data.fullName}
     >
-      <Handle type="target" position={Position.Top} id="top-in" className="!border-0 !bg-transparent !opacity-0 !min-w-0 !min-h-0 !w-1 !h-1" />
-      <Handle type="source" position={Position.Top} id="top-out" className="!border-0 !bg-transparent !opacity-0 !min-w-0 !min-h-0 !w-1 !h-1" />
-      <Handle type="target" position={Position.Bottom} id="bottom-in" className="!border-0 !bg-transparent !opacity-0 !min-w-0 !min-h-0 !w-1 !h-1" />
-      <Handle type="source" position={Position.Bottom} id="bottom-out" className="!border-0 !bg-transparent !opacity-0 !min-w-0 !min-h-0 !w-1 !h-1" />
-      <Handle type="target" position={Position.Left} id="left-in" className="!border-0 !bg-transparent !opacity-0 !min-w-0 !min-h-0 !w-1 !h-1" />
-      <Handle type="source" position={Position.Left} id="left-out" className="!border-0 !bg-transparent !opacity-0 !min-w-0 !min-h-0 !w-1 !h-1" />
-      <Handle type="target" position={Position.Right} id="right-in" className="!border-0 !bg-transparent !opacity-0 !min-w-0 !min-h-0 !w-1 !h-1" />
-      <Handle type="source" position={Position.Right} id="right-out" className="!border-0 !bg-transparent !opacity-0 !min-w-0 !min-h-0 !w-1 !h-1" />
+      {SIDE_CONFIG.flatMap(({ side, position }) =>
+        Array.from({ length: EDGE_HANDLE_SLOT_COUNT }, (_, slot) => [
+          <Handle
+            key={`${side}-in-${slot}`}
+            type="target"
+            position={position}
+            id={`${side}-in-${slot}`}
+            className="!border-0 !bg-transparent !opacity-0 !min-w-0 !min-h-0 !w-1 !h-1"
+            style={slotStyle(side, slot)}
+          />,
+          <Handle
+            key={`${side}-out-${slot}`}
+            type="source"
+            position={position}
+            id={`${side}-out-${slot}`}
+            className="!border-0 !bg-transparent !opacity-0 !min-w-0 !min-h-0 !w-1 !h-1"
+            style={slotStyle(side, slot)}
+          />,
+        ]).flat(),
+      )}
       <div className="flex items-center gap-2">
         <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${data.online ? "bg-emerald-500" : "bg-slate-300"}`} />
         <span className="truncate text-sm font-semibold text-slate-800">{data.label}</span>

@@ -388,6 +388,21 @@ export function siteLabelForNode(
 
 export type EdgeHandleSide = "top" | "bottom" | "left" | "right";
 
+/** Number of connection slots per side on each device node (reduces edge overlap). */
+export const EDGE_HANDLE_SLOT_COUNT = 6;
+
+/** Fractional position (0–1) along a node side for each slot. */
+export const EDGE_HANDLE_SLOT_OFFSETS = [0.16, 0.32, 0.48, 0.52, 0.68, 0.84];
+
+export function slottedHandleId(
+  side: EdgeHandleSide,
+  direction: "in" | "out",
+  slot: number,
+): string {
+  const idx = Math.max(0, Math.min(EDGE_HANDLE_SLOT_COUNT - 1, slot));
+  return `${side}-${direction}-${idx}`;
+}
+
 export type EdgeHandlePair = {
   sourceHandle: string;
   targetHandle: string;
@@ -452,6 +467,49 @@ export function edgeSidesForLayout(
 
 type HandleLayoutEdge = { source: number; target: number; key?: number | string };
 
+function assignHandleSlots(
+  edges: HandleLayoutEdge[],
+  result: Map<string, EdgeHandlePair>,
+): void {
+  const sourceGroups = new Map<string, string[]>();
+  const targetGroups = new Map<string, string[]>();
+
+  for (const e of edges) {
+    if (e.source === e.target) continue;
+    const key = String(e.key ?? `${e.source}-${e.target}`);
+    const pair = result.get(key);
+    if (!pair) continue;
+    const sk = `${e.source}:${pair.sourceSide}`;
+    const tk = `${e.target}:${pair.targetSide}`;
+    if (!sourceGroups.has(sk)) sourceGroups.set(sk, []);
+    if (!targetGroups.has(tk)) targetGroups.set(tk, []);
+    sourceGroups.get(sk)!.push(key);
+    targetGroups.get(tk)!.push(key);
+  }
+
+  const slotFor = (keys: string[], edgeKey: string) => {
+    const sorted = [...keys].sort();
+    const idx = sorted.indexOf(edgeKey);
+    if (idx < 0) return 0;
+    if (sorted.length <= EDGE_HANDLE_SLOT_COUNT) return idx;
+    return Math.floor((idx / (sorted.length - 1)) * (EDGE_HANDLE_SLOT_COUNT - 1));
+  };
+
+  for (const e of edges) {
+    if (e.source === e.target) continue;
+    const key = String(e.key ?? `${e.source}-${e.target}`);
+    const pair = result.get(key);
+    if (!pair) continue;
+    const srcSlot = slotFor(sourceGroups.get(`${e.source}:${pair.sourceSide}`) ?? [key], key);
+    const tgtSlot = slotFor(targetGroups.get(`${e.target}:${pair.targetSide}`) ?? [key], key);
+    result.set(key, {
+      ...pair,
+      sourceHandle: slottedHandleId(pair.sourceSide, "out", srcSlot),
+      targetHandle: slottedHandleId(pair.targetSide, "in", tgtSlot),
+    });
+  }
+}
+
 /** Spread handles across four sides when a node fans out to many peers (mesh). */
 export function edgeHandlePairsForGraph(
   edges: HandleLayoutEdge[],
@@ -474,8 +532,8 @@ export function edgeHandlePairsForGraph(
     result.set(key, {
       sourceSide: base.sourceSide,
       targetSide: base.targetSide,
-      sourceHandle: `${base.sourceSide}-out`,
-      targetHandle: `${base.targetSide}-in`,
+      sourceHandle: slottedHandleId(base.sourceSide, "out", 0),
+      targetHandle: slottedHandleId(base.targetSide, "in", 0),
     });
   }
 
@@ -511,12 +569,13 @@ export function edgeHandlePairsForGraph(
       result.set(key, {
         sourceSide: spreadSide,
         targetSide,
-        sourceHandle: `${spreadSide}-out`,
-        targetHandle: `${targetSide}-in`,
+        sourceHandle: slottedHandleId(spreadSide, "out", 0),
+        targetHandle: slottedHandleId(targetSide, "in", 0),
       });
     });
   }
 
+  assignHandleSlots(edges, result);
   return result;
 }
 
@@ -527,8 +586,8 @@ export function edgeHandlesForLayout(
 ): { sourceHandle?: string; targetHandle?: string } {
   const { sourceSide, targetSide } = edgeSidesForLayout(sourceId, targetId, positions);
   return {
-    sourceHandle: `${sourceSide}-out`,
-    targetHandle: `${targetSide}-in`,
+    sourceHandle: slottedHandleId(sourceSide, "out", 0),
+    targetHandle: slottedHandleId(targetSide, "in", 0),
   };
 }
 
@@ -541,8 +600,8 @@ export function edgeHandlePairForLayout(
   return {
     sourceSide,
     targetSide,
-    sourceHandle: `${sourceSide}-out`,
-    targetHandle: `${targetSide}-in`,
+    sourceHandle: slottedHandleId(sourceSide, "out", 0),
+    targetHandle: slottedHandleId(targetSide, "in", 0),
   };
 }
 
