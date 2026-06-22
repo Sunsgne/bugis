@@ -47,6 +47,7 @@ _BRIDGE_AGG = re.compile(r"^Bridge-Aggregation\d+$", re.IGNORECASE)
 
 # Default / management VLAN — not used for backbone auto-matching.
 _EXCLUDED_VLAN_IDS: frozenset[int] = frozenset({1})
+BACKBONE_OSPF_PROCESS = 100
 
 _ROLE_PRIORITY: dict[DeviceRole, int] = {
     DeviceRole.DCI_GW: 0,
@@ -290,7 +291,7 @@ def _best_matched_vlan_pair(
     device_a: Device,
     device_z: Device,
 ) -> tuple[ScoredInterface, ScoredInterface] | None:
-    """Pick A/Z VLAN interfaces with the same VLAN id and optional /30 peer IPs."""
+    """Pick A/Z VLAN interfaces with same VLAN id, OSPF 100, and a /30 peer IP pair."""
     ranked_a = [row for row in rank_interfaces(db, device_a.id, limit=50) if row.kind == "vlan"]
     ranked_b = [row for row in rank_interfaces(db, device_z.id, limit=50) if row.kind == "vlan"]
     if not ranked_a or not ranked_b:
@@ -310,6 +311,7 @@ def _best_matched_vlan_pair(
         meta_a = details_a.get(_normalize_iface(pick_a.name), {})
         ip_a = meta_a.get("ip_address")
         prefix_a = meta_a.get("prefix_len")
+        ospf_a = meta_a.get("ospf_process")
 
         for pick_b in ranked_b:
             vlan_b = vlan_id_from_interface(pick_b.name)
@@ -319,17 +321,19 @@ def _best_matched_vlan_pair(
             meta_b = details_b.get(_normalize_iface(pick_b.name), {})
             ip_b = meta_b.get("ip_address")
             prefix_b = meta_b.get("prefix_len")
+            ospf_b = meta_b.get("ospf_process")
 
-            if ip_a and ip_b:
-                if not _is_p2p_30_pair(ip_a, prefix_a, ip_b, prefix_b):
-                    continue
-                pair_reason = f"VLAN {vlan_a} · /30 {ip_a}↔{ip_b}"
-                pair_score = pick_a.score + pick_b.score + 120.0
-            elif ip_a or ip_b:
+            if ospf_a != BACKBONE_OSPF_PROCESS or ospf_b != BACKBONE_OSPF_PROCESS:
                 continue
-            else:
-                pair_reason = f"VLAN {vlan_a} · 同 VLAN 匹配"
-                pair_score = pick_a.score + pick_b.score + 40.0
+            if not ip_a or not ip_b:
+                continue
+            if not _is_p2p_30_pair(ip_a, prefix_a, ip_b, prefix_b):
+                continue
+
+            pair_reason = (
+                f"VLAN {vlan_a} · OSPF {BACKBONE_OSPF_PROCESS} · /30 {ip_a}↔{ip_b}"
+            )
+            pair_score = pick_a.score + pick_b.score + 120.0
 
             if pair_score > best_score:
                 best_score = pair_score
@@ -516,6 +520,54 @@ def plan_link(
     }
 
 
+def plan_backbone_suggestion(
+    db: Session,
+    device_a: Device,
+    device_z: Device,
+) -> dict | None:
+    """Recommend a backbone link only when VLAN, OSPF 100, and /30 peer IPs all match."""
+    if device_a.id == device_z.id:
+        return None
+    matched = _best_matched_vlan_pair(db, device_a, device_z)
+    if not matched:
+        return None
+    pick_a, pick_z = matched
+    link_type = _link_type(device_a, device_z)
+    capacity = _capacity_for_pair(
+        db, device_a.id, pick_a.name, device_z.id, pick_z.name,
+        fallback=min(pick_a.speed_mbps or 10_000, pick_z.speed_mbps or 10_000) or 10_000,
+    )
+    site_a = db.get(Site, device_a.site_id) if device_a.site_id else None
+    site_z = db.get(Site, device_z.site_id) if device_z.site_id else None
+    score = round((pick_a.score + pick_z.score) / 2, 1)
+    return {
+        "device_a_id": device_a.id,
+        "device_z_id": device_z.id,
+        "device_a": device_a.name,
+        "device_z": device_z.name,
+        "site_a": site_a.code if site_a else None,
+        "site_z": site_z.code if site_z else None,
+        "type": link_type.value,
+        "name": _default_name(device_a, device_z, link_type),
+        "interface_a": pick_a.name,
+        "interface_z": pick_z.name,
+        "interface_a_description": pick_a.description or _interface_description(
+            db, device_a.id, pick_a.name
+        ),
+        "interface_z_description": pick_z.description or _interface_description(
+            db, device_z.id, pick_z.name
+        ),
+        "interface_a_score": pick_a.score,
+        "interface_z_score": pick_z.score,
+        "interface_a_reason": pick_a.reason,
+        "interface_z_reason": pick_z.reason,
+        "capacity_mbps": capacity,
+        "score": score,
+        "reason": pick_a.reason,
+        "vlan_id": vlan_id_from_interface(pick_a.name),
+    }
+
+
 def suggest_backbone_links(db: Session) -> list[dict]:
     """Recommend missing backbone links between sites (one optimal pair per site pair)."""
     devices = db.execute(select(Device).order_by(Device.id)).scalars().all()
@@ -537,7 +589,7 @@ def suggest_backbone_links(db: Session) -> list[dict]:
                 for device_z in by_site[site_z_id]:
                     if _pair_key(device_a.id, device_z.id) in existing:
                         continue
-                    plan = plan_link(db, device_a, device_z)
+                    plan = plan_backbone_suggestion(db, device_a, device_z)
                     if plan:
                         plan["priority"] = _device_priority(device_a) + _device_priority(device_z)
                         candidates.append(plan)
@@ -566,7 +618,7 @@ def suggest_backbone_links(db: Session) -> list[dict]:
         device_a, device_z = cores[0], access[0]
         if _pair_key(device_a.id, device_z.id) in existing:
             continue
-        plan = plan_link(db, device_a, device_z)
+        plan = plan_backbone_suggestion(db, device_a, device_z)
         if plan:
             plan["recommended"] = True
             suggestions.append(plan)

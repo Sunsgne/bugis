@@ -230,10 +230,12 @@ def test_list_vlan_interfaces_from_config():
 interface Vlanif4010
  description DCI peer bw(10000M)
  ip address 10.10.10.1 255.255.255.252
+ ospf enable 100 area 0.0.0.0
 #
 interface Vlan-interface4001
  description H3C DCI
  ip address 10.20.20.1 255.255.255.252
+ ospf 100 area 0.0.0.0
 #
 interface 10GE1/0/3
  description uplink
@@ -245,9 +247,11 @@ interface 10GE1/0/3
     assert by_name["Vlanif4010"]["ip_address"] == "10.10.10.1"
     assert by_name["Vlanif4010"]["prefix_len"] == 30
     assert by_name["Vlanif4010"]["vlan_id"] == 4010
+    assert by_name["Vlanif4010"]["ospf_process"] == 100
     assert "Vlan-interface4001" in by_name
     assert by_name["Vlan-interface4001"]["description"] == "H3C DCI"
     assert by_name["Vlan-interface4001"]["vlan_id"] == 4001
+    assert by_name["Vlan-interface4001"]["ospf_process"] == 100
 
 
 def test_rollup_huawei_subif_usage_to_physical_port():

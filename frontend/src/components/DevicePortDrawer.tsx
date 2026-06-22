@@ -36,6 +36,7 @@ import SvidUsageCell from "./SvidUsageCell";
 import AdoptBindingModal from "./AdoptBindingModal";
 import type { InterfaceDescSaveJob, InterfaceDescSaveStatus } from "@/hooks/useInterfaceDescJobs";
 import type { DeviceCheckJob } from "@/hooks/useDeviceCheckJobs";
+import type { SnmpDiscoverJob } from "@/hooks/useSnmpDiscoverJobs";
 import type { LearnJob } from "@/hooks/useLearnJobs";
 import InterfaceNameCell from "./InterfaceNameCell";
 import {
@@ -90,13 +91,14 @@ interface DevicePortDrawerProps {
   refreshVersion?: number;
   onClose: () => void;
   onCheck: (device: Device) => void;
-  onDiscover: (deviceId: number) => Promise<DeviceInterface[] | void>;
+  onDiscover: (deviceId: number, deviceName?: string) => Promise<DeviceInterface[] | void>;
   onLearn: (device: Device) => void | Promise<void>;
   editingDesc?: boolean;
   descDraft?: Record<string, string>;
   saveJob?: InterfaceDescSaveJob | null;
   learnJob?: LearnJob | null;
   checkJob?: DeviceCheckJob | null;
+  snmpDiscoverJob?: SnmpDiscoverJob | null;
   onBeginEdit?: (physicalPorts: DeviceInterface[]) => void;
   onCancelEdit?: () => void;
   onDraftChange?: (name: string, value: string) => void;
@@ -115,6 +117,7 @@ export default function DevicePortDrawer({
   saveJob = null,
   learnJob = null,
   checkJob = null,
+  snmpDiscoverJob = null,
   onBeginEdit,
   onCancelEdit,
   onDraftChange,
@@ -129,9 +132,9 @@ export default function DevicePortDrawer({
   const [ifaceSearch, setIfaceSearch] = useState("");
   const [ifaceStatus, setIfaceStatus] = useState<"all" | "up" | "down" | "allocated">("all");
   const [activeTab, setActiveTab] = useState("ports");
-  const [discovering, setDiscovering] = useState(false);
   const learning = learnJob?.status === "learning";
   const checking = checkJob?.status === "checking";
+  const discovering = snmpDiscoverJob?.status === "discovering";
   const [adoptBinding, setAdoptBinding] = useState<DevicePortBinding | null>(null);
 
   const [discoverError, setDiscoverError] = useState<string | null>(null);
@@ -196,10 +199,9 @@ export default function DevicePortDrawer({
       const rows = await loadIfaces(device.id, false);
       if (cancelled) return;
       if (rows.length === 0) {
-        setDiscovering(true);
         setDiscoverError(null);
         try {
-          const discovered = await onDiscover(device.id);
+          const discovered = await onDiscover(device.id, device.name);
           if (!cancelled && Array.isArray(discovered)) {
             setDiscoverError(null);
             setIfaces(discovered.filter((iface) => !isHuaweiSubinterface(iface.name) || device.vendor !== "huawei"));
@@ -209,8 +211,6 @@ export default function DevicePortDrawer({
             const err = e as { response?: { data?: { detail?: string } } };
             setDiscoverError(err?.response?.data?.detail || "SNMP 发现失败");
           }
-        } finally {
-          if (!cancelled) setDiscovering(false);
         }
       }
     })();
@@ -306,21 +306,18 @@ export default function DevicePortDrawer({
               icon={<NodeIndexOutlined />}
               loading={discovering}
               onClick={async () => {
-                setDiscovering(true);
                 setDiscoverError(null);
                 try {
-                  const data = await onDiscover(device.id);
+                  const data = await onDiscover(device.id, device.name);
                   if (Array.isArray(data)) setIfaces(data);
                   await loadBindings(device.id);
                 } catch (e: unknown) {
                   const err = e as { response?: { data?: { detail?: string } } };
                   setDiscoverError(err?.response?.data?.detail || "SNMP 发现失败");
-                } finally {
-                  setDiscovering(false);
                 }
               }}
             >
-              SNMP 发现
+              {discovering ? "扫描中…" : "SNMP 发现"}
             </Button>
             <Button
               size="small"
@@ -502,7 +499,7 @@ export default function DevicePortDrawer({
                   dataSource={ifaceRows}
                   locale={{
                     emptyText: discovering
-                      ? "SNMP 接口扫描中…（主备管理 IP 自动探测）"
+                      ? "SNMP 扫描中…"
                       : ifaceSvidOnly
                         ? "暂无 S-VID 占用端口"
                         : "暂无端口数据 · 将自动尝试 SNMP 发现",

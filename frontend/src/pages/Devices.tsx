@@ -59,6 +59,7 @@ import DevicePortDrawer from "@/components/DevicePortDrawer";
 import { useInterfaceDescJobs } from "@/hooks/useInterfaceDescJobs";
 import { useDeviceCheckJobs } from "@/hooks/useDeviceCheckJobs";
 import { useLearnJobs } from "@/hooks/useLearnJobs";
+import { useSnmpDiscoverJobs } from "@/hooks/useSnmpDiscoverJobs";
 import { fetchAllPages } from "@/utils/pagination";
 import { useTc } from "@/i18n/useTc";
 import { useTranslation } from "react-i18next";
@@ -130,6 +131,7 @@ export default function Devices() {
   const descJobs = useInterfaceDescJobs(message);
   const learnJobs = useLearnJobs(message);
   const checkJobs = useDeviceCheckJobs(message);
+  const snmpDiscoverJobs = useSnmpDiscoverJobs(message);
   const [rows, setRows] = useState<Device[]>([]);
   const [total, setTotal] = useState(0);
   const [summary, setSummary] = useState({ total: 0, online: 0, offline: 0 });
@@ -298,38 +300,13 @@ export default function Devices() {
     }
   }
 
-  async function discover(deviceId: number) {
-    const hide = message.loading("SNMP 接口扫描中…", 0);
-    try {
-      const { data } = await api.post<DeviceInterface[]>(`/devices/${deviceId}/discover-interfaces`);
-      hide();
-      const simCount = data.filter((i) => i.discovered_via === "snmp-sim").length;
-      const cfgCount = data.filter((i) => i.discovered_via === "running-config").length;
-      const svidCount = data.filter((i) => i.used_s_vids?.length).length;
-      if (simCount === data.length) {
-        message.warning(
-          "返回的是模拟数据（设备 SNMP 不可达或 Community/端口错误）。华为请确认 UDP 16161 与管理网 IP 可达后重试",
-        );
-      } else if (cfgCount > 0 && !data.some((i) => i.discovered_via === "snmp")) {
-        message.info(
-          `SNMP 不可达，已从 running-config 解析 ${data.length} 个物理口（${svidCount} 个有 S-VID 占用）`,
-        );
-      } else if (simCount > 0) {
-        message.warning(`部分接口为模拟数据（${simCount}/${data.length}），请检查 SNMP 配置`);
-      } else {
-        message.success(`SNMP 发现 ${data.length} 个接口 · ${svidCount} 个端口有 S-VID 占用`);
-      }
-      if (svidCount === 0 && simCount < data.length) {
-        message.info(tc('S-VID 需从 running-config 解析，请执行「现网学习」后重新检测'));
-      }
+  async function discover(deviceId: number, deviceName?: string) {
+    const device = rows.find((row) => row.id === deviceId);
+    const name = deviceName ?? device?.name ?? `设备 ${deviceId}`;
+    return snmpDiscoverJobs.discoverOne(deviceId, name, () => {
       bumpPortDrawer();
-      return data;
-    } catch (e: unknown) {
-      hide();
-      const err = e as { response?: { data?: { detail?: string } } };
-      message.error(err?.response?.data?.detail || toastCopy.failed);
-      throw e;
-    }
+      load();
+    });
   }
 
   function learnConfig(d: Device) {
@@ -595,6 +572,7 @@ export default function Devices() {
               const job = descJobs.getJob(d.id);
               const learnJob = learnJobs.getJob(d.id);
               const checkJob = checkJobs.getJob(d.id);
+              const snmpJob = snmpDiscoverJobs.getJob(d.id);
               return (
               <Tooltip
                 title={
@@ -617,6 +595,9 @@ export default function Devices() {
                     {checkJob?.status === "checking" ? <Tag color="processing">探测中</Tag> : null}
                     {checkJob?.status === "success" ? <Tag color="success">已探测</Tag> : null}
                     {checkJob?.status === "error" ? <Tag color="error">探测失败</Tag> : null}
+                    {snmpJob?.status === "discovering" ? <Tag color="processing">SNMP 扫描中</Tag> : null}
+                    {snmpJob?.status === "success" ? <Tag color="success">已扫描</Tag> : null}
+                    {snmpJob?.status === "error" ? <Tag color="error">扫描失败</Tag> : null}
                   </Space>
                   {d.model ? (
                     <Typography.Text type="secondary" ellipsis style={{ fontSize: 12, display: "block" }}>
@@ -755,7 +736,7 @@ export default function Devices() {
                         key: "discover",
                         icon: <NodeIndexOutlined />,
                         label: tc('SNMP 发现'),
-                        onClick: () => discover(r.id),
+                        onClick: () => discover(r.id, r.name),
                       },
                       { type: "divider" },
                       {
@@ -791,6 +772,7 @@ export default function Devices() {
         onClose={() => setDrawerDevice(null)}
         onCheck={checkDevice}
         checkJob={drawerDevice ? checkJobs.getJob(drawerDevice.id) : null}
+        snmpDiscoverJob={drawerDevice ? snmpDiscoverJobs.getJob(drawerDevice.id) : null}
         onDiscover={discover}
         onLearn={learnConfig}
         editingDesc={drawerDevice ? descJobs.isEditing(drawerDevice.id) : false}
