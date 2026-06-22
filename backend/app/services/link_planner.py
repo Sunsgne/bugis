@@ -45,6 +45,9 @@ _SYSTEM_IFACE = re.compile(
 )
 _BRIDGE_AGG = re.compile(r"^Bridge-Aggregation\d+$", re.IGNORECASE)
 
+# Default / management VLAN — not used for backbone auto-matching.
+_EXCLUDED_VLAN_IDS: frozenset[int] = frozenset({1})
+
 _ROLE_PRIORITY: dict[DeviceRole, int] = {
     DeviceRole.DCI_GW: 0,
     DeviceRole.BORDER_LEAF: 1,
@@ -302,7 +305,7 @@ def _best_matched_vlan_pair(
 
     for pick_a in ranked_a:
         vlan_a = vlan_id_from_interface(pick_a.name)
-        if vlan_a is None:
+        if vlan_a is None or vlan_a in _EXCLUDED_VLAN_IDS:
             continue
         meta_a = details_a.get(_normalize_iface(pick_a.name), {})
         ip_a = meta_a.get("ip_address")
@@ -467,7 +470,12 @@ def plan_link(
     ):
         vlan_a = vlan_id_from_interface(pick_a.name)
         vlan_b = vlan_id_from_interface(pick_z.name)
-        if vlan_a is None or vlan_b is None or vlan_a != vlan_b:
+        if (
+            vlan_a is None
+            or vlan_b is None
+            or vlan_a != vlan_b
+            or vlan_a in _EXCLUDED_VLAN_IDS
+        ):
             return None
 
     link_type = _link_type(device_a, device_z)

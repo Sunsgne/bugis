@@ -114,7 +114,7 @@ export default function BackboneLinkModal({ open, devices, editLink, onClose, on
   const { platform } = usePlatformSettings();
   const isEdit = Boolean(editLink);
   const [suggestions, setSuggestions] = useState<LinkPlan[]>([]);
-  const [selectedKeys, setSelectedKeys] = useState<number[]>([]);
+  const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const [saving, setSaving] = useState(false);
   const [manualPlan, setManualPlan] = useState<LinkPlan | null>(null);
@@ -141,7 +141,7 @@ export default function BackboneLinkModal({ open, devices, editLink, onClose, on
     try {
       const { data } = await api.get<LinkPlan[]>("/capacity/links/suggestions");
       setSuggestions(data);
-      setSelectedKeys(data.map((_, idx) => idx));
+      setSelectedKeys(data.map((_, idx) => String(idx)));
     } finally {
       setLoadingSuggestions(false);
     }
@@ -225,7 +225,7 @@ export default function BackboneLinkModal({ open, devices, editLink, onClose, on
   }, [open, editLink]);
 
   async function applySuggestions() {
-    const picks = suggestions.filter((_, idx) => selectedKeys.includes(idx));
+    const picks = suggestions.filter((_, idx) => selectedKeys.includes(String(idx)));
     if (!picks.length) {
       message.warning(tc('请至少选择一条推荐链路'));
       return;
@@ -322,7 +322,7 @@ export default function BackboneLinkModal({ open, devices, editLink, onClose, on
           pagination={false}
           rowSelection={{
             selectedRowKeys: selectedKeys,
-            onChange: (keys) => setSelectedKeys(keys as number[]),
+            onChange: (keys) => setSelectedKeys(keys.map(String)),
           }}
           style={{ marginBottom: 24 }}
           locale={{ emptyText: "暂无推荐 · 请确认设备已 SNMP 发现且跨站点存在未建链路" }}
