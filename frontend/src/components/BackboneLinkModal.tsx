@@ -25,6 +25,7 @@ import {
   formatOperStatus,
   isVlanInterface,
 } from "../utils/networkDisplay";
+import { fmtLinkBw } from "../utils/linkUtilization";
 
 const LINK_TYPE_LABEL: Record<string, string> = {
   dci: "跨站点 DCI",
@@ -37,10 +38,6 @@ function linkPlanSelectionKey(row: LinkPlan): string {
   return `${row.device_a_id}:${row.device_z_id}:${row.interface_a}:${row.interface_z}`;
 }
 
-function fmtBw(mbps: number) {
-  return mbps >= 1000 ? `${Math.round(mbps / 1000)} Gbps` : `${mbps} Mbps`;
-}
-
 function clipDescription(desc?: string | null, max = 56) {
   const text = desc?.trim();
   if (!text) return null;
@@ -50,7 +47,7 @@ function clipDescription(desc?: string | null, max = 56) {
 function portOptionLabel(c: UplinkCandidate) {
   const short = formatInterfaceShort(c.name);
   const desc = clipDescription(c.description);
-  if (!desc) return `${short} · ${fmtBw(c.speed_mbps)}`;
+  if (!desc) return `${short} · ${fmtLinkBw(c.speed_mbps)}`;
   return `${short} — ${desc}`;
 }
 
@@ -73,7 +70,7 @@ function PortCandidateOption({ candidate }: { candidate: UplinkCandidate }) {
         </div>
       ) : null}
       <div className="backbone-port-option-meta">
-        {fmtBw(candidate.speed_mbps)}
+        {fmtLinkBw(candidate.speed_mbps)}
         {candidate.oper_status ? ` · ${formatOperStatus(candidate.oper_status)}` : ""}
         {candidate.reason ? ` · ${candidate.reason}` : ""}
       </div>
@@ -370,7 +367,7 @@ export default function BackboneLinkModal({ open, devices, editLink, onClose, on
               title: tc('带宽'),
               dataIndex: "capacity_mbps",
               width: 90,
-              render: (v: number) => fmtBw(v),
+              render: (v: number) => fmtLinkBw(v),
             },
             {
               title: tc('评分'),

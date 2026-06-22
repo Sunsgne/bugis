@@ -2,8 +2,8 @@ import type { LinkUsage } from "@/api/types";
 import { formatUserDateTime } from "./datetime";
 
 export function fmtLinkBw(mbps?: number) {
-  if (!mbps) return "—";
-  return mbps >= 1000 ? `${Math.round(mbps / 1000)} Gbps` : `${mbps} Mbps`;
+  if (mbps == null || mbps <= 0) return "—";
+  return `${mbps} Mbps`;
 }
 
 export function formatPeakAt(iso?: string | null) {
