@@ -25,6 +25,8 @@ from app.schemas.device import (
     InterfaceDescriptionBulkOut,
     InterfaceDescriptionMultiBulkIn,
     InterfaceDescriptionMultiBulkOut,
+    DeviceLearnBatchIn,
+    DeviceLearnBatchOut,
 )
 from app.schemas.pagination import PaginatedResponse, paginate_query, paginated
 from app.services import baseline, config_learn, config_mgmt, port_inventory, snmp, snmp_settings as snmp_cfg
@@ -437,6 +439,31 @@ def discover_interfaces(
     if device.vendor == Vendor.HUAWEI:
         all_ifaces = [r for r in all_ifaces if not port_inventory.is_huawei_subinterface(r.name)]
     return sorted(all_ifaces, key=lambda i: (i.ifindex or 0, i.name))
+
+
+@router.post("/learn-batch", response_model=DeviceLearnBatchOut)
+def learn_devices_batch(
+    payload: DeviceLearnBatchIn,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_operator),
+):
+    """Pull running-config from multiple devices concurrently (thread pool)."""
+    if not payload.device_ids:
+        raise HTTPException(status_code=400, detail="device_ids required")
+    plat = platform_cfg.get_or_create(db)
+    max_workers = payload.max_workers
+    if max_workers is None:
+        max_workers = max(1, int(plat.provision_max_concurrency or 4))
+    else:
+        max_workers = max(1, min(16, max_workers))
+
+    summary = config_learn.learn_devices_batch(
+        db,
+        payload.device_ids,
+        created_by=user.username,
+        max_workers=max_workers,
+    )
+    return DeviceLearnBatchOut(**summary)
 
 
 @router.post("/{device_id}/learn")

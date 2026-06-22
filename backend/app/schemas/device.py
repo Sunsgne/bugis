@@ -92,6 +92,19 @@ class InterfaceDescriptionMultiBulkOut(BaseModel):
     dry_run: bool
 
 
+class DeviceLearnBatchIn(BaseModel):
+    device_ids: list[int] = Field(..., min_length=1)
+    max_workers: int | None = Field(None, ge=1, le=16)
+
+
+class DeviceLearnBatchOut(BaseModel):
+    total: int
+    success: int
+    failed: int
+    max_workers: int
+    results: list[dict]
+
+
 class DevicePortBindingOut(BaseModel):
     interface_name: str
     binding_type: str  # platform | device

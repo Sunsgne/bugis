@@ -183,17 +183,24 @@ def learn_devices_batch(
     device_ids: list[int],
     *,
     created_by: str | None = None,
+    discover_snmp: bool = True,
+    max_workers: int | None = None,
 ) -> dict:
-    """Learn config for multiple devices (e.g. after CSV import)."""
-    results: list[dict] = []
-    for did in device_ids:
-        device = db.get(Device, did)
-        if not device:
-            results.append({"device_id": did, "success": False, "error": "not found"})
-            continue
-        results.append(learn_device(db, device, created_by=created_by))
-    ok = sum(1 for r in results if r.get("success"))
-    return {"total": len(results), "success": ok, "failed": len(results) - ok, "results": results}
+    """Learn config for multiple devices concurrently (e.g. after CSV import)."""
+    from app.services import concurrent_learn, platform_settings as platform_cfg
+
+    if max_workers is None:
+        plat = platform_cfg.get_or_create(db)
+        max_workers = max(1, int(plat.provision_max_concurrency or 4))
+
+    # Commit any pending work on the caller session before workers open their own.
+    db.commit()
+    return concurrent_learn.learn_devices_parallel(
+        device_ids,
+        created_by=created_by,
+        discover_snmp=discover_snmp,
+        max_workers=max_workers,
+    )
 
 
 def scheduled_learn_all_online(
@@ -211,31 +218,37 @@ def scheduled_learn_all_online(
     devices = db.execute(
         select(Device).where(Device.status == DeviceStatus.ONLINE)
     ).scalars().all()
-    results: list[dict] = []
+    device_ids = [d.id for d in devices]
+    if not device_ids:
+        return {
+            "skipped": False,
+            "devices": 0,
+            "success": 0,
+            "failed": 0,
+            "conflicts": 0,
+            "results": [],
+        }
+
+    max_workers = max(1, int(plat.provision_max_concurrency or 4))
+    db.commit()
+    from app.services import concurrent_learn
+
+    batch = concurrent_learn.learn_devices_parallel(
+        device_ids,
+        created_by=created_by,
+        discover_snmp=False,
+        max_workers=max_workers,
+    )
     conflicts = 0
-    for device in devices:
-        try:
-            result = learn_device(
-                db,
-                device,
-                created_by=created_by,
-                discover_snmp=False,
-            )
-            if result.get("success"):
-                conflicts += int((result.get("svid_scan") or {}).get("conflicts") or 0)
-            results.append(result)
-        except Exception as exc:  # noqa: BLE001
-            results.append({
-                "device": device.name,
-                "success": False,
-                "error": str(exc),
-            })
-    ok = sum(1 for r in results if r.get("success"))
+    for result in batch.get("results") or []:
+        if result.get("success"):
+            conflicts += int((result.get("svid_scan") or {}).get("conflicts") or 0)
     return {
         "skipped": False,
-        "devices": len(devices),
-        "success": ok,
-        "failed": len(devices) - ok,
+        "devices": len(device_ids),
+        "success": batch.get("success", 0),
+        "failed": batch.get("failed", 0),
         "conflicts": conflicts,
-        "results": results,
+        "max_workers": batch.get("max_workers"),
+        "results": batch.get("results") or [],
     }

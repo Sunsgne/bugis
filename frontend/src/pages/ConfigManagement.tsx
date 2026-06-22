@@ -6,6 +6,8 @@ import dayjs from "dayjs";
 import { api } from "../api/client";
 import { configPreviewModalProps, ConfigPreviewPre } from "../utils/configPreview";
 import { usePlatformSettings } from "../hooks/usePlatformSettings";
+import { useLearnJobs } from "@/hooks/useLearnJobs";
+import type { Device } from "@/api/types";
 import { useTc } from "@/i18n/useTc";
 import { translateApiText, translateConfigSnapshotNote } from "@/i18n/translateApiText";
 import { VENDOR_OPTIONS } from "@/constants/formOptions";
@@ -71,6 +73,7 @@ function ColoredDiff({ text }: { text: string }) {
 export default function ConfigManagement() {
   const { tc, isEn } = useTc();
   const { message, modal } = AntApp.useApp();
+  const learnJobs = useLearnJobs(message);
   const { platform } = usePlatformSettings();
   const [devices, setDevices] = useState<ConfigDeviceRow[]>([]);
   const [sel, setSel] = useState<number | null>(null);
@@ -141,19 +144,15 @@ export default function ConfigManagement() {
     }
   }
 
-  async function runLearn() {
+  function runLearn() {
     if (!sel) return;
-    const hide = message.loading("现网配置学习中...", 0);
-    try {
-      await api.post(`/devices/${sel}/learn`);
-      hide();
-      message.success(tc('现网配置学习完成'));
+    const row = devices.find((d) => d.device_id === sel);
+    if (!row) return;
+    const device = { id: row.device_id, name: row.name } as Device;
+    void learnJobs.learnOne(device, () => {
       select(sel);
       loadDevices();
-    } catch (e: any) {
-      hide();
-      message.error(e?.response?.data?.detail || "学习失败");
-    }
+    });
   }
 
   async function loadDiff() {
@@ -200,6 +199,15 @@ export default function ConfigManagement() {
           </Link>
         }
       />
+      {learnJobs.activeLearnCount > 0 ? (
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 12 }}
+          message={`${learnJobs.activeLearnCount} 台设备配置学习进行中（并行），可切换设备继续操作`}
+        />
+      ) : null}
+
       <Card
         className="config-panel-card config-management-devices"
         title={tc('设备配置')}
@@ -239,6 +247,10 @@ export default function ConfigManagement() {
               align: "right",
               onHeaderCell: () => ({ style: { whiteSpace: "nowrap" } }),
               render: (_: unknown, row: ConfigDeviceRow) => {
+                const job = learnJobs.getJob(row.device_id);
+                if (job?.status === "learning") {
+                  return <Tag color="processing">{tc("学习中")}</Tag>;
+                }
                 if (row.learned_version) {
                   return (
                     <div className="config-device-status">
@@ -261,7 +273,14 @@ export default function ConfigManagement() {
         title={tc('配置管理')}
         extra={
           <Button.Group>
-            <Button icon={<BookOutlined />} onClick={runLearn} disabled={!sel}>{tc('现网学习')}</Button>
+            <Button
+              icon={<BookOutlined />}
+              onClick={runLearn}
+              disabled={!sel}
+              loading={sel != null && learnJobs.getJob(sel)?.status === "learning"}
+            >
+              {sel != null && learnJobs.getJob(sel)?.status === "learning" ? tc("学习中…") : tc("现网学习")}
+            </Button>
             <Button type="primary" icon={<CloudUploadOutlined />} onClick={backup} disabled={!sel}>{tc('备份现网配置')}</Button>
           </Button.Group>
         }

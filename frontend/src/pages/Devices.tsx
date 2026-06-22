@@ -57,6 +57,8 @@ import ListToolbar from "../components/ListToolbar";
 import DeviceFormDialog, { type DeviceFormValues } from "@/components/DeviceFormDialog";
 import DevicePortDrawer from "@/components/DevicePortDrawer";
 import { useInterfaceDescJobs } from "@/hooks/useInterfaceDescJobs";
+import { useLearnJobs } from "@/hooks/useLearnJobs";
+import { fetchAllPages } from "@/utils/pagination";
 import { useTc } from "@/i18n/useTc";
 import { useTranslation } from "react-i18next";
 import { deviceStatusLabel } from "../i18n/helpers";
@@ -125,6 +127,7 @@ export default function Devices() {
   const { t } = useTranslation();
   const { message, modal } = AntApp.useApp();
   const descJobs = useInterfaceDescJobs(message);
+  const learnJobs = useLearnJobs(message);
   const [rows, setRows] = useState<Device[]>([]);
   const [total, setTotal] = useState(0);
   const [summary, setSummary] = useState({ total: 0, online: 0, offline: 0 });
@@ -145,6 +148,8 @@ export default function Devices() {
   const [initDevice, setInitDevice] = useState<Device | null>(null);
   const [initBaseline, setInitBaseline] = useState("");
   const [initLoading, setInitLoading] = useState(false);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [batchLearning, setBatchLearning] = useState(false);
   const importRef = useRef<HTMLInputElement>(null);
 
   const siteName = useCallback((id?: number) => sites.find((s) => s.id === id)?.code || "-", [sites]);
@@ -309,33 +314,45 @@ export default function Devices() {
     }
   }
 
-  async function learnConfig(d: Device) {
-    const hide = message.loading(`现网配置学习中 · ${d.name}...`, 0);
-    try {
-      const { data } = await api.post(`/devices/${d.id}/learn`);
-      hide();
-      if (data.success) {
-        const inv = data.inventory;
-        const svidTotal = data.svid_scan?.total_s_vids ?? 0;
-        if (data.dry_run) {
-          message.warning(`${d.name} 学习完成（Dry-run：未从真实设备拉取配置）`);
-        } else {
-          message.success(
-            `${d.name} 学习完成 · ${inv?.service_count ?? 0} 个业务 · v${data.snapshot_version}`,
-          );
-        }
-        if (svidTotal === 0) {
-          message.info(tc('未解析到 S-VID，请确认设备 running-config 含 service-instance / dot1q 配置'));
-        }
-        bumpPortDrawer();
-      } else {
-        message.error(data.error || toastCopy.failed);
-      }
+  function learnConfig(d: Device) {
+    void learnJobs.learnOne(d, () => {
+      bumpPortDrawer();
       load();
-    } catch (e: unknown) {
-      hide();
-      const err = e as { response?: { data?: { detail?: string } } };
-      message.error(err?.response?.data?.detail || toastCopy.failed);
+    });
+  }
+
+  async function learnSelected() {
+    const selected = rows.filter((r) => selectedRowKeys.includes(r.id));
+    if (!selected.length) {
+      message.info(tc("请先勾选要学习的设备"));
+      return;
+    }
+    setBatchLearning(true);
+    try {
+      await learnJobs.learnBatch(selected, () => {
+        bumpPortDrawer();
+        load();
+      });
+    } finally {
+      setBatchLearning(false);
+    }
+  }
+
+  async function learnAllOnline() {
+    setBatchLearning(true);
+    try {
+      const all = await fetchAllPages<Device>("/devices", { page_size: 200 });
+      const online = all.filter((d) => d.status === "online");
+      if (!online.length) {
+        message.info(tc("当前没有在线设备"));
+        return;
+      }
+      await learnJobs.learnBatch(online, () => {
+        bumpPortDrawer();
+        load();
+      });
+    } finally {
+      setBatchLearning(false);
     }
   }
 
@@ -509,10 +526,42 @@ export default function Devices() {
         />
       ) : null}
 
+      {learnJobs.activeLearnCount > 0 ? (
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 12 }}
+          message={`${learnJobs.activeLearnCount} 台设备配置学习进行中（并行），可切换设备继续操作`}
+        />
+      ) : null}
+
+      <Space wrap style={{ marginBottom: 12 }}>
+        <Button
+          icon={<BookOutlined />}
+          loading={batchLearning}
+          disabled={selectedRowKeys.length === 0}
+          onClick={() => void learnSelected()}
+        >
+          {tc("批量现网学习")}
+          {selectedRowKeys.length > 0 ? ` (${selectedRowKeys.length})` : ""}
+        </Button>
+        <Button
+          icon={<BookOutlined />}
+          loading={batchLearning}
+          onClick={() => void learnAllOnline()}
+        >
+          {tc("学习全部在线设备")}
+        </Button>
+      </Space>
+
       <Table
         rowKey="id"
         loading={loading}
         dataSource={rows}
+        rowSelection={{
+          selectedRowKeys,
+          onChange: (keys) => setSelectedRowKeys(keys),
+        }}
         locale={{ emptyText: tc("暂无设备 · 从导入或纳管开始") }}
         {...dataTableProps(TABLE_SCROLL.lg)}
         pagination={tablePagination(total, page, pageSize, (p, ps) => {
@@ -528,6 +577,7 @@ export default function Devices() {
             ellipsis: true,
             render: (name: string, d: Device) => {
               const job = descJobs.getJob(d.id);
+              const learnJob = learnJobs.getJob(d.id);
               return (
               <Tooltip
                 title={
@@ -544,6 +594,9 @@ export default function Devices() {
                     {job?.status === "saving" ? <Tag color="processing">下发中</Tag> : null}
                     {job?.status === "success" ? <Tag color="success">已下发</Tag> : null}
                     {job?.status === "error" ? <Tag color="error">下发失败</Tag> : null}
+                    {learnJob?.status === "learning" ? <Tag color="processing">学习中</Tag> : null}
+                    {learnJob?.status === "success" ? <Tag color="success">已学习</Tag> : null}
+                    {learnJob?.status === "error" ? <Tag color="error">学习失败</Tag> : null}
                   </Space>
                   {d.model ? (
                     <Typography.Text type="secondary" ellipsis style={{ fontSize: 12, display: "block" }}>
@@ -722,6 +775,7 @@ export default function Devices() {
         editingDesc={drawerDevice ? descJobs.isEditing(drawerDevice.id) : false}
         descDraft={drawerDevice ? descJobs.getDraft(drawerDevice.id) : {}}
         saveJob={drawerDevice ? descJobs.getJob(drawerDevice.id) : null}
+        learnJob={drawerDevice ? learnJobs.getJob(drawerDevice.id) : null}
         onBeginEdit={(ports) => drawerDevice && descJobs.beginEdit(drawerDevice.id, ports)}
         onCancelEdit={() => drawerDevice && descJobs.cancelEdit(drawerDevice.id)}
         onDraftChange={(name, value) => drawerDevice && descJobs.updateDraft(drawerDevice.id, name, value)}
