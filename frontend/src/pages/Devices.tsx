@@ -57,6 +57,7 @@ import ListToolbar from "../components/ListToolbar";
 import DeviceFormDialog, { type DeviceFormValues } from "@/components/DeviceFormDialog";
 import DevicePortDrawer from "@/components/DevicePortDrawer";
 import { useInterfaceDescJobs } from "@/hooks/useInterfaceDescJobs";
+import { useDeviceCheckJobs } from "@/hooks/useDeviceCheckJobs";
 import { useLearnJobs } from "@/hooks/useLearnJobs";
 import { fetchAllPages } from "@/utils/pagination";
 import { useTc } from "@/i18n/useTc";
@@ -128,6 +129,7 @@ export default function Devices() {
   const { message, modal } = AntApp.useApp();
   const descJobs = useInterfaceDescJobs(message);
   const learnJobs = useLearnJobs(message);
+  const checkJobs = useDeviceCheckJobs(message);
   const [rows, setRows] = useState<Device[]>([]);
   const [total, setTotal] = useState(0);
   const [summary, setSummary] = useState({ total: 0, online: 0, offline: 0 });
@@ -150,6 +152,7 @@ export default function Devices() {
   const [initLoading, setInitLoading] = useState(false);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [batchLearning, setBatchLearning] = useState(false);
+  const [batchChecking, setBatchChecking] = useState(false);
   const importRef = useRef<HTMLInputElement>(null);
 
   const siteName = useCallback((id?: number) => sites.find((s) => s.id === id)?.code || "-", [sites]);
@@ -400,45 +403,25 @@ export default function Devices() {
     }
   }
 
-  async function check(id: number) {
-    const hide = message.loading("可达性探测 · S-VID 扫描中…", 0);
-    try {
-      const { data } = await api.post(`/devices/${id}/check`);
-      hide();
-      if (data.reachable) {
-        const scan = data.svid_scan;
-        const svidCount = scan?.total_s_vids ?? 0;
-        const conflictCount = scan?.conflicts?.length ?? 0;
-        const dryTag = data.dry_run ? " · 配置 dry-run" : "";
-        const activeTag = data.mgmt_ip_active
-          ? ` · 当前 ${data.mgmt_ip_active_label || data.mgmt_ip_active_role} ${data.mgmt_ip_active}`
-          : "";
-        if (conflictCount > 0) {
-          message.warning(
-            `${data.device} 可达 · 发现 ${svidCount} 个 S-VID · ${conflictCount} 处冲突`,
-          );
-        } else {
-          message.success(
-            `${data.device} 可达${data.method ? ` · ${data.method}` : ""} (${data.latency_ms}ms) · 已扫描 ${svidCount} 个 S-VID 占用${activeTag}${dryTag}`,
-          );
-        }
-        bumpPortDrawer();
-      } else {
-        const tried = (data.probes as Array<{ method?: string }> | undefined)
-          ?.map((p) => p.method)
-          .filter(Boolean)
-          .join(" / ");
-        message.warning(
-          `${data.device} 管理面不可达${data.mgmt_ip_backup ? `（主 ${data.mgmt_ip} / 备 ${data.mgmt_ip_backup}）` : ` (${data.mgmt_ip})`}${tried ? ` · 已探测 ${tried}` : ""} · 请检查 IP、端口、SNMP Community 与防火墙`,
-          6,
-        );
-      }
+  function checkDevice(d: Device) {
+    checkJobs.checkOne(d, () => {
+      bumpPortDrawer();
       load();
-    } catch (e: unknown) {
-      hide();
-      const err = e as { response?: { data?: { detail?: string } } };
-      message.error(err?.response?.data?.detail || toastCopy.failed);
+    });
+  }
+
+  function checkSelected() {
+    const selected = rows.filter((r) => selectedRowKeys.includes(r.id));
+    if (!selected.length) {
+      message.info(tc("请先勾选要探测的设备"));
+      return;
     }
+    setBatchChecking(true);
+    checkJobs.checkBatch(selected, () => {
+      bumpPortDrawer();
+      load();
+    });
+    setBatchChecking(false);
   }
 
   const stats = useMemo(
@@ -550,7 +533,25 @@ export default function Devices() {
         />
       ) : null}
 
+      {checkJobs.activeCheckCount > 0 ? (
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 12 }}
+          message={`${checkJobs.activeCheckCount} 台设备可达性探测 / S-VID 扫描进行中（并行），可继续操作其他设备`}
+        />
+      ) : null}
+
       <Space wrap style={{ marginBottom: 12 }}>
+        <Button
+          icon={<RadarChartOutlined />}
+          loading={batchChecking}
+          disabled={selectedRowKeys.length === 0}
+          onClick={() => void checkSelected()}
+        >
+          {tc("批量探测")}
+          {selectedRowKeys.length > 0 ? ` (${selectedRowKeys.length})` : ""}
+        </Button>
         <Button
           icon={<BookOutlined />}
           loading={batchLearning}
@@ -593,6 +594,7 @@ export default function Devices() {
             render: (name: string, d: Device) => {
               const job = descJobs.getJob(d.id);
               const learnJob = learnJobs.getJob(d.id);
+              const checkJob = checkJobs.getJob(d.id);
               return (
               <Tooltip
                 title={
@@ -612,6 +614,9 @@ export default function Devices() {
                     {learnJob?.status === "learning" ? <Tag color="processing">学习中</Tag> : null}
                     {learnJob?.status === "success" ? <Tag color="success">已学习</Tag> : null}
                     {learnJob?.status === "error" ? <Tag color="error">学习失败</Tag> : null}
+                    {checkJob?.status === "checking" ? <Tag color="processing">探测中</Tag> : null}
+                    {checkJob?.status === "success" ? <Tag color="success">已探测</Tag> : null}
+                    {checkJob?.status === "error" ? <Tag color="error">探测失败</Tag> : null}
                   </Space>
                   {d.model ? (
                     <Typography.Text type="secondary" ellipsis style={{ fontSize: 12, display: "block" }}>
@@ -744,7 +749,7 @@ export default function Devices() {
                         key: "check",
                         icon: <RadarChartOutlined />,
                         label: tc('检测'),
-                        onClick: () => check(r.id),
+                        onClick: () => checkDevice(r),
                       },
                       {
                         key: "discover",
@@ -784,7 +789,8 @@ export default function Devices() {
         device={drawerDevice}
         refreshVersion={portDrawerRefresh}
         onClose={() => setDrawerDevice(null)}
-        onCheck={check}
+        onCheck={checkDevice}
+        checkJob={drawerDevice ? checkJobs.getJob(drawerDevice.id) : null}
         onDiscover={discover}
         onLearn={learnConfig}
         editingDesc={drawerDevice ? descJobs.isEditing(drawerDevice.id) : false}
