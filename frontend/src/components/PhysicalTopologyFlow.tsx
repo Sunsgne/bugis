@@ -37,7 +37,7 @@ function fmtG(mbps: number): string {
   return mbps >= 1000 ? `${(mbps / 1000).toFixed(0)}G` : `${mbps}M`;
 }
 
-function shortHost(name: string, max = 28): string {
+function shortHost(name: string, max = 36): string {
   if (name.length <= max) return name;
   const head = Math.ceil((max - 1) / 2);
   const tail = max - head - 1;
@@ -47,16 +47,31 @@ function shortHost(name: string, max = 28): string {
 const nodeTypes = { device: DeviceGraphNode };
 const edgeTypes = { utilization: UtilizationEdge, logicalPeer: LogicalPeerEdge };
 
-function FitViewOnLayout({ layoutKey }: { layoutKey: string }) {
+function FitViewOnLayout({
+  layoutKey,
+  focusNodeIds,
+}: {
+  layoutKey: string;
+  focusNodeIds?: string[];
+}) {
   const { fitView } = useReactFlow();
   const nodesInitialized = useNodesInitialized({ includeHiddenNodes: false });
   useEffect(() => {
     if (!nodesInitialized) return;
     const timer = window.setTimeout(() => {
-      fitView({ padding: 0.06, maxZoom: 1.35, duration: 280 });
+      if (focusNodeIds?.length) {
+        fitView({
+          nodes: focusNodeIds.map((id) => ({ id })),
+          padding: 0.22,
+          maxZoom: 1.15,
+          duration: 320,
+        });
+        return;
+      }
+      fitView({ padding: 0.08, maxZoom: 1.25, duration: 280 });
     }, 120);
     return () => window.clearTimeout(timer);
-  }, [fitView, layoutKey, nodesInitialized]);
+  }, [fitView, layoutKey, nodesInitialized, focusNodeIds]);
   return null;
 }
 
@@ -77,6 +92,12 @@ function buildDeviceGraph(
     && pathDeviceOrder.length <= 8
     && pathDeviceOrder.every((id) => topo.nodes.some((n) => n.id === id));
 
+  const siteCount = new Set(topo.nodes.map((n) => n.site_id ?? -1)).size;
+  const useSiteColumns = !usePathChain && siteCount >= 2 && topo.nodes.length >= 4;
+  const pathFocus = !usePathChain
+    && highlightLinkIds != null
+    && highlightLinkIds.size > 0;
+
   const autoPositions = usePathChain
     ? layoutPathChain(pathDeviceOrder!, size.w, size.h)
     : layoutDeviceGraph(
@@ -84,6 +105,7 @@ function buildDeviceGraph(
       topo.edges.map((e) => ({ source: e.source, target: e.target })),
       size.w,
       size.h,
+      topo.sites,
     );
 
   const connected = new Set<number>();
@@ -99,15 +121,19 @@ function buildDeviceGraph(
     posById.set(n.id, saved ?? autoPositions.get(n.id) ?? { x: 0, y: 0 });
   }
 
-  const graphNodes = topo.nodes.map((n) => ({ id: n.id, site_id: n.site_id }));
   const graphEdges = topo.edges.map((e) => ({ source: e.source, target: e.target }));
-  const hubId = findHubNodeId(graphNodes, graphEdges);
   const frozenLayoutIds = new Set(
     Object.keys(savedPositions)
       .map((id) => Number(id))
       .filter((id) => topo.nodes.some((n) => n.id === id)),
   );
-  applySpokePeerSeparation(hubId, graphEdges, posById, undefined, frozenLayoutIds);
+  if (!usePathChain && !useSiteColumns) {
+    const hubId = findHubNodeId(
+      topo.nodes.map((n) => ({ id: n.id, site_id: n.site_id })),
+      graphEdges,
+    );
+    applySpokePeerSeparation(hubId, graphEdges, posById, undefined, frozenLayoutIds);
+  }
 
   const handlePairs = edgeHandlePairsForGraph(
     topo.edges.map((e) => ({ source: e.source, target: e.target, key: e.id })),
@@ -118,9 +144,12 @@ function buildDeviceGraph(
     const pos = posById.get(n.id)!;
     const siteLabel = siteLabelForNode(n.site_id, topo.sites);
     const vendorColor = vendorColors[n.vendor] || "#64748b";
-    const dimmed = dimUnconnected
-      ? !highlightDeviceIds!.has(n.id)
-      : topo.edges.length > 0 && !connected.has(n.id);
+    const dimmed = pathFocus && highlightDeviceIds
+      ? !highlightDeviceIds.has(n.id)
+      : dimUnconnected
+        ? !highlightDeviceIds!.has(n.id)
+        : topo.edges.length > 0 && !connected.has(n.id);
+    const pathActive = Boolean(pathFocus && highlightDeviceIds?.has(n.id));
 
     return {
       id: String(n.id),
@@ -128,6 +157,7 @@ function buildDeviceGraph(
       position: pos,
       width: DEVICE_GRAPH_NODE_WIDTH,
       height: DEVICE_GRAPH_NODE_HEIGHT,
+      zIndex: pathActive ? 6 : dimmed ? 1 : 3,
       data: {
         label: shortHost(n.name),
         fullName: n.name,
@@ -136,6 +166,7 @@ function buildDeviceGraph(
         border: vendorColor,
         online: n.status === "online",
         dimmed,
+        pathActive,
       },
     };
   });
@@ -148,6 +179,7 @@ function buildDeviceGraph(
       const util = link?.utilization_pct ?? e.utilization_pct ?? (e.capacity_mbps ? (e.reserved_mbps / e.capacity_mbps) * 100 : 0);
       const pathHighlighted = highlightLinkIds != null && highlightLinkIds.size > 0 && highlightLinkIds.has(e.id);
       const highlighted = hoveredLinkId != null && link?.link_id === hoveredLinkId;
+      const deemphasized = pathFocus && !pathHighlighted && !highlighted;
       const handles =
         handlePairs.get(String(e.id)) ??
         handlePairs.get(`${e.source}-${e.target}`) ??
@@ -171,6 +203,7 @@ function buildDeviceGraph(
           linkType: e.type,
           highlighted,
           pathHighlighted,
+          deemphasized,
           curvature: layoutEdgeCurvature(
             e.source,
             e.target,
@@ -179,11 +212,22 @@ function buildDeviceGraph(
             handles,
           ),
         } satisfies EdgeData,
+        zIndex: pathHighlighted ? 20 : deemphasized ? 0 : 2,
       };
     });
 
   const links = [...linksById.values()];
-  const edges = mergeTopologyEdges(utilizationEdges, links, nodeIds, tc);
+  const merged = mergeTopologyEdges(utilizationEdges, links, nodeIds, tc);
+  const edges = merged.map((edge) => {
+    if (edge.type === "logicalPeer" && pathFocus) {
+      return {
+        ...edge,
+        style: { ...(edge.style as object), opacity: 0.1 },
+        zIndex: 0,
+      };
+    }
+    return edge;
+  });
 
   return { nodes, edges };
 }
@@ -262,6 +306,11 @@ export default function PhysicalTopologyFlow({
     return new Set(ids);
   }, [highlightPath?.linkIds]);
 
+  const focusNodeIds = useMemo(() => {
+    if (!highlightDeviceSet?.size) return undefined;
+    return [...highlightDeviceSet].map(String);
+  }, [highlightDeviceSet]);
+
   const graphKey = `${size.w}x${size.h}-${topo.nodes.length}-${topo.edges.length}-${links.length}-${Object.keys(positions).length}-${highlightPath?.deviceIds?.join(",") || ""}-${highlightPath?.linkIds?.join(",") || ""}-${pathDeviceOrder?.join(",") || ""}`;
 
   const { nodes: layoutNodes, edges: layoutEdges } = useMemo(
@@ -304,9 +353,10 @@ export default function PhysicalTopologyFlow({
   return (
     <div
       ref={hostRef}
-      className={[
+        className={[
         "physical-topology-flow device-graph-flow",
         fillContainer ? "physical-topology-flow-fill" : "",
+        highlightLinkSet?.size ? "physical-topology-flow-path-focus" : "",
         className,
       ].filter(Boolean).join(" ")}
     >
@@ -333,7 +383,7 @@ export default function PhysicalTopologyFlow({
         maxZoom={1.6}
         proOptions={{ hideAttribution: true }}
       >
-        <FitViewOnLayout layoutKey={graphKey} />
+        <FitViewOnLayout layoutKey={graphKey} focusNodeIds={focusNodeIds} />
         <Background gap={24} size={1} color="#e2e8f0" />
         <Controls showInteractive={false} position="bottom-right" />
         <MiniMap
@@ -375,6 +425,12 @@ export default function PhysicalTopologyFlow({
           />
           {tc("同链路对端")}
         </span>
+        {highlightLinkSet?.size ? (
+          <span className="physical-topology-legend-item">
+            <span className="physical-topology-legend-line" style={{ background: "#4f46e5", height: 3 }} />
+            {tc("专线路径")}
+          </span>
+        ) : null}
       </div>
     </div>
   );

@@ -94,16 +94,27 @@ export function layoutPathChain(
   if (n === 0) return map;
 
   const padX = Math.max(24, width * 0.04);
-  const y = height / 2 - NODE_H / 2;
+  const yCenter = height / 2 - NODE_H / 2;
   if (n === 1) {
-    map.set(deviceIds[0], { x: width / 2 - NODE_W / 2, y });
+    map.set(deviceIds[0], { x: width / 2 - NODE_W / 2, y: yCenter });
     return map;
   }
 
-  const usable = Math.max(NODE_W, width - padX * 2 - NODE_W);
-  const gap = usable / (n - 1);
+  const margin = 40;
+  const minStep = NODE_W + margin;
+  const innerWidth = Math.max(NODE_W, width - padX * 2);
+  const packedStep = (innerWidth - NODE_W) / (n - 1);
+  const step = Math.max(minStep, packedStep);
+  const needsZigzag = packedStep < minStep;
+  const startX = padX + Math.max(0, (innerWidth - NODE_W - step * (n - 1)) / 2);
+  const yStagger = needsZigzag ? Math.min(NODE_H + 24, height * 0.22) : 0;
+
   deviceIds.forEach((id, i) => {
-    map.set(id, { x: padX + gap * i, y });
+    const y =
+      needsZigzag && yStagger > 0
+        ? yCenter + (i % 2 === 0 ? -yStagger * 0.35 : yStagger * 0.65)
+        : yCenter;
+    map.set(id, { x: startX + step * i, y });
   });
   return map;
 }
@@ -289,6 +300,59 @@ function scalePositionsToFit(
   return result;
 }
 
+/** Site-column layout — one PoP per column, devices stacked vertically (readable DCI view). */
+export function layoutSiteColumns(
+  nodes: LayoutGraphNode[],
+  sites: { id: number; code: string }[],
+  width: number,
+  height: number,
+): Map<number, { x: number; y: number }> | null {
+  if (nodes.length < 3) return null;
+
+  const bySite = new Map<number, LayoutGraphNode[]>();
+  for (const n of nodes) {
+    const k = siteKey(n.site_id);
+    if (!bySite.has(k)) bySite.set(k, []);
+    bySite.get(k)!.push(n);
+  }
+  const siteKeys = [...bySite.keys()];
+  if (siteKeys.length < 2) return null;
+
+  const siteById = new Map(sites.map((s) => [s.id, s]));
+  siteKeys.sort((a, b) => {
+    if (a === -1) return 1;
+    if (b === -1) return -1;
+    const ca = siteById.get(a)?.code ?? String(a);
+    const cb = siteById.get(b)?.code ?? String(b);
+    return ca.localeCompare(cb);
+  });
+
+  const marginX = 48;
+  const marginY = 56;
+  const rowGap = NODE_H + 40;
+  const nCols = siteKeys.length;
+  const usableW = Math.max(NODE_W + 80, width - marginX * 2);
+  const colW = usableW / nCols;
+
+  const maxRows = Math.max(...siteKeys.map((k) => bySite.get(k)!.length));
+  const stackH = rowGap * Math.max(maxRows - 1, 0);
+  const baseY = marginY + Math.max(0, (height - marginY * 2 - NODE_H - stackH) / 2);
+
+  const result = new Map<number, { x: number; y: number }>();
+  siteKeys.forEach((sid, col) => {
+    const members = [...bySite.get(sid)!].sort((a, b) => a.id - b.id);
+    const colStackH = rowGap * Math.max(members.length - 1, 0);
+    const startY = baseY + Math.max(0, (stackH - colStackH) / 2);
+    members.forEach((n, row) => {
+      result.set(n.id, {
+        x: marginX + col * colW + (colW - NODE_W) / 2,
+        y: startY + row * rowGap,
+      });
+    });
+  });
+  return result;
+}
+
 /**
  * Compute device positions for a network graph (devices ↔ links).
  * Returns top-left coordinates for each device node card (220×72).
@@ -298,8 +362,14 @@ export function layoutDeviceGraph(
   edges: LayoutGraphEdge[],
   width: number,
   height: number,
+  sites: { id: number; code: string }[] = [],
 ): Map<number, { x: number; y: number }> {
   if (!nodes.length) return new Map();
+
+  const siteColumns = layoutSiteColumns(nodes, sites, width, height);
+  if (siteColumns && siteColumns.size === nodes.length && nodes.length >= 4) {
+    return siteColumns;
+  }
 
   if (nodes.length <= 12) {
     const hub = layoutCompactHub(nodes, edges, width, height);

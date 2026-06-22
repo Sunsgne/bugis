@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Alert, Space } from "antd";
 import { useSearchParams } from "react-router-dom";
 import { api } from "../api/client";
@@ -10,6 +10,40 @@ import { Badge } from "@/components/ui/badge";
 import { empty, page } from "../constants/uiCopy";
 import { useTc } from "@/i18n/useTc";
 import { useTopologyLayout } from "@/hooks/useTopologyLayout";
+
+function linkedTopology(
+  topo: Topo,
+  links: LinkUsage[],
+  extraDeviceIds?: number[],
+): Topo {
+  const linkedIds = new Set<number>();
+  for (const l of links) {
+    linkedIds.add(l.device_a_id);
+    linkedIds.add(l.device_z_id);
+  }
+  for (const e of topo.edges) {
+    linkedIds.add(e.source);
+    linkedIds.add(e.target);
+  }
+  for (const id of extraDeviceIds ?? []) {
+    linkedIds.add(id);
+  }
+  if (linkedIds.size === 0) return topo;
+
+  const siteIds = new Set<number>();
+  const nodes = topo.nodes.filter((n) => {
+    if (!linkedIds.has(n.id)) return false;
+    if (n.site_id != null) siteIds.add(n.site_id);
+    return true;
+  });
+  if (nodes.length === topo.nodes.length) return topo;
+
+  return {
+    sites: topo.sites.filter((s) => siteIds.has(s.id)),
+    nodes,
+    edges: topo.edges.filter((e) => linkedIds.has(e.source) && linkedIds.has(e.target)),
+  };
+}
 
 export default function Topology() {
   const { tc } = useTc();
@@ -67,24 +101,32 @@ export default function Topology() {
     return () => clearInterval(t);
   }, []);
 
+  const displayTopo = useMemo(() => {
+    if (!topo) return null;
+    if (!links.length && !topo.edges.length) return topo;
+    return linkedTopology(topo, links, highlightPath?.deviceIds);
+  }, [topo, links, highlightPath?.deviceIds]);
+
   if (error && !topo) {
     return (
       <div className="py-16 text-center text-sm text-muted-foreground">{tc("拓扑数据加载失败，将自动重试…")}</div>
     );
   }
 
-  if (!topo) {
+  if (!topo || !displayTopo) {
     return <div className="py-16 text-center text-sm text-muted-foreground">{empty.data}</div>;
   }
 
-  if (!topo.nodes.length) {
+  if (!displayTopo.nodes.length) {
     return <div className="py-16 text-center text-sm text-muted-foreground">{empty.devices}</div>;
   }
 
   const linkStats = {
-    dci: topo.edges.filter((e) => e.type === "dci").length,
-    fabric: topo.edges.filter((e) => e.type === "intra_dc").length,
+    dci: displayTopo.edges.filter((e) => e.type === "dci").length,
+    fabric: displayTopo.edges.filter((e) => e.type === "intra_dc").length,
   };
+
+  const hiddenDeviceCount = topo.nodes.length - displayTopo.nodes.length;
 
   return (
     <PageCard
@@ -112,21 +154,29 @@ export default function Topology() {
           showIcon
           style={{ marginBottom: 12 }}
           message={tc("正在高亮专线 Underlay 路径")}
-          description={tc(`电路 ID ${highlightCircuitId} 的计算路径已在拓扑中标注（靛蓝实线）`)}
+          description={tc(`电路 ID ${highlightCircuitId} 的计算路径已在拓扑中标注（靛蓝粗线）；其余链路已弱化显示`)}
         />
       ) : null}
-      {topo.edges.length === 0 && (
+      {hiddenDeviceCount > 0 ? (
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 12 }}
+          message={tc(`已隐藏 ${hiddenDeviceCount} 台未互联设备，使拓扑更易阅读`)}
+        />
+      ) : null}
+      {displayTopo.edges.length === 0 && (
         <Alert
           type="info"
           showIcon
           style={{ marginBottom: 12 }}
           message={tc("尚未配置站点间链路")}
-          description={tc("设备节点按互联关系自动布局；在「容量规划」中添加 DCI / Fabric 链路后，将显示设备间连线与带宽利用率。")}
+          description={tc("设备节点按站点分列布局；在「容量规划」中添加 DCI / Fabric 链路后，将显示设备间连线与带宽利用率。")}
         />
       )}
       <div className="topology-page-body">
         <PhysicalTopologyFlow
-          topo={topo}
+          topo={displayTopo}
           links={links}
           savedPositions={layout.draftPositions}
           autoSave={layout.autoSave}

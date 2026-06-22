@@ -9,6 +9,7 @@ export type DeviceGraphNodeData = {
   border: string;
   online: boolean;
   dimmed?: boolean;
+  pathActive?: boolean;
 };
 
 export const DEVICE_GRAPH_NODE_WIDTH = 220;
@@ -26,12 +27,15 @@ export default function DeviceGraphNode({ data }: { data: DeviceGraphNodeData })
 
   return (
     <div
-      className="device-graph-node rounded-xl border-2 bg-white px-3 py-2.5 shadow-sm transition-all hover:shadow-md"
+      className={[
+        "device-graph-node rounded-xl border-2 bg-white px-3 py-2 shadow-sm transition-all hover:shadow-md",
+        data.pathActive ? "device-graph-node-path-active" : "",
+      ].filter(Boolean).join(" ")}
       style={{
-        borderColor: data.border,
+        borderColor: data.pathActive ? "#6366f1" : data.border,
         width: DEVICE_GRAPH_NODE_WIDTH,
         height: DEVICE_GRAPH_NODE_HEIGHT,
-        opacity: data.dimmed ? 0.35 : 1,
+        opacity: data.dimmed ? 0.28 : 1,
       }}
       title={data.fullName}
     >
@@ -43,16 +47,20 @@ export default function DeviceGraphNode({ data }: { data: DeviceGraphNodeData })
       <Handle type="source" position={Position.Left} id="left-out" className="!border-0 !bg-transparent !opacity-0 !min-w-0 !min-h-0 !w-1 !h-1" />
       <Handle type="target" position={Position.Right} id="right-in" className="!border-0 !bg-transparent !opacity-0 !min-w-0 !min-h-0 !w-1 !h-1" />
       <Handle type="source" position={Position.Right} id="right-out" className="!border-0 !bg-transparent !opacity-0 !min-w-0 !min-h-0 !w-1 !h-1" />
-      <div className="flex items-center gap-2">
-        <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${data.online ? "bg-emerald-500" : "bg-slate-300"}`} />
-        <span className="truncate text-sm font-semibold text-slate-800">{data.label}</span>
+      <div className="flex items-start gap-2">
+        <span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${data.online ? "bg-emerald-500" : "bg-slate-300"}`} />
+        <div className="min-w-0 flex-1">
+          <div className="line-clamp-2 text-[12px] font-semibold leading-tight text-slate-800">
+            {data.label}
+          </div>
+          <div className="mt-0.5 truncate text-[10px] text-slate-500">{data.meta}</div>
+        </div>
         {data.siteLabel && (
-          <span className="ml-auto shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+          <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">
             {data.siteLabel}
           </span>
         )}
       </div>
-      <div className="mt-1 truncate text-[11px] text-slate-500">{data.meta}</div>
     </div>
   );
 }

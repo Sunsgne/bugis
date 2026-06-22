@@ -69,6 +69,7 @@ export function buildBackboneTopologyLayout(
     topo.edges.map((e) => ({ source: e.source, target: e.target })),
     size.w,
     size.h,
+    topo.sites,
   );
 
   const connectedDevices = new Set<number>();

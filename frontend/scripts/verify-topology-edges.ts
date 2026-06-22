@@ -4,7 +4,24 @@
  */
 import type { LinkUsage, Topology } from "../src/api/types";
 import { buildBackboneTopologyLayout, buildFilteredTopo } from "../src/utils/backboneTopologyLayout";
-import { edgeHandlePairsForGraph } from "../src/utils/deviceGraphLayout";
+import { edgeHandlePairsForGraph, layoutPathChain, layoutSiteColumns } from "../src/utils/deviceGraphLayout";
+
+const NODE_W = 220;
+const NODE_H = 72;
+
+function layoutHasOverlaps(positions: Map<number, { x: number; y: number }>): boolean {
+  const ids = [...positions.keys()];
+  for (let i = 0; i < ids.length; i += 1) {
+    for (let j = i + 1; j < ids.length; j += 1) {
+      const a = positions.get(ids[i])!;
+      const b = positions.get(ids[j])!;
+      if (a.x + NODE_W > b.x && b.x + NODE_W > a.x && a.y + NODE_H > b.y && b.y + NODE_H > a.y) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
 
 const tc = (s: string) => s;
 
@@ -206,3 +223,33 @@ if (meshSides.size < 2) {
 }
 console.log(`mesh side spread: ${[...meshSides].join(", ")}`);
 console.log("mesh handle spread — passed");
+
+const pathIds = [101, 102, 103, 104];
+const pathLayout = layoutPathChain(pathIds, 720, 320);
+if (pathLayout.size !== pathIds.length || layoutHasOverlaps(pathLayout)) {
+  console.error("Path chain layout failed");
+  process.exit(1);
+}
+console.log("path chain layout — passed");
+
+const siteLayout = layoutSiteColumns(
+  [
+    { id: 1, site_id: 10 },
+    { id: 2, site_id: 10 },
+    { id: 3, site_id: 20 },
+    { id: 4, site_id: 30 },
+    { id: 5, site_id: 30 },
+  ],
+  [
+    { id: 10, code: "FRA1" },
+    { id: 20, code: "HKG3" },
+    { id: 30, code: "SIN2" },
+  ],
+  960,
+  640,
+);
+if (!siteLayout || siteLayout.size !== 5 || layoutHasOverlaps(siteLayout)) {
+  console.error("Site column layout failed");
+  process.exit(1);
+}
+console.log("site column layout — passed");

@@ -20,6 +20,7 @@ export type UtilizationEdgeData = {
   shortLabel: string;
   highlighted?: boolean;
   pathHighlighted?: boolean;
+  deemphasized?: boolean;
   curvature?: number;
   labelOffsetY?: number;
   linkType?: string;
@@ -49,12 +50,16 @@ export default function UtilizationEdge({
   const link = d?.link;
   const style = EDGE_STYLE[d?.linkType || "intra_dc"] || EDGE_STYLE.intra_dc;
   const [labelHover, setLabelHover] = useState(false);
+  const deemphasized = Boolean(d?.deemphasized);
   const active = Boolean(d?.highlighted || d?.pathHighlighted || labelHover);
   const showTooltip = Boolean(active && link && !d?.pathHighlighted);
-  const showCompactLabel = Boolean(d?.shortLabel && active && !showTooltip);
-  const pathStroke = d?.pathHighlighted ? "#6366f1" : color;
+  const showCompactLabel = Boolean(
+    d?.shortLabel && (d?.pathHighlighted || (active && !showTooltip)),
+  );
+  const pathStroke = d?.pathHighlighted ? "#4f46e5" : color;
   const curvature = d?.curvature ?? 0.18;
   const labelOffsetY = labelOffsetForEdge(curvature, d?.labelOffsetY);
+  const baseOpacity = deemphasized ? 0.14 : d?.pathHighlighted ? 1 : 0.62;
 
   const [edgePath, labelX, labelY] = getBezierPath({
     sourceX,
@@ -73,14 +78,20 @@ export default function UtilizationEdge({
       <BaseEdge
         path={edgePath}
         {...props}
-        interactionWidth={24}
+        interactionWidth={deemphasized ? 8 : 24}
         style={{
           ...props.style,
           stroke: pathStroke,
-          strokeWidth: selected || d?.highlighted || d?.pathHighlighted ? style.weight + 1.5 : style.weight,
+          strokeWidth:
+            selected || d?.highlighted || d?.pathHighlighted
+              ? style.weight + (d?.pathHighlighted ? 2 : 1.5)
+              : deemphasized
+                ? 1.25
+                : style.weight,
           strokeDasharray: d?.pathHighlighted ? undefined : style.dash,
           strokeLinecap: "round",
-          opacity: d?.highlighted || d?.pathHighlighted ? 1 : 0.88,
+          opacity: baseOpacity,
+          filter: d?.pathHighlighted ? "drop-shadow(0 0 4px rgba(79, 70, 229, 0.45))" : undefined,
         }}
       />
       {active && d?.shortLabel ? (
@@ -102,13 +113,16 @@ export default function UtilizationEdge({
                 "nodrag",
                 "nopan",
                 showCompactLabel ? "is-visible" : "",
+                d?.pathHighlighted ? "is-path-highlight" : "",
                 showTooltip ? "is-tooltip-anchor" : "",
               ]
                 .filter(Boolean)
                 .join(" ")}
               style={{
                 transform: labelTransform,
-                borderColor: showCompactLabel ? color : "transparent",
+                borderColor: showCompactLabel
+                  ? d?.pathHighlighted ? "#4f46e5" : color
+                  : "transparent",
               }}
               onMouseEnter={() => setLabelHover(true)}
               onMouseLeave={() => setLabelHover(false)}
