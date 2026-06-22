@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import JSONResponse, Response
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
@@ -21,6 +22,7 @@ from app.schemas.circuit import (
     CircuitAdoptVniCreate,
     CircuitAdoptVniPreview,
     CircuitCreate,
+    CircuitDeleteScheduledOut,
     CircuitEndpointCreate,
     CircuitEndpointOut,
     CircuitEndpointsReplace,
@@ -540,12 +542,24 @@ def preview_circuit_config(
     return {"operation": "apply", "previews": previews}
 
 
-@router.delete("/{circuit_id}", status_code=204)
+@router.delete(
+    "/{circuit_id}",
+    responses={
+        204: {"description": "Circuit deleted"},
+        202: {"model": CircuitDeleteScheduledOut},
+    },
+)
 def delete_circuit(
     circuit_id: int,
+    background: bool = Query(
+        default=False,
+        description="true：后台删除记录，HTTP 立即返回；false：同步等待删除完成",
+    ),
     db: Session = Depends(get_db),
     _: User = Depends(require_operator),
 ):
+    from app.services import circuit_delete_service, concurrent_circuit_delete
+
     circuit = db.get(Circuit, circuit_id)
     if not circuit:
         raise HTTPException(status_code=404, detail="circuit not found")
@@ -557,15 +571,18 @@ def delete_circuit(
                 "请先执行拆除工单后再删除"
             ),
         )
-    # Clean controller overlay state (EVPN routes + VTEP/VNI membership) so the
-    # topology graph does not keep a stale edge for the deleted circuit.
-    from app.controller import controller as bugis_controller
-    from app.services.circuit_cleanup import purge_circuit_dependencies
-
-    bugis_controller.purge_circuit(db, circuit)
-    purge_circuit_dependencies(db, circuit.id)
-    db.delete(circuit)
+    if background:
+        code = circuit.code
+        concurrent_circuit_delete.schedule_circuit_delete(circuit_id)
+        body = CircuitDeleteScheduledOut(
+            scheduled=True,
+            circuit_id=circuit_id,
+            circuit_code=code,
+        )
+        return JSONResponse(status_code=202, content=body.model_dump())
+    circuit_delete_service.delete_circuit_record(db, circuit)
     db.commit()
+    return Response(status_code=204)
 
 
 @router.put("/{circuit_id}/endpoints", response_model=CircuitOut)
