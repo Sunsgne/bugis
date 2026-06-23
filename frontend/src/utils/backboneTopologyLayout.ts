@@ -7,7 +7,6 @@ import { layoutDeviceGraph, siteLabelForNode, edgeHandlePairForLayout, edgeHandl
 import {
   linkEdgeShortLabel,
   mergeTopologyEdges,
-  stepOffsetForEdge,
 } from "@/utils/topologyEdges";
 import {
   DEVICE_GRAPH_NODE_HEIGHT,
@@ -20,8 +19,7 @@ type EdgeData = {
   utilization_pct: number;
   shortLabel: string;
   highlighted?: boolean;
-  pathMode?: "smoothstep";
-  stepOffset?: number;
+  pathMode?: "straight";
 };
 
 function shortHost(name: string, max = 26): string {
@@ -165,31 +163,15 @@ export function buildBackboneTopologyLayout(
           link,
           utilization_pct: pct,
           shortLabel: link ? linkEdgeShortLabel(link, pct) : `${fmtLinkBw(e.capacity_mbps)} · ${Math.round(pct)}%`,
-          pathMode: "smoothstep",
-          stepOffset: stepOffsetForEdge(topo.edges, e.id),
+          pathMode: "straight",
         } satisfies EdgeData,
         style: { stroke: color },
       };
     });
 
   const links = [...linksById.values()];
-  const merged = mergeTopologyEdges(utilizationEdges, links, nodeIds, tc);
-  const edges = merged.map((e) => {
-    if (e.type !== "logicalPeer") return e;
-    const srcId = Number(e.source);
-    const tgtId = Number(e.target);
-    const handles =
-      handlePairs.get(`${srcId}-${tgtId}`) ??
-      edgeHandlePairForLayout(srcId, tgtId, posById);
-    return {
-      ...e,
-      sourceHandle: handles.sourceHandle,
-      targetHandle: handles.targetHandle,
-      data: {
-        ...(e.data as object),
-        pathMode: "smoothstep" as const,
-      },
-    };
+  const edges = mergeTopologyEdges(utilizationEdges, links, nodeIds, tc, {
+    includeLogicalPeers: false,
   });
 
   return { nodes, edges };
