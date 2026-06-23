@@ -478,115 +478,115 @@ export function edgeSidesForLayout(
 
 type HandleLayoutEdge = { source: number; target: number; key?: number | string };
 
-function assignHandleSlots(
+/** Assign exit/entry side + slot for every edge incident on a node. */
+function assignHandlesForNode(
+  nodeId: number,
   edges: HandleLayoutEdge[],
-  result: Map<string, EdgeHandlePair>,
-): void {
-  const sourceGroups = new Map<string, string[]>();
-  const targetGroups = new Map<string, string[]>();
+  positions: Map<number, { x: number; y: number }>,
+): Map<string, { side: EdgeHandleSide; slot: number }> {
+  const result = new Map<string, { side: EdgeHandleSide; slot: number }>();
+  const nodePos = positions.get(nodeId);
+  if (!nodePos) return result;
+
+  const { cx, cy } = nodeCenter(nodePos);
+  type Incident = {
+    edgeKey: string;
+    role: "out" | "in";
+    side: EdgeHandleSide;
+    along: number;
+  };
+  const incident: Incident[] = [];
 
   for (const e of edges) {
     if (e.source === e.target) continue;
-    const key = String(e.key ?? `${e.source}-${e.target}`);
-    const pair = result.get(key);
-    if (!pair) continue;
-    const sk = `${e.source}:${pair.sourceSide}`;
-    const tk = `${e.target}:${pair.targetSide}`;
-    if (!sourceGroups.has(sk)) sourceGroups.set(sk, []);
-    if (!targetGroups.has(tk)) targetGroups.set(tk, []);
-    sourceGroups.get(sk)!.push(key);
-    targetGroups.get(tk)!.push(key);
+    const edgeKey = String(e.key ?? `${e.source}-${e.target}`);
+    let peerId: number | null = null;
+    let role: "out" | "in" | null = null;
+    if (e.source === nodeId) {
+      peerId = e.target;
+      role = "out";
+    } else if (e.target === nodeId) {
+      peerId = e.source;
+      role = "in";
+    }
+    if (peerId == null || role == null) continue;
+    const peerPos = positions.get(peerId);
+    if (!peerPos) continue;
+    const { cx: px, cy: py } = nodeCenter(peerPos);
+    const dx = px - cx;
+    const dy = py - cy;
+    const side = sideFacingDelta(dx, dy);
+    const along = side === "left" || side === "right" ? py : px;
+    incident.push({ edgeKey, role, side, along });
   }
 
-  const slotFor = (keys: string[], edgeKey: string) => {
-    const sorted = [...keys].sort();
-    const idx = sorted.indexOf(edgeKey);
-    if (idx < 0) return 0;
-    if (sorted.length <= EDGE_HANDLE_SLOT_COUNT) return idx;
-    return Math.floor((idx / (sorted.length - 1)) * (EDGE_HANDLE_SLOT_COUNT - 1));
-  };
+  if (incident.length === 0) return result;
 
-  for (const e of edges) {
-    if (e.source === e.target) continue;
-    const key = String(e.key ?? `${e.source}-${e.target}`);
-    const pair = result.get(key);
-    if (!pair) continue;
-    const srcSlot = slotFor(sourceGroups.get(`${e.source}:${pair.sourceSide}`) ?? [key], key);
-    const tgtSlot = slotFor(targetGroups.get(`${e.target}:${pair.targetSide}`) ?? [key], key);
-    result.set(key, {
-      ...pair,
-      sourceHandle: slottedHandleId(pair.sourceSide, "out", srcSlot),
-      targetHandle: slottedHandleId(pair.targetSide, "in", tgtSlot),
+  const bySide = new Map<EdgeHandleSide, Incident[]>();
+  for (const item of incident) {
+    if (!bySide.has(item.side)) bySide.set(item.side, []);
+    bySide.get(item.side)!.push(item);
+  }
+
+  for (const [, group] of bySide) {
+    group.sort((a, b) => a.along - b.along);
+    const n = group.length;
+    group.forEach((item, idx) => {
+      const slot =
+        n <= 1
+          ? 0
+          : n <= EDGE_HANDLE_SLOT_COUNT
+            ? idx
+            : Math.floor((idx / (n - 1)) * (EDGE_HANDLE_SLOT_COUNT - 1));
+      result.set(`${item.edgeKey}:${item.role}`, { side: item.side, slot });
     });
   }
+
+  return result;
 }
 
-/** Spread handles across four sides when a node fans out to many peers (mesh). */
+/** Spread handles across sides when a node fans out to many peers (mesh). */
 export function edgeHandlePairsForGraph(
   edges: HandleLayoutEdge[],
   positions: Map<number, { x: number; y: number }>,
 ): Map<string, EdgeHandlePair> {
   const result = new Map<string, EdgeHandlePair>();
-  const bySource = new Map<number, HandleLayoutEdge[]>();
+  const nodeIds = new Set<number>();
+  for (const e of edges) {
+    if (e.source === e.target) continue;
+    nodeIds.add(e.source);
+    nodeIds.add(e.target);
+  }
+
+  const bindingsByNode = new Map<number, Map<string, { side: EdgeHandleSide; slot: number }>>();
+  for (const nodeId of nodeIds) {
+    bindingsByNode.set(nodeId, assignHandlesForNode(nodeId, edges, positions));
+  }
 
   for (const e of edges) {
     if (e.source === e.target) continue;
-    const key = String(e.key ?? `${e.source}-${e.target}`);
-    if (!bySource.has(e.source)) bySource.set(e.source, []);
-    bySource.get(e.source)!.push({ ...e, key });
-  }
+    const edgeKey = String(e.key ?? `${e.source}-${e.target}`);
+    const srcBind = bindingsByNode.get(e.source)?.get(`${edgeKey}:out`);
+    const tgtBind = bindingsByNode.get(e.target)?.get(`${edgeKey}:in`);
+    const fallback = edgeSidesForLayout(e.source, e.target, positions);
 
-  for (const e of edges) {
-    if (e.source === e.target) continue;
-    const key = String(e.key ?? `${e.source}-${e.target}`);
-    const base = edgeSidesForLayout(e.source, e.target, positions);
-    result.set(key, {
-      sourceSide: base.sourceSide,
-      targetSide: base.targetSide,
-      sourceHandle: slottedHandleId(base.sourceSide, "out", 0),
-      targetHandle: slottedHandleId(base.targetSide, "in", 0),
+    let sourceSide = srcBind?.side ?? fallback.sourceSide;
+    let targetSide = tgtBind?.side ?? fallback.targetSide;
+    const sourceSlot = srcBind?.slot ?? 0;
+    const targetSlot = tgtBind?.slot ?? 0;
+
+    if (sourceSide === targetSide) {
+      targetSide = oppositeSide(sourceSide);
+    }
+
+    result.set(edgeKey, {
+      sourceSide,
+      targetSide,
+      sourceHandle: slottedHandleId(sourceSide, "out", sourceSlot),
+      targetHandle: slottedHandleId(targetSide, "in", targetSlot),
     });
   }
 
-  for (const [, outEdges] of bySource) {
-    if (outEdges.length < 3) continue;
-
-    const nodeId = outEdges[0]?.source;
-    if (nodeId == null) continue;
-    const pos = positions.get(nodeId);
-    if (!pos) continue;
-    const { cx, cy } = nodeCenter(pos);
-
-    const ranked = outEdges
-      .map((e) => {
-        const tgt = positions.get(e.target);
-        if (!tgt) return null;
-        const { cx: tx, cy: ty } = nodeCenter(tgt);
-        return { edge: e, angle: Math.atan2(ty - cy, tx - cx) };
-      })
-      .filter((x): x is { edge: HandleLayoutEdge; angle: number } => x != null)
-      .sort((a, b) => a.angle - b.angle);
-
-    const sides: EdgeHandleSide[] = ["right", "bottom", "left", "top"];
-    ranked.forEach(({ edge, angle }) => {
-      const key = String(edge.key ?? `${edge.source}-${edge.target}`);
-      const sector = Math.floor(((angle + Math.PI) / (2 * Math.PI)) * 4) % 4;
-      const spreadSide = sides[sector];
-      const tgtPos = positions.get(edge.target);
-      if (!tgtPos) return;
-      const { cx: tx, cy: ty } = nodeCenter(tgtPos);
-      const targetSide = sideFacingDelta(cx - tx, cy - ty);
-
-      result.set(key, {
-        sourceSide: spreadSide,
-        targetSide,
-        sourceHandle: slottedHandleId(spreadSide, "out", 0),
-        targetHandle: slottedHandleId(targetSide, "in", 0),
-      });
-    });
-  }
-
-  assignHandleSlots(edges, result);
   return result;
 }
 
