@@ -42,6 +42,29 @@ def _ctx(vendor: Vendor):
 def test_description_uses_customer_and_circuit(vendor):
     driver = get_driver(vendor)
     cfg = driver.render("l2vpn_evpn", "apply", _ctx(vendor))
-    assert "Acme Bank:CIR-5AF450" in cfg, cfg
+    if vendor == Vendor.H3C:
+        # H3C: do not stamp the physical (main) AC port; VSI carries service label.
+        assert "interface 10GE1/0/11" in cfg
+        assert "port link-mode bridge" in cfg
+        assert "Acme Bank:CIR-5AF450" not in cfg
+        assert "Acme Bank" in cfg
+        assert "CIR-5AF450" in cfg
+    else:
+        assert "Acme Bank:CIR-5AF450" in cfg, cfg
     # The old numeric tenant-id form must be gone.
     assert "CUST_4_CIR-5AF450" not in cfg
+
+
+def test_huawei_access_mode_skips_main_interface_description():
+    ctx = _ctx(Vendor.HUAWEI)
+    ctx["endpoint"] = SimpleNamespace(
+        access_mode=AccessMode.ACCESS,
+        vlan_id=None,
+        inner_vlan_id=None,
+        interface_name="10GE1/0/11",
+        gateway_ip=None,
+        ip_address=None,
+    )
+    cfg = get_driver(Vendor.HUAWEI).render("l2vpn_evpn", "apply", ctx)
+    assert "interface 10GE1/0/11 mode l2" in cfg
+    assert "description Acme Bank:CIR-5AF450" not in cfg

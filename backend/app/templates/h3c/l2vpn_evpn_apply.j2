@@ -13,7 +13,6 @@ l2vpn enable
 #
 interface {{ endpoint.interface_name }}
  port link-mode bridge
- description {% if circuit.tenant %}{{ circuit.tenant.name }}{% else %}CUST{{ circuit.tenant_id }}{% endif %}:{{ circuit.code }}
 {{ h3c.service_instance_ac(endpoint, circuit, mode, svid, cvid) }}
 #
 return

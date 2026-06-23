@@ -63,7 +63,9 @@ bridge-domain {{ circuit.vni }}
 
 {% macro l2_subif(endpoint, circuit, mode, svid, cvid) -%}
 interface {{ l2_ifname(endpoint, mode, svid) }} mode l2
+{% if mode != 'access' %}
  description {{ cust_label(circuit) }}
+{% endif %}
 {% if mode == 'access' %}
  encapsulation untag
 {% elif mode == 'qinq' %}
