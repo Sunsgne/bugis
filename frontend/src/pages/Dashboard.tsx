@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Card, Col, Row, Statistic, Spin, Tag, Empty, Progress, Table, Badge } from "antd";
 import {
   TeamOutlined,
@@ -45,6 +45,19 @@ const ROUTE_TYPE_LABEL: Record<string, string> = {
   type5_ip_prefix: "Type-5 prefix",
 };
 
+const DASHBOARD_POLL_MS = 30000;
+
+type OperationsOverview = {
+  dashboard: DashboardData;
+  traffic: any[];
+  alarms: { active: number; by_severity: Record<string, number> };
+  sdn: any;
+  sites: any[];
+  links: any[];
+  work_orders: any[];
+  scheduler: any;
+};
+
 export default function Dashboard() {
   const { tc, t } = useTc();
   const { brand } = useBrand();
@@ -56,32 +69,32 @@ export default function Dashboard() {
   const [links, setLinks] = useState<any[]>([]);
   const [wos, setWos] = useState<any[]>([]);
   const [sched, setSched] = useState<any>(null);
+  const loadSeq = useRef(0);
 
   async function load() {
-    const safe = (p: Promise<any>, d: any) => p.then((r) => r.data).catch(() => d);
-    const [d, tr, al, sd, si, li, wo, sy] = await Promise.all([
-      safe(api.get("/telemetry/dashboard"), null),
-      safe(api.get("/telemetry/overview"), []),
-      safe(api.get("/alarms/summary"), { active: 0, by_severity: {} }),
-      safe(api.get("/controller/status"), null),
-      safe(api.get("/capacity/sites"), []),
-      safe(api.get("/capacity/links/usage"), []),
-      safe(api.get("/work-orders"), []),
-      safe(api.get("/system/info"), null),
-    ]);
-    setData(d);
-    setTraffic(tr);
-    setAlarms(al);
-    setSdn(sd);
-    setSites(si);
-    setLinks(li);
-    setWos(wo.slice(0, 6));
-    setSched(sy?.scheduler);
+    const seq = ++loadSeq.current;
+    try {
+      const { data } = await api.get<OperationsOverview>("/telemetry/dashboard-overview");
+      if (seq !== loadSeq.current) return;
+      setData(data.dashboard);
+      setTraffic(data.traffic);
+      setAlarms(data.alarms);
+      setSdn(data.sdn);
+      setSites(data.sites);
+      setLinks(data.links);
+      setWos(data.work_orders);
+      setSched(data.scheduler);
+    } catch {
+      if (seq !== loadSeq.current) return;
+    }
   }
   useEffect(() => {
     load();
-    const timer = setInterval(() => load(), 10000);
-    return () => clearInterval(timer);
+    const timer = setInterval(() => load(), DASHBOARD_POLL_MS);
+    return () => {
+      loadSeq.current += 1;
+      clearInterval(timer);
+    };
   }, []);
 
   const vendorData = useMemo(

@@ -24,7 +24,7 @@ from app.schemas.telemetry import (
     TelemetrySampleIn,
     TelemetrySampleOut,
 )
-from app.services import alarm_service, health_snapshot_service, telemetry_service
+from app.services import alarm_service, dashboard_service, health_snapshot_service, telemetry_service
 
 router = APIRouter()
 
@@ -241,48 +241,14 @@ def overview(
 @router.get("/dashboard")
 def dashboard(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
     """Aggregate KPIs for the operations overview screen."""
-    tenant_count = db.scalar(select(func.count(Tenant.id))) or 0
-    device_count = db.scalar(select(func.count(Device.id))) or 0
-    online_devices = db.scalar(
-        select(func.count(Device.id)).where(Device.status == DeviceStatus.ONLINE)
-    ) or 0
-    circuit_count = db.scalar(select(func.count(Circuit.id))) or 0
-    active_circuits = db.scalar(
-        select(func.count(Circuit.id)).where(Circuit.status == CircuitStatus.ACTIVE)
-    ) or 0
-    total_bandwidth = db.scalar(
-        select(func.coalesce(func.sum(Circuit.bandwidth_mbps), 0)).where(
-            Circuit.status == CircuitStatus.ACTIVE
-        )
-    ) or 0
-    open_work_orders = db.scalar(
-        select(func.count(WorkOrder.id)).where(
-            WorkOrder.status.notin_(
-                [WorkOrderStatus.COMPLETED, WorkOrderStatus.CANCELLED]
-            )
-        )
-    ) or 0
+    return dashboard_service.dashboard_kpis(db)
 
-    circuits_by_status: dict[str, int] = {}
-    for status_row in db.execute(
-        select(Circuit.status, func.count(Circuit.id)).group_by(Circuit.status)
-    ).all():
-        circuits_by_status[status_row[0].value] = status_row[1]
 
-    devices_by_vendor: dict[str, int] = {}
-    for row in db.execute(
-        select(Device.vendor, func.count(Device.id)).group_by(Device.vendor)
-    ).all():
-        devices_by_vendor[row[0].value] = row[1]
-
-    return {
-        "tenants": tenant_count,
-        "devices": device_count,
-        "devices_online": online_devices,
-        "circuits": circuit_count,
-        "circuits_active": active_circuits,
-        "total_active_bandwidth_mbps": int(total_bandwidth),
-        "work_orders": open_work_orders,
-        "circuits_by_status": circuits_by_status,
-        "devices_by_vendor": devices_by_vendor,
-    }
+@router.get("/dashboard-overview")
+def dashboard_overview(
+    hours: int = 24,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    """Single payload for the operations home dashboard."""
+    return dashboard_service.operations_overview(db, hours=hours)

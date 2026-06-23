@@ -792,6 +792,18 @@ def test_system_info_and_scheduler_tick(client, auth_headers):
     assert "generated" in tick.json()
 
 
+def test_dashboard_overview(client, auth_headers):
+    r = client.get("/api/v1/telemetry/dashboard-overview", headers=auth_headers)
+    assert r.status_code == 200
+    body = r.json()
+    assert "dashboard" in body and "traffic" in body
+    assert "alarms" in body and "sites" in body and "links" in body
+    assert "work_orders" in body and "scheduler" in body
+    assert "tenants" in body["dashboard"]
+    assert isinstance(body["work_orders"], list)
+    assert len(body["work_orders"]) <= 6
+
+
 def test_access_encapsulation_modes(client, auth_headers):
     site, tenant, dev_h3c, dev_hw = _bootstrap_topology(client, auth_headers)
     # dev_h3c is H3C, dev_hw is Cisco in the helper; add a real Huawei device.
