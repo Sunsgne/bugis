@@ -55,6 +55,14 @@ export function withMobileHide(
   });
 }
 
+export function twinTableProps(): Pick<TableProps<unknown>, "size" | "tableLayout" | "className"> {
+  return {
+    size: "small",
+    tableLayout: "auto",
+    className: "data-table control-plane-twin-table",
+  };
+}
+
 export function dataTableProps(
   scrollX: number | string = TABLE_SCROLL.md,
   enableScroll = true,

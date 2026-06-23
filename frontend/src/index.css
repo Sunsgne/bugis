@@ -1243,6 +1243,28 @@ body {
   line-height: 1.5;
 }
 
+.control-plane-twin-table .ant-table-content > table {
+  width: 100% !important;
+  table-layout: auto !important;
+}
+
+.control-plane-twin-table .ant-table-thead > tr > th,
+.control-plane-twin-table .ant-table-tbody > tr > td {
+  white-space: nowrap;
+}
+
+.control-plane-twin-table .ant-table-cell-ellipsis {
+  max-width: 0;
+}
+
+.control-plane-page .control-plane-twin-card {
+  height: 100%;
+}
+
+.control-plane-page .control-plane-twin-card > .ant-card-body {
+  padding-top: 12px;
+}
+
 
 .config-inline-tag {
   margin: 0;

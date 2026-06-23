@@ -99,16 +99,39 @@ def list_bindings(db: Session, circuit_id: int | None = None) -> list[dict]:
     if circuit_id is not None:
         stmt = stmt.where(DataPlaneBinding.circuit_id == circuit_id)
     rows = db.execute(stmt.limit(200)).scalars().all()
-    return [
-        {
-            "id": b.id,
-            "circuit_id": b.circuit_id,
-            "device_id": b.device_id,
-            "work_order_id": b.work_order_id,
-            "operation": b.operation,
-            "transport": b.transport,
-            "state": b.state.value,
-            "created_at": b.created_at.isoformat() if b.created_at else None,
+
+    circuit_ids = {b.circuit_id for b in rows}
+    device_ids = {b.device_id for b in rows}
+    circuits: dict[int, Circuit] = {}
+    devices: dict[int, Device] = {}
+    if circuit_ids:
+        circuits = {
+            c.id: c
+            for c in db.execute(select(Circuit).where(Circuit.id.in_(circuit_ids))).scalars()
         }
-        for b in rows
-    ]
+    if device_ids:
+        devices = {
+            d.id: d
+            for d in db.execute(select(Device).where(Device.id.in_(device_ids))).scalars()
+        }
+
+    out: list[dict] = []
+    for b in rows:
+        circuit = circuits.get(b.circuit_id)
+        device = devices.get(b.device_id)
+        out.append(
+            {
+                "id": b.id,
+                "circuit_id": b.circuit_id,
+                "circuit_code": circuit.code if circuit else None,
+                "circuit_name": circuit.name if circuit else None,
+                "device_id": b.device_id,
+                "device_name": device.name if device else None,
+                "work_order_id": b.work_order_id,
+                "operation": b.operation,
+                "transport": b.transport,
+                "state": b.state.value,
+                "created_at": b.created_at.isoformat() if b.created_at else None,
+            }
+        )
+    return out
