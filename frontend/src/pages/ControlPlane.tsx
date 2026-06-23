@@ -452,11 +452,21 @@ export default function ControlPlane() {
           pagination={false}
           size="small"
           locale={{ emptyText: <Empty description={tc('托管专线开通后自动建立 BGP 对等')} /> }}
-          columns={colsNowrap([
+            columns={colsNowrap([
             { title: tc("设备"), dataIndex: "device_name" },
             { title: tc("对端 IP"), dataIndex: "peer_ip" },
-            { title: tc("本地 ASN"), dataIndex: "local_asn" },
-            { title: tc("对端 ASN"), dataIndex: "remote_asn" },
+            {
+              title: tc("控制器 ASN"),
+              dataIndex: "local_asn",
+              width: 110,
+              render: (v: number) => v ?? "—",
+            },
+            {
+              title: tc("设备 ASN"),
+              dataIndex: "remote_asn",
+              width: 110,
+              render: (v: number) => v ?? "—",
+            },
             {
               title: tc('状态'),
               dataIndex: "state",

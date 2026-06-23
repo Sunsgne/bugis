@@ -255,3 +255,14 @@ def test_diff_platform_vs_learned(client, auth_headers):
         assert "learned-v" in diff or diff == ""
     finally:
         db.close()
+
+
+def test_enrich_device_refreshes_stale_bgp_asn():
+    from app.services.config_learn import _enrich_device
+
+    device = Device(name="leaf-1", bgp_asn=65000)
+    inv = config_learn_parse.LearnedInventory()
+    inv.bgp_asn = 65001
+    updated = _enrich_device(device, inv)
+    assert device.bgp_asn == 65001
+    assert updated["bgp_asn"] == 65001

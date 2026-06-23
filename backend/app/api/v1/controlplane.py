@@ -88,6 +88,10 @@ def list_bgp_sessions(db: Session = Depends(get_db), _: User = Depends(get_curre
 def sync_bgp_sessions(
     db: Session = Depends(get_db), _: User = Depends(require_operator)
 ):
+    from app.models.device import Device
+
+    devices = db.execute(select(Device)).scalars().all()
+    bgp_peering.ensure_sessions(db, devices)
     count = bgp_peering.sync_sessions(db)
     db.commit()
     return {"synced": count}

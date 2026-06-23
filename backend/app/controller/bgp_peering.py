@@ -12,7 +12,12 @@ from app.models.device import Device
 from app.models.enums import BgpSessionState, OverlayTech
 
 
-def _controller_asn() -> int:
+def _controller_asn(db: Session | None = None) -> int:
+    if db is not None:
+        from app.services import platform_settings as platform_cfg
+
+        row = platform_cfg.get_or_create(db)
+        return int(row.controller_bgp_asn or getattr(settings, "controller_bgp_asn", 65000))
     return getattr(settings, "controller_bgp_asn", 65000)
 
 
@@ -42,6 +47,7 @@ def ensure_sessions(db: Session, devices: list[Device]) -> list[BgpEvpnSession]:
         unique_devices[device.id] = device
 
     sessions: list[BgpEvpnSession] = []
+    ctrl_asn = _controller_asn(db)
     for device in unique_devices.values():
         peer_ip = device.loopback_ip or device.mgmt_ip
         sess = db.execute(
@@ -52,13 +58,14 @@ def ensure_sessions(db: Session, devices: list[Device]) -> list[BgpEvpnSession]:
                 device_id=device.id,
                 device_name=device.name,
                 peer_ip=peer_ip,
-                local_asn=_controller_asn(),
+                local_asn=ctrl_asn,
                 remote_asn=device.bgp_asn,
                 state=BgpSessionState.CONNECT,
             )
             db.add(sess)
         sess.device_name = device.name
         sess.peer_ip = peer_ip
+        sess.local_asn = ctrl_asn
         sess.remote_asn = device.bgp_asn
         sess.config_snippet = render_peer_config(device)
         sessions.append(sess)
@@ -68,9 +75,15 @@ def ensure_sessions(db: Session, devices: list[Device]) -> list[BgpEvpnSession]:
 
 def sync_sessions(db: Session) -> int:
     """Refresh BGP session state from RIB (dry-run: simulate established)."""
+    ctrl_asn = _controller_asn(db)
     sessions = db.execute(select(BgpEvpnSession)).scalars().all()
     now = datetime.now(timezone.utc)
     for sess in sessions:
+        sess.local_asn = ctrl_asn
+        if sess.device_id:
+            device = db.get(Device, sess.device_id)
+            if device and device.bgp_asn:
+                sess.remote_asn = device.bgp_asn
         rx = db.scalar(
             select(func.count(EvpnRoute.id)).where(
                 EvpnRoute.origin_device_id == sess.device_id

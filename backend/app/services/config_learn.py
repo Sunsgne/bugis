@@ -30,6 +30,9 @@ def _enrich_device(device: Device, inventory: config_learn_parse.LearnedInventor
     if not device.bgp_asn and inventory.bgp_asn:
         device.bgp_asn = inventory.bgp_asn
         updated["bgp_asn"] = inventory.bgp_asn
+    elif inventory.bgp_asn and device.bgp_asn != inventory.bgp_asn:
+        device.bgp_asn = inventory.bgp_asn
+        updated["bgp_asn"] = inventory.bgp_asn
     if device.status == DeviceStatus.UNKNOWN:
         device.status = DeviceStatus.ONLINE
         updated["status"] = DeviceStatus.ONLINE.value
