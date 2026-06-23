@@ -182,6 +182,7 @@ export interface CircuitEndpoint {
   inner_vlan_id?: number;
   ip_address?: string;
   gateway_ip?: string;
+  interface_description?: string | null;
 }
 
 export interface Circuit {

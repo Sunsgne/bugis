@@ -33,6 +33,7 @@ class CircuitEndpointsReplace(BaseModel):
 class CircuitEndpointOut(CircuitEndpointBase, TimestampedSchema):
     id: int
     circuit_id: int
+    interface_description: str | None = None
 
 
 class CircuitBase(BaseModel):
