@@ -16,9 +16,8 @@ import { labelForOption, DEVICE_ROLE_OPTIONS } from "@/constants/formOptions";
 import { vendorColors } from "@/charts/theme";
 import type { LinkUsage, Topology } from "@/api/types";
 import { useTc } from "@/i18n/useTc";
-import { layoutDeviceGraph, layoutPathChain, siteLabelForNode, edgeHandlePairForLayout, edgeHandlePairsForGraph, layoutEdgeCurvature, findHubNodeId, applySpokePeerSeparation } from "@/utils/deviceGraphLayout";
+import { layoutDeviceGraph, layoutPathChain, siteLabelForNode, edgeHandlePairForLayout, edgeHandlePairsForGraph, findHubNodeId, applySpokePeerSeparation } from "@/utils/deviceGraphLayout";
 import {
-  curvatureForEdge,
   linkEdgeShortLabel,
   mergeTopologyEdges,
 } from "@/utils/topologyEdges";
@@ -175,20 +174,31 @@ function buildDeviceGraph(
           linkType: e.type,
           highlighted,
           pathHighlighted,
-          curvature: layoutEdgeCurvature(
-            e.source,
-            e.target,
-            posById,
-            curvatureForEdge(topo.edges, e.id),
-            handles,
-          ),
+          pathMode: "straight",
         } satisfies EdgeData,
       };
     });
 
   const links = [...linksById.values()];
-  const edges = mergeTopologyEdges(utilizationEdges, links, nodeIds, tc, {
+  const merged = mergeTopologyEdges(utilizationEdges, links, nodeIds, tc, {
     includeLogicalPeers: !usePathChain,
+  });
+  const edges = merged.map((edge) => {
+    if (edge.type !== "logicalPeer") return edge;
+    const srcId = Number(edge.source);
+    const tgtId = Number(edge.target);
+    const handles =
+      handlePairs.get(`${srcId}-${tgtId}`) ??
+      edgeHandlePairForLayout(srcId, tgtId, posById);
+    return {
+      ...edge,
+      sourceHandle: handles.sourceHandle,
+      targetHandle: handles.targetHandle,
+      data: {
+        ...(edge.data as object),
+        pathMode: "straight" as const,
+      },
+    };
   });
 
   return { nodes, edges };
