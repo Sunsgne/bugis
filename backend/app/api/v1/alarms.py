@@ -53,7 +53,7 @@ def evaluate(db: Session = Depends(get_db), _: User = Depends(require_operator))
     """Re-evaluate all circuits and raise/clear alarms accordingly."""
     circuits = db.execute(select(Circuit)).scalars().all()
     for c in circuits:
-        health = telemetry_service.compute_health(db, c)
+        health = telemetry_service.compute_health_for_alarms(db, c)
         alarm_service.evaluate_circuit_health(db, c, health)
     from app.models.link import Link
     from app.services import link_monitor

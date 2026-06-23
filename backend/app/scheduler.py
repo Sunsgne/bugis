@@ -231,7 +231,7 @@ def _tick(*, include_learn: bool = False) -> int:
             c = circuit_by_id.get(cid)
             if not c:
                 continue
-            health = telemetry_service.compute_health(db, c)
+            health = telemetry_service.compute_health_for_alarms(db, c)
             health_snapshot_service.upsert_from_health(db, c.id, health)
             health_snapshot_service.invalidate_circuit(c)
             alarm_service.evaluate_circuit_health(db, c, health)

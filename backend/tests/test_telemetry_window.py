@@ -70,3 +70,46 @@ def test_list_circuit_samples_returns_most_recent_within_limit(db_session):
     )
     assert health.samples == 3
     assert health.avg_utilization_pct == 8.0
+
+
+def test_compute_health_for_alarms_uses_last_two_cycles_only(db_session):
+    suffix = uuid.uuid4().hex[:8]
+    tenant = Tenant(name=f"T {suffix}", code=f"T{suffix}")
+    db_session.add(tenant)
+    db_session.flush()
+    circuit = Circuit(
+        name="Alarm Window Circuit",
+        code=f"ALM-{suffix}",
+        tenant_id=tenant.id,
+        service_type=ServiceType.L2VPN_EVPN,
+        status=CircuitStatus.ACTIVE,
+        bandwidth_mbps=100,
+    )
+    db_session.add(circuit)
+    db_session.flush()
+
+    base = datetime.now(timezone.utc) - timedelta(hours=5)
+    # Older samples had phantom high utilization; latest two are near zero.
+    utilizations = [95.0, 90.0, 88.0, 1.0, 0.5]
+    for i, util in enumerate(utilizations):
+        db_session.add(
+            TelemetrySample(
+                circuit_id=circuit.id,
+                rx_mbps=util,
+                tx_mbps=0.0,
+                latency_ms=1.0,
+                jitter_ms=0.1,
+                packet_loss_pct=0.0,
+                utilization_pct=util,
+                tunnel_state="up",
+                source="snmp",
+                created_at=base + timedelta(minutes=i * 10),
+            )
+        )
+    db_session.commit()
+
+    health = telemetry_service.compute_health_for_alarms(db_session, circuit)
+    assert health.samples == 2
+    assert health.peak_utilization_pct == 1.0
+    assert health.avg_utilization_pct == 0.75
+    assert health.health_score == 100.0

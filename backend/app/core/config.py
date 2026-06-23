@@ -79,6 +79,8 @@ class Settings(BaseSettings):
     telemetry_collect_batch_size: int = 500
     # Per-tick latency probes (10k enabled @ 50/tick/20s ≈ full sweep in ~67 min).
     telemetry_probe_batch_size: int = 50
+    # Health / utilization alarms use the last N SNMP collection cycles (not hours).
+    telemetry_alarm_sample_cycles: int = 2
     # Use Timescale continuous aggregates when window exceeds this many hours.
     telemetry_aggregate_after_hours: int = 1
     # Raw sample retention (Timescale retention policy); aggregates kept longer in DB.

@@ -193,7 +193,7 @@ def collect_telemetry(
             skipped += 1
     db.flush()
     for c in circuits:
-        health = telemetry_service.compute_health(db, c)
+        health = telemetry_service.compute_health_for_alarms(db, c)
         health_snapshot_service.upsert_from_health(db, c.id, health)
         health_snapshot_service.invalidate_circuit(c)
         alarm_service.evaluate_circuit_health(db, c, health)

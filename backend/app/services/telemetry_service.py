@@ -6,11 +6,14 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.models.circuit import Circuit
 from app.models.enums import CircuitStatus
 from app.models.telemetry import TelemetrySample
 from app.schemas.telemetry import CircuitHealth
 from app.services import availability_service, snmp_telemetry, telemetry_timescale
+
+DEFAULT_HEALTH_SAMPLE_LIMIT = 100
 
 # Probe rows carry QoS only (latency/jitter/loss); rx/tx are always 0 and must not
 # appear in traffic charts or bandwidth billing.
@@ -470,21 +473,32 @@ def billing_95th(db: Session, circuit: Circuit, period: str | None = None) -> di
     }
 
 
+def alarm_sample_cycles() -> int:
+    return max(1, get_settings().telemetry_alarm_sample_cycles)
+
+
+def compute_health_for_alarms(db: Session, circuit: Circuit) -> CircuitHealth:
+    """Health metrics for alarm evaluation — last N SNMP collection cycles only."""
+    return compute_health(db, circuit, sample_cycles=alarm_sample_cycles())
+
+
 def compute_health(
     db: Session,
     circuit: Circuit,
     *,
-    limit: int = 100,
+    limit: int = DEFAULT_HEALTH_SAMPLE_LIMIT,
+    sample_cycles: int | None = None,
     hours: int | None = None,
     start_at: datetime | None = None,
     end_at: datetime | None = None,
 ) -> CircuitHealth:
+    eff_limit = max(1, sample_cycles) if sample_cycles is not None else limit
     windowed = hours is not None or (start_at is not None and end_at is not None)
     if windowed:
         samples = list_circuit_samples(
             db,
             circuit.id,
-            limit=limit,
+            limit=eff_limit,
             hours=hours,
             start_at=start_at,
             end_at=end_at,
@@ -496,7 +510,7 @@ def compute_health(
                 select(TelemetrySample)
                 .where(TelemetrySample.circuit_id == circuit.id)
                 .order_by(TelemetrySample.id.desc())
-                .limit(limit)
+                .limit(eff_limit)
             ).scalars().all()
         )
         latest = samples[0] if samples else None
@@ -507,6 +521,14 @@ def compute_health(
         if circuit.latency_probe_enabled
         else []
     )
+    if (
+        circuit.latency_probe_enabled
+        and sample_cycles is not None
+        and not qos_samples
+    ):
+        probe = _latest_probe_qos(db, circuit.id)
+        if probe is not None:
+            qos_samples = [probe]
     traffic_rows = traffic_samples(samples)
     sources = sorted({s.source for s in samples if s.source})
 
