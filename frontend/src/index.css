@@ -926,6 +926,14 @@ body {
   justify-content: flex-end;
 }
 
+.alarm-detail-cell {
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.55;
+  min-width: 280px;
+  max-width: 720px;
+}
+
 /* Settings layout */
 .settings-layout-card {
   width: 100%;
