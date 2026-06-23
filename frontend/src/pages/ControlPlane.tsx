@@ -29,7 +29,7 @@ import AdoptVniModal from "../components/AdoptVniModal";
 import { empty, page } from "../constants/uiCopy";
 import { useTc } from "@/i18n/useTc";
 import { OVERLAY_SOURCE } from "../constants/statusLabels";
-import { dataTableProps, TABLE_SCROLL, colsNowrap } from "../utils/table";
+import { dataTableProps, PAGE_SIZE_OPTIONS, TABLE_SCROLL, colsNowrap } from "../utils/table";
 
 const { Text } = Typography;
 
@@ -170,6 +170,8 @@ export default function ControlPlane() {
   const [adoptVniPreset, setAdoptVniPreset] = useState<number | undefined>(undefined);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [overlayPage, setOverlayPage] = useState(1);
+  const [overlayPageSize, setOverlayPageSize] = useState(20);
 
   async function load() {
     try {
@@ -333,8 +335,17 @@ export default function ControlPlane() {
               rowKey={(row: { device_id?: number; service_name?: string; vni?: number }) =>
                 `${row.device_id}-${row.service_name}-${row.vni ?? "u"}`
               }
-              dataSource={(overlay?.items ?? []).slice(0, 100)}
-              pagination={{ pageSize: 20, showSizeChanger: true }}
+              dataSource={overlay?.items ?? []}
+              pagination={{
+                current: overlayPage,
+                pageSize: overlayPageSize,
+                showSizeChanger: true,
+                pageSizeOptions: PAGE_SIZE_OPTIONS.map(String),
+                onChange: (page, pageSize) => {
+                  setOverlayPage(page);
+                  setOverlayPageSize(pageSize);
+                },
+              }}
               size="small"
               scroll={{ x: "max-content" }}
               locale={{ emptyText: <Empty description={tc('暂无现网 Overlay 数据 · 请对设备执行现网学习后扫描')} /> }}
