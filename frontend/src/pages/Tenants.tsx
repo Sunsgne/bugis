@@ -12,7 +12,7 @@ import {
   App as AntApp,
   Popconfirm,
 } from "antd";
-import { PlusOutlined, SearchOutlined } from "@ant-design/icons";
+import { EditOutlined, PlusOutlined, SearchOutlined } from "@ant-design/icons";
 import { api } from "../api/client";
 import type { Paginated, Tenant } from "../api/types";
 import TenantPortalUsersModal from "../components/TenantPortalUsersModal";
@@ -21,12 +21,13 @@ import PageCard from "../components/PageCard";
 import { dataTableProps, PAGE_SIZE_OPTIONS, pageRangeLabel, TABLE_SCROLL, tablePagination, withMobileHide, colsNowrap } from "../utils/table";
 import { formModalProps } from "../utils/formModal";
 import { TENANT_STATUS, TENANT_TYPE, statusMeta } from "../constants/statusLabels";
-import { page as pageCopy } from "../constants/uiCopy";
+import { page as pageCopy, toast } from "../constants/uiCopy";
 import { useTc } from "@/i18n/useTc";
 import { useTranslation } from "react-i18next";
 import { pageSizeSelectOptions } from "../i18n/helpers";
 
 const TENANT_TYPE_KEYS = ["enterprise", "hybrid_cloud", "public_cloud", "internal"] as const;
+const TENANT_STATUS_KEYS = ["active", "suspended", "terminated"] as const;
 
 export default function Tenants() {
   const { tc } = useTc();
@@ -39,8 +40,10 @@ export default function Tenants() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<Tenant | null>(null);
   const [portalTenant, setPortalTenant] = useState<Tenant | null>(null);
   const [form] = Form.useForm();
+  const [editForm] = Form.useForm();
 
   async function load(p = page, ps = pageSize, q = search) {
     setLoading(true);
@@ -80,6 +83,45 @@ export default function Tenants() {
       load();
     } catch (e: any) {
       message.error(e?.response?.data?.detail || "删除失败");
+    }
+  }
+
+  function openEdit(row: Tenant) {
+    setEditing(row);
+    editForm.setFieldsValue({
+      code: row.code,
+      name: row.name,
+      type: row.type,
+      status: row.status,
+      contact_name: row.contact_name || "",
+      contact_email: row.contact_email || "",
+      contact_phone: row.contact_phone || "",
+      cloud_account: row.cloud_account || "",
+      description: row.description || "",
+    });
+  }
+
+  async function onEdit() {
+    if (!editing) return;
+    const values = await editForm.validateFields();
+    const payload = {
+      name: values.name,
+      type: values.type,
+      status: values.status,
+      contact_name: values.contact_name?.trim() || null,
+      contact_email: values.contact_email?.trim() || null,
+      contact_phone: values.contact_phone?.trim() || null,
+      cloud_account: values.cloud_account?.trim() || null,
+      description: values.description?.trim() || null,
+    };
+    try {
+      await api.patch(`/tenants/${editing.id}`, payload);
+      message.success(toast.saved);
+      setEditing(null);
+      editForm.resetFields();
+      load();
+    } catch (e: any) {
+      message.error(e?.response?.data?.detail || toast.failed);
     }
   }
 
@@ -181,6 +223,9 @@ export default function Tenants() {
             className: "table-actions",
             render: (_, r) => (
               <Space size={4} className="table-actions">
+                <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(r)}>
+                  {tc('编辑')}
+                </Button>
                 <Link to={`/circuits?tenant=${r.id}`}>{tc('查看专线')}</Link>
                 <Button type="link" size="small" onClick={() => setPortalTenant(r)}>{tc('门户账号')}</Button>
                 <Popconfirm title={tc('确认删除?')} onConfirm={() => remove(r.id)}>
@@ -218,6 +263,53 @@ export default function Tenants() {
           </Form.Item>
           <Form.Item name="contact_email" label={tc('邮箱')}>
             <Input />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title={tc('编辑客户')}
+        open={!!editing}
+        onOk={onEdit}
+        onCancel={() => {
+          setEditing(null);
+          editForm.resetFields();
+        }}
+        okText={tc('保存')}
+        {...formModalProps}
+      >
+        <Form form={editForm} layout="vertical" className="app-form">
+          <Form.Item name="code" label={tc('编码')}>
+            <Input disabled />
+          </Form.Item>
+          <Form.Item name="name" label={tc('客户名称')} rules={[{ required: true }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item name="type" label={tc('类型')}>
+            <Select options={TENANT_TYPE_KEYS.map((value) => ({ value, label: TENANT_TYPE[value] }))} />
+          </Form.Item>
+          <Form.Item name="status" label={tc('状态')}>
+            <Select
+              options={TENANT_STATUS_KEYS.map((value) => ({
+                value,
+                label: statusMeta(TENANT_STATUS, value).label,
+              }))}
+            />
+          </Form.Item>
+          <Form.Item name="contact_name" label={tc('联系人')}>
+            <Input />
+          </Form.Item>
+          <Form.Item name="contact_email" label={tc('邮箱')}>
+            <Input type="email" />
+          </Form.Item>
+          <Form.Item name="contact_phone" label={tc('电话')}>
+            <Input />
+          </Form.Item>
+          <Form.Item name="cloud_account" label={tc('云账号')}>
+            <Input placeholder={tc('混合云/公有云客户可选')} />
+          </Form.Item>
+          <Form.Item name="description" label={tc('备注')}>
+            <Input.TextArea rows={3} />
           </Form.Item>
         </Form>
       </Modal>

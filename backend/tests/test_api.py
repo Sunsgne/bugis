@@ -1314,6 +1314,32 @@ def test_tenant_list_pagination(client, auth_headers):
     assert "circuits_total" in overview
 
 
+def test_update_tenant(client, auth_headers):
+    n = next(_seq)
+    tenant = client.post(
+        "/api/v1/tenants",
+        headers=auth_headers,
+        json={"name": f"Edit Tenant {n}", "code": f"EDT{n}", "type": "enterprise"},
+    ).json()
+    updated = client.patch(
+        f"/api/v1/tenants/{tenant['id']}",
+        headers=auth_headers,
+        json={
+            "name": f"Renamed {n}",
+            "contact_name": "Luke",
+            "contact_email": "luke@example.com",
+            "status": "suspended",
+        },
+    )
+    assert updated.status_code == 200
+    body = updated.json()
+    assert body["name"] == f"Renamed {n}"
+    assert body["code"] == f"EDT{n}"
+    assert body["contact_name"] == "Luke"
+    assert body["contact_email"] == "luke@example.com"
+    assert body["status"] == "suspended"
+
+
 def test_remote_ipt_provision(client, auth_headers):
     n = next(_seq)
     egress = client.post(
