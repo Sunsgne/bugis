@@ -12,16 +12,24 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.models.circuit import Circuit
+from app.models.circuit import Circuit, CircuitEndpoint
 from app.models.device import Device, DeviceInterface
 from app.models.enums import CircuitStatus, Vendor
 from app.models.snmp_settings import SnmpSettings
 from app.services import snmp_device, snmp_settings as snmp_cfg
 from app.services.mib_registry import HH3C_EVC, IF_MIB
+from app.services.port_inventory import (
+    huawei_physical_port,
+    is_huawei_subinterface,
+    parse_huawei_subinterface,
+)
 
 # cache key -> (in_octets, out_octets, monotonic_ts)
 # key = (device_id, kind, ifindex, srv_inst_id) where kind is "if" | "evc"
 _counter_cache: dict[tuple[int, str, int, int], tuple[int, int, float]] = {}
+# device_id -> (monotonic_ts, name -> ifindex)
+_ifname_index_cache: dict[int, tuple[float, dict[str, int]]] = {}
+_IFNAME_CACHE_TTL_SEC = 300.0
 
 
 @dataclass
@@ -34,8 +42,27 @@ class TrafficPollResult:
     source: str
 
 
+@dataclass(frozen=True)
+class _PollTarget:
+    ifindex: int
+    name: str
+
+
 def simulation_allowed() -> bool:
     return bool(settings.telemetry_simulation)
+
+
+def endpoints_for_traffic_poll(circuit: Circuit) -> list[CircuitEndpoint]:
+    """Poll customer handoff only (端点 A), not every transit PE."""
+    eps = [ep for ep in circuit.endpoints if ep.device_id]
+    if not eps:
+        return []
+    by_label = {ep.label.upper(): ep for ep in eps}
+    if "A" in by_label:
+        return [by_label["A"]]
+    if "Z" in by_label:
+        return [by_label["Z"]]
+    return [sorted(eps, key=lambda e: e.label)[0]]
 
 
 def _resolve_iface(
@@ -47,6 +74,98 @@ def _resolve_iface(
             DeviceInterface.name == interface_name,
         )
     ).scalar_one_or_none()
+
+
+def _huawei_ac_name(parent: str, svid: int) -> str:
+    return f"{huawei_physical_port(parent)}.{svid}"
+
+
+def _ifname_index_map(db: Session, device: Device) -> dict[str, int]:
+    now = time.monotonic()
+    cached = _ifname_index_cache.get(device.id)
+    if cached and now - cached[0] < _IFNAME_CACHE_TTL_SEC:
+        return cached[1]
+
+    from app.services import snmp
+
+    mapping: dict[str, int] = {}
+    try:
+        for row in snmp.probe_interfaces(db, device):
+            name = (row.get("name") or "").strip()
+            ifindex = row.get("ifindex")
+            if name and ifindex is not None:
+                mapping[name] = int(ifindex)
+    except Exception:
+        if cached:
+            return cached[1]
+        return {}
+
+    _ifname_index_cache[device.id] = (now, mapping)
+    return mapping
+
+
+def _persist_ifindex(
+    db: Session, device_id: int, name: str, ifindex: int
+) -> DeviceInterface:
+    iface = _resolve_iface(db, device_id, name)
+    if iface is None:
+        iface = DeviceInterface(
+            device_id=device_id,
+            name=name,
+            ifindex=ifindex,
+            discovered_via="snmp-subif",
+        )
+        db.add(iface)
+    else:
+        iface.ifindex = ifindex
+        if not iface.discovered_via:
+            iface.discovered_via = "snmp-subif"
+    db.flush()
+    return iface
+
+
+def _resolve_poll_target(
+    db: Session,
+    device: Device,
+    interface_name: str,
+    srv_inst_id: int | None,
+) -> _PollTarget | None:
+    """Resolve the SNMP counter target for a circuit endpoint."""
+    parsed = parse_huawei_subinterface(interface_name)
+    if parsed and device.vendor == Vendor.HUAWEI:
+        parent, svid = parsed
+        if srv_inst_id is not None and svid != srv_inst_id:
+            return None
+        iface = _resolve_iface(db, device.id, interface_name)
+        if iface and iface.ifindex is not None:
+            return _PollTarget(iface.ifindex, iface.name)
+        idx = _ifname_index_map(db, device).get(interface_name)
+        if idx is not None:
+            _persist_ifindex(db, device.id, interface_name, idx)
+            return _PollTarget(idx, interface_name)
+        return None
+
+    if device.vendor == Vendor.HUAWEI and srv_inst_id is not None:
+        if is_huawei_subinterface(interface_name):
+            return None
+        ac_name = _huawei_ac_name(interface_name, srv_inst_id)
+        iface = _resolve_iface(db, device.id, ac_name)
+        if iface and iface.ifindex is not None:
+            return _PollTarget(iface.ifindex, iface.name)
+        idx = _ifname_index_map(db, device).get(ac_name)
+        if idx is not None:
+            _persist_ifindex(db, device.id, ac_name, idx)
+            return _PollTarget(idx, ac_name)
+        return None
+
+    iface = _resolve_iface(db, device.id, interface_name)
+    if iface is None or iface.ifindex is None:
+        idx = _ifname_index_map(db, device).get(interface_name)
+        if idx is not None:
+            iface = _persist_ifindex(db, device.id, interface_name, idx)
+        else:
+            return None
+    return _PollTarget(iface.ifindex, iface.name)
 
 
 def _get_oid(
@@ -94,13 +213,17 @@ def poll_iface_counters(
     srv_inst_id: int | None = None,
 ) -> tuple[float, float, int, bool] | None:
     """Public wrapper for interface / service-instance counter polling."""
-    return _poll_iface_counters(db, device, iface, interval_sec, srv_inst_id)
+    if iface.ifindex is None:
+        return None
+    return _poll_iface_counters(
+        db, device, _PollTarget(iface.ifindex, iface.name), interval_sec, srv_inst_id
+    )
 
 
 def _poll_iface_counters(
     db: Session,
     device: Device,
-    iface: DeviceInterface,
+    target: _PollTarget,
     interval_sec: float,
     srv_inst_id: int | None = None,
 ) -> tuple[float, float, int, bool] | None:
@@ -109,10 +232,7 @@ def _poll_iface_counters(
     if not cfg.enabled or not device_snmp["enabled"]:
         return None
 
-    ifindex = iface.ifindex
-    if ifindex is None:
-        return None
-
+    ifindex = target.ifindex
     community = snmp_cfg.effective_community(db, device)
     port = device_snmp["port"]
     # H3C only aggregates traffic at the physical port via standard IF-MIB; the
@@ -138,21 +258,6 @@ def _poll_iface_counters(
         oper_raw = _get_oid(device, oper_oid, cfg, community, port=port)
     except RuntimeError:
         return None
-
-    # If the H3C private MIB has no data (statistics not enabled / unsupported
-    # on this platform), fall back to the standard port-level IF-MIB counters so
-    # the circuit still reports *something* rather than nothing.
-    if use_evc and (in_oct is None or out_oct is None):
-        try:
-            in_oct = _get_oid(
-                device, IF_MIB.ifHCInOctets.column(ifindex), cfg, community, port=port
-            )
-            out_oct = _get_oid(
-                device, IF_MIB.ifHCOutOctets.column(ifindex), cfg, community, port=port
-            )
-        except RuntimeError:
-            return None
-        cache_key = (device.id, "if", ifindex, 0)
 
     if in_oct is None or out_oct is None:
         return None
@@ -211,7 +316,7 @@ def poll_circuit_traffic(
     *,
     interval_sec: float = 30.0,
 ) -> TrafficPollResult:
-    """Poll SNMP counters on circuit endpoints and aggregate traffic."""
+    """Poll SNMP counters on the customer access endpoint (A) only."""
     if simulation_allowed() and settings.dry_run:
         return _simulate_traffic(circuit)
 
@@ -225,20 +330,16 @@ def poll_circuit_traffic(
     any_poll = False
     all_up = True
 
-    for ep in circuit.endpoints:
-        if not ep.device_id:
-            continue
+    for ep in endpoints_for_traffic_poll(circuit):
         device = db.get(Device, ep.device_id)
         if not device:
             continue
-        iface = _resolve_iface(db, ep.device_id, ep.interface_name)
-        if iface is None:
-            continue
-        # H3C service-instance id == the AC's S-VID (service-instance N where
-        # N = svid), matching the L2VPN apply template.
         srv_inst_id = ep.vlan_id or circuit.vlan_id
+        target = _resolve_poll_target(db, device, ep.interface_name, srv_inst_id)
+        if target is None:
+            continue
         polled = _poll_iface_counters(
-            db, device, iface, interval_sec, srv_inst_id=srv_inst_id
+            db, device, target, interval_sec, srv_inst_id=srv_inst_id
         )
         if polled is None:
             continue
@@ -251,8 +352,6 @@ def poll_circuit_traffic(
             all_up = False
 
     if not any_poll:
-        # Simulation is a lab/demo affordance only: never fabricate traffic in
-        # production (dry_run=false), even if telemetry_simulation is left on.
         if simulation_allowed() and settings.dry_run:
             return _simulate_traffic(circuit)
         return _unavailable_traffic(circuit)
