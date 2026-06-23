@@ -119,6 +119,39 @@ export function layoutPathChain(
   return map;
 }
 
+/** Ring layout for multipoint EVPN access PEs (equal spokes, no false A→Z chain). */
+export function layoutMultipointRing(
+  deviceIds: number[],
+  width: number,
+  height: number,
+): Map<number, { x: number; y: number }> {
+  const map = new Map<number, { x: number; y: number }>();
+  const n = deviceIds.length;
+  if (n === 0) return map;
+  if (n === 1) {
+    map.set(deviceIds[0], { x: width / 2 - NODE_W / 2, y: height / 2 - NODE_H / 2 });
+    return map;
+  }
+
+  const pad = Math.max(48, Math.min(width, height) * 0.08);
+  const cx = width / 2;
+  const cy = height / 2;
+  const radius = Math.max(
+    NODE_W + pad,
+    Math.min(width, height) / 2 - Math.max(NODE_W, NODE_H) / 2 - pad,
+  );
+  const angleStart = -Math.PI / 2;
+
+  deviceIds.forEach((id, i) => {
+    const angle = angleStart + (2 * Math.PI * i) / n;
+    map.set(id, {
+      x: cx - NODE_W / 2 + radius * Math.cos(angle),
+      y: cy - NODE_H / 2 + radius * Math.sin(angle),
+    });
+  });
+  return map;
+}
+
 /** Hub on the left, spokes stacked on the right — compact for small backbone graphs. */
 function layoutCompactHub(
   nodes: LayoutGraphNode[],

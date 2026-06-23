@@ -95,6 +95,7 @@ def test_forwarding_path_api(client, auth_headers):
 
     assert body["circuit_id"] == circuit["id"]
     assert body["business_plane"]["vni"] == circuit["vni"]
+    assert body["business_plane"]["topology"] == "point_to_point"
     assert len(body["business_plane"]["hops"]) >= 3
 
     assert "control_plane" in body

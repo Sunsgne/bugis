@@ -17,7 +17,12 @@ export default function Topology() {
   const [topo, setTopo] = useState<Topo | null>(null);
   const [links, setLinks] = useState<LinkUsage[]>([]);
   const [error, setError] = useState(false);
-  const [highlightPath, setHighlightPath] = useState<{ deviceIds?: number[]; linkIds?: number[] }>();
+  const [highlightPath, setHighlightPath] = useState<{
+    deviceIds?: number[];
+    linkIds?: number[];
+    mode?: "multipoint" | "point_to_point";
+    endpointOrder?: number[];
+  }>();
   const layout = useTopologyLayout();
 
   const highlightCircuitId = searchParams.get("highlight_circuit");
@@ -35,7 +40,12 @@ export default function Topology() {
         );
         if (!cancelled) {
           const hl = data.underlay?.topology_highlight;
-          setHighlightPath(hl ? { deviceIds: hl.device_ids, linkIds: hl.link_ids } : undefined);
+          setHighlightPath(hl ? {
+            deviceIds: hl.device_ids,
+            linkIds: hl.link_ids,
+            mode: hl.mode ?? data.underlay?.topology_mode,
+            endpointOrder: hl.endpoint_order,
+          } : undefined);
         }
       } catch {
         if (!cancelled) setHighlightPath(undefined);
@@ -111,8 +121,16 @@ export default function Topology() {
           type="info"
           showIcon
           style={{ marginBottom: 12 }}
-          message={tc("正在高亮专线 Underlay 路径")}
-          description={tc(`电路 ID ${highlightCircuitId} 的计算路径已在拓扑中标注（靛蓝实线）`)}
+          message={
+            highlightPath.mode === "multipoint"
+              ? tc("正在高亮专线全部接入 PE")
+              : tc("正在高亮专线 Underlay 路径")
+          }
+          description={
+            highlightPath.mode === "multipoint"
+              ? tc(`电路 ID ${highlightCircuitId} 的 ${highlightPath.deviceIds.length} 个接入站点已在拓扑中标注`)
+              : tc(`电路 ID ${highlightCircuitId} 的计算路径已在拓扑中标注（靛蓝实线）`)
+          }
         />
       ) : null}
       {topo.edges.length === 0 && (
@@ -135,6 +153,14 @@ export default function Topology() {
             deviceIds: highlightPath.deviceIds,
             linkIds: highlightPath.linkIds,
           } : undefined}
+          pathDeviceOrder={
+            highlightPath?.mode === "multipoint" ? undefined : highlightPath?.deviceIds
+          }
+          multipointDeviceOrder={
+            highlightPath?.mode === "multipoint"
+              ? highlightPath.endpointOrder ?? highlightPath.deviceIds
+              : undefined
+          }
         />
       </div>
     </PageCard>

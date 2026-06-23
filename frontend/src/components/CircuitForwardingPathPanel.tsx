@@ -12,6 +12,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api/client";
 import type { ForwardingPath, LinkUsage, Topology } from "../api/types";
+import MultipointEvpnDiagram from "./MultipointEvpnDiagram";
 import PhysicalTopologyFlow from "./PhysicalTopologyFlow";
 import { useTc } from "@/i18n/useTc";
 import { filterLinksForPath, filterTopologyForPath } from "@/utils/topologyPathFilter";
@@ -27,6 +28,7 @@ const LAYER_LABELS: Record<string, string> = {
   access: "接入",
   evpn_encap: "EVPN 封装",
   evpn_tunnel: "EVPN 隧道",
+  evpn_instance: "EVPN 实例",
 };
 
 type Props = {
@@ -133,10 +135,24 @@ export default function CircuitForwardingPathPanel({ circuitId, circuitCode }: P
   const underlay = data.underlay;
   const comparison = underlay.comparison;
   const comparisonColor = COMPARISON_COLORS[comparison?.status || "no_probe"] || "default";
+  const isMultipoint =
+    data.business_plane.topology === "multipoint" || underlay.topology_mode === "multipoint";
+  const topologyHighlight = underlay.topology_highlight;
+  const multipointOrder =
+    isMultipoint && topologyHighlight?.endpoint_order?.length
+      ? topologyHighlight.endpoint_order
+      : undefined;
+  const pathOrder =
+    !isMultipoint && highlightPath.deviceIds?.length ? highlightPath.deviceIds : undefined;
 
   return (
     <div className="circuit-forwarding-path" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <Space wrap>
+        {isMultipoint ? (
+          <Tag color="purple">
+            {tc("多点接入")} · {data.business_plane.endpoint_count ?? data.business_plane.endpoints?.length ?? 0} PE
+          </Tag>
+        ) : null}
         <Tag color="geekblue">{data.path_mode === "explicit_sr" ? "SR 显式" : "IGP 自动"}</Tag>
         {underlay.igp_algorithm && (
           <Tag>{underlay.igp_algorithm === "dijkstra_igp_cost" ? "IGP Cost 最短路" : underlay.igp_algorithm}</Tag>
@@ -185,6 +201,15 @@ export default function CircuitForwardingPathPanel({ circuitId, circuitCode }: P
                   <Descriptions.Item label="RD">{data.business_plane.rd || "—"}</Descriptions.Item>
                   <Descriptions.Item label="RT">{data.business_plane.rt || "—"}</Descriptions.Item>
                 </Descriptions>
+                {isMultipoint && data.business_plane.endpoints?.length ? (
+                  <MultipointEvpnDiagram
+                    vni={data.business_plane.vni}
+                    vsi_name={data.business_plane.vsi_name}
+                    rd={data.business_plane.rd}
+                    rt={data.business_plane.rt}
+                    endpoints={data.business_plane.endpoints}
+                  />
+                ) : null}
                 <Table
                   size="small"
                   rowKey={(r) => `${r.sequence}-${r.layer}`}
@@ -281,7 +306,9 @@ export default function CircuitForwardingPathPanel({ circuitId, circuitCode }: P
                 ) : pathTopo && highlightPath.deviceIds?.length ? (
                   <div style={{ marginBottom: 16 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                      <Typography.Text strong>{tc("拓扑路径高亮")}</Typography.Text>
+                      <Typography.Text strong>
+                        {isMultipoint ? tc("接入 PE 站点") : tc("拓扑路径高亮")}
+                      </Typography.Text>
                       <Link to={`/topology?highlight_circuit=${circuitId}`}>{tc("在拓扑页打开")}</Link>
                     </div>
                     <div className="circuit-path-topology-wrap">
@@ -290,7 +317,8 @@ export default function CircuitForwardingPathPanel({ circuitId, circuitCode }: P
                         links={links}
                         savedPositions={{}}
                         highlightPath={highlightPath}
-                        pathDeviceOrder={highlightPath.deviceIds}
+                        pathDeviceOrder={pathOrder}
+                        multipointDeviceOrder={multipointOrder}
                         fillContainer
                         className="circuit-path-topology-mini"
                       />
@@ -305,23 +333,36 @@ export default function CircuitForwardingPathPanel({ circuitId, circuitCode }: P
                   />
                 ) : null}
                 <Typography.Text strong style={{ display: "block", marginBottom: 8 }}>
-                  {tc("IGP 计算路径")}
+                  {isMultipoint ? tc("接入 PE 站点") : tc("IGP 计算路径")}
                 </Typography.Text>
                 <Space wrap style={{ marginBottom: 12 }}>
                   {(underlay.computed?.hops || []).map((h, i) => (
-                    <Tag key={h.device_id} color={i === 0 ? "blue" : i === (underlay.computed?.hops?.length || 0) - 1 ? "purple" : "geekblue"}>
+                    <Tag
+                      key={h.device_id}
+                      color={
+                        isMultipoint
+                          ? "blue"
+                          : i === 0
+                            ? "blue"
+                            : i === (underlay.computed?.hops?.length || 0) - 1
+                              ? "purple"
+                              : "geekblue"
+                      }
+                    >
+                      {isMultipoint && h.endpoint_label ? `${h.endpoint_label} · ` : ""}
                       {h.name}
-                      {h.igp_cost != null && i < (underlay.computed?.hops?.length || 0) - 1
+                      {!isMultipoint && h.igp_cost != null && i < (underlay.computed?.hops?.length || 0) - 1
                         ? ` → cost ${h.igp_cost}`
                         : ""}
                     </Tag>
                   ))}
-                  {underlay.segment_list && underlay.segment_list.length > 0 && (
+                  {!isMultipoint && underlay.segment_list && underlay.segment_list.length > 0 && (
                     <Typography.Text type="secondary" style={{ fontSize: 12 }}>
                       SID: {underlay.segment_list.join(" → ")}
                     </Typography.Text>
                   )}
                 </Space>
+                {!isMultipoint ? (
                 <Table
                   size="small"
                   rowKey={(r) => String(r.sequence)}
@@ -373,6 +414,15 @@ export default function CircuitForwardingPathPanel({ circuitId, circuitCode }: P
                     },
                   ]}
                 />
+                ) : (
+                  <Alert
+                    type="info"
+                    showIcon
+                    style={{ marginBottom: 16 }}
+                    message={tc("多点 EVPN 无单一 Underlay 路径")}
+                    description={tc("各 PE 通过 EVPN 控制面加入同一 VNI，Underlay 仅展示接入站点位置。")}
+                  />
+                )}
 
                 <Typography.Text strong style={{ display: "block", marginBottom: 8 }}>
                   {tc("拨测实测")}

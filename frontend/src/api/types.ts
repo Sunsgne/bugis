@@ -261,6 +261,18 @@ export interface ForwardingPath {
   path_mode: string;
   generated_at: string;
   business_plane: {
+    topology?: "multipoint" | "point_to_point";
+    endpoint_count?: number;
+    endpoints?: Array<{
+      label: string;
+      device_id: number;
+      device_name: string;
+      interface?: string;
+      access_mode?: string;
+      vlan?: string;
+      vtep_ip?: string;
+      overlay_tech?: string;
+    }>;
     service_type?: string;
     vni?: number;
     vsi_name?: string;
@@ -291,6 +303,7 @@ export interface ForwardingPath {
     bgp_sessions?: unknown[];
   };
   underlay: {
+    topology_mode?: "multipoint" | "point_to_point";
     path_mode?: string;
     path_reason?: string;
     igp_algorithm?: string;
@@ -303,6 +316,7 @@ export interface ForwardingPath {
         device_id: number;
         name: string;
         hop_type?: string;
+        endpoint_label?: string;
         igp_cost?: number;
         egress_interface?: string;
         cost_learned?: boolean;
@@ -335,8 +349,10 @@ export interface ForwardingPath {
       probed_device_names?: string[];
     };
     topology_highlight: {
+      mode?: "multipoint" | "point_to_point";
       device_ids: number[];
       link_ids: number[];
+      endpoint_order?: number[];
     };
   };
 }

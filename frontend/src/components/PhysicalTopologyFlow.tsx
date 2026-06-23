@@ -16,7 +16,7 @@ import { labelForOption, DEVICE_ROLE_OPTIONS } from "@/constants/formOptions";
 import { vendorColors } from "@/charts/theme";
 import type { LinkUsage, Topology } from "@/api/types";
 import { useTc } from "@/i18n/useTc";
-import { layoutDeviceGraph, layoutPathChain, siteLabelForNode, edgeHandlePairForLayout, edgeHandlePairsForGraph, findHubNodeId, applySpokePeerSeparation } from "@/utils/deviceGraphLayout";
+import { layoutDeviceGraph, layoutMultipointRing, layoutPathChain, siteLabelForNode, edgeHandlePairForLayout, edgeHandlePairsForGraph, findHubNodeId, applySpokePeerSeparation } from "@/utils/deviceGraphLayout";
 import {
   linkEdgeShortLabel,
   mergeTopologyEdges,
@@ -69,14 +69,23 @@ function buildDeviceGraph(
   highlightLinkIds?: Set<number> | null,
   hoveredLinkId?: number | null,
   pathDeviceOrder?: number[] | null,
+  multipointDeviceOrder?: number[] | null,
 ): { nodes: Node[]; edges: Edge[] } {
+  const useMultipointRing =
+    multipointDeviceOrder != null
+    && multipointDeviceOrder.length >= 3
+    && multipointDeviceOrder.every((id) => topo.nodes.some((n) => n.id === id));
+
   const usePathChain =
-    pathDeviceOrder != null
+    !useMultipointRing
+    && pathDeviceOrder != null
     && pathDeviceOrder.length >= 2
     && pathDeviceOrder.length <= 8
     && pathDeviceOrder.every((id) => topo.nodes.some((n) => n.id === id));
 
-  const autoPositions = usePathChain
+  const autoPositions = useMultipointRing
+    ? layoutMultipointRing(multipointDeviceOrder!, size.w, size.h)
+    : usePathChain
     ? layoutPathChain(pathDeviceOrder!, size.w, size.h)
     : layoutDeviceGraph(
       topo.nodes.map((n) => ({ id: n.id, site_id: n.site_id })),
@@ -90,7 +99,7 @@ function buildDeviceGraph(
     connected.add(e.source);
     connected.add(e.target);
   }
-  const dimUnconnected = !usePathChain && highlightDeviceIds != null && highlightDeviceIds.size > 0;
+  const dimUnconnected = !usePathChain && !useMultipointRing && highlightDeviceIds != null && highlightDeviceIds.size > 0;
 
   const posById = new Map<number, { x: number; y: number }>();
   for (const n of topo.nodes) {
@@ -104,7 +113,7 @@ function buildDeviceGraph(
       .map((id) => Number(id))
       .filter((id) => topo.nodes.some((n) => n.id === id)),
   );
-  if (!usePathChain) {
+  if (!usePathChain && !useMultipointRing) {
     const hubId = findHubNodeId(
       topo.nodes.map((n) => ({ id: n.id, site_id: n.site_id })),
       graphEdges,
@@ -216,6 +225,8 @@ type Props = {
   fillContainer?: boolean;
   /** Ordered device ids for left-to-right path chain layout. */
   pathDeviceOrder?: number[];
+  /** Ring layout for multipoint EVPN access PEs. */
+  multipointDeviceOrder?: number[];
 };
 
 export default function PhysicalTopologyFlow({
@@ -228,6 +239,7 @@ export default function PhysicalTopologyFlow({
   highlightPath,
   fillContainer = false,
   pathDeviceOrder,
+  multipointDeviceOrder,
 }: Props) {
   const { tc } = useTc();
   const hostRef = useRef<HTMLDivElement>(null);
@@ -278,7 +290,7 @@ export default function PhysicalTopologyFlow({
     return new Set(ids);
   }, [highlightPath?.linkIds]);
 
-  const graphKey = `${size.w}x${size.h}-${topo.nodes.length}-${topo.edges.length}-${links.length}-${Object.keys(positions).length}-${highlightPath?.deviceIds?.join(",") || ""}-${highlightPath?.linkIds?.join(",") || ""}-${pathDeviceOrder?.join(",") || ""}`;
+  const graphKey = `${size.w}x${size.h}-${topo.nodes.length}-${topo.edges.length}-${links.length}-${Object.keys(positions).length}-${highlightPath?.deviceIds?.join(",") || ""}-${highlightPath?.linkIds?.join(",") || ""}-${pathDeviceOrder?.join(",") || ""}-${multipointDeviceOrder?.join(",") || ""}`;
 
   const { nodes: layoutNodes, edges: layoutEdges } = useMemo(
     () => buildDeviceGraph(
@@ -291,8 +303,9 @@ export default function PhysicalTopologyFlow({
       highlightLinkSet,
       hoveredLinkId,
       pathDeviceOrder,
+      multipointDeviceOrder,
     ),
-    [topo, size, linksById, positions, tc, highlightDeviceSet, highlightLinkSet, hoveredLinkId, pathDeviceOrder],
+    [topo, size, linksById, positions, tc, highlightDeviceSet, highlightLinkSet, hoveredLinkId, pathDeviceOrder, multipointDeviceOrder],
   );
 
   const onNodeDragStop = useCallback(

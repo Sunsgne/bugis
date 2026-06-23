@@ -57,7 +57,9 @@ def _find_access_binding_for_endpoint(
 
 def _build_business_plane(db: Session, circuit: Circuit) -> dict:
     eps = _ordered_endpoints(circuit)
+    multipoint = len(eps) > 2
     hops: list[dict] = []
+    endpoint_summaries: list[dict] = []
     seq = 0
 
     for ep in eps:
@@ -71,6 +73,17 @@ def _build_business_plane(db: Session, circuit: Circuit) -> dict:
         )
         if ep.access_mode == "qinq" and ep.inner_vlan_id is not None:
             vlan_label = f"S:{ep.vlan_id} C:{ep.inner_vlan_id}"
+
+        endpoint_summaries.append({
+            "label": ep.label,
+            "device_id": device.id,
+            "device_name": device.name,
+            "interface": ep.interface_name,
+            "access_mode": _access_mode_label(ep.access_mode),
+            "vlan": vlan_label,
+            "vtep_ip": device.loopback_ip,
+            "overlay_tech": device.overlay_tech.value,
+        })
 
         hops.append({
             "sequence": seq,
@@ -91,6 +104,7 @@ def _build_business_plane(db: Session, circuit: Circuit) -> dict:
         hops.append({
             "sequence": seq,
             "layer": "evpn_encap",
+            "endpoint_label": ep.label,
             "device_id": device.id,
             "device_name": device.name,
             "vtep_ip": device.loopback_ip,
@@ -100,13 +114,27 @@ def _build_business_plane(db: Session, circuit: Circuit) -> dict:
             "rt": circuit.route_target,
             "overlay_tech": device.overlay_tech.value,
             "detail": (
-                f"VTEP {device.loopback_ip or '—'} · "
+                f"{ep.label} · VTEP {device.loopback_ip or '—'} · "
                 f"VNI {circuit.vni or '—'} · {device.overlay_tech.value}"
             ),
         })
         seq += 1
 
-    if len(eps) >= 2:
+    if multipoint:
+        hops.append({
+            "sequence": seq,
+            "layer": "evpn_instance",
+            "vni": circuit.vni,
+            "vsi_name": circuit.vsi_name,
+            "rd": circuit.route_distinguisher,
+            "rt": circuit.route_target,
+            "endpoint_count": len(endpoint_summaries),
+            "detail": (
+                f"多点 EVPN 实例 · VNI {circuit.vni or '—'} · "
+                f"{len(endpoint_summaries)} 个 PE 接入 · 二层互通"
+            ),
+        })
+    elif len(eps) >= 2:
         a_dev = eps[0].device or db.get(Device, eps[0].device_id)
         z_dev = eps[-1].device or db.get(Device, eps[-1].device_id)
         if a_dev and z_dev:
@@ -128,6 +156,9 @@ def _build_business_plane(db: Session, circuit: Circuit) -> dict:
             })
 
     return {
+        "topology": "multipoint" if multipoint else "point_to_point",
+        "endpoint_count": len(endpoint_summaries),
+        "endpoints": endpoint_summaries,
         "service_type": circuit.service_type.value if circuit.service_type else None,
         "vni": circuit.vni,
         "vsi_name": circuit.vsi_name,
@@ -327,30 +358,100 @@ def _merge_probe_segments(
     return out
 
 
+def _multipoint_underlay(db: Session, circuit: Circuit, eps: list[CircuitEndpoint]) -> dict:
+    """Underlay view for multi-PE EVPN: highlight all access sites, no A→Z chain."""
+    endpoint_devices: list[Device] = []
+    endpoint_ids: list[int] = []
+    hops: list[dict] = []
+    for ep in eps:
+        device = ep.device or db.get(Device, ep.device_id)
+        if not device:
+            continue
+        endpoint_devices.append(device)
+        endpoint_ids.append(device.id)
+        hops.append({
+            "device_id": device.id,
+            "name": device.name,
+            "hop_type": "access_pe",
+            "endpoint_label": ep.label,
+        })
+
+    return {
+        "path_mode": circuit.path_mode.value if circuit.path_mode else "auto",
+        "path_reason": (
+            f"多点 EVPN 接入 · {len(endpoint_ids)} 个 PE 站点共享 VNI {circuit.vni or '—'}；"
+            "Underlay 展示全部接入 PE（非 A→Z 单路径）"
+        ),
+        "igp_algorithm": None,
+        "total_igp_cost": None,
+        "segment_list": [],
+        "connectivity_errors": [],
+        "computed": {
+            "device_ids": endpoint_ids,
+            "hops": hops,
+            "segments": [],
+        },
+        "topology_highlight": {
+            "mode": "multipoint",
+            "device_ids": endpoint_ids,
+            "link_ids": [],
+            "endpoint_order": endpoint_ids,
+        },
+    }
+
+
 def build_forwarding_path(db: Session, circuit: Circuit) -> dict:
     """Aggregate business, control, and underlay forwarding views."""
-    endpoint_ids = [ep.device_id for ep in _ordered_endpoints(circuit)]
+    eps = _ordered_endpoints(circuit)
+    endpoint_ids = [ep.device_id for ep in eps]
     via_ids = [h.device_id for h in sorted(circuit.path_hops, key=lambda h: h.sequence)]
+    multipoint = len(eps) > 2
 
-    if circuit.path_mode == PathMode.EXPLICIT_SR or via_ids:
-        preview = path_service.preview_path(
-            db, endpoint_ids, via_ids, PathMode.EXPLICIT_SR
-        )
+    business_plane = _build_business_plane(db, circuit)
+    topology_highlight: dict
+
+    if multipoint:
+        underlay_core = _multipoint_underlay(db, circuit, eps)
+        preview = {
+            "path_mode": underlay_core["path_mode"],
+            "reason": underlay_core["path_reason"],
+            "igp_algorithm": None,
+            "total_igp_cost": None,
+            "segment_list": [],
+            "connectivity_errors": [],
+        }
+        computed_ids = underlay_core["computed"]["device_ids"]
+        computed_hops = underlay_core["computed"]["hops"]
+        segments: list[dict] = []
+        link_ids: list[int] = []
+        topology_highlight = underlay_core["topology_highlight"]
     else:
-        preview = path_service.preview_path(db, endpoint_ids, None, PathMode.AUTO)
+        if circuit.path_mode == PathMode.EXPLICIT_SR or via_ids:
+            preview = path_service.preview_path(
+                db, endpoint_ids, via_ids, PathMode.EXPLICIT_SR
+            )
+        else:
+            preview = path_service.preview_path(db, endpoint_ids, None, PathMode.AUTO)
 
-    path_meta = resolve_underlay_path(db, circuit)
-    chain_devices = path_meta["devices"]
-    computed_ids = [d.id for d in chain_devices]
-    segments = _enrich_segments(preview.get("segments") or [], db)
-    computed_hops = _enrich_computed_hops(preview.get("hops") or [], segments)
+        chain_devices = path_service.build_device_chain(
+            db, endpoint_ids, via_ids or None, circuit.path_mode
+        )
+        computed_ids = [d.id for d in chain_devices]
+        segments = _enrich_segments(preview.get("segments") or [], db)
+        computed_hops = _enrich_computed_hops(preview.get("hops") or [], segments)
+        link_ids = [s["link_id"] for s in segments if s.get("link_id")]
+        topology_highlight = {
+            "mode": "point_to_point",
+            "device_ids": computed_ids,
+            "link_ids": link_ids,
+            "endpoint_order": computed_ids,
+        }
 
     latest = probe_log_service.latest_probe_log(db, circuit.id)
     probe_result = latest.result_json if latest else None
     probe_hops = (probe_result or {}).get("hops") or []
-    segments = _merge_probe_segments(segments, probe_hops)
-
-    link_ids = [s["link_id"] for s in segments if s.get("link_id")]
+    if not multipoint:
+        segments = _merge_probe_segments(segments, probe_hops)
 
     comparison = _compare_paths(computed_ids, probe_hops, db)
 
@@ -382,9 +483,10 @@ def build_forwarding_path(db: Session, circuit: Circuit) -> dict:
         "circuit_code": circuit.code,
         "path_mode": circuit.path_mode.value if circuit.path_mode else "auto",
         "generated_at": datetime.now(timezone.utc).isoformat(),
-        "business_plane": _build_business_plane(db, circuit),
+        "business_plane": business_plane,
         "control_plane": _build_control_plane(db, circuit),
         "underlay": {
+            "topology_mode": "multipoint" if multipoint else "point_to_point",
             "path_mode": preview.get("path_mode"),
             "path_reason": preview.get("reason"),
             "igp_algorithm": preview.get("igp_algorithm"),
@@ -398,9 +500,6 @@ def build_forwarding_path(db: Session, circuit: Circuit) -> dict:
             },
             "probed": probed_summary,
             "comparison": comparison,
-            "topology_highlight": {
-                "device_ids": computed_ids,
-                "link_ids": link_ids,
-            },
+            "topology_highlight": topology_highlight,
         },
     }
