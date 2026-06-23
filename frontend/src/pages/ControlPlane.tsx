@@ -480,15 +480,39 @@ export default function ControlPlane() {
 
       <Card title={tc('数据面编排绑定')} size="small">
         <Table
-          {...dataTableProps(TABLE_SCROLL.md)}
+          {...dataTableProps(TABLE_SCROLL.lg)}
           rowKey="id"
-          dataSource={bindings.slice(0, 50)}
-          pagination={false}
+          dataSource={bindings}
+          pagination={{ pageSize: 20, showSizeChanger: true }}
           size="small"
           locale={{ emptyText: <Empty description={tc('暂无数据面绑定记录')} /> }}
           columns={colsNowrap([
-            { title: tc("专线 ID"), dataIndex: "circuit_id", width: 90 },
-            { title: tc("设备 ID"), dataIndex: "device_id", width: 90 },
+            {
+              title: tc("专线"),
+              dataIndex: "circuit_code",
+              width: 120,
+              ellipsis: true,
+              render: (code: string | undefined, row: { circuit_id?: number; circuit_name?: string }) =>
+                code ? (
+                  <Link to={`/circuits?circuit=${row.circuit_id}`} title={row.circuit_name}>
+                    {code}
+                  </Link>
+                ) : (
+                  row.circuit_id ?? "—"
+                ),
+            },
+            {
+              title: tc("设备"),
+              dataIndex: "device_name",
+              width: 180,
+              ellipsis: true,
+              render: (name: string | undefined, row: { device_id?: number }) =>
+                name ? (
+                  <span title={name}>{name}</span>
+                ) : (
+                  row.device_id ?? "—"
+                ),
+            },
             { title: tc("操作"), dataIndex: "operation", width: 80 },
             { title: tc("传输"), dataIndex: "transport", width: 90 },
             {
@@ -496,7 +520,12 @@ export default function ControlPlane() {
               dataIndex: "state",
               render: (s) => <Tag color={DP_COLOR[s] || "default"}>{s}</Tag>,
             },
-            { title: tc("时间"), dataIndex: "created_at" },
+            {
+              title: tc("时间"),
+              dataIndex: "created_at",
+              width: 168,
+              render: (t: string | undefined) => (t ? t.replace("T", " ").slice(0, 19) : "—"),
+            },
           ])}
         />
       </Card>
