@@ -62,7 +62,7 @@ import CircuitEndpointsEditor from "../components/CircuitEndpointsEditor";
 import AdoptVniModal from "../components/AdoptVniModal";
 import ProvisionFeedbackModal from "../components/ProvisionFeedbackModal";
 import ProvisionProgressDock from "../components/ProvisionProgressDock";
-import { CIRCUIT_STATUS, SERVICE_TYPE, statusMeta } from "../constants/statusLabels";
+import { CIRCUIT_STATUS, CIRCUIT_PURPOSE, SERVICE_TYPE, statusMeta } from "../constants/statusLabels";
 import { useTc } from "@/i18n/useTc";
 import { useTranslation } from "react-i18next";
 
@@ -1074,6 +1074,15 @@ export default function Circuits() {
             },
           },
           {
+            title: tc("用途"),
+            dataIndex: "purpose",
+            width: 72,
+            render: (p: string | undefined) => {
+              const m = statusMeta(CIRCUIT_PURPOSE, p || "business");
+              return <Tag color={m.color}>{m.label}</Tag>;
+            },
+          },
+          {
             title: tc("操作"),
             key: "actions",
             width: 184,
@@ -1512,6 +1521,7 @@ function CreateModal({
         className="app-form"
         initialValues={{
           service_type: "l2vpn_evpn",
+          purpose: "business",
           bandwidth_mbps: 100,
           mtu: 9000,
           ipt_nat_enabled: true,
@@ -1545,7 +1555,7 @@ function CreateModal({
         </Row>
 
         <Row gutter={16}>
-          <Col span={10}>
+          <Col span={8}>
             <Form.Item name="service_type" label={tc("业务类型")}>
               <Select
                 onChange={(v) => {
@@ -1558,12 +1568,29 @@ function CreateModal({
               />
             </Form.Item>
           </Col>
-          <Col span={7}>
+          <Col span={8}>
+            <Form.Item
+              name="purpose"
+              label={tc("用途")}
+              rules={[{ required: true, message: tc("请选择商务或测试") }]}
+            >
+              <Select
+                options={[
+                  { value: "business", label: tc("商务") },
+                  { value: "test", label: tc("测试") },
+                ]}
+              />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
             <Form.Item name="bandwidth_mbps" label={tc("带宽 (Mbps)")}>
               <InputNumber min={1} style={{ width: "100%" }} />
             </Form.Item>
           </Col>
-          <Col span={7}>
+        </Row>
+
+        <Row gutter={16}>
+          <Col span={8}>
             <Form.Item name="sla_target" label="SLA (%)">
               <Input placeholder="99.95" />
             </Form.Item>

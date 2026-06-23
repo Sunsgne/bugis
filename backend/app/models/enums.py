@@ -95,6 +95,13 @@ class CircuitStatus(str, enum.Enum):
     FAILED = "failed"
 
 
+class CircuitPurpose(str, enum.Enum):
+    """Whether a circuit is production business traffic or a test line."""
+
+    BUSINESS = "business"  # 商务
+    TEST = "test"  # 测试
+
+
 class PathMode(str, enum.Enum):
     """Underlay steering mode for a circuit."""
 

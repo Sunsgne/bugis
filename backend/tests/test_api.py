@@ -160,6 +160,47 @@ def test_circuit_provisioning_pipeline(client, auth_headers):
     assert refreshed["status"] == "active"
 
 
+def test_circuit_purpose(client, auth_headers):
+    _, tenant, dev_a, dev_z = _bootstrap_topology(client, auth_headers)
+    endpoints = [
+        {"label": "A", "device_id": dev_a["id"], "interface_name": "GE1/0/2"},
+        {"label": "Z", "device_id": dev_z["id"], "interface_name": "GE1/0/2"},
+    ]
+    test_line = client.post(
+        "/api/v1/circuits",
+        headers=auth_headers,
+        json={
+            "name": "Lab test line",
+            "tenant_id": tenant["id"],
+            "purpose": "test",
+            "service_type": "l2vpn_evpn",
+            "bandwidth_mbps": 100,
+            "endpoints": endpoints,
+        },
+    ).json()
+    assert test_line["purpose"] == "test"
+
+    business_line = client.post(
+        "/api/v1/circuits",
+        headers=auth_headers,
+        json={
+            "name": "Production line",
+            "tenant_id": tenant["id"],
+            "service_type": "l2vpn_evpn",
+            "bandwidth_mbps": 200,
+            "endpoints": endpoints,
+        },
+    ).json()
+    assert business_line["purpose"] == "business"
+
+    updated = client.patch(
+        f"/api/v1/circuits/{test_line['id']}",
+        headers=auth_headers,
+        json={"purpose": "business"},
+    ).json()
+    assert updated["purpose"] == "business"
+
+
 def test_alarms_lifecycle(client, auth_headers):
     _, tenant, dev_a, _ = _bootstrap_topology(client, auth_headers)
     circuit = client.post(

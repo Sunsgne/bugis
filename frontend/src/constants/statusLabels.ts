@@ -104,6 +104,21 @@ export const SERVICE_TYPE: Record<string, string> = new Proxy({} as Record<strin
   },
 });
 
+export const CIRCUIT_PURPOSE: Record<string, { label: string; color: string }> = new Proxy(
+  {} as Record<string, { label: string; color: string }>,
+  {
+    get(_t, value: string) {
+      if (value === "toJSON") return undefined;
+      const label = tKey(`status.circuitPurpose.${value}`, tc({
+        business: "商务",
+        test: "测试",
+      }[value] || String(value)));
+      const color = value === "test" ? "orange" : "blue";
+      return { label, color };
+    },
+  },
+);
+
 export const TENANT_TYPE: Record<string, string> = new Proxy({} as Record<string, string>, {
   get(_t, value: string) {
     if (value === "toJSON") return undefined;

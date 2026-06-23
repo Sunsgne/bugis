@@ -191,6 +191,7 @@ export interface Circuit {
   code: string;
   tenant_id: number;
   service_type: string;
+  purpose?: string;
   status: string;
   adopted?: boolean;
   vni?: number;
