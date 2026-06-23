@@ -1,5 +1,5 @@
 /**
- * Sanity check: backbone topology layout must emit utilization + logical peer edges.
+ * Sanity check: backbone topology layout must emit straight utilization edges (no dashed peers).
  * Run: npx tsx scripts/verify-topology-edges.ts
  */
 import type { LinkUsage, Topology } from "../src/api/types";
@@ -76,14 +76,19 @@ if (utilEdges.length !== 2) {
   console.error("Expected 2 utilization edges");
   process.exit(1);
 }
-if (peerEdges.length !== 1) {
-  console.error("Expected 1 logical peer edge between TYO2 and TYO3");
+if (peerEdges.length !== 0) {
+  console.error("Capacity backbone should not show dashed logical peer edges");
   process.exit(1);
 }
 
 for (const e of utilEdges) {
   if (!e.source || !e.target) {
     console.error("Edge missing source/target", e);
+    process.exit(1);
+  }
+  const pathMode = (e.data as { pathMode?: string } | undefined)?.pathMode;
+  if (pathMode !== "straight") {
+    console.error(`Expected straight pathMode, got ${pathMode ?? "default"} on edge ${e.id}`);
     process.exit(1);
   }
 }

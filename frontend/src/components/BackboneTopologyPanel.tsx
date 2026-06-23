@@ -351,13 +351,6 @@ export default function BackboneTopologyPanel({ topo, links, loading }: Props) {
                 <span className="backbone-legend-dot" style={{ background: "#ef4444" }} />
                 ≥85%
               </span>
-              <span className="backbone-legend-item">
-                <span
-                  className="backbone-legend-line"
-                  style={{ background: "transparent", borderTop: "2px dashed #64748b", width: 18, height: 0 }}
-                />
-                {tc("同链路对端")}
-              </span>
             </div>
           </div>
         </Col>
