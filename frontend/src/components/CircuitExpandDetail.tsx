@@ -1,4 +1,4 @@
-import { Button, Card, Col, Descriptions, Row, Space, Tag, Typography } from "antd";
+import { Button, Card, Col, Descriptions, Row, Space, Tag, Tooltip, Typography } from "antd";
 import type { ReactNode } from "react";
 import { EditOutlined } from "@ant-design/icons";
 import type { Circuit, CircuitEndpoint } from "../api/types";
@@ -34,6 +34,25 @@ function EndpointField({ label, children }: { label: string; children: ReactNode
     <div className="endpoint-field">
       <span className="endpoint-field-label">{label}</span>
       <span className="endpoint-field-value">{children}</span>
+    </div>
+  );
+}
+
+function EndpointPortValue({ name, description }: { name?: string | null; description?: string | null }) {
+  const { tc } = useTc();
+  const desc = description?.trim();
+  if (!name) return <>—</>;
+  return (
+    <div className="endpoint-port-row">
+      <InterfaceNameCell name={name} />
+      {desc ? (
+        <Tooltip title={desc.length > 48 ? desc : undefined}>
+          <span className="endpoint-port-desc">
+            <span className="endpoint-port-desc-label">{tc("端口描述")}</span>
+            <span className="endpoint-port-desc-text">{desc}</span>
+          </span>
+        </Tooltip>
+      ) : null}
     </div>
   );
 }
@@ -137,7 +156,7 @@ export default function CircuitExpandDetail({
                 <EndpointFields>
                   <EndpointField label={tc('接入设备')}>{deviceName(ep.device_id)}</EndpointField>
                   <EndpointField label={tc('物理端口')}>
-                    {ep.interface_name ? <InterfaceNameCell name={ep.interface_name} /> : "—"}
+                    <EndpointPortValue name={ep.interface_name} description={ep.interface_description} />
                   </EndpointField>
                   <EndpointField label={tc('封装模式')}>
                     {accessModeLabel(t, ep.access_mode || "dot1q")}

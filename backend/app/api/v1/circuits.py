@@ -35,7 +35,7 @@ from app.schemas.circuit import (
 from app.schemas.pagination import PaginatedResponse, paginate_query, paginated
 from app.schemas.forwarding_path import ForwardingPathResponse
 from app.schemas.path import PathPreviewRequest, PathPreviewResponse
-from app.services import allocation, circuit_adopt, concurrent_scan, forwarding_path_service, path_service, port_inventory, probe, validation
+from app.services import allocation, circuit_adopt, concurrent_scan, forwarding_path_service, link_planner, path_service, port_inventory, probe, validation
 from app.services import platform_settings as platform_cfg
 from app.services.circuit_alarm_settings import thresholds_out
 
@@ -58,10 +58,29 @@ def _site_asn_for_endpoints(db: Session, endpoints: list[CircuitEndpoint]) -> in
     return None
 
 
+def _endpoint_out(db: Session, ep: CircuitEndpoint) -> CircuitEndpointOut:
+    base = CircuitEndpointOut.model_validate(ep, from_attributes=True)
+    desc = (ep.interface_description or "").strip() or None
+    if not desc and ep.device_id and ep.interface_name:
+        desc = link_planner._interface_description(db, ep.device_id, ep.interface_name)
+    if desc != base.interface_description:
+        return base.model_copy(update={"interface_description": desc})
+    return base
+
+
+def _endpoints_out(db: Session, circuit: Circuit) -> list[CircuitEndpointOut]:
+    return [_endpoint_out(db, ep) for ep in circuit.endpoints]
+
+
 def _to_circuit_list_out(db: Session, circuit: Circuit) -> CircuitListOut:
     base = CircuitListOut.model_validate(circuit, from_attributes=True)
     plat = platform_cfg.get_or_create(db)
-    return base.model_copy(update=thresholds_out(circuit, plat))
+    return base.model_copy(
+        update={
+            **thresholds_out(circuit, plat),
+            "endpoints": _endpoints_out(db, circuit),
+        }
+    )
 
 
 def _to_circuit_out(db: Session, circuit: Circuit) -> CircuitOut:
@@ -85,6 +104,7 @@ def _to_circuit_out(db: Session, circuit: Circuit) -> CircuitOut:
             **thresholds_out(circuit, plat),
             "path_hops": hop_schemas,
             "segment_list": path_service.segment_list(path_devices),
+            "endpoints": _endpoints_out(db, circuit),
         }
     )
 
@@ -731,7 +751,7 @@ def update_endpoint(
         setattr(endpoint, k, v)
     db.commit()
     db.refresh(endpoint)
-    return endpoint
+    return _endpoint_out(db, endpoint)
 
 
 @router.post(
@@ -752,7 +772,7 @@ def add_endpoint(
     db.add(endpoint)
     db.commit()
     db.refresh(endpoint)
-    return endpoint
+    return _endpoint_out(db, endpoint)
 
 
 @router.delete("/{circuit_id}/endpoints/{endpoint_id}", status_code=204)
