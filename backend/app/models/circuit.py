@@ -7,7 +7,7 @@ from sqlalchemy import Boolean, Float, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
-from app.models.enums import AccessMode, CircuitStatus, PathMode, ServiceType
+from app.models.enums import AccessMode, CircuitPurpose, CircuitStatus, PathMode, ServiceType
 from app.models.mixins import TimestampMixin, str_enum_column
 
 if TYPE_CHECKING:
@@ -33,6 +33,9 @@ class Circuit(Base, TimestampMixin):
     )
     status: Mapped[CircuitStatus] = mapped_column(
         str_enum_column(CircuitStatus), default=CircuitStatus.DRAFT
+    )
+    purpose: Mapped[CircuitPurpose] = mapped_column(
+        str_enum_column(CircuitPurpose), default=CircuitPurpose.BUSINESS
     )
 
     # EVPN identifiers
