@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from app.models.enums import AccessMode, CircuitStatus, PathMode, ServiceType
+from app.models.enums import AccessMode, CircuitPurpose, CircuitStatus, PathMode, ServiceType
 from app.schemas.common import TimestampedSchema
 
 
@@ -39,6 +39,7 @@ class CircuitBase(BaseModel):
     name: str
     tenant_id: int
     service_type: ServiceType = ServiceType.L2VPN_EVPN
+    purpose: CircuitPurpose = CircuitPurpose.BUSINESS
     # EVPN identifiers - auto-allocated when omitted.
     vni: int | None = None
     vsi_name: str | None = None
@@ -147,6 +148,7 @@ class CircuitCreate(CircuitBase):
 class CircuitUpdate(BaseModel):
     name: str | None = None
     service_type: ServiceType | None = None
+    purpose: CircuitPurpose | None = None
     bandwidth_mbps: int | None = None
     mtu: int | None = None
     sla_target: str | None = None
