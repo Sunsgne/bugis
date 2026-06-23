@@ -25,8 +25,6 @@ interface Vsi-interface{{ circuit.vni }}
  distributed-gateway local
  mac-address evpn-anycast
 #
-interface {{ endpoint.interface_name }}
- port link-mode bridge
-{{ h3c.service_instance_ac(endpoint, circuit, mode, svid, cvid) }}
+{{ h3c.physical_ac_block(endpoint, circuit, mode, svid, cvid) }}
 #
 return

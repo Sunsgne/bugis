@@ -11,8 +11,6 @@ l2vpn enable
 {{ h3c.qos_policy_objects(circuit) }}
 {{ h3c.vsi_evpn_header(circuit, l3=false) }}
 #
-interface {{ endpoint.interface_name }}
- port link-mode bridge
-{{ h3c.service_instance_ac(endpoint, circuit, mode, svid, cvid) }}
+{{ h3c.physical_ac_block(endpoint, circuit, mode, svid, cvid) }}
 #
 return

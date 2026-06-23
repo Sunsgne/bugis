@@ -877,9 +877,9 @@ def test_access_encapsulation_modes(client, auth_headers):
     # H3C QinQ -> service-instance with s-vid + c-vid
     assert "service-instance" in h3c_cfg
     assert "encapsulation s-vid 100 c-vid 200" in h3c_cfg
-    # Huawei access (untagged) -> sub-interface mode l2 + encapsulation untag
-    assert ".mode l2" not in hw_cfg  # subif uses "<if>.<id> mode l2"
-    assert "mode l2" in hw_cfg
+    # Huawei access (untagged) -> L2 sub-interface .0, not the physical main port
+    assert "interface GE1/0/1.0 mode l2" in hw_cfg or "GE1/0/1.0 mode l2" in hw_cfg
+    assert "interface GE1/0/1 mode l2" not in hw_cfg
     assert "encapsulation untag" in hw_cfg
 
 

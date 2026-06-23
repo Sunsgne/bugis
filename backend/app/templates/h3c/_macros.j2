@@ -61,3 +61,8 @@ undo traffic classifier tc-{{ circuit.code }}
   xconnect vsi {{ circuit.vsi_name }}
 {{ service_instance_qos_apply(circuit) }}
 {%- endmacro %}
+
+{% macro physical_ac_block(endpoint, circuit, mode, svid, cvid) -%}
+interface {{ endpoint.interface_name }}
+{{ service_instance_ac(endpoint, circuit, mode, svid, cvid) }}
+{%- endmacro %}

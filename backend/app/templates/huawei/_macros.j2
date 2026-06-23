@@ -4,11 +4,7 @@
 {%- endmacro %}
 
 {% macro l2_ifname(endpoint, mode, svid) -%}
-{%- if mode == 'access' -%}
-{{ endpoint.interface_name }}
-{%- else -%}
-{{ endpoint.interface_name }}.{{ svid or 1 }}
-{%- endif -%}
+{{ endpoint.interface_name }}.{% if mode == 'access' %}0{% else %}{{ svid or 1 }}{% endif %}
 {%- endmacro %}
 
 {% macro qos_policy_name(circuit) -%}

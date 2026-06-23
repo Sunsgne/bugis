@@ -43,9 +43,11 @@ def test_description_uses_customer_and_circuit(vendor):
     driver = get_driver(vendor)
     cfg = driver.render("l2vpn_evpn", "apply", _ctx(vendor))
     if vendor == Vendor.H3C:
-        # H3C: do not stamp the physical (main) AC port; VSI carries service label.
+        # H3C: only service-instance under the physical port; no main-if desc/mode.
         assert "interface 10GE1/0/11" in cfg
-        assert "port link-mode bridge" in cfg
+        assert "port link-mode bridge" not in cfg
+        assert "description" not in cfg.split("interface 10GE1/0/11")[1].split("service-instance")[0]
+        assert "service-instance" in cfg
         assert "Acme Bank:CIR-5AF450" not in cfg
         assert "Acme Bank" in cfg
         assert "CIR-5AF450" in cfg
@@ -55,7 +57,7 @@ def test_description_uses_customer_and_circuit(vendor):
     assert "CUST_4_CIR-5AF450" not in cfg
 
 
-def test_huawei_access_mode_skips_main_interface_description():
+def test_huawei_access_mode_uses_subinterface_not_main():
     ctx = _ctx(Vendor.HUAWEI)
     ctx["endpoint"] = SimpleNamespace(
         access_mode=AccessMode.ACCESS,
@@ -66,5 +68,7 @@ def test_huawei_access_mode_skips_main_interface_description():
         ip_address=None,
     )
     cfg = get_driver(Vendor.HUAWEI).render("l2vpn_evpn", "apply", ctx)
-    assert "interface 10GE1/0/11 mode l2" in cfg
+    assert "interface 10GE1/0/11.0 mode l2" in cfg
+    assert "interface 10GE1/0/11 mode l2" not in cfg
     assert "description Acme Bank:CIR-5AF450" not in cfg
+    assert "encapsulation untag" in cfg
