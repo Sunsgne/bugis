@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Button, Empty, Segmented, Space, Table, Tag, App as AntApp } from "antd";
+import { Button, Empty, Segmented, Space, Table, Tag, Tooltip, App as AntApp } from "antd";
 import { ReloadOutlined, ThunderboltOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { api } from "../api/client";
@@ -74,7 +74,8 @@ export default function Alarms() {
           loading={loading}
           dataSource={rows}
           style={{ width: "100%" }}
-          {...dataTableProps(TABLE_SCROLL.md)}
+          {...dataTableProps(TABLE_SCROLL.xl)}
+          tableLayout="auto"
           locale={{
             emptyText: (
               <Empty
@@ -87,7 +88,7 @@ export default function Alarms() {
             {
               title: tc('级别'),
               dataIndex: "severity",
-              width: "10%",
+              width: 96,
               render: (s) => {
                 const m = statusMeta(ALARM_SEVERITY, s);
                 return <Tag color={m.color}>{m.label}</Tag>;
@@ -96,22 +97,32 @@ export default function Alarms() {
             {
               title: tc('类型'),
               dataIndex: "kind",
-              width: "10%",
-              ellipsis: true,
+              width: 108,
               render: (k) => <Tag>{ALARM_KIND[k] || k}</Tag>,
             },
-            { title: tc("标题"), dataIndex: "title", width: "26%", ellipsis: true },
-            { title: tc("详情"), dataIndex: "detail", width: "24%", ellipsis: true, render: (v) => v || "—" },
+            { title: tc("标题"), dataIndex: "title", width: 240, ellipsis: true },
+            {
+              title: tc("详情"),
+              dataIndex: "detail",
+              render: (v: string | null | undefined) => {
+                if (!v) return "—";
+                return (
+                  <Tooltip title={v} overlayStyle={{ maxWidth: 640 }}>
+                    <div className="alarm-detail-cell">{v}</div>
+                  </Tooltip>
+                );
+              },
+            },
             {
               title: tc('时间'),
               dataIndex: "created_at",
-              width: "14%",
+              width: 132,
               render: (t) => (t ? dayjs(t).format("MM-DD HH:mm:ss") : "—"),
             },
             {
               title: tc('状态'),
               dataIndex: "status",
-              width: "10%",
+              width: 108,
               render: (s, r) => {
                 const m = statusMeta(ALARM_STATUS, s);
                 const auto = r.acknowledged_by === "system:auto-notify";
@@ -124,7 +135,8 @@ export default function Alarms() {
             },
             {
               title: tc('操作'),
-              width: "12%",
+              width: 132,
+              fixed: "right",
               className: "table-actions",
               render: (_, r) =>
                 r.status !== "cleared" ? (
