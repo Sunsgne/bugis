@@ -130,9 +130,11 @@ function buildDeviceGraph(
     const pos = posById.get(n.id)!;
     const siteLabel = siteLabelForNode(n.site_id, topo.sites);
     const vendorColor = vendorColors[n.vendor] || "#64748b";
-    const dimmed = dimUnconnected
-      ? !highlightDeviceIds!.has(n.id)
-      : topo.edges.length > 0 && !connected.has(n.id);
+    const dimmed = useMultipointRing
+      ? (highlightDeviceIds != null && highlightDeviceIds.size > 0 && !highlightDeviceIds.has(n.id))
+      : dimUnconnected
+        ? !highlightDeviceIds!.has(n.id)
+        : topo.edges.length > 0 && !connected.has(n.id);
 
     return {
       id: String(n.id),
@@ -190,7 +192,7 @@ function buildDeviceGraph(
 
   const links = [...linksById.values()];
   const merged = mergeTopologyEdges(utilizationEdges, links, nodeIds, tc, {
-    includeLogicalPeers: !usePathChain,
+    includeLogicalPeers: !usePathChain && !useMultipointRing,
   });
   const edges = merged.map((edge) => {
     if (edge.type !== "logicalPeer") return edge;

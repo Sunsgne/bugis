@@ -83,10 +83,13 @@ export default function CircuitForwardingPathPanel({ circuitId, circuitCode }: P
           api.get<LinkUsage[]>("/capacity/links/usage"),
         ]);
         if (!cancelled) {
+          const multipoint = hl.mode === "multipoint";
           setTopo(
-            filterTopologyForPath(topoRes.data, hl.device_ids, hl.link_ids || []),
+            filterTopologyForPath(topoRes.data, hl.device_ids, hl.link_ids || [], {
+              multipoint,
+            }),
           );
-          setLinks(filterLinksForPath(linksRes.data, hl.link_ids || []));
+          setLinks(filterLinksForPath(linksRes.data, hl.link_ids || [], { multipoint }));
         }
       } catch {
         if (!cancelled) {
