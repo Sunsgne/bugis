@@ -1,6 +1,7 @@
 """Backbone link bandwidth: sync capacity from port descriptions and monitor load."""
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import dataclass
 
@@ -8,10 +9,13 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.database import SessionLocal
 from app.models.device import Device, DeviceInterface
 from app.models.link import Link
 from app.services.bw_parser import format_bw_tag, parse_bw_mbps
 from app.services import port_inventory, snmp_telemetry, telemetry_service
+
+logger = logging.getLogger(__name__)
 
 _VLAN_IFACE_RE = re.compile(
     r"^(?:Vlan-interface|Vlanif|VlanIF|Vlan)(\d+)$",
@@ -327,11 +331,33 @@ def _simulate_link_sample(db: Session, link: Link) -> int:
     return written
 
 
-def sample_all_links(db: Session, *, interval_sec: float = 30.0) -> int:
-    links = db.execute(select(Link)).scalars().all()
+def sample_all_links(db: Session | None = None, *, interval_sec: float = 30.0) -> int:
+    """Poll SNMP counters on all links.
+
+    Uses a fresh DB session per link so slow SNMP I/O does not hold one
+    connection in an open transaction for the entire backbone sweep.
+    """
+    del db  # legacy arg — callers may still pass a session from scheduler
+    list_db = SessionLocal()
+    try:
+        link_ids = list(list_db.execute(select(Link.id)).scalars().all())
+    finally:
+        list_db.close()
+
     total = 0
-    for link in links:
-        total += poll_link_sample(db, link, interval_sec=interval_sec)
+    for link_id in link_ids:
+        link_db = SessionLocal()
+        try:
+            link = link_db.get(Link, link_id)
+            if not link:
+                continue
+            total += poll_link_sample(link_db, link, interval_sec=interval_sec)
+            link_db.commit()
+        except Exception as exc:  # noqa: BLE001 — one bad link must not stall the sweep
+            link_db.rollback()
+            logger.warning("link SNMP sample failed for link_id=%s: %s", link_id, exc)
+        finally:
+            link_db.close()
     return total
 
 

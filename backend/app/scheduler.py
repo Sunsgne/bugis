@@ -207,10 +207,15 @@ def _collect_circuit_batch(
 
 
 def _tick(*, include_learn: bool = False) -> int:
+    if include_learn:
+        _try_scheduled_learn_sync()
+
+    collected = 0
+    touched_ids: set[int] = set()
+    probed = 0
+
     db = SessionLocal()
     try:
-        if include_learn:
-            _try_scheduled_learn_sync()
         circuits = db.execute(
             select(Circuit).where(Circuit.status == CircuitStatus.ACTIVE)
         ).scalars().all()
@@ -221,7 +226,6 @@ def _tick(*, include_learn: bool = False) -> int:
         )
         probed, probe_touched = _probe_one_circuit(db, circuits)
         touched_ids = collect_touched | probe_touched
-        db.flush()
         circuit_by_id = {c.id: c for c in circuits}
         for cid in touched_ids:
             c = circuit_by_id.get(cid)
@@ -232,10 +236,22 @@ def _tick(*, include_learn: bool = False) -> int:
             health_snapshot_service.invalidate_circuit(c)
             alarm_service.evaluate_circuit_health(db, c, health)
             alarm_service.evaluate_circuit_availability(db, c)
+        db.commit()
+    finally:
+        db.close()
+
+    db = SessionLocal()
+    try:
         link_monitor.sync_all_link_capacity(db)
-        link_monitor.sample_all_links(
-            db, interval_sec=float(_state["interval"])
-        )
+        db.commit()
+    finally:
+        db.close()
+
+    # Per-link sessions — SNMP can be slow; must not block the pool.
+    link_monitor.sample_all_links(interval_sec=float(_state["interval"]))
+
+    db = SessionLocal()
+    try:
         links = db.execute(select(Link)).scalars().all()
         for link in links:
             lh = link_monitor.compute_link_health(db, link)
@@ -243,10 +259,11 @@ def _tick(*, include_learn: bool = False) -> int:
         bgp_peering.sync_sessions(db)
         ha.heartbeat(db)
         db.commit()
-        _state["last_probes"] = probed
-        return collected
     finally:
         db.close()
+
+    _state["last_probes"] = probed
+    return collected
 
 
 async def _run() -> None:
