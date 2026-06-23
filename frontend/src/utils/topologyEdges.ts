@@ -76,6 +76,38 @@ export function curvatureForEdge(edges: TopoEdge[], edgeId: number): number {
   return 0.22;
 }
 
+/** Separate parallel backbone edges when using orthogonal (smooth-step) routing. */
+export function stepOffsetForEdge(edges: TopoEdge[], edgeId: number): number {
+  const edge = edges.find((e) => e.id === edgeId);
+  if (!edge) return 0;
+
+  const undirectedKey = (e: TopoEdge) => devicePairKey(e.source, e.target);
+  const edgeKey = undirectedKey(edge);
+
+  const sameUndirected = edges.filter((e) => undirectedKey(e) === edgeKey);
+  if (sameUndirected.length > 1) {
+    const idx = sameUndirected.findIndex((e) => e.id === edgeId);
+    const sign = idx % 2 === 0 ? 1 : -1;
+    return sign * (18 + Math.floor(idx / 2) * 14);
+  }
+
+  const fromSource = edges.filter((e) => e.source === edge.source);
+  if (fromSource.length > 1) {
+    const idx = fromSource.findIndex((e) => e.id === edgeId);
+    const sign = idx % 2 === 0 ? 1 : -1;
+    return sign * (16 + Math.floor(idx / 2) * 12);
+  }
+
+  const toTarget = edges.filter((e) => e.target === edge.target);
+  if (toTarget.length > 1) {
+    const idx = toTarget.findIndex((e) => e.id === edgeId);
+    const sign = idx % 2 === 0 ? 1 : -1;
+    return sign * (14 + Math.floor(idx / 2) * 10);
+  }
+
+  return 0;
+}
+
 /** Dashed peer link between Z-end devices when multiple rows share the same link name. */
 export function buildLogicalPeerEdges(
   links: LinkUsage[],

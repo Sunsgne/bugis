@@ -1,4 +1,4 @@
-import { BaseEdge, EdgeLabelRenderer, getBezierPath, type EdgeProps } from "@xyflow/react";
+import { BaseEdge, EdgeLabelRenderer, getBezierPath, getSmoothStepPath, getStraightPath, type EdgeProps } from "@xyflow/react";
 import { Tooltip } from "antd";
 import { useState } from "react";
 import type { LinkUsage } from "@/api/types";
@@ -23,6 +23,9 @@ export type UtilizationEdgeData = {
   curvature?: number;
   labelOffsetY?: number;
   linkType?: string;
+  /** Orthogonal straight segments (capacity backbone); default bezier curve. */
+  pathMode?: "bezier" | "smoothstep" | "straight";
+  stepOffset?: number;
 };
 
 function labelOffsetForEdge(curvature: number, explicit?: number): number {
@@ -53,18 +56,43 @@ export default function UtilizationEdge({
   const showTooltip = Boolean(active && link && !d?.pathHighlighted);
   const showCompactLabel = Boolean(d?.shortLabel && active && !showTooltip);
   const pathStroke = d?.pathHighlighted ? "#6366f1" : color;
+  const pathMode = d?.pathMode ?? "bezier";
   const curvature = d?.curvature ?? 0.18;
   const labelOffsetY = labelOffsetForEdge(curvature, d?.labelOffsetY);
 
-  const [edgePath, labelX, labelY] = getBezierPath({
-    sourceX,
-    sourceY,
-    targetX,
-    targetY,
-    sourcePosition,
-    targetPosition,
-    curvature,
-  });
+  let edgePath: string;
+  let labelX: number;
+  let labelY: number;
+
+  if (pathMode === "smoothstep") {
+    [edgePath, labelX, labelY] = getSmoothStepPath({
+      sourceX,
+      sourceY,
+      targetX,
+      targetY,
+      sourcePosition,
+      targetPosition,
+      borderRadius: 0,
+      offset: d?.stepOffset ?? 0,
+    });
+  } else if (pathMode === "straight") {
+    [edgePath, labelX, labelY] = getStraightPath({
+      sourceX,
+      sourceY,
+      targetX,
+      targetY,
+    });
+  } else {
+    [edgePath, labelX, labelY] = getBezierPath({
+      sourceX,
+      sourceY,
+      targetX,
+      targetY,
+      sourcePosition,
+      targetPosition,
+      curvature,
+    });
+  }
 
   const labelTransform = `translate(-50%, -50%) translate(${labelX}px,${labelY + labelOffsetY}px)`;
 
@@ -79,7 +107,7 @@ export default function UtilizationEdge({
           stroke: pathStroke,
           strokeWidth: selected || d?.highlighted || d?.pathHighlighted ? style.weight + 1.5 : style.weight,
           strokeDasharray: d?.pathHighlighted ? undefined : style.dash,
-          strokeLinecap: "round",
+          strokeLinecap: pathMode === "smoothstep" || pathMode === "straight" ? "square" : "round",
           opacity: d?.highlighted || d?.pathHighlighted ? 1 : 0.88,
         }}
       />

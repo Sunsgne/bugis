@@ -3,11 +3,11 @@ import { labelForOption, DEVICE_ROLE_OPTIONS } from "@/constants/formOptions";
 import { vendorColors } from "@/charts/theme";
 import type { LinkUsage, Topology } from "@/api/types";
 import { backboneUtilColor, fmtLinkBw } from "@/utils/linkUtilization";
-import { layoutDeviceGraph, siteLabelForNode, edgeHandlePairForLayout, edgeHandlePairsForGraph, layoutEdgeCurvature, findHubNodeId, applySpokePeerSeparation } from "@/utils/deviceGraphLayout";
+import { layoutDeviceGraph, siteLabelForNode, edgeHandlePairForLayout, edgeHandlePairsForGraph, findHubNodeId, applySpokePeerSeparation } from "@/utils/deviceGraphLayout";
 import {
-  curvatureForEdge,
   linkEdgeShortLabel,
   mergeTopologyEdges,
+  stepOffsetForEdge,
 } from "@/utils/topologyEdges";
 import {
   DEVICE_GRAPH_NODE_HEIGHT,
@@ -20,7 +20,8 @@ type EdgeData = {
   utilization_pct: number;
   shortLabel: string;
   highlighted?: boolean;
-  curvature?: number;
+  pathMode?: "smoothstep";
+  stepOffset?: number;
 };
 
 function shortHost(name: string, max = 26): string {
@@ -164,13 +165,8 @@ export function buildBackboneTopologyLayout(
           link,
           utilization_pct: pct,
           shortLabel: link ? linkEdgeShortLabel(link, pct) : `${fmtLinkBw(e.capacity_mbps)} · ${Math.round(pct)}%`,
-          curvature: layoutEdgeCurvature(
-            e.source,
-            e.target,
-            posById,
-            curvatureForEdge(topo.edges, e.id),
-            handles,
-          ),
+          pathMode: "smoothstep",
+          stepOffset: stepOffsetForEdge(topo.edges, e.id),
         } satisfies EdgeData,
         style: { stroke: color },
       };
@@ -191,7 +187,7 @@ export function buildBackboneTopologyLayout(
       targetHandle: handles.targetHandle,
       data: {
         ...(e.data as object),
-        curvature: layoutEdgeCurvature(srcId, tgtId, posById, -0.35, handles),
+        pathMode: "smoothstep" as const,
       },
     };
   });

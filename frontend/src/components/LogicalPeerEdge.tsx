@@ -1,8 +1,10 @@
-import { BaseEdge, EdgeLabelRenderer, getBezierPath, type EdgeProps } from "@xyflow/react";
+import { BaseEdge, EdgeLabelRenderer, getSmoothStepPath, type EdgeProps } from "@xyflow/react";
 
 type EdgeData = {
   label?: string;
   curvature?: number;
+  pathMode?: "bezier" | "smoothstep";
+  stepOffset?: number;
 };
 
 export default function LogicalPeerEdge({
@@ -17,14 +19,15 @@ export default function LogicalPeerEdge({
   style,
 }: EdgeProps) {
   const d = data as EdgeData | undefined;
-  const [edgePath, labelX, labelY] = getBezierPath({
+  const [edgePath, labelX, labelY] = getSmoothStepPath({
     sourceX,
     sourceY,
     targetX,
     targetY,
     sourcePosition,
     targetPosition,
-    curvature: d?.curvature ?? -0.35,
+    borderRadius: 0,
+    offset: d?.stepOffset ?? 0,
   });
 
   return (
