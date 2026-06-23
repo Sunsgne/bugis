@@ -191,6 +191,12 @@ def delete_link(
 
 
 # --- capacity views --------------------------------------------------------
+@router.get("/overview")
+def capacity_overview(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+    """Sites + link usage + topology in one request (capacity planning page)."""
+    return capacity_service.capacity_overview(db)
+
+
 @router.get("/devices")
 def device_capacity(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
     return capacity_service.device_capacity(db)

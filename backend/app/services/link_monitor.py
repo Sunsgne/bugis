@@ -206,19 +206,14 @@ def _sample_utilization_pct(sample, capacity_mbps: int) -> float:
     return round(peak_mbps / cap * 100, 2)
 
 
-def compute_link_health(db: Session, link: Link, limit: int = 20) -> LinkHealth:
+def _health_from_samples(link: Link, sample_groups: list[list]) -> LinkHealth:
     cap = max(link.capacity_mbps, 1)
     utils: list[float] = []
     traffic = 0.0
     peak_sample = None
     peak_util = -1.0
-    for device_id, ifname in (
-        (link.device_a_id, link.interface_a),
-        (link.device_z_id, link.interface_z),
-    ):
-        if not ifname:
-            continue
-        for s in _recent_interface_samples(db, device_id, ifname, limit):
+    for samples in sample_groups:
+        for s in samples:
             if s.source not in _TRAFFIC_SOURCES:
                 continue
             util = _sample_utilization_pct(s, cap)
@@ -256,6 +251,92 @@ def compute_link_health(db: Session, link: Link, limit: int = 20) -> LinkHealth:
         peak_traffic_mbps=peak_traffic,
         peak_at=peak_at,
     )
+
+
+def compute_link_health(db: Session, link: Link, limit: int = 20) -> LinkHealth:
+    groups: list[list] = []
+    for device_id, ifname in (
+        (link.device_a_id, link.interface_a),
+        (link.device_z_id, link.interface_z),
+    ):
+        if not ifname:
+            continue
+        groups.append(_recent_interface_samples(db, device_id, ifname, limit))
+    return _health_from_samples(link, groups)
+
+
+def batch_compute_link_health(
+    db: Session,
+    links: list[Link],
+    *,
+    limit: int = 20,
+) -> dict[int, LinkHealth]:
+    """Compute link health for many links with one telemetry query."""
+    if not links:
+        return {}
+
+    from app.models.telemetry import TelemetrySample
+
+    endpoint_keys: list[tuple[int, int, str]] = []
+    alias_by_key: dict[tuple[int, str], list[str]] = {}
+    device_ids: set[int] = set()
+    for link in links:
+        for device_id, ifname in (
+            (link.device_a_id, link.interface_a),
+            (link.device_z_id, link.interface_z),
+        ):
+            if not ifname:
+                continue
+            endpoint_keys.append((link.id, device_id, ifname))
+            alias_key = (device_id, ifname)
+            if alias_key not in alias_by_key:
+                alias_by_key[alias_key] = _iface_lookup_names(db, device_id, ifname)
+                device_ids.add(device_id)
+
+    if not device_ids:
+        return {link.id: _health_from_samples(link, []) for link in links}
+
+    fetch_limit = max(500, len(endpoint_keys) * limit * 6)
+    raw = db.execute(
+        select(TelemetrySample)
+        .where(
+            TelemetrySample.device_id.in_(device_ids),
+            TelemetrySample.source.in_(_TRAFFIC_SOURCES),
+        )
+        .order_by(TelemetrySample.id.desc())
+        .limit(fetch_limit)
+    ).scalars().all()
+
+    buckets: dict[tuple[int, str], list] = {}
+    for sample in raw:
+        key = (sample.device_id, sample.interface_name)
+        bucket = buckets.setdefault(key, [])
+        if len(bucket) < limit:
+            bucket.append(sample)
+
+    def samples_for(device_id: int, ifname: str) -> list:
+        merged: list = []
+        seen_ids: set[int] = set()
+        for name in alias_by_key.get((device_id, ifname), [ifname]):
+            for sample in buckets.get((device_id, name), []):
+                if sample.id in seen_ids:
+                    continue
+                seen_ids.add(sample.id)
+                merged.append(sample)
+        merged.sort(key=lambda s: s.id, reverse=True)
+        return merged[:limit]
+
+    return {
+        link.id: _health_from_samples(
+            link,
+            [
+                samples_for(device_id, ifname)
+                for link_id, device_id, ifname in endpoint_keys
+                if link_id == link.id
+            ],
+        )
+        for link in links
+    }
 
 
 def poll_link_sample(

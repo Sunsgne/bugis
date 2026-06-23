@@ -175,3 +175,50 @@ def test_compute_link_health_matches_vlanif_alias(db_session):
     health = link_monitor.compute_link_health(db_session, link)
     assert health.samples == 1
     assert health.peak_utilization_pct == 4.5
+
+
+def test_batch_compute_link_health_matches_single(db_session):
+    suffix = uuid.uuid4().hex[:8]
+    site_a = Site(name=f"Batch A {suffix}", code=f"BA{suffix}", bgp_asn=65001)
+    site_z = Site(name=f"Batch Z {suffix}", code=f"BZ{suffix}", bgp_asn=65002)
+    db_session.add_all([site_a, site_z])
+    db_session.flush()
+    dev_a = Device(
+        name=f"dev-a-{suffix}", mgmt_ip="10.0.0.1", vendor=Vendor.H3C,
+        role=DeviceRole.DCI_GW, overlay_tech=OverlayTech.VXLAN_EVPN, site_id=site_a.id,
+        status=DeviceStatus.ONLINE,
+    )
+    dev_z = Device(
+        name=f"dev-z-{suffix}", mgmt_ip="10.0.0.2", vendor=Vendor.H3C,
+        role=DeviceRole.DCI_GW, overlay_tech=OverlayTech.VXLAN_EVPN, site_id=site_z.id,
+        status=DeviceStatus.ONLINE,
+    )
+    db_session.add_all([dev_a, dev_z])
+    db_session.flush()
+    link = Link(
+        name=f"batch-{suffix}",
+        type=LinkType.DCI,
+        device_a_id=dev_a.id,
+        device_z_id=dev_z.id,
+        interface_a="Vlan-interface100",
+        interface_z="Vlanif100",
+        capacity_mbps=500,
+    )
+    db_session.add(link)
+    db_session.add(
+        TelemetrySample(
+            device_id=dev_a.id,
+            interface_name="Vlan-interface100",
+            rx_mbps=25.0,
+            tx_mbps=5.0,
+            utilization_pct=5.0,
+            tunnel_state="up",
+            source="snmp-link",
+        )
+    )
+    db_session.commit()
+
+    single = link_monitor.compute_link_health(db_session, link)
+    batch = link_monitor.batch_compute_link_health(db_session, [link])[link.id]
+    assert batch.peak_utilization_pct == single.peak_utilization_pct
+    assert batch.samples == single.samples

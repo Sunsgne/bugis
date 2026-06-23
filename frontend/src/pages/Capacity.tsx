@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   App as AntApp,
@@ -48,6 +48,15 @@ function siteRouteKey(r: LinkUsage) {
   return `${r.site_a_id ?? ""}:${r.site_z_id ?? ""}`;
 }
 
+const CAPACITY_POLL_MS = 30000;
+
+type CapacityOverview = {
+  sites: SiteCapacity[];
+  links: LinkUsage[];
+  topology: Topology;
+  total_active_bandwidth_mbps: number;
+};
+
 export default function Capacity() {
   const { tc } = useTc();
   const { message } = AntApp.useApp();
@@ -68,24 +77,23 @@ export default function Capacity() {
   const [linkModalOpen, setLinkModalOpen] = useState(false);
   const [editingLink, setEditingLink] = useState<LinkUsage | null>(null);
   const [activeCircuitBw, setActiveCircuitBw] = useState(0);
+  const loadSeq = useRef(0);
 
   async function load(showSpinner = false) {
+    const seq = ++loadSeq.current;
     if (showSpinner) setLoading(true);
     try {
-      const [s, l, t, dash] = await Promise.all([
-        api.get<SiteCapacity[]>("/capacity/sites"),
-        api.get<LinkUsage[]>("/capacity/links/usage"),
-        api.get<Topology>("/capacity/topology"),
-        api.get<{ total_active_bandwidth_mbps: number }>("/telemetry/dashboard"),
-      ]);
-      setSites(s.data);
-      setLinks(l.data);
-      setTopo(t.data);
-      setActiveCircuitBw(dash.data.total_active_bandwidth_mbps ?? 0);
+      const { data } = await api.get<CapacityOverview>("/capacity/overview");
+      if (seq !== loadSeq.current) return;
+      setSites(data.sites);
+      setLinks(data.links);
+      setTopo(data.topology);
+      setActiveCircuitBw(data.total_active_bandwidth_mbps ?? 0);
     } catch {
+      if (seq !== loadSeq.current) return;
       message.error(tc('容量数据加载失败，请稍后重试'));
     } finally {
-      if (showSpinner) setLoading(false);
+      if (seq === loadSeq.current && showSpinner) setLoading(false);
     }
   }
 
@@ -133,8 +141,11 @@ export default function Capacity() {
 
   useEffect(() => {
     load(true);
-    const t = setInterval(() => load(false), 10000);
-    return () => clearInterval(t);
+    const t = setInterval(() => load(false), CAPACITY_POLL_MS);
+    return () => {
+      loadSeq.current += 1;
+      clearInterval(t);
+    };
   }, []);
 
   const totalBackboneCap = useMemo(

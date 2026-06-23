@@ -17,10 +17,10 @@ if settings.database_url.startswith("sqlite"):
     _engine_kwargs["connect_args"] = {"check_same_thread": False}
 else:
     _engine_kwargs.update(
-        pool_size=15,
-        max_overflow=25,
-        pool_recycle=3600,
-        pool_timeout=30,
+        pool_size=max(1, settings.db_pool_size),
+        max_overflow=max(0, settings.db_max_overflow),
+        pool_recycle=max(60, settings.db_pool_recycle),
+        pool_timeout=max(1, settings.db_pool_timeout),
     )
 
 engine = create_engine(settings.database_url, **_engine_kwargs)

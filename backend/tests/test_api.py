@@ -252,6 +252,12 @@ def test_capacity_and_topology(client, auth_headers):
     assert link.status_code == 201
     usage = client.get("/api/v1/capacity/links/usage", headers=auth_headers).json()
     assert any(u["name"] == "test-dci" for u in usage)
+    overview = client.get("/api/v1/capacity/overview", headers=auth_headers)
+    assert overview.status_code == 200
+    body = overview.json()
+    assert "sites" in body and "links" in body and "topology" in body
+    assert any(u["name"] == "test-dci" for u in body["links"])
+    assert "total_active_bandwidth_mbps" in body
     topo = client.get("/api/v1/capacity/topology", headers=auth_headers).json()
     assert "nodes" in topo and "edges" in topo
     assert len(topo["nodes"]) >= 2

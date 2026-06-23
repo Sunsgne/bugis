@@ -3,8 +3,8 @@ from __future__ import annotations
 
 import re
 
-from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session, selectinload
 
 from app.models.circuit import Circuit, CircuitEndpoint
 from app.models.device import Device, DeviceInterface
@@ -58,7 +58,9 @@ def _active_circuit_load_by_device(db: Session) -> dict[int, int]:
 
 def device_capacity(db: Session) -> list[dict]:
     load = _active_circuit_load_by_device(db)
-    devices = db.execute(select(Device)).scalars().all()
+    devices = db.execute(
+        select(Device).options(selectinload(Device.interfaces))
+    ).scalars().all()
     result = []
     for d in devices:
         # Fabric capacity counts physical port speeds only (no VLAN/SVI/sub-if).
@@ -96,11 +98,14 @@ def site_capacity(db: Session) -> list[dict]:
     return result
 
 
-def link_capacity(db: Session) -> list[dict]:
+def _link_capacity_rows(
+    db: Session,
+    links: list[Link],
+    health_by_id: dict,
+) -> list[dict]:
     from app.services import igp_cost_service, link_alarm_settings, link_monitor, link_planner, platform_settings
 
     plat = platform_settings.get_or_create(db)
-    links = db.execute(select(Link)).scalars().all()
     site_by_id = {s.id: s for s in db.execute(select(Site)).scalars().all()}
     device_ids = {l.device_a_id for l in links} | {l.device_z_id for l in links}
     backbone_cache = igp_cost_service.build_backbone_cache(db, device_ids)
@@ -110,7 +115,7 @@ def link_capacity(db: Session) -> list[dict]:
         dz = db.get(Device, l.device_z_id)
         site_a = site_by_id.get(da.site_id) if da and da.site_id else None
         site_z = site_by_id.get(dz.site_id) if dz and dz.site_id else None
-        health = link_monitor.compute_link_health(db, l)
+        health = health_by_id.get(l.id) or link_monitor.compute_link_health(db, l)
         alarm = link_alarm_settings.thresholds_out(l, plat)
         igp = igp_cost_service.link_backbone_igp(db, l, backbone_cache=backbone_cache)
         result.append({
@@ -154,13 +159,27 @@ def link_capacity(db: Session) -> list[dict]:
     return result
 
 
-def topology(db: Session) -> dict:
+def link_capacity(db: Session) -> list[dict]:
+    from app.services import link_monitor
+
+    links = db.execute(select(Link)).scalars().all()
+    health_by_id = link_monitor.batch_compute_link_health(db, links)
+    return _link_capacity_rows(db, links, health_by_id)
+
+
+def topology(
+    db: Session,
+    *,
+    health_by_id: dict | None = None,
+) -> dict:
     """Nodes (devices grouped by site) and edges (links) for visualization."""
     from app.services import link_monitor
 
     sites = db.execute(select(Site)).scalars().all()
     devices = db.execute(select(Device)).scalars().all()
     links = db.execute(select(Link)).scalars().all()
+    if health_by_id is None:
+        health_by_id = link_monitor.batch_compute_link_health(db, links)
     return {
         "sites": [{"id": s.id, "name": s.name, "code": s.code} for s in sites],
         "nodes": [
@@ -184,10 +203,36 @@ def topology(db: Session) -> dict:
                 "target": l.device_z_id,
                 "capacity_mbps": l.capacity_mbps,
                 "reserved_mbps": l.reserved_mbps,
-                "utilization_pct": link_monitor.compute_link_health(db, l).peak_utilization_pct,
+                "utilization_pct": (
+                    health_by_id[l.id].peak_utilization_pct
+                    if l.id in health_by_id
+                    else 0.0
+                ),
             }
             for l in links
         ],
+    }
+
+
+def capacity_overview(db: Session) -> dict:
+    """Single round-trip payload for the capacity planning page."""
+    from app.models.enums import CircuitStatus
+    from app.services import link_monitor
+
+    links = db.execute(select(Link)).scalars().all()
+    health_by_id = link_monitor.batch_compute_link_health(db, links)
+    return {
+        "sites": site_capacity(db),
+        "links": _link_capacity_rows(db, links, health_by_id),
+        "topology": topology(db, health_by_id=health_by_id),
+        "total_active_bandwidth_mbps": int(
+            db.scalar(
+                select(func.coalesce(func.sum(Circuit.bandwidth_mbps), 0)).where(
+                    Circuit.status == CircuitStatus.ACTIVE
+                )
+            )
+            or 0
+        ),
     }
 
 

@@ -26,6 +26,10 @@ class Settings(BaseSettings):
     # Default to SQLite for zero-config local dev; override with PostgreSQL in prod.
     database_url: str = "sqlite:///./bugis.db"
     db_echo: bool = False
+    db_pool_size: int = 25
+    db_max_overflow: int = 25
+    db_pool_timeout: int = 30
+    db_pool_recycle: int = 3600
 
     # --- Security / Auth ---
     secret_key: str = "change-me-in-production-please-use-a-long-random-string"
