@@ -153,6 +153,19 @@ const DP_COLOR: Record<string, string> = {
   failed: "red",
 };
 
+type DataplaneBindingRow = {
+  id: number;
+  circuit_id?: number;
+  circuit_code?: string;
+  circuit_name?: string;
+  device_id?: number;
+  device_name?: string;
+  operation?: string;
+  transport?: string;
+  state?: string;
+  created_at?: string;
+};
+
 export default function ControlPlane() {
   const { tc } = useTc();
   const [status, setStatus] = useState<any>(null);
@@ -486,13 +499,13 @@ export default function ControlPlane() {
           pagination={{ pageSize: 20, showSizeChanger: true }}
           size="small"
           locale={{ emptyText: <Empty description={tc('暂无数据面绑定记录')} /> }}
-          columns={colsNowrap([
+          columns={colsNowrap<DataplaneBindingRow>([
             {
               title: tc("专线"),
               dataIndex: "circuit_code",
               width: 120,
               ellipsis: true,
-              render: (code: string | undefined, row: { circuit_id?: number; circuit_name?: string }) =>
+              render: (code: string | undefined, row: DataplaneBindingRow) =>
                 code ? (
                   <Link to={`/circuits?circuit=${row.circuit_id}`} title={row.circuit_name}>
                     {code}
@@ -506,7 +519,7 @@ export default function ControlPlane() {
               dataIndex: "device_name",
               width: 180,
               ellipsis: true,
-              render: (name: string | undefined, row: { device_id?: number }) =>
+              render: (name: string | undefined, row: DataplaneBindingRow) =>
                 name ? (
                   <span title={name}>{name}</span>
                 ) : (
