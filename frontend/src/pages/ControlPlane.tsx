@@ -29,7 +29,7 @@ import AdoptVniModal from "../components/AdoptVniModal";
 import { empty, page } from "../constants/uiCopy";
 import { useTc } from "@/i18n/useTc";
 import { OVERLAY_SOURCE } from "../constants/statusLabels";
-import { dataTableProps, TABLE_SCROLL, colsNowrap } from "../utils/table";
+import { dataTableProps, PAGE_SIZE_OPTIONS, TABLE_SCROLL, colsNowrap, tablePagination, twinTableProps } from "../utils/table";
 
 const { Text } = Typography;
 
@@ -153,6 +153,19 @@ const DP_COLOR: Record<string, string> = {
   failed: "red",
 };
 
+type DataplaneBindingRow = {
+  id: number;
+  circuit_id?: number;
+  circuit_code?: string;
+  circuit_name?: string;
+  device_id?: number;
+  device_name?: string;
+  operation?: string;
+  transport?: string;
+  state?: string;
+  created_at?: string;
+};
+
 export default function ControlPlane() {
   const { tc } = useTc();
   const [status, setStatus] = useState<any>(null);
@@ -170,6 +183,14 @@ export default function ControlPlane() {
   const [adoptVniPreset, setAdoptVniPreset] = useState<number | undefined>(undefined);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [overlayPage, setOverlayPage] = useState(1);
+  const [overlayPageSize, setOverlayPageSize] = useState(20);
+  const [bindingsPage, setBindingsPage] = useState(1);
+  const [bindingsPageSize, setBindingsPageSize] = useState(20);
+  const [vtepPage, setVtepPage] = useState(1);
+  const [vtepPageSize, setVtepPageSize] = useState(20);
+  const [ribPage, setRibPage] = useState(1);
+  const [ribPageSize, setRibPageSize] = useState(20);
 
   async function load() {
     try {
@@ -333,8 +354,17 @@ export default function ControlPlane() {
               rowKey={(row: { device_id?: number; service_name?: string; vni?: number }) =>
                 `${row.device_id}-${row.service_name}-${row.vni ?? "u"}`
               }
-              dataSource={(overlay?.items ?? []).slice(0, 100)}
-              pagination={{ pageSize: 20, showSizeChanger: true }}
+              dataSource={overlay?.items ?? []}
+              pagination={{
+                current: overlayPage,
+                pageSize: overlayPageSize,
+                showSizeChanger: true,
+                pageSizeOptions: PAGE_SIZE_OPTIONS.map(String),
+                onChange: (page, pageSize) => {
+                  setOverlayPage(page);
+                  setOverlayPageSize(pageSize);
+                },
+              }}
               size="small"
               scroll={{ x: "max-content" }}
               locale={{ emptyText: <Empty description={tc('暂无现网 Overlay 数据 · 请对设备执行现网学习后扫描')} /> }}
@@ -402,37 +432,6 @@ export default function ControlPlane() {
         </Row>
       </Card>
 
-      <Card title={tc('控制器集群 · HA')} size="small">
-        <Table
-          {...dataTableProps(TABLE_SCROLL.md)}
-          rowKey="node_id"
-          dataSource={cluster?.nodes || []}
-          pagination={false}
-          size="small"
-          locale={{ emptyText: <Empty description={empty.data} /> }}
-          columns={colsNowrap([
-            { title: tc("节点"), dataIndex: "node_id" },
-            { title: tc("主机"), dataIndex: "hostname" },
-            {
-              title: tc('角色'),
-              dataIndex: "role",
-              render: (r) => (
-                <Tag color={r === "leader" ? "blue" : r === "standby" ? "purple" : "default"}>
-                  {r}
-                </Tag>
-              ),
-            },
-            { title: tc("RIB 版本"), dataIndex: "rib_version" },
-            {
-              title: tc('本机'),
-              dataIndex: "is_local",
-              render: (v) => (v ? <Tag color="green">{tc('是')}</Tag> : "-"),
-            },
-            { title: tc("最近心跳"), dataIndex: "last_heartbeat" },
-          ])}
-        />
-      </Card>
-
       <Card title={tc('BGP EVPN 对等会话')} size="small">
         <Table
           {...dataTableProps(TABLE_SCROLL.lg)}
@@ -442,111 +441,195 @@ export default function ControlPlane() {
           size="small"
           locale={{ emptyText: <Empty description={tc('托管专线开通后自动建立 BGP 对等')} /> }}
           columns={colsNowrap([
-            { title: tc("设备"), dataIndex: "device_name" },
+            { title: tc("设备"), dataIndex: "device_name", ellipsis: true },
             { title: tc("对端 IP"), dataIndex: "peer_ip" },
-            { title: tc("本地 ASN"), dataIndex: "local_asn" },
-            { title: tc("对端 ASN"), dataIndex: "remote_asn" },
+            { title: tc("本地 ASN"), dataIndex: "local_asn", width: 100 },
+            { title: tc("对端 ASN"), dataIndex: "remote_asn", width: 100 },
             {
               title: tc('状态'),
               dataIndex: "state",
               render: (s) => <Tag color={BGP_COLOR[s] || "default"}>{s}</Tag>,
             },
-            { title: tc("收路由"), dataIndex: "routes_received" },
-            { title: tc("发路由"), dataIndex: "routes_sent" },
+            { title: tc("收路由"), dataIndex: "routes_received", width: 80 },
+            { title: tc("发路由"), dataIndex: "routes_sent", width: 80 },
           ])}
         />
       </Card>
 
-      <Card title={tc('数据面编排绑定')} size="small">
-        <Table
-          {...dataTableProps(TABLE_SCROLL.md)}
-          rowKey="id"
-          dataSource={bindings.slice(0, 50)}
-          pagination={false}
-          size="small"
-          locale={{ emptyText: <Empty description={tc('暂无数据面绑定记录')} /> }}
-          columns={colsNowrap([
-            { title: tc("专线 ID"), dataIndex: "circuit_id", width: 90 },
-            { title: tc("设备 ID"), dataIndex: "device_id", width: 90 },
-            { title: tc("操作"), dataIndex: "operation", width: 80 },
-            { title: tc("传输"), dataIndex: "transport", width: 90 },
-            {
-              title: tc('状态'),
-              dataIndex: "state",
-              render: (s) => <Tag color={DP_COLOR[s] || "default"}>{s}</Tag>,
-            },
-            { title: tc("时间"), dataIndex: "created_at" },
-          ])}
-        />
-      </Card>
+      <Row gutter={[16, 16]}>
+        <Col xs={24} xl={12}>
+          <Card title={tc('数据面编排绑定')} size="small" className="control-plane-twin-card">
+            <Table
+              {...twinTableProps()}
+              rowKey="id"
+              dataSource={bindings}
+              pagination={tablePagination(bindings.length, bindingsPage, bindingsPageSize, (page, pageSize) => {
+                setBindingsPage(page);
+                setBindingsPageSize(pageSize);
+              })}
+              locale={{ emptyText: <Empty description={tc('暂无数据面绑定记录')} /> }}
+              columns={colsNowrap<DataplaneBindingRow>([
+                {
+                  title: tc("专线"),
+                  dataIndex: "circuit_code",
+                  ellipsis: true,
+                  render: (code: string | undefined, row: DataplaneBindingRow) =>
+                    code ? (
+                      <Link to={`/circuits?circuit=${row.circuit_id}`} title={row.circuit_name}>
+                        {code}
+                      </Link>
+                    ) : (
+                      row.circuit_id ?? "—"
+                    ),
+                },
+                {
+                  title: tc("设备"),
+                  dataIndex: "device_name",
+                  ellipsis: true,
+                  render: (name: string | undefined, row: DataplaneBindingRow) =>
+                    name ? (
+                      <span title={name}>{name}</span>
+                    ) : (
+                      row.device_id ?? "—"
+                    ),
+                },
+                { title: tc("操作"), dataIndex: "operation", width: 72 },
+                { title: tc("传输"), dataIndex: "transport", width: 72 },
+                {
+                  title: tc('状态'),
+                  dataIndex: "state",
+                  width: 88,
+                  render: (s) => <Tag color={DP_COLOR[s] || "default"}>{s}</Tag>,
+                },
+                {
+                  title: tc("时间"),
+                  dataIndex: "created_at",
+                  ellipsis: true,
+                  render: (t: string | undefined) => (t ? t.replace("T", " ").slice(0, 19) : "—"),
+                },
+              ])}
+            />
+          </Card>
+        </Col>
+        <Col xs={24} xl={12}>
+          <Card title={tc('VTEP 邻居表')} size="small" className="control-plane-twin-card">
+            <Table
+              {...twinTableProps()}
+              rowKey="id"
+              dataSource={vteps}
+              pagination={tablePagination(vteps.length, vtepPage, vtepPageSize, (page, pageSize) => {
+                setVtepPage(page);
+                setVtepPageSize(pageSize);
+              })}
+              locale={{ emptyText: <Empty description={tc('暂无 VTEP 邻居')} /> }}
+              columns={colsNowrap([
+                { title: tc("设备"), dataIndex: "name", ellipsis: true },
+                { title: "VTEP IP", dataIndex: "vtep_ip" },
+                { title: "ASN", dataIndex: "asn", width: 72 },
+                {
+                  title: tc('状态'),
+                  dataIndex: "status",
+                  width: 72,
+                  render: (s) => <Tag color={s === "up" ? "green" : "red"}>{s}</Tag>,
+                },
+                {
+                  title: "VNI",
+                  dataIndex: "vnis",
+                  ellipsis: true,
+                  render: (vs: number[] | undefined) => (vs ?? []).map((v) => <Tag key={v}>{v}</Tag>),
+                },
+              ])}
+            />
+          </Card>
+        </Col>
+      </Row>
 
       <Card title="VXLAN / SR-MPLS Overlay">
         <OverlayTopologyPanel topo={topo} overlayInventory={overlay} />
       </Card>
 
-      <Card title={tc('VTEP 邻居表')}>
-        <Table
-          {...dataTableProps(TABLE_SCROLL.md)}
-          rowKey="id"
-          dataSource={vteps}
-          pagination={false}
-          locale={{ emptyText: <Empty description={tc('暂无 VTEP 邻居')} /> }}
-          columns={colsNowrap([
-            { title: tc("设备"), dataIndex: "name" },
-            { title: "VTEP IP", dataIndex: "vtep_ip" },
-            { title: "ASN", dataIndex: "asn" },
-            {
-              title: tc('状态'),
-              dataIndex: "status",
-              render: (s) => <Tag color={s === "up" ? "green" : "red"}>{s}</Tag>,
-            },
-            {
-              title: "VNI",
-              dataIndex: "vnis",
-              render: (vs: number[] | undefined) => (vs ?? []).map((v) => <Tag key={v}>{v}</Tag>),
-            },
-          ])}
-        />
-      </Card>
-
-      <Card
-        title={tc('EVPN 路由表 (RIB)')}
-        extra={
-          <Select
-            allowClear
-            placeholder={tc('按 VNI 过滤')}
-            style={{ width: 160 }}
-            value={vni}
-            onChange={(v) => setVni(v)}
-            options={allVnis.map((v) => ({ value: v, label: `VNI ${v}` }))}
-          />
-        }
-      >
-        <Table
-          {...dataTableProps(TABLE_SCROLL.lg)}
-          rowKey="id"
-          dataSource={routes}
-          size="small"
-          locale={{ emptyText: <Empty description={tc('RIB 为空 · 等待路由同步')} /> }}
-          columns={colsNowrap([
-            {
-              title: tc('类型'),
-              dataIndex: "type",
-              render: (t) => <Tag color={RT_COLOR[t]}>{RT_LABEL[t] || t}</Tag>,
-            },
-            { title: "VNI", dataIndex: "vni", width: 70 },
-            {
-              title: tc('封装'),
-              dataIndex: "encap",
-              width: 110,
-              render: (e) => <Tag>{e || "vxlan"}</Tag>,
-            },
-            { title: tc("MPLS 标签"), dataIndex: "mpls_label", width: 100, render: (v) => v || "-" },
-            { title: "RD", dataIndex: "rd", width: 120 },
-            { title: tc("下一跳"), dataIndex: "next_hop", ellipsis: true },
-          ])}
-        />
-      </Card>
+      <Row gutter={[16, 16]}>
+        <Col xs={24} xl={12}>
+          <Card title={tc('控制器集群 · HA')} size="small" className="control-plane-twin-card">
+            <Table
+              {...twinTableProps()}
+              rowKey="node_id"
+              dataSource={cluster?.nodes || []}
+              pagination={false}
+              locale={{ emptyText: <Empty description={empty.data} /> }}
+              columns={colsNowrap([
+                { title: tc("节点"), dataIndex: "node_id" },
+                { title: tc("主机"), dataIndex: "hostname", ellipsis: true },
+                {
+                  title: tc('角色'),
+                  dataIndex: "role",
+                  render: (r) => (
+                    <Tag color={r === "leader" ? "blue" : r === "standby" ? "purple" : "default"}>
+                      {r}
+                    </Tag>
+                  ),
+                },
+                { title: tc("RIB 版本"), dataIndex: "rib_version", width: 90 },
+                {
+                  title: tc('本机'),
+                  dataIndex: "is_local",
+                  width: 72,
+                  render: (v) => (v ? <Tag color="green">{tc('是')}</Tag> : "-"),
+                },
+                { title: tc("最近心跳"), dataIndex: "last_heartbeat", ellipsis: true },
+              ])}
+            />
+          </Card>
+        </Col>
+        <Col xs={24} xl={12}>
+          <Card
+            title={tc('EVPN 路由表 (RIB)')}
+            size="small"
+            className="control-plane-twin-card"
+            extra={
+              <Select
+                allowClear
+                placeholder={tc('按 VNI 过滤')}
+                style={{ width: 140 }}
+                value={vni}
+                onChange={(v) => {
+                  setVni(v);
+                  setRibPage(1);
+                }}
+                options={allVnis.map((v) => ({ value: v, label: `VNI ${v}` }))}
+              />
+            }
+          >
+            <Table
+              {...twinTableProps()}
+              rowKey="id"
+              dataSource={routes}
+              pagination={tablePagination(routes.length, ribPage, ribPageSize, (page, pageSize) => {
+                setRibPage(page);
+                setRibPageSize(pageSize);
+              })}
+              locale={{ emptyText: <Empty description={tc('RIB 为空 · 等待路由同步')} /> }}
+              columns={colsNowrap([
+                {
+                  title: tc('类型'),
+                  dataIndex: "type",
+                  render: (t) => <Tag color={RT_COLOR[t]}>{RT_LABEL[t] || t}</Tag>,
+                },
+                { title: "VNI", dataIndex: "vni", width: 70 },
+                {
+                  title: tc('封装'),
+                  dataIndex: "encap",
+                  width: 96,
+                  render: (e) => <Tag>{e || "vxlan"}</Tag>,
+                },
+                { title: tc("MPLS 标签"), dataIndex: "mpls_label", width: 96, render: (v) => v || "-" },
+                { title: "RD", dataIndex: "rd", ellipsis: true },
+                { title: tc("下一跳"), dataIndex: "next_hop", ellipsis: true },
+              ])}
+            />
+          </Card>
+        </Col>
+      </Row>
 
       <AdoptVniModal
         open={adoptVniOpen}
