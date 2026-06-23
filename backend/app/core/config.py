@@ -75,6 +75,9 @@ class Settings(BaseSettings):
     # --- Background scheduler (auto telemetry + alarm evaluation) ---
     scheduler_enabled: bool = True
     scheduler_interval_seconds: int = 30
+    # Scheduled SNMP IF-MIB interface discovery (default 6 hours).
+    snmp_discover_enabled: bool = True
+    snmp_discover_interval_seconds: int = 21600
     # Per-tick SNMP collection batch (10k circuits @ 500/tick/20s ≈ full sweep in ~7 min).
     telemetry_collect_batch_size: int = 500
     # Per-tick latency probes (10k enabled @ 50/tick/20s ≈ full sweep in ~67 min).

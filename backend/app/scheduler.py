@@ -27,14 +27,16 @@ from app.models.circuit import Circuit
 from app.models.device_learn_run import DeviceLearnRun
 from app.models.enums import CircuitStatus
 from app.models.link import Link
-from app.services import alarm_service, config_learn, health_snapshot_service, link_monitor, platform_settings, telemetry_service
+from app.services import alarm_service, config_learn, health_snapshot_service, link_monitor, platform_settings, snmp_discovery_service, telemetry_service
 from app.controller import bgp_peering, ha
 
 logger = logging.getLogger("bugis.scheduler")
 
 _task: asyncio.Task | None = None
 _learn_task: asyncio.Task | None = None
+_snmp_discover_task: asyncio.Task | None = None
 _learn_lock = threading.Lock()
+_snmp_discover_lock = threading.Lock()
 _probe_cursor = 0
 _collect_cursor = 0
 _state: dict = {
@@ -47,6 +49,9 @@ _state: dict = {
     "last_learn_devices": 0,
     "last_learn_conflicts": 0,
     "learn_running": False,
+    "snmp_discover_running": False,
+    "last_snmp_discover": None,
+    "last_snmp_discover_devices": 0,
     "interval": settings.scheduler_interval_seconds,
     "collect_batch_size": settings.telemetry_collect_batch_size,
     "probe_batch_size": settings.telemetry_probe_batch_size,
@@ -155,6 +160,77 @@ async def _maybe_start_learn_task() -> None:
             logger.exception("scheduled learn task failed: %s", exc)
 
     _learn_task = asyncio.create_task(_job())
+
+
+def _update_snmp_discover_state(summary: dict) -> None:
+    _state["last_snmp_discover"] = datetime.now(timezone.utc).isoformat()
+    _state["last_snmp_discover_devices"] = summary.get("devices", 0)
+
+
+def _execute_scheduled_snmp_discover() -> dict | None:
+    """Run one scheduled SNMP discovery sweep (blocking — background thread)."""
+    if not _snmp_discover_lock.acquire(blocking=False):
+        return None
+    _state["snmp_discover_running"] = True
+    db = SessionLocal()
+    try:
+        if not snmp_discovery_service.is_scheduled_discover_due(db):
+            return None
+        summary = snmp_discovery_service.scheduled_discover_all_online(db, created_by="scheduler")
+        if summary.get("skipped"):
+            return summary
+        db.commit()
+        _update_snmp_discover_state(summary)
+        return summary
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        _state["snmp_discover_running"] = False
+        db.close()
+        _snmp_discover_lock.release()
+
+
+def _try_scheduled_snmp_discover_sync() -> dict | None:
+    try:
+        summary = _execute_scheduled_snmp_discover()
+        if summary and not summary.get("skipped"):
+            logger.info(
+                "scheduled SNMP discover: %s/%s devices ok, %s failed",
+                summary.get("success"),
+                summary.get("devices"),
+                summary.get("failed"),
+            )
+        return summary
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("scheduled SNMP discover failed: %s", exc)
+        return None
+
+
+async def _maybe_start_snmp_discover_task() -> None:
+    global _snmp_discover_task
+    if _state.get("snmp_discover_running"):
+        return
+    if _snmp_discover_task is not None and not _snmp_discover_task.done():
+        return
+
+    def _due_check() -> bool:
+        db = SessionLocal()
+        try:
+            return snmp_discovery_service.is_scheduled_discover_due(db)
+        finally:
+            db.close()
+
+    if not await asyncio.to_thread(_due_check):
+        return
+
+    async def _job() -> None:
+        try:
+            await asyncio.to_thread(_try_scheduled_snmp_discover_sync)
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("scheduled SNMP discover task failed: %s", exc)
+
+    _snmp_discover_task = asyncio.create_task(_job())
 
 
 def _probe_one_circuit(db, circuits: list[Circuit]) -> tuple[int, set[int]]:
@@ -274,6 +350,7 @@ async def _run() -> None:
             await asyncio.sleep(_state["interval"])
             try:
                 await _maybe_start_learn_task()
+                await _maybe_start_snmp_discover_task()
                 count = await asyncio.to_thread(_tick)
                 _state["ticks"] += 1
                 _state["last_samples"] = count
@@ -338,6 +415,27 @@ def status() -> dict:
             base["next_learn_in_seconds"] = 0 if plat.auto_learn_enabled else None
         base["auto_learn_enabled"] = plat.auto_learn_enabled
         base["auto_learn_interval_seconds"] = interval
+        snmp_interval = snmp_discovery_service.snmp_discover_interval_seconds(db)
+        last_snmp = getattr(plat, "last_snmp_discover_at", None)
+        base["snmp_discover_enabled"] = snmp_discovery_service.snmp_discover_enabled(db)
+        base["snmp_discover_interval_seconds"] = snmp_interval
+        if last_snmp is not None:
+            if last_snmp.tzinfo is None:
+                last_snmp = last_snmp.replace(tzinfo=timezone.utc)
+            base["last_snmp_discover"] = last_snmp.isoformat()
+            elapsed_snmp = (datetime.now(timezone.utc) - last_snmp).total_seconds()
+            if base["snmp_discover_enabled"]:
+                remaining_snmp = max(0, int(snmp_interval - elapsed_snmp))
+                base["next_snmp_discover_in_seconds"] = remaining_snmp
+                base["next_snmp_discover_at"] = (
+                    datetime.now(timezone.utc) + timedelta(seconds=remaining_snmp)
+                ).isoformat()
+            else:
+                base["next_snmp_discover_in_seconds"] = None
+        else:
+            base["next_snmp_discover_in_seconds"] = (
+                0 if base["snmp_discover_enabled"] else None
+            )
     finally:
         db.close()
     return base

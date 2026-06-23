@@ -1,7 +1,9 @@
 """Platform-wide settings (singleton row): operational params and branding."""
 from __future__ import annotations
 
-from sqlalchemy import Boolean, Float, Integer, JSON, String, Text
+from datetime import datetime
+
+from sqlalchemy import Boolean, DateTime, Float, Integer, JSON, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -52,6 +54,11 @@ class PlatformSettings(Base, TimestampMixin):
     auto_learn_on_import: Mapped[bool] = mapped_column(Boolean, default=True)
     auto_learn_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     auto_learn_interval_seconds: Mapped[int] = mapped_column(Integer, default=60)
+    snmp_discover_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    snmp_discover_interval_seconds: Mapped[int] = mapped_column(Integer, default=21600)
+    last_snmp_discover_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     access_token_expire_minutes: Mapped[int] = mapped_column(Integer, default=60 * 24)
 

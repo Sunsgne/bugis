@@ -623,6 +623,8 @@ def execute(db: Session, wo: WorkOrder, actor: str | None = None) -> WorkOrder:
         _log(db, wo, "Execution completed successfully", actor=actor)
         # Auto-snapshot affected devices into configuration management.
         _snapshot_devices(db, circuit, actor)
+        if operation == "apply" and wo.type != WorkOrderType.DECOMMISSION:
+            _schedule_snmp_discover_after_provision(db, wo, circuit, actor)
     return wo
 
 
@@ -713,6 +715,27 @@ def _snapshot_devices(db: Session, circuit: Circuit, actor: str | None) -> None:
                 port_inventory.scan_device(db, ep.device)
             except Exception:  # noqa: BLE001
                 pass
+
+
+def _schedule_snmp_discover_after_provision(
+    db: Session,
+    wo: WorkOrder,
+    circuit: Circuit,
+    actor: str | None,
+) -> None:
+    """Queue SNMP IF-MIB discovery on endpoint devices after a successful apply."""
+    from app.services import snmp_discovery_service
+
+    device_ids = snmp_discovery_service.circuit_endpoint_device_ids(circuit)
+    if not device_ids:
+        return
+    snmp_discovery_service.schedule_circuit_endpoint_discovery(circuit.id)
+    _log(
+        db,
+        wo,
+        f"已排队 SNMP 发现（{len(device_ids)} 台接入设备）",
+        actor=actor,
+    )
 
 
 def _deliver_via_bugis(

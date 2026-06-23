@@ -57,6 +57,8 @@ class PlatformSettingsBase(BaseModel):
     auto_learn_on_import: bool = True
     auto_learn_enabled: bool = True
     auto_learn_interval_seconds: int = Field(default=60, ge=30, le=3600)
+    snmp_discover_enabled: bool = True
+    snmp_discover_interval_seconds: int = Field(default=21600, ge=300, le=86400)
     access_token_expire_minutes: int = Field(default=1440, ge=5, le=60 * 24 * 30)
 
     login_rate_limit_per_ip: int = Field(default=30, ge=5, le=500)
@@ -117,6 +119,8 @@ class PlatformSettingsUpdate(BaseModel):
     auto_learn_on_import: bool | None = None
     auto_learn_enabled: bool | None = None
     auto_learn_interval_seconds: int | None = Field(default=None, ge=30, le=3600)
+    snmp_discover_enabled: bool | None = None
+    snmp_discover_interval_seconds: int | None = Field(default=None, ge=300, le=86400)
     access_token_expire_minutes: int | None = Field(default=None, ge=5, le=60 * 24 * 30)
 
     login_rate_limit_per_ip: int | None = Field(default=None, ge=5, le=500)
