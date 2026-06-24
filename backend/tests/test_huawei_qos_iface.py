@@ -118,6 +118,7 @@ def test_bulk_interface_descriptions(client, auth_headers):
     assert body["dry_run"] is True  # tests run in dry-run
     assert "interface GE1/0/14" in body["rendered"]
     assert "description SDWAN-BACKBONE" in body["rendered"]
+    assert 'description "SDWAN' not in body["rendered"]
 
     # Persisted on the physical port.
     ifaces = client.get(
@@ -125,6 +126,20 @@ def test_bulk_interface_descriptions(client, auth_headers):
     ).json()
     by_name = {i["name"]: i for i in ifaces}
     assert by_name["GE1/0/14"]["description"] == "SDWAN-BACKBONE"
+
+
+def test_huawei_port_label_description_unquoted(client, auth_headers):
+    _, dev = _huawei_topology(client, auth_headers, "48")
+    label = "PL:P1:isp(langqiao):bw(10Gbps):d(HW S6730):p(XGE0/0/11)"
+    r = client.post(
+        f"/api/v1/devices/{dev['id']}/interfaces/descriptions",
+        headers=auth_headers,
+        json={"items": [{"name": "XGE0/0/11", "description": label}], "push": True},
+    )
+    assert r.status_code == 200, r.text
+    rendered = r.json()["rendered"]
+    assert f"description {label}" in rendered
+    assert f'description "{label}"' not in rendered
 
 
 def test_clear_interface_description(client, auth_headers):
@@ -142,7 +157,7 @@ def test_clear_interface_description(client, auth_headers):
     assert "undo description" in r["rendered"]
 
 
-def test_h3c_vlan_description_quoted(client, auth_headers):
+def test_h3c_vlan_description_unquoted(client, auth_headers):
     site = client.post(
         "/api/v1/sites", headers=auth_headers,
         json={"name": "TYO VLAN", "code": "TVQ99", "city": "TYO"},
@@ -170,7 +185,8 @@ def test_h3c_vlan_description_quoted(client, auth_headers):
     assert r.status_code == 200, r.text
     rendered = r.json()["rendered"]
     assert "interface Vlan-interface2600" in rendered
-    assert 'description "BB:P1:d(cs-1.tyo2):cm(pl-bb)"' in rendered
+    assert 'description BB:P1:d(cs-1.tyo2):cm(pl-bb)' in rendered
+    assert 'description "BB:P1' not in rendered
 
 
 def test_parallel_bulk_interface_descriptions(client, auth_headers):

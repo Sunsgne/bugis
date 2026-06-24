@@ -19,12 +19,15 @@ from app.models.enums import Vendor
 
 
 def _quote_description(vendor: Vendor, desc: str) -> str:
-    """Wrap description for vendor CLI when special characters are present."""
+    """Wrap description for vendor CLI when required by that NOS."""
     if not desc:
         return desc
     if vendor == Vendor.JUNIPER:
         return desc.replace('"', '\\"')
-    if re.search(r'[\s#;"\'\\()]', desc) or ":" in desc:
+    # VRP (Huawei) / Comware (H3C): colons/parens are normal in port labels — no quotes.
+    if vendor in (Vendor.H3C, Vendor.HUAWEI):
+        return desc
+    if re.search(r'[\s#;"\'\\]', desc):
         escaped = desc.replace("\\", "\\\\").replace('"', '\\"')
         return f'"{escaped}"'
     return desc
