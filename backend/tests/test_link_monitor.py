@@ -102,6 +102,8 @@ def test_compute_link_health_recalculates_after_capacity_sync(db_session):
     assert fresh.peak_utilization_pct == 7.8
     assert fresh.peak_rx_mbps == 780.0
     assert fresh.peak_tx_mbps == 120.0
+    assert fresh.peak_traffic_mbps == 780.0
+    assert fresh.traffic_mbps == 780.0
 
 
 def test_sample_utilization_uses_peak_direction(db_session):

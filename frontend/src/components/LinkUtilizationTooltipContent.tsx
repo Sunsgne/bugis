@@ -4,6 +4,7 @@ import {
   backboneUtilColor,
   fmtLinkBw,
   formatPeakAt,
+  peakDirectionMbps,
 } from "@/utils/linkUtilization";
 import { formatInterfaceShort } from "@/utils/networkDisplay";
 
@@ -75,7 +76,7 @@ export default function LinkUtilizationTooltipContent({ link, pct, tc }: Props) 
   const utilColor = backboneUtilColor(pct);
   const peakRx = link.peak_rx_mbps ?? 0;
   const peakTx = link.peak_tx_mbps ?? 0;
-  const peakTotal = link.peak_traffic_mbps ?? peakRx + peakTx;
+  const peakDirection = link.peak_traffic_mbps ?? peakDirectionMbps(peakRx, peakTx);
   const utilRounded = Math.round(pct);
 
   return (
@@ -138,8 +139,8 @@ export default function LinkUtilizationTooltipContent({ link, pct, tc }: Props) 
           </span>
         </div>
         <div className="link-util-tooltip-metric">
-          <span className="link-util-tooltip-metric-label">{tc("合计")}</span>
-          <span className="link-util-tooltip-metric-value">{fmtLinkBw(peakTotal)}</span>
+          <span className="link-util-tooltip-metric-label">{tc("峰值")}</span>
+          <span className="link-util-tooltip-metric-value">{fmtLinkBw(peakDirection)}</span>
         </div>
         <div className="link-util-tooltip-metric">
           <span className="link-util-tooltip-metric-label">{tc("合同带宽")}</span>

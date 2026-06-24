@@ -199,11 +199,14 @@ def _recent_interface_samples(
     ).scalars().all()
 
 
+def _sample_peak_mbps(sample) -> float:
+    return max(sample.rx_mbps or 0.0, sample.tx_mbps or 0.0)
+
+
 def _sample_utilization_pct(sample, capacity_mbps: int) -> float:
     """Recompute utilization from live counters and current contract bandwidth."""
     cap = max(capacity_mbps, 1)
-    peak_mbps = max(sample.rx_mbps or 0.0, sample.tx_mbps or 0.0)
-    return round(peak_mbps / cap * 100, 2)
+    return round(_sample_peak_mbps(sample) / cap * 100, 2)
 
 
 def _health_from_samples(link: Link, sample_groups: list[list]) -> LinkHealth:
@@ -218,7 +221,7 @@ def _health_from_samples(link: Link, sample_groups: list[list]) -> LinkHealth:
                 continue
             util = _sample_utilization_pct(s, cap)
             utils.append(util)
-            traffic = max(traffic, (s.rx_mbps or 0.0) + (s.tx_mbps or 0.0))
+            traffic = max(traffic, _sample_peak_mbps(s))
             if util >= peak_util:
                 peak_util = util
                 peak_sample = s
@@ -236,7 +239,7 @@ def _health_from_samples(link: Link, sample_groups: list[list]) -> LinkHealth:
     avg = sum(utils) / len(utils)
     peak_rx = peak_sample.rx_mbps if peak_sample else 0.0
     peak_tx = peak_sample.tx_mbps if peak_sample else 0.0
-    peak_traffic = round(peak_rx + peak_tx, 2) if peak_sample else 0.0
+    peak_traffic = round(max(peak_rx, peak_tx), 2) if peak_sample else 0.0
     peak_at = peak_sample.created_at.isoformat() if peak_sample and peak_sample.created_at else None
     return LinkHealth(
         link_id=link.id,

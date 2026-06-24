@@ -1,6 +1,11 @@
 import type { LinkUsage } from "@/api/types";
 import { formatUserDateTime } from "./datetime";
 
+/** Peak Mbps on a symmetric full-duplex link (max of Rx/Tx, not sum). */
+export function peakDirectionMbps(rx?: number | null, tx?: number | null): number {
+  return Math.max(rx ?? 0, tx ?? 0);
+}
+
 export function fmtLinkBw(mbps?: number) {
   if (mbps == null || mbps <= 0) return "—";
   return `${mbps} Mbps`;
@@ -23,10 +28,10 @@ type Tc = (zh: string) => string;
 export function linkUtilizationLines(r: LinkUsage, pct: number, tc: Tc = (s) => s): string[] {
   const peakRx = r.peak_rx_mbps ?? 0;
   const peakTx = r.peak_tx_mbps ?? 0;
-  const peakTotal = r.peak_traffic_mbps ?? peakRx + peakTx;
+  const peakDirection = r.peak_traffic_mbps ?? peakDirectionMbps(peakRx, peakTx);
   const lines = [
     `${tc("峰值利用率")} ${Math.round(pct)}%`,
-    `${tc("峰值带宽")} Rx ${fmtLinkBw(peakRx)} / Tx ${fmtLinkBw(peakTx)} · ${tc("合计")} ${fmtLinkBw(peakTotal)}`,
+    `${tc("峰值带宽")} Rx ${fmtLinkBw(peakRx)} / Tx ${fmtLinkBw(peakTx)} · ${tc("峰值")} ${fmtLinkBw(peakDirection)}`,
     `${tc("合同带宽")} ${fmtLinkBw(r.capacity_mbps)}`,
     `${tc("采样时间")} ${formatPeakAt(r.peak_at)}`,
   ];
