@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -18,6 +18,8 @@ DEFAULT_HEALTH_SAMPLE_LIMIT = 100
 # Probe rows carry QoS only (latency/jitter/loss); rx/tx are always 0 and must not
 # appear in traffic charts or bandwidth billing.
 _TRAFFIC_EXCLUDED_SOURCES = frozenset({"probe"})
+# Circuit-only sources for the network-wide dashboard chart (exclude link/backbone rows).
+_OVERVIEW_CIRCUIT_SOURCES = ("snmp", "traffic_only", "simulated", "manual")
 
 
 def _is_traffic_sample(sample: TelemetrySample) -> bool:
@@ -352,6 +354,73 @@ def _aggregate_overview_traffic(rows: list[TelemetrySample]) -> list[dict]:
     return out
 
 
+def _fetch_overview_traffic_minute_pg(
+    db: Session, since: datetime
+) -> list[dict] | None:
+    """Postgres: per-minute circuit averages summed network-wide."""
+    try:
+        rows = db.execute(
+            text(
+                """
+                WITH per_circuit AS (
+                  SELECT
+                    date_trunc('minute', created_at) AS minute,
+                    circuit_id,
+                    AVG(rx_mbps) AS avg_rx,
+                    AVG(tx_mbps) AS avg_tx
+                  FROM telemetry_samples
+                  WHERE created_at >= :since
+                    AND circuit_id IS NOT NULL
+                    AND source = ANY(:sources)
+                  GROUP BY 1, 2
+                )
+                SELECT
+                  minute,
+                  SUM(avg_rx) AS rx,
+                  SUM(avg_tx) AS tx
+                FROM per_circuit
+                GROUP BY minute
+                ORDER BY minute ASC
+                """
+            ),
+            {"since": since, "sources": list(_OVERVIEW_CIRCUIT_SOURCES)},
+        ).mappings().all()
+    except Exception:
+        return None
+
+    out: list[dict] = []
+    for row in rows:
+        minute = row["minute"]
+        label = minute.strftime("%H:%M") if minute else ""
+        out.append({
+            "t": label,
+            "rx": round(float(row["rx"] or 0), 1),
+            "tx": round(float(row["tx"] or 0), 1),
+            "latency": None,
+            "loss": None,
+        })
+    return out
+
+
+def _fetch_overview_traffic_minute(db: Session, since: datetime) -> list[dict]:
+    """Per-minute network-wide traffic from raw circuit SNMP samples."""
+    if db.get_bind().dialect.name == "postgresql":
+        pg_buckets = _fetch_overview_traffic_minute_pg(db, since)
+        if pg_buckets is not None:
+            return pg_buckets
+
+    rows = db.execute(
+        select(TelemetrySample)
+        .where(
+            TelemetrySample.created_at >= since,
+            TelemetrySample.circuit_id.isnot(None),
+            TelemetrySample.source.in_(_OVERVIEW_CIRCUIT_SOURCES),
+        )
+        .order_by(TelemetrySample.created_at.asc(), TelemetrySample.id.asc())
+    ).scalars().all()
+    return _aggregate_overview_traffic(rows)
+
+
 def overview_traffic(
     db: Session,
     *,
@@ -359,7 +428,15 @@ def overview_traffic(
     hours: int = 24,
 ) -> list[dict]:
     """Aggregate recent telemetry into a per-minute network-wide traffic trend."""
+    _ = sample_limit  # kept for API compatibility; aggregation no longer truncates rows
     eff_hours = max(1, min(hours, 24 * 7))
+    since = datetime.now(timezone.utc) - timedelta(hours=eff_hours)
+
+    # Short windows (dashboard): minute-level SQL aggregation — avoids sparse
+    # buckets from LIMIT+DESC sampling and incomplete 5m continuous aggregates.
+    if eff_hours <= get_settings().telemetry_aggregate_after_hours:
+        return _fetch_overview_traffic_minute(db, since)[-40:]
+
     if (
         telemetry_timescale.continuous_aggregate_available(db)
         and telemetry_timescale.should_use_continuous_aggregate(eff_hours)
@@ -370,14 +447,7 @@ def overview_traffic(
         if buckets:
             return buckets
 
-    since = datetime.now(timezone.utc) - timedelta(hours=eff_hours)
-    rows = db.execute(
-        select(TelemetrySample)
-        .where(TelemetrySample.created_at >= since)
-        .order_by(TelemetrySample.created_at.desc(), TelemetrySample.id.desc())
-        .limit(sample_limit)
-    ).scalars().all()
-    return _aggregate_overview_traffic(rows)[-40:]
+    return _fetch_overview_traffic_minute(db, since)[-40:]
 
 
 def _percentile(values: list[float], pct: float) -> float:

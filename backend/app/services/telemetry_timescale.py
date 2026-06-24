@@ -138,6 +138,7 @@ def fetch_network_overview_buckets(
               SUM(max_tx_mbps) AS tx
             FROM telemetry_samples_5m
             WHERE bucket >= :since
+              AND circuit_id IS NOT NULL
               AND source = ANY(:sources)
             GROUP BY bucket
             ORDER BY bucket ASC

@@ -120,7 +120,8 @@ def _recent_work_orders(db: Session, *, limit: int = 6) -> list[dict]:
     ]
 
 
-def _traffic_overview(db: Session, *, hours: int = 24) -> list:
+def _traffic_overview(db: Session, *, hours: int = 1) -> list:
+    """Recent per-minute circuit traffic for the home dashboard chart."""
     cache_key = health_snapshot_service.cache_key_overview(hours)
     cached = redis_client.cache_get_json(cache_key)
     if cached is not None:
@@ -144,7 +145,7 @@ def operations_overview(db: Session, *, hours: int = 24) -> dict:
 
     payload = {
         "dashboard": dashboard_kpis(db),
-        "traffic": _traffic_overview(db, hours=hours),
+        "traffic": _traffic_overview(db),
         "alarms": _alarm_summary(db),
         "sdn": bugis_controller.status(db),
         "sites": capacity_service.site_capacity(db),
