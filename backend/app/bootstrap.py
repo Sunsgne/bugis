@@ -49,11 +49,31 @@ def ensure_cluster_node(db: Session) -> None:
     db.commit()
 
 
+def _has_active_platform_admin(db: Session) -> bool:
+    return (
+        db.execute(
+            select(User.id).where(
+                User.role == UserRole.ADMIN,
+                User.scope == UserScope.PLATFORM,
+                User.is_active.is_(True),
+            ).limit(1)
+        ).scalar_one_or_none()
+        is not None
+    )
+
+
 def ensure_superuser(db: Session) -> None:
+    """Create the bootstrap admin only on a fresh install.
+
+    If operators removed the default ``admin`` account but another platform
+    administrator exists, do not recreate ``admin`` on every restart/deploy.
+    """
     existing = db.execute(
         select(User).where(User.username == settings.first_superuser)
     ).scalar_one_or_none()
     if existing:
+        return
+    if _has_active_platform_admin(db):
         return
     user = User(
         username=settings.first_superuser,
