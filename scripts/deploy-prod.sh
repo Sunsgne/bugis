@@ -253,9 +253,10 @@ STACK_ENV="$(mktemp)"
 write_stack_env "$STACK_ENV"
 
 echo "==> Uploading to $USER@$HOST:$REMOTE_DIR"
-run_ssh "mkdir -p '$REMOTE_DIR/deploy/prod/certs' '$REMOTE_DIR/deploy/prod'"
+run_ssh "mkdir -p '$REMOTE_DIR/deploy/prod/certs' '$REMOTE_DIR/deploy/prod' && \
+  test -f '$REMOTE_DIR/.env' && cp '$REMOTE_DIR/.env' /tmp/bugis-prod.env || true"
 run_scp "$ARCHIVE" "$USER@$HOST:$REMOTE_DIR/bugis-prod-src.tar.gz"
-run_scp "$STACK_ENV" "$USER@$HOST:$REMOTE_DIR/.env"
+run_scp "$STACK_ENV" "$USER@$HOST:$REMOTE_DIR/.env.stack.new"
 run_scp "$CERT_DIR/cert.pem" "$USER@$HOST:$REMOTE_DIR/deploy/prod/certs/cert.pem"
 run_scp "$CERT_DIR/key.pem" "$USER@$HOST:$REMOTE_DIR/deploy/prod/certs/key.pem"
 run_scp "${ROOT}/deploy/prod/metrics_token" "$USER@$HOST:$REMOTE_DIR/deploy/prod/metrics_token"
@@ -263,11 +264,11 @@ rm -f "$STACK_ENV"
 
 echo "==> Building and starting production containers"
 run_ssh "cd '$REMOTE_DIR' && \
-  cp .env /tmp/bugis-prod.env 2>/dev/null || true && \
+  if [ ! -f /tmp/bugis-prod.env ]; then cp .env.stack.new /tmp/bugis-prod.env; fi && \
   find . -mindepth 1 -maxdepth 1 ! -name 'bugis-prod-src.tar.gz' -exec rm -rf {} + && \
   tar -xzf bugis-prod-src.tar.gz && \
   cp /tmp/bugis-prod.env .env && \
-  rm -f bugis-prod-src.tar.gz && \
+  rm -f bugis-prod-src.tar.gz .env.stack.new && \
   mkdir -p deploy/prod/certs && \
   test -f deploy/prod/certs/cert.pem && test -f deploy/prod/certs/key.pem && \
   docker compose -f docker-compose.prod.yml --env-file .env build && \
