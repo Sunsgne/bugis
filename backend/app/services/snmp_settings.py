@@ -9,9 +9,21 @@ from app.core.config import settings
 from app.models.device import Device
 from app.models.snmp_settings import SnmpSettings
 from app.schemas.snmp_settings import SnmpSettingsOut, SnmpSettingsUpdate
-from app.services.credential_store import decrypt_value, encrypt_value
+from app.services.credential_store import decrypt_value, encrypt_value, is_encrypted
 
 DEFAULT_EXCLUDE = ["Null0", "Loopback", "Management", "Console", "InLoopBack", "MEth"]
+
+
+def _resolved_secret(raw: str | None, *, default: str | None = None) -> str | None:
+    """Return decrypted plaintext; never fall back to enc$ ciphertext."""
+    if not raw:
+        return default
+    dec = decrypt_value(raw)
+    if dec is not None:
+        return dec
+    if is_encrypted(raw):
+        return default
+    return raw
 
 
 def get_or_create(db: Session) -> SnmpSettings:
@@ -34,8 +46,8 @@ def to_out(row: SnmpSettings) -> SnmpSettingsOut:
     data = SnmpSettingsOut.model_validate(row, from_attributes=True)
     return data.model_copy(
         update={
-            "community": decrypt_value(row.community) or row.community,
-            "write_community": decrypt_value(row.write_community) if row.write_community else None,
+            "community": _resolved_secret(row.community) or "",
+            "write_community": _resolved_secret(row.write_community),
             "exclude_name_patterns": row.exclude_name_patterns or list(DEFAULT_EXCLUDE),
             "include_name_patterns": row.include_name_patterns or [],
             "v3_auth_password_set": bool(row.v3_auth_password),
@@ -63,9 +75,9 @@ def effective_community(db: Session, device: Device, override: str | None = None
     if override:
         return override
     if device.snmp_community:
-        return decrypt_value(device.snmp_community) or device.snmp_community
+        return _resolved_secret(device.snmp_community) or "public"
     cfg = get_or_create(db)
-    return decrypt_value(cfg.community) or cfg.community or "public"
+    return _resolved_secret(cfg.community, default="public") or "public"
 
 
 def interface_allowed(name: str, cfg: SnmpSettings) -> bool:

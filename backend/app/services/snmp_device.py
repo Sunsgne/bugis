@@ -23,7 +23,7 @@ def snmp_defaults(db: Session | None = None) -> dict:
         cfg = snmp_cfg.get_or_create(db)
         enabled = cfg.enabled
         port = cfg.port
-        community = decrypt_value(cfg.community) or cfg.community
+        community = snmp_cfg._resolved_secret(cfg.community, default=settings.baseline_snmp_community) or settings.baseline_snmp_community
         version = cfg.version
     return {
         "enabled": enabled,
