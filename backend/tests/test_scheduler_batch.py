@@ -9,7 +9,7 @@ import pytest
 from app.models.circuit import Circuit
 from app.models.enums import CircuitStatus, ServiceType
 from app.models.tenant import Tenant
-from app.scheduler import _collect_circuit_batch, _probe_one_circuit
+from app.scheduler import _collect_circuit_batch, _probe_one_circuit, _tick, _tick_lock
 
 
 @pytest.fixture

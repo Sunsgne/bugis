@@ -37,6 +37,7 @@ _learn_task: asyncio.Task | None = None
 _snmp_discover_task: asyncio.Task | None = None
 _learn_lock = threading.Lock()
 _snmp_discover_lock = threading.Lock()
+_tick_lock = threading.Lock()
 _probe_cursor = 0
 _collect_cursor = 0
 _state: dict = {
@@ -50,6 +51,8 @@ _state: dict = {
     "last_learn_conflicts": 0,
     "learn_running": False,
     "snmp_discover_running": False,
+    "tick_running": False,
+    "tick_skipped": 0,
     "last_snmp_discover": None,
     "last_snmp_discover_devices": 0,
     "interval": settings.scheduler_interval_seconds,
@@ -286,6 +289,19 @@ def _tick(*, include_learn: bool = False) -> int:
     if include_learn:
         _try_scheduled_learn_sync()
 
+    if not _tick_lock.acquire(blocking=False):
+        _state["tick_skipped"] = int(_state.get("tick_skipped") or 0) + 1
+        return 0
+
+    _state["tick_running"] = True
+    try:
+        return _tick_body()
+    finally:
+        _state["tick_running"] = False
+        _tick_lock.release()
+
+
+def _tick_body() -> int:
     collected = 0
     touched_ids: set[int] = set()
     probed = 0
