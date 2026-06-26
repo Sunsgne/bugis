@@ -18,6 +18,16 @@ type BatchResult = {
   results: Array<{ device_id?: number; device?: string; success?: boolean; error?: string }>;
 };
 
+const LEARN_PHASE_LABEL: Record<string, string> = {
+  reachability: "连通性检测",
+  fetch_config: "拉取 running-config",
+  parse_snapshot: "解析并归档",
+  snmp_discover: "SNMP 接口发现",
+  port_scan: "S-VID 扫描",
+  overlay_inventory: "Overlay 清单",
+  done: "完成",
+};
+
 export function useLearnJobs(notify: {
   success: (msg: string) => void;
   warning: (msg: string) => void;
@@ -36,38 +46,100 @@ export function useLearnJobs(notify: {
     [jobs],
   );
 
+  const pollLearnState = useCallback(
+    async (deviceId: number, deviceName: string, onDone?: () => void) => {
+      const maxAttempts = 180;
+      for (let i = 0; i < maxAttempts; i += 1) {
+        await new Promise((r) => setTimeout(r, 2000));
+        try {
+          const { data } = await api.get<{
+            has_learned_config?: boolean;
+            last_run_status?: string | null;
+            last_run_phase?: string | null;
+            latest_snapshot_version?: number | null;
+            inventory?: { service_count?: number };
+            run_id?: number | null;
+          }>(`/devices/${deviceId}/learned-state`);
+          const phase = data.last_run_phase;
+          if (phase && data.last_run_status === "running") {
+            const label = LEARN_PHASE_LABEL[phase] ?? phase;
+            setJobs((prev) => ({
+              ...prev,
+              [deviceId]: {
+                status: "learning",
+                deviceName,
+                message: label,
+              },
+            }));
+          }
+          if (data.has_learned_config) {
+            const ver = data.latest_snapshot_version;
+            const svc = data.inventory?.service_count ?? 0;
+            setJobs((prev) => ({
+              ...prev,
+              [deviceId]: {
+                status: "success",
+                deviceName,
+                message: ver != null ? `v${ver} · ${svc} 业务` : undefined,
+              },
+            }));
+            notify.success(`${deviceName} 学习完成${ver != null ? ` · v${ver}` : ""}`);
+            onDone?.();
+            return data;
+          }
+          if (data.last_run_status === "failed") {
+            setJobs((prev) => ({
+              ...prev,
+              [deviceId]: {
+                status: "error",
+                deviceName,
+                message: "learn failed",
+              },
+            }));
+            notify.error(`${deviceName} 现网学习失败`);
+            onDone?.();
+            return data;
+          }
+        } catch {
+          /* keep polling */
+        }
+      }
+      setJobs((prev) => ({
+        ...prev,
+        [deviceId]: {
+          status: "error",
+          deviceName,
+          message: "timeout",
+        },
+      }));
+      notify.warning(`${deviceName} 现网学习超时，请稍后重试`);
+      onDone?.();
+      return null;
+    },
+    [notify],
+  );
+
   const learnOne = useCallback(
     async (device: Device, onDone?: () => void) => {
       setJobs((prev) => ({
         ...prev,
-        [device.id]: { status: "learning", deviceName: device.name },
+        [device.id]: { status: "learning", deviceName: device.name, message: "排队中…" },
       }));
       try {
-        const { data } = await api.post(`/devices/${device.id}/learn`);
-        if (data.success) {
-          const inv = data.inventory;
-          setJobs((prev) => ({
-            ...prev,
-            [device.id]: {
-              status: "success",
-              deviceName: device.name,
-              message: `v${data.snapshot_version} · ${inv?.service_count ?? 0} 业务`,
-            },
-          }));
-          notify.success(`${device.name} 学习完成 · v${data.snapshot_version}`);
-        } else {
-          setJobs((prev) => ({
-            ...prev,
-            [device.id]: {
-              status: "error",
-              deviceName: device.name,
-              message: data.error,
-            },
-          }));
-          notify.error(data.error || `${device.name} 学习失败`);
+        const { data } = await api.post<{
+          scheduled?: boolean;
+          run_id?: number;
+          phase?: string;
+        }>(`/devices/${device.id}/learn`);
+        if (!data.scheduled) {
+          throw new Error("learn not scheduled");
         }
-        onDone?.();
-        return data;
+        const label = LEARN_PHASE_LABEL[data.phase ?? "reachability"] ?? data.phase;
+        setJobs((prev) => ({
+          ...prev,
+          [device.id]: { status: "learning", deviceName: device.name, message: label },
+        }));
+        return pollLearnState(device.id, device.name, onDone);
       } catch (e: unknown) {
         const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
         setJobs((prev) => ({
@@ -82,7 +154,7 @@ export function useLearnJobs(notify: {
         throw e;
       }
     },
-    [notify],
+    [notify, pollLearnState],
   );
 
   const learnBatch = useCallback(
@@ -145,67 +217,11 @@ export function useLearnJobs(notify: {
     (deviceId: number, deviceName: string, onDone?: () => void) => {
       setJobs((prev) => ({
         ...prev,
-        [deviceId]: { status: "learning", deviceName },
+        [deviceId]: { status: "learning", deviceName, message: "排队中…" },
       }));
-
-      const poll = async () => {
-        const maxAttempts = 120;
-        for (let i = 0; i < maxAttempts; i += 1) {
-          await new Promise((r) => setTimeout(r, 2000));
-          try {
-            const { data } = await api.get<{
-              has_learned_config?: boolean;
-              last_run_status?: string | null;
-              latest_snapshot_version?: number | null;
-              inventory?: { service_count?: number };
-            }>(`/devices/${deviceId}/learned-state`);
-            if (data.has_learned_config) {
-              const ver = data.latest_snapshot_version;
-              const svc = data.inventory?.service_count ?? 0;
-              setJobs((prev) => ({
-                ...prev,
-                [deviceId]: {
-                  status: "success",
-                  deviceName,
-                  message: ver != null ? `v${ver} · ${svc} 业务` : undefined,
-                },
-              }));
-              notify.success(`${deviceName} 现网学习完成${ver != null ? ` · v${ver}` : ""}`);
-              onDone?.();
-              return;
-            }
-            if (data.last_run_status === "failed") {
-              setJobs((prev) => ({
-                ...prev,
-                [deviceId]: {
-                  status: "error",
-                  deviceName,
-                  message: "learn failed",
-                },
-              }));
-              notify.error(`${deviceName} 现网学习失败`);
-              onDone?.();
-              return;
-            }
-          } catch {
-            /* keep polling */
-          }
-        }
-        setJobs((prev) => ({
-          ...prev,
-          [deviceId]: {
-            status: "error",
-            deviceName,
-            message: "timeout",
-          },
-        }));
-        notify.warning(`${deviceName} 现网学习超时，请稍后在设备页手动重试`);
-        onDone?.();
-      };
-
-      void poll();
+      void pollLearnState(deviceId, deviceName, onDone);
     },
-    [notify],
+    [pollLearnState],
   );
 
   const watchScheduledLearnBatch = useCallback(

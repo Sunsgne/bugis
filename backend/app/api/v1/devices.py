@@ -452,6 +452,17 @@ def discover_interfaces(
     return sorted(all_ifaces, key=lambda i: (i.ifindex or 0, i.name))
 
 
+@router.get("/credential-audit")
+def credential_audit(
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
+    """List devices whose southbound credentials are missing or cannot be decrypted."""
+    from app.services import credential_audit_service
+
+    return credential_audit_service.audit_all_devices(db)
+
+
 @router.post("/learn-batch", response_model=DeviceLearnBatchOut)
 def learn_devices_batch(
     payload: DeviceLearnBatchIn,
@@ -483,13 +494,19 @@ def learn_device_config(
     db: Session = Depends(get_db),
     user: User = Depends(require_operator),
 ):
-    """Pull live running-config, parse inventory, snapshot and refresh port S-VID."""
+    """Queue live config learn; poll GET /devices/{id}/learned-state for phase progress."""
     device = db.get(Device, device_id)
     if not device:
         raise HTTPException(status_code=404, detail="device not found")
-    result = config_learn.learn_device(db, device, created_by=user.username)
+    run_id = config_learn.start_learn_device(db, device, created_by=user.username)
     db.commit()
-    return result
+    return {
+        "scheduled": True,
+        "device_id": device.id,
+        "device": device.name,
+        "run_id": run_id,
+        "phase": "reachability",
+    }
 
 
 @router.get("/{device_id}/learned-state")

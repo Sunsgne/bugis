@@ -28,6 +28,7 @@ def schedule_learn_devices(
     created_by: str | None = None,
     discover_snmp: bool = True,
     max_workers: int | None = None,
+    run_ids: dict[int, int] | None = None,
 ) -> None:
     """Fire-and-forget config learn (used after device create / CSV import)."""
     unique = list(dict.fromkeys(device_ids))
@@ -44,6 +45,7 @@ def schedule_learn_devices(
                 created_by=created_by,
                 discover_snmp=discover_snmp,
                 max_workers=workers,
+                run_ids=run_ids,
             )
         except Exception:
             logger.exception("background config learn failed for %s device(s)", len(unique))
@@ -56,8 +58,15 @@ def schedule_learn_device(
     *,
     created_by: str | None = None,
     discover_snmp: bool = True,
+    run_id: int | None = None,
 ) -> None:
-    schedule_learn_devices([device_id], created_by=created_by, discover_snmp=discover_snmp)
+    run_ids = {device_id: run_id} if run_id is not None else None
+    schedule_learn_devices(
+        [device_id],
+        created_by=created_by,
+        discover_snmp=discover_snmp,
+        run_ids=run_ids,
+    )
 
 
 def learn_devices_parallel(
@@ -66,6 +75,7 @@ def learn_devices_parallel(
     created_by: str | None = None,
     discover_snmp: bool = True,
     max_workers: int = 4,
+    run_ids: dict[int, int] | None = None,
 ) -> dict:
     """Learn running-config for multiple devices concurrently (I/O-bound SSH/NETCONF)."""
     unique = list(dict.fromkeys(device_ids))
@@ -85,6 +95,7 @@ def learn_devices_parallel(
                 device,
                 created_by=created_by,
                 discover_snmp=discover_snmp,
+                run_id=(run_ids or {}).get(device_id),
             )
             result.setdefault("device_id", device_id)
             db.commit()

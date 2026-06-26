@@ -13,6 +13,52 @@ from app.models.enums import DeviceStatus
 from app.services import config_fetch, config_learn_parse, config_mgmt, overlay_inventory, port_inventory, snmp
 from app.services import device_management, snmp_settings as snmp_cfg
 
+LEARN_PHASES = (
+    "reachability",
+    "fetch_config",
+    "parse_snapshot",
+    "snmp_discover",
+    "port_scan",
+    "overlay_inventory",
+    "done",
+)
+
+
+def _set_learn_phase(db: Session, run: DeviceLearnRun | None, phase: str) -> None:
+    if run is None:
+        return
+    summary = dict(run.summary or {})
+    summary["phase"] = phase
+    run.summary = summary
+    db.flush()
+
+
+def start_learn_device(
+    db: Session,
+    device: Device,
+    *,
+    created_by: str | None = None,
+    discover_snmp: bool = True,
+) -> int:
+    """Create a running learn record and queue background execution."""
+    from app.services import concurrent_learn
+
+    run = DeviceLearnRun(
+        device_id=device.id,
+        status="running",
+        summary={"phase": "reachability"},
+        created_by=created_by,
+    )
+    db.add(run)
+    db.flush()
+    concurrent_learn.schedule_learn_device(
+        device.id,
+        created_by=created_by,
+        discover_snmp=discover_snmp,
+        run_id=run.id,
+    )
+    return run.id
+
 
 def _check_reachable(db: Session, device: Device) -> tuple[bool, str | None]:
     probe = device_management.probe_reachability(db, device)
@@ -42,45 +88,54 @@ def learn_device(
     *,
     created_by: str | None = None,
     discover_snmp: bool = True,
+    run_id: int | None = None,
 ) -> dict:
     """Full learn pipeline: fetch → parse → snapshot → port inventory → enrich."""
     started = datetime.now(timezone.utc)
+    run: DeviceLearnRun | None = None
+    if run_id is not None:
+        run = db.get(DeviceLearnRun, run_id)
+    if run is None:
+        run = DeviceLearnRun(
+            device_id=device.id,
+            status="running",
+            summary={"phase": "reachability"},
+            created_by=created_by,
+        )
+        db.add(run)
+        db.flush()
+
+    _set_learn_phase(db, run, "reachability")
     reachable, reach_err = _check_reachable(db, device)
     if not reachable:
-        run = DeviceLearnRun(
-            device_id=device.id,
-            status="failed",
-            error=f"device unreachable: {reach_err}",
-            created_by=created_by,
-        )
-        db.add(run)
-        db.flush()
+        run.status = "failed"
+        run.error = f"device unreachable: {reach_err}"
+        _set_learn_phase(db, run, "failed")
         return {
             "device": device.name,
             "success": False,
             "status": "failed",
             "error": run.error,
             "run_id": run.id,
+            "phase": "failed",
         }
 
+    _set_learn_phase(db, run, "fetch_config")
     ok, content, fetch_err = config_fetch.fetch_running_config(device, db=db)
     if not ok or not content.strip():
-        run = DeviceLearnRun(
-            device_id=device.id,
-            status="failed",
-            error=fetch_err or "empty config",
-            created_by=created_by,
-        )
-        db.add(run)
-        db.flush()
+        run.status = "failed"
+        run.error = fetch_err or "empty config"
+        _set_learn_phase(db, run, "failed")
         return {
             "device": device.name,
             "success": False,
             "status": "failed",
             "error": run.error,
             "run_id": run.id,
+            "phase": "failed",
         }
 
+    _set_learn_phase(db, run, "parse_snapshot")
     inventory = config_learn_parse.parse_inventory(content, device.vendor)
     snap = config_mgmt.add_snapshot(
         db,
@@ -97,8 +152,11 @@ def learn_device(
     if discover_snmp:
         cfg = snmp_cfg.get_or_create(db)
         if cfg.auto_discover_on_check:
+            _set_learn_phase(db, run, "snmp_discover")
             snmp.discover_interfaces(db, device)
+    _set_learn_phase(db, run, "port_scan")
     svid_scan = port_inventory.scan_device(db, device, include_legacy=False)
+    _set_learn_phase(db, run, "overlay_inventory")
     overlay = overlay_inventory.device_overlay_inventory(db, device)
 
     summary = {
@@ -119,17 +177,14 @@ def learn_device(
         },
         "started_at": started.isoformat(),
         "finished_at": datetime.now(timezone.utc).isoformat(),
+        "phase": "done",
     }
 
-    run = DeviceLearnRun(
-        device_id=device.id,
-        status="success",
-        snapshot_id=snap.id,
-        inventory=inventory.as_dict(),
-        summary=summary,
-        created_by=created_by,
-    )
-    db.add(run)
+    run.status = "success"
+    run.snapshot_id = snap.id
+    run.inventory = inventory.as_dict()
+    run.summary = summary
+    run.error = None
     db.flush()
 
     return {
@@ -137,6 +192,7 @@ def learn_device(
         "success": True,
         "status": "success",
         "run_id": run.id,
+        "phase": "done",
         "snapshot_version": snap.version,
         "snapshot_id": snap.id,
         "inventory": inventory.as_dict(),
@@ -173,7 +229,9 @@ def learned_state(db: Session, device: Device) -> dict:
         "latest_snapshot_at": snap.created_at.isoformat() if snap and snap.created_at else None,
         "last_run_status": run.status if run else None,
         "last_run_at": run.created_at.isoformat() if run and run.created_at else None,
-        "inventory": run.inventory if run else None,
+        "last_run_phase": (run.summary or {}).get("phase") if run else None,
+        "run_id": run.id if run else None,
+        "inventory": run.inventory if run and run.status == "success" else None,
         "drift_line_count": drift_lines,
     }
 

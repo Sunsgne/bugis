@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import itertools
+import time
 
 from app.core.database import SessionLocal
 from app.models.device import Device
@@ -38,6 +39,21 @@ def _site(client, auth_headers):
         headers=auth_headers,
         json={"name": f"Learn DC {n}", "code": f"L-DC{n}", "bgp_asn": 65001},
     ).json()
+
+
+def _wait_learn(client, device_id: int, auth_headers, *, timeout_sec: float = 15.0) -> dict:
+    deadline = time.time() + timeout_sec
+    state = {}
+    while time.time() < deadline:
+        state = client.get(
+            f"/api/v1/devices/{device_id}/learned-state", headers=auth_headers
+        ).json()
+        if state.get("has_learned_config") and state.get("last_run_status") == "success":
+            return state
+        if state.get("last_run_status") == "failed":
+            raise AssertionError(state)
+        time.sleep(0.2)
+    raise AssertionError(f"learn timed out: {state}")
 
 
 def test_parse_h3c_inventory():
@@ -113,17 +129,14 @@ def test_device_learn_api(client, auth_headers):
         params={"learn": False},
     ).json()
 
-    result = client.post(
+    queued = client.post(
         f"/api/v1/devices/{leaf['id']}/learn", headers=auth_headers
     ).json()
-    assert result["success"] is True, result
-    assert result["snapshot_version"] >= 1
-    assert result["inventory"]["service_count"] >= 1
-
-    state = client.get(
-        f"/api/v1/devices/{leaf['id']}/learned-state", headers=auth_headers
-    ).json()
+    assert queued["scheduled"] is True
+    state = _wait_learn(client, leaf["id"], auth_headers)
     assert state["has_learned_config"] is True
+    assert state["latest_snapshot_version"] >= 1
+    assert state["inventory"]["service_count"] >= 1
     assert state["inventory"]["loopback_ip"] == "10.255.255.1"
 
     drift = client.get(
@@ -183,6 +196,7 @@ def test_port_inventory_uses_learned_config(client, auth_headers):
         params={"learn": False},
     ).json()
     client.post(f"/api/v1/devices/{pe['id']}/learn", headers=auth_headers)
+    _wait_learn(client, pe["id"], auth_headers)
 
     db = SessionLocal()
     try:
@@ -213,8 +227,8 @@ def test_backup_live_running_config(client, auth_headers):
         params={"learn": False},
     ).json()
 
-    learn = client.post(f"/api/v1/devices/{leaf['id']}/learn", headers=auth_headers).json()
-    assert learn["success"] is True
+    client.post(f"/api/v1/devices/{leaf['id']}/learn", headers=auth_headers)
+    _wait_learn(client, leaf["id"], auth_headers)
 
     backup = client.post(
         f"/api/v1/config/devices/{leaf['id']}/backup", headers=auth_headers
@@ -247,6 +261,7 @@ def test_diff_platform_vs_learned(client, auth_headers):
         params={"learn": False},
     ).json()
     client.post(f"/api/v1/devices/{leaf['id']}/learn", headers=auth_headers)
+    _wait_learn(client, leaf["id"], auth_headers)
 
     db = SessionLocal()
     try:
