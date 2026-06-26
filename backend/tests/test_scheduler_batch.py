@@ -70,3 +70,11 @@ def test_probe_batch_respects_limit(db_session):
         assert count == 4
         assert len(touched) == 4
         assert mock_probe.call_count == 4
+
+
+def test_tick_skips_when_previous_still_running():
+    _tick_lock.acquire()
+    try:
+        assert _tick() == 0
+    finally:
+        _tick_lock.release()
