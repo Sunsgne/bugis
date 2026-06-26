@@ -10,6 +10,21 @@ from app.models.enums import DataPlaneState
 from app.models.circuit import Circuit, CircuitEndpoint
 
 
+def _find_binding(
+    db: Session, circuit_id: int, device_id: int, operation: str
+) -> DataPlaneBinding | None:
+    return db.execute(
+        select(DataPlaneBinding)
+        .where(
+            DataPlaneBinding.circuit_id == circuit_id,
+            DataPlaneBinding.device_id == device_id,
+            DataPlaneBinding.operation == operation,
+        )
+        .order_by(DataPlaneBinding.id.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+
+
 def plan_bindings(
     db: Session,
     circuit: Circuit,
@@ -18,16 +33,12 @@ def plan_bindings(
     work_order_id: int | None = None,
 ) -> list[DataPlaneBinding]:
     bindings: list[DataPlaneBinding] = []
+    seen_devices: set[int] = set()
     for ep in endpoints:
-        if not ep.device:
+        if not ep.device or ep.device_id in seen_devices:
             continue
-        existing = db.execute(
-            select(DataPlaneBinding).where(
-                DataPlaneBinding.circuit_id == circuit.id,
-                DataPlaneBinding.device_id == ep.device_id,
-                DataPlaneBinding.operation == operation,
-            )
-        ).scalar_one_or_none()
+        seen_devices.add(ep.device_id)
+        existing = _find_binding(db, circuit.id, ep.device_id, operation)
         binding = existing or DataPlaneBinding(
             circuit_id=circuit.id,
             device_id=ep.device_id,
@@ -58,13 +69,7 @@ def _transport_for(device: Device) -> str:
 def mark_rendered(
     db: Session, circuit_id: int, device_id: int, operation: str, config: str
 ) -> None:
-    binding = db.execute(
-        select(DataPlaneBinding).where(
-            DataPlaneBinding.circuit_id == circuit_id,
-            DataPlaneBinding.device_id == device_id,
-            DataPlaneBinding.operation == operation,
-        ).order_by(DataPlaneBinding.id.desc()).limit(1)
-    ).scalar_one_or_none()
+    binding = _find_binding(db, circuit_id, device_id, operation)
     if not binding:
         return
     binding.state = DataPlaneState.RENDERED
@@ -80,13 +85,7 @@ def mark_applied(
     output: str = "",
     success: bool = True,
 ) -> None:
-    binding = db.execute(
-        select(DataPlaneBinding).where(
-            DataPlaneBinding.circuit_id == circuit_id,
-            DataPlaneBinding.device_id == device_id,
-            DataPlaneBinding.operation == operation,
-        ).order_by(DataPlaneBinding.id.desc()).limit(1)
-    ).scalar_one_or_none()
+    binding = _find_binding(db, circuit_id, device_id, operation)
     if not binding:
         return
     binding.state = DataPlaneState.APPLIED if success else DataPlaneState.FAILED
