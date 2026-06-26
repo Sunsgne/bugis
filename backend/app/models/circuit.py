@@ -3,7 +3,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, Float, ForeignKey, Integer, String
+from datetime import datetime
+
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -61,6 +63,13 @@ class Circuit(Base, TimestampMixin):
     alarm_health_score_min: Mapped[float | None] = mapped_column(Float, nullable=True)
     # When false, skip scheduled/on-demand path probes and hide QoS metrics in UI.
     latency_probe_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Post-provision alarm grace: no new alarms until activated_at + suppress minutes.
+    activated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    alarm_suppress_minutes: Mapped[int] = mapped_column(Integer, default=60)
+    # JSON list of alarm kind keys; null = all circuit alarm kinds enabled.
+    enabled_alarm_kinds: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     description: Mapped[str | None] = mapped_column(String(255), nullable=True)
 

@@ -16,7 +16,11 @@ from app.models.enums import AlarmSeverity, AlarmStatus, CircuitStatus
 from app.models.link import Link
 from app.schemas.telemetry import CircuitHealth
 from app.services import platform_settings as platform_cfg
-from app.services.circuit_alarm_settings import effective_thresholds
+from app.services.circuit_alarm_settings import (
+    alarms_suppressed,
+    effective_thresholds,
+    is_alarm_kind_enabled,
+)
 from app.services import alarm_messages as msg
 from app.services.alarm_context import circuit_alarm_context, link_alarm_context, template_extra
 from app.services.alarm_template_registry import get_templates
@@ -81,6 +85,9 @@ def clear_by_key(db: Session, dedup_key: str) -> int:
 
 def evaluate_circuit_health(db: Session, circuit: Circuit, health: CircuitHealth) -> None:
     """Raise/clear alarms for one circuit based on its computed health."""
+    if alarms_suppressed(circuit):
+        return
+
     cid = circuit.id
     plat = platform_cfg.get_or_create(db)
     th = effective_thresholds(circuit, plat)
@@ -91,18 +98,21 @@ def evaluate_circuit_health(db: Session, circuit: Circuit, health: CircuitHealth
     key_down = f"circuit:{cid}:down"
     latest_down = health.tunnel_down
     if circuit.status in (CircuitStatus.FAILED, CircuitStatus.DEGRADED) or latest_down:
-        tunnel_status = "down" if latest_down else circuit.status.value
-        copy = msg.build_circuit_tunnel_down(
-            circuit.code,
-            tunnel_status,
-            templates,
-            **template_extra(ctx, "circuit_code", "status"),
-        )
-        raise_alarm(
-            db, "tunnel_down", AlarmSeverity.CRITICAL,
-            copy.title,
-            key_down, detail=copy.detail, circuit_id=cid,
-        )
+        if is_alarm_kind_enabled(circuit, "tunnel_down"):
+            tunnel_status = "down" if latest_down else circuit.status.value
+            copy = msg.build_circuit_tunnel_down(
+                circuit.code,
+                tunnel_status,
+                templates,
+                **template_extra(ctx, "circuit_code", "status"),
+            )
+            raise_alarm(
+                db, "tunnel_down", AlarmSeverity.CRITICAL,
+                copy.title,
+                key_down, detail=copy.detail, circuit_id=cid,
+            )
+        else:
+            clear_by_key(db, key_down)
     else:
         clear_by_key(db, key_down)
 
@@ -112,7 +122,7 @@ def evaluate_circuit_health(db: Session, circuit: Circuit, health: CircuitHealth
     # Packet loss / latency — only when path probes are enabled for this circuit.
     key_loss = f"circuit:{cid}:loss"
     key_lat = f"circuit:{cid}:latency"
-    if circuit.latency_probe_enabled:
+    if circuit.latency_probe_enabled and is_alarm_kind_enabled(circuit, "sla_loss"):
         if health.avg_packet_loss_pct > th.packet_loss_pct:
             copy = msg.build_circuit_loss(
                 circuit.code,
@@ -129,7 +139,10 @@ def evaluate_circuit_health(db: Session, circuit: Circuit, health: CircuitHealth
             )
         else:
             clear_by_key(db, key_loss)
+    else:
+        clear_by_key(db, key_loss)
 
+    if circuit.latency_probe_enabled and is_alarm_kind_enabled(circuit, "sla_latency"):
         if health.avg_latency_ms > th.latency_ms:
             copy = msg.build_circuit_latency(
                 circuit.code,
@@ -147,12 +160,11 @@ def evaluate_circuit_health(db: Session, circuit: Circuit, health: CircuitHealth
         else:
             clear_by_key(db, key_lat)
     else:
-        clear_by_key(db, key_loss)
         clear_by_key(db, key_lat)
 
     # Utilization
     key_util = f"circuit:{cid}:utilization"
-    if health.peak_utilization_pct > th.utilization_pct:
+    if is_alarm_kind_enabled(circuit, "utilization") and health.peak_utilization_pct > th.utilization_pct:
         copy = msg.build_circuit_utilization(
             circuit.code,
             health.peak_utilization_pct,
@@ -170,7 +182,7 @@ def evaluate_circuit_health(db: Session, circuit: Circuit, health: CircuitHealth
 
     # Composite health score
     key_health = f"circuit:{cid}:health"
-    if health.health_score < th.health_score_min:
+    if is_alarm_kind_enabled(circuit, "health") and health.health_score < th.health_score_min:
         copy = msg.build_circuit_health(
             circuit.code,
             health.health_score,
@@ -190,6 +202,9 @@ def evaluate_circuit_health(db: Session, circuit: Circuit, health: CircuitHealth
 
 def evaluate_circuit_availability(db: Session, circuit: Circuit) -> None:
     """Raise/clear interruption and flap alarms from availability events."""
+    if alarms_suppressed(circuit):
+        return
+
     from app.services import availability_service
 
     cid = circuit.id
@@ -203,7 +218,9 @@ def evaluate_circuit_availability(db: Session, circuit: Circuit) -> None:
     templates = get_templates(db)
     ctx = circuit_alarm_context(db, circuit)
     key_interrupt = f"circuit:{cid}:interruption"
-    if open_ev and open_ev.kind == "interruption":
+    if open_ev and open_ev.kind == "interruption" and is_alarm_kind_enabled(
+        circuit, "circuit_interruption"
+    ):
         copy = msg.build_circuit_interruption(
             circuit.code,
             open_ev.detail,
@@ -224,7 +241,9 @@ def evaluate_circuit_availability(db: Session, circuit: Circuit) -> None:
 
     flaps = availability_service.flap_count(db, cid)
     key_flap = f"circuit:{cid}:flap"
-    if flaps >= availability_service.FLAP_COUNT_THRESHOLD:
+    if flaps >= availability_service.FLAP_COUNT_THRESHOLD and is_alarm_kind_enabled(
+        circuit, "circuit_flap"
+    ):
         copy = msg.build_circuit_flap(
             circuit.code,
             flaps,

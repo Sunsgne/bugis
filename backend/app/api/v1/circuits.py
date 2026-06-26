@@ -37,7 +37,11 @@ from app.schemas.forwarding_path import ForwardingPathResponse
 from app.schemas.path import PathPreviewRequest, PathPreviewResponse
 from app.services import allocation, circuit_adopt, concurrent_scan, forwarding_path_service, link_planner, path_service, port_inventory, probe, validation
 from app.services import platform_settings as platform_cfg
-from app.services.circuit_alarm_settings import thresholds_out
+from app.services.circuit_alarm_settings import (
+    alarm_policy_out,
+    normalize_alarm_policy_payload,
+    thresholds_out,
+)
 
 router = APIRouter()
 
@@ -78,6 +82,7 @@ def _to_circuit_list_out(db: Session, circuit: Circuit) -> CircuitListOut:
     return base.model_copy(
         update={
             **thresholds_out(circuit, plat),
+            **alarm_policy_out(circuit),
             "endpoints": _endpoints_out(db, circuit),
         }
     )
@@ -102,6 +107,7 @@ def _to_circuit_out(db: Session, circuit: Circuit) -> CircuitOut:
     return base.model_copy(
         update={
             **thresholds_out(circuit, plat),
+            **alarm_policy_out(circuit),
             "path_hops": hop_schemas,
             "segment_list": path_service.segment_list(path_devices),
             "endpoints": _endpoints_out(db, circuit),
@@ -160,8 +166,8 @@ def create_circuit(
     if not db.get(Tenant, payload.tenant_id):
         raise HTTPException(status_code=404, detail="tenant not found")
 
-    data = payload.model_dump(
-        exclude={"endpoints", "code", "via_device_ids"}
+    data = normalize_alarm_policy_payload(
+        payload.model_dump(exclude={"endpoints", "code", "via_device_ids"})
     )
     via_ids = payload.via_device_ids or []
     path_mode = payload.path_mode
@@ -516,7 +522,8 @@ def update_circuit(
     circuit = db.get(Circuit, circuit_id)
     if not circuit:
         raise HTTPException(status_code=404, detail="circuit not found")
-    for k, v in payload.model_dump(exclude_unset=True).items():
+    changes = normalize_alarm_policy_payload(payload.model_dump(exclude_unset=True))
+    for k, v in changes.items():
         setattr(circuit, k, v)
     db.commit()
     db.refresh(circuit)

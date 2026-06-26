@@ -1,16 +1,27 @@
-import { Col, Form, InputNumber, Row, Typography } from "antd";
+import { Checkbox, Col, Form, InputNumber, Row, Typography } from "antd";
 import { usePlatformSettings } from "../hooks/usePlatformSettings";
 import { useTc } from "@/i18n/useTc";
 import SwitchOnOff from "./SwitchOnOff";
+import { ALARM_KIND } from "../constants/statusLabels";
+import {
+  CIRCUIT_ALARM_KINDS,
+  DEFAULT_ALARM_SUPPRESS_MINUTES,
+  DEFAULT_CIRCUIT_ALARM_KINDS,
+} from "../constants/circuitAlarms";
 
 const { Text } = Typography;
 
 type Props = {
   /** Show platform defaults as field hints. */
   showDefaults?: boolean;
+  /** Show alarm kind multi-select and post-provision suppress duration. */
+  showAlarmPolicy?: boolean;
 };
 
-export default function CircuitAlarmThresholdFields({ showDefaults = true }: Props) {
+export default function CircuitAlarmThresholdFields({
+  showDefaults = true,
+  showAlarmPolicy = true,
+}: Props) {
   const { tc } = useTc();
   const { platform } = usePlatformSettings();
   const probeEnabled = Form.useWatch("latency_probe_enabled");
@@ -32,6 +43,34 @@ export default function CircuitAlarmThresholdFields({ showDefaults = true }: Pro
 
   return (
     <>
+      {showAlarmPolicy && (
+        <>
+          <Form.Item
+            name="alarm_suppress_minutes"
+            label={tc("开通后告警抑制")}
+            initialValue={DEFAULT_ALARM_SUPPRESS_MINUTES}
+            extra={tc("专线首次开通成功后，在此时间内不触发新告警（默认 60 分钟）")}
+          >
+            <InputNumber min={0} max={24 * 60} addonAfter={tc("分钟")} style={{ width: "100%" }} />
+          </Form.Item>
+          <Form.Item
+            name="enabled_alarm_kinds"
+            label={tc("告警类型")}
+            initialValue={DEFAULT_CIRCUIT_ALARM_KINDS}
+            extra={tc("选择该专线需要评估的告警类型；未勾选的类型不会触发告警")}
+          >
+            <Checkbox.Group style={{ width: "100%" }}>
+              <Row gutter={[8, 8]}>
+                {CIRCUIT_ALARM_KINDS.map((kind) => (
+                  <Col span={12} key={kind}>
+                    <Checkbox value={kind}>{ALARM_KIND[kind]}</Checkbox>
+                  </Col>
+                ))}
+              </Row>
+            </Checkbox.Group>
+          </Form.Item>
+        </>
+      )}
       <Form.Item
         name="latency_probe_enabled"
         label={tc("延迟探测")}

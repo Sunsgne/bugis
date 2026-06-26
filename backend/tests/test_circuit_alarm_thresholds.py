@@ -104,4 +104,4 @@ def test_evaluate_circuit_health_respects_circuit_latency_threshold(
         db_session, f"circuit:{sample_circuit.id}:latency"
     )
     assert lat_alarm is not None
-    assert "280" in lat_alarm.title
+    assert lat_alarm.kind == "sla_latency"

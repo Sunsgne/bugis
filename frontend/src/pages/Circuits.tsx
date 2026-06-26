@@ -395,6 +395,9 @@ export default function Circuits() {
         delete payload[key];
       }
     }
+    if (!Array.isArray(payload.enabled_alarm_kinds) || payload.enabled_alarm_kinds.length === 0) {
+      delete payload.enabled_alarm_kinds;
+    }
     if (typeof payload.ipt_nat_enabled === "boolean") {
       payload.ipt_nat_enabled = payload.ipt_nat_enabled ? 1 : 0;
     }
@@ -571,6 +574,8 @@ export default function Circuits() {
         alarm_packet_loss_pct: v.alarm_packet_loss_pct ?? null,
         alarm_utilization_pct: v.alarm_utilization_pct ?? null,
         alarm_health_score_min: v.alarm_health_score_min ?? null,
+        alarm_suppress_minutes: v.alarm_suppress_minutes ?? 60,
+        enabled_alarm_kinds: v.enabled_alarm_kinds,
       };
       const bwChanged = v.bandwidth_mbps !== modifyTarget.bandwidth_mbps;
       if (bwChanged) {
@@ -1067,10 +1072,17 @@ export default function Circuits() {
           {
             title: tc("状态"),
             dataIndex: "status",
-            width: 88,
-            render: (s) => {
+            width: 120,
+            render: (s, r) => {
               const m = statusMeta(CIRCUIT_STATUS, s);
-              return <Tag color={m.color}>{m.label}</Tag>;
+              return (
+                <Space size={4}>
+                  <Tag color={m.color}>{m.label}</Tag>
+                  {r.alarms_suppressed && (
+                    <Tag color="default">{tc("告警抑制中")}</Tag>
+                  )}
+                </Space>
+              );
             },
           },
           {
@@ -1107,6 +1119,10 @@ export default function Circuits() {
                       alarm_packet_loss_pct: detail.alarm_packet_loss_pct,
                       alarm_utilization_pct: detail.alarm_utilization_pct,
                       alarm_health_score_min: detail.alarm_health_score_min,
+                      alarm_suppress_minutes: detail.alarm_suppress_minutes ?? 60,
+                      enabled_alarm_kinds: detail.enabled_alarm_kinds?.length
+                        ? detail.enabled_alarm_kinds
+                        : undefined,
                     });
                   },
                 },

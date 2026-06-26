@@ -1,10 +1,15 @@
 """Circuit & endpoint schemas."""
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from typing import Any
+
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+from datetime import datetime
 
 from app.models.enums import AccessMode, CircuitPurpose, CircuitStatus, PathMode, ServiceType
 from app.schemas.common import TimestampedSchema
+from app.services.circuit_alarm_settings import CIRCUIT_ALARM_KINDS, DEFAULT_ALARM_SUPPRESS_MINUTES
 
 
 class CircuitEndpointBase(BaseModel):
@@ -58,12 +63,28 @@ class CircuitBase(BaseModel):
     alarm_utilization_pct: float | None = Field(default=None, ge=0, le=100)
     alarm_health_score_min: float | None = Field(default=None, ge=0, le=100)
     latency_probe_enabled: bool = True
+    alarm_suppress_minutes: int = Field(
+        default=DEFAULT_ALARM_SUPPRESS_MINUTES, ge=0, le=24 * 60
+    )
+    enabled_alarm_kinds: list[str] | None = None
     description: str | None = None
     egress_country: str | None = None
     egress_site_id: int | None = None
     ipt_public_ip: str | None = None
     ipt_nat_enabled: int = 1
     path_mode: PathMode = PathMode.AUTO
+
+    @field_validator("enabled_alarm_kinds")
+    @classmethod
+    def _validate_alarm_kinds(cls, value: list[str] | None) -> list[str] | None:
+        if value is None:
+            return None
+        invalid = [k for k in value if k not in CIRCUIT_ALARM_KINDS]
+        if invalid:
+            raise ValueError(f"unsupported alarm kinds: {', '.join(invalid)}")
+        if not value:
+            raise ValueError("at least one alarm kind must be selected")
+        return value
 
 
 class CircuitAdoptBinding(BaseModel):
@@ -159,6 +180,8 @@ class CircuitUpdate(BaseModel):
     alarm_utilization_pct: float | None = Field(default=None, ge=0, le=100)
     alarm_health_score_min: float | None = Field(default=None, ge=0, le=100)
     latency_probe_enabled: bool | None = None
+    alarm_suppress_minutes: int | None = Field(default=None, ge=0, le=24 * 60)
+    enabled_alarm_kinds: list[str] | None = None
     description: str | None = None
     egress_country: str | None = None
     egress_site_id: int | None = None
@@ -192,6 +215,23 @@ class CircuitListOut(CircuitBase, TimestampedSchema):
     effective_alarm_utilization_pct: float | None = None
     effective_alarm_health_score_min: float | None = None
     alarm_thresholds_customized: bool = False
+    enabled_alarm_kinds: list[str] = Field(default_factory=list)
+    alarm_suppress_minutes: int = DEFAULT_ALARM_SUPPRESS_MINUTES
+    activated_at: datetime | None = None
+    alarms_suppressed: bool = False
+    alarm_suppression_until: datetime | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _coerce_from_orm(cls, data: Any) -> Any:
+        if isinstance(data, dict) or not hasattr(data, "__mapper__"):
+            return data
+        skip = {"enabled_alarm_kinds", "alarms_suppressed", "alarm_suppression_until"}
+        return {
+            name: getattr(data, name)
+            for name in cls.model_fields
+            if name not in skip and hasattr(data, name)
+        }
 
 
 class CircuitOut(CircuitListOut):

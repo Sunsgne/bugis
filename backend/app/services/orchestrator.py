@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 import secrets
+from datetime import datetime, timezone
 from typing import Callable
 
 logger = logging.getLogger("bugis.orchestrator")
@@ -623,6 +624,25 @@ def execute(db: Session, wo: WorkOrder, actor: str | None = None) -> WorkOrder:
             _clear_circuit_alarms_on_decommission(db, wo, circuit, actor)
         else:
             circuit.status = CircuitStatus.ACTIVE
+            if wo.type == WorkOrderType.PROVISION:
+                circuit.activated_at = datetime.now(timezone.utc)
+                cleared = alarm_service.clear_active_for_circuit(db, circuit)
+                suppress_min = circuit.alarm_suppress_minutes or 60
+                if cleared:
+                    _log(
+                        db,
+                        wo,
+                        f"开通后 {suppress_min} 分钟内不触发告警"
+                        f"（已清除开通前 {cleared} 条告警）",
+                        actor=actor,
+                    )
+                else:
+                    _log(
+                        db,
+                        wo,
+                        f"开通后 {suppress_min} 分钟内不触发告警",
+                        actor=actor,
+                    )
         _log(db, wo, "Execution completed successfully", actor=actor)
         # Auto-snapshot affected devices into configuration management.
         _snapshot_devices(db, circuit, actor)
