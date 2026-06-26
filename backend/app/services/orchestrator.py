@@ -496,12 +496,14 @@ def execute(db: Session, wo: WorkOrder, actor: str | None = None) -> WorkOrder:
                     + "、".join(missing),
                     level="error", actor=actor,
                 )
+                _rescan_circuit_ports(db, circuit)
                 return wo
         if errors:
             wo.status = WorkOrderStatus.FAILED
             circuit.status = CircuitStatus.FAILED
             _log(db, wo, f"预检未通过，存在 {len(errors)} 个错误，已阻断下发",
                  level="error", actor=actor)
+            _rescan_circuit_ports(db, circuit)
             return wo
 
     operation = _operation_for(wo.type)
@@ -613,6 +615,7 @@ def execute(db: Session, wo: WorkOrder, actor: str | None = None) -> WorkOrder:
         circuit.status = CircuitStatus.FAILED
         _log(db, wo, "Execution finished with errors", level="error", actor=actor)
         _rollback_applied(db, wo, rollbacks, actor)
+        _rescan_circuit_ports(db, circuit)
     else:
         wo.status = WorkOrderStatus.COMPLETED
         if wo.type == WorkOrderType.DECOMMISSION:
@@ -715,6 +718,25 @@ def _snapshot_devices(db: Session, circuit: Circuit, actor: str | None) -> None:
                 port_inventory.scan_device(db, ep.device)
             except Exception:  # noqa: BLE001
                 pass
+
+
+def _rescan_circuit_ports(db: Session, circuit: Circuit) -> None:
+    """Refresh port S-VID inventory after provision failure (no config snapshot)."""
+    from app.models.device import Device
+    from app.services import port_inventory
+
+    seen: set[int] = set()
+    for ep in circuit.endpoints:
+        if not ep.device_id or ep.device_id in seen:
+            continue
+        seen.add(ep.device_id)
+        device = ep.device or db.get(Device, ep.device_id)
+        if not device:
+            continue
+        try:
+            port_inventory.scan_device(db, device)
+        except Exception:  # noqa: BLE001
+            pass
 
 
 def _schedule_snmp_discover_after_provision(

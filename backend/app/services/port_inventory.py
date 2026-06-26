@@ -22,12 +22,16 @@ from app.models.tenant import Tenant
 from app.services import config_mgmt
 
 # Circuits whose endpoints should reserve S-VID on a port.
+# Include FAILED/SUSPENDED so a failed provision does not drop platform intent
+# from port inventory (device learn would otherwise win as source=device).
 RESERVING_STATUSES = frozenset({
     CircuitStatus.ACTIVE,
     CircuitStatus.PROVISIONING,
     CircuitStatus.PENDING,
     CircuitStatus.DEGRADED,
     CircuitStatus.DRAFT,
+    CircuitStatus.FAILED,
+    CircuitStatus.SUSPENDED,
 })
 
 # Demo-only: legacy config fragments not tracked by the platform (dry-run realism).
@@ -1260,16 +1264,6 @@ def list_port_bindings(db: Session, device: Device) -> dict:
     def _canonical_iface(name: str) -> str:
         return _canonical_iface_for_device(device, name, alias_to_canonical)
 
-    for iface in ifaces:
-        canonical = _canonical_iface(iface.name)
-        for raw in iface.used_s_vids or []:
-            btype = "platform" if raw.get("source") == "platform" else "device"
-            _append_row(
-                interface_name=canonical,
-                raw=raw,
-                binding_type=btype,
-            )
-
     rows = db.execute(
         select(CircuitEndpoint, Circuit, Tenant)
         .join(Circuit, Circuit.id == CircuitEndpoint.circuit_id)
@@ -1281,9 +1275,6 @@ def list_port_bindings(db: Session, device: Device) -> dict:
     for ep, circuit, tenant in rows:
         mode = ep.access_mode.value if ep.access_mode else AccessMode.DOT1Q.value
         svid = ep.vlan_id or circuit.vlan_id
-        key = _binding_key(_canonical_iface(ep.interface_name), mode, svid, ep.inner_vlan_id)
-        if key in seen_keys:
-            continue
         _append_row(
             interface_name=_canonical_iface(ep.interface_name),
             raw={
@@ -1305,6 +1296,16 @@ def list_port_bindings(db: Session, device: Device) -> dict:
             tenant=tenant,
             endpoint_label=ep.label,
         )
+
+    for iface in ifaces:
+        canonical = _canonical_iface(iface.name)
+        for raw in iface.used_s_vids or []:
+            btype = "platform" if raw.get("source") == "platform" else "device"
+            _append_row(
+                interface_name=canonical,
+                raw=raw,
+                binding_type=btype,
+            )
 
     items.sort(
         key=lambda row: (
