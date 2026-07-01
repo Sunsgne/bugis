@@ -7,16 +7,26 @@ import { useTc } from "@/i18n/useTc";
 import { useTranslation } from "react-i18next";
 import { accessModeLabel } from "../i18n/helpers";
 
-function endpointVlanLabel(ep: CircuitEndpoint, tc: (s: string) => string): string {
+function effectiveEndpointVlan(ep: CircuitEndpoint, circuit: Circuit): number | null | undefined {
+  if (ep.access_mode === "access") return null;
+  return ep.vlan_id ?? circuit.vlan_id;
+}
+
+function endpointVlanLabel(
+  ep: CircuitEndpoint,
+  circuit: Circuit,
+  tc: (s: string) => string,
+): string {
   const mode = ep.access_mode || "dot1q";
   if (mode === "access") return tc("无 (Access 模式)");
+  const svid = effectiveEndpointVlan(ep, circuit);
   if (mode === "qinq") {
-    if (ep.vlan_id == null && ep.inner_vlan_id == null) return tc("自动分配");
-    const s = ep.vlan_id != null ? `S:${ep.vlan_id}` : tc("S:自动");
+    if (svid == null && ep.inner_vlan_id == null) return tc("自动分配");
+    const s = svid != null ? `S:${svid}` : tc("S:自动");
     const c = ep.inner_vlan_id != null ? `C:${ep.inner_vlan_id}` : ep.inner_vlan_id === undefined ? "" : tc("C:自动");
     return c ? `${s} / ${c}` : s;
   }
-  return ep.vlan_id != null ? `S-VID ${ep.vlan_id}` : tc("自动分配");
+  return svid != null ? `S-VID ${svid}` : tc("自动分配");
 }
 
 function endpointTagColor(label: string): string {
@@ -125,6 +135,7 @@ export default function CircuitExpandDetail({
         <Descriptions size="small" column={{ xs: 1, sm: 2, lg: 3 }} bordered>
           <Descriptions.Item label="VNI">{detail.vni ?? "—"}</Descriptions.Item>
           <Descriptions.Item label="VSI">{detail.vsi_name || "—"}</Descriptions.Item>
+          <Descriptions.Item label={tc("Service VLAN")}>{detail.vlan_id ?? "—"}</Descriptions.Item>
           <Descriptions.Item label="MTU">{detail.mtu ?? "—"}</Descriptions.Item>
           <Descriptions.Item label="VRF">{detail.vrf_name || "—"}</Descriptions.Item>
           <Descriptions.Item label="RD">{detail.route_distinguisher || "—"}</Descriptions.Item>
@@ -161,7 +172,7 @@ export default function CircuitExpandDetail({
                   <EndpointField label={tc('封装模式')}>
                     {accessModeLabel(t, ep.access_mode || "dot1q")}
                   </EndpointField>
-                  <EndpointField label="VLAN">{endpointVlanLabel(ep, tc)}</EndpointField>
+                  <EndpointField label="VLAN">{endpointVlanLabel(ep, detail, tc)}</EndpointField>
                   {ep.gateway_ip ? <EndpointField label={tc('网关')}>{ep.gateway_ip}</EndpointField> : null}
                   {ep.ip_address ? <EndpointField label={tc('接口 IP')}>{ep.ip_address}</EndpointField> : null}
                 </EndpointFields>

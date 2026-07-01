@@ -188,6 +188,19 @@ def allocate_public_ip(db: Session, vni: int) -> str:
     return f"{base}.{second}.{third}.254"
 
 
+def materialize_endpoint_vlans(circuit: Circuit) -> None:
+    """Copy circuit-level Service VLAN onto endpoints that left it blank."""
+    from app.models.enums import AccessMode
+
+    if circuit.vlan_id is None:
+        return
+    for ep in circuit.endpoints:
+        if ep.access_mode == AccessMode.ACCESS:
+            continue
+        if ep.vlan_id is None:
+            ep.vlan_id = circuit.vlan_id
+
+
 def auto_allocate_circuit_fields(db: Session, circuit: Circuit, asn: int | None) -> None:
     """Fill in any unset EVPN identifiers on a circuit in-place."""
     if circuit.vni is None:
@@ -206,3 +219,4 @@ def auto_allocate_circuit_fields(db: Session, circuit: Circuit, asn: int | None)
 
     if circuit.service_type == ServiceType.REMOTE_IPT and not circuit.ipt_public_ip:
         circuit.ipt_public_ip = allocate_public_ip(db, circuit.vni)
+    materialize_endpoint_vlans(circuit)

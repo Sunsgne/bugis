@@ -62,18 +62,33 @@ def _site_asn_for_endpoints(db: Session, endpoints: list[CircuitEndpoint]) -> in
     return None
 
 
-def _endpoint_out(db: Session, ep: CircuitEndpoint) -> CircuitEndpointOut:
+def _endpoint_out(
+    db: Session, ep: CircuitEndpoint, circuit: Circuit | None = None
+) -> CircuitEndpointOut:
     base = CircuitEndpointOut.model_validate(ep, from_attributes=True)
     desc = (ep.interface_description or "").strip() or None
     if not desc and ep.device_id and ep.interface_name:
         desc = link_planner._interface_description(db, ep.device_id, ep.interface_name)
+    vlan_id = base.vlan_id
+    if (
+        vlan_id is None
+        and circuit is not None
+        and circuit.vlan_id is not None
+        and ep.access_mode != AccessMode.ACCESS
+    ):
+        vlan_id = circuit.vlan_id
+    updates: dict = {}
     if desc != base.interface_description:
-        return base.model_copy(update={"interface_description": desc})
+        updates["interface_description"] = desc
+    if vlan_id != base.vlan_id:
+        updates["vlan_id"] = vlan_id
+    if updates:
+        return base.model_copy(update=updates)
     return base
 
 
 def _endpoints_out(db: Session, circuit: Circuit) -> list[CircuitEndpointOut]:
-    return [_endpoint_out(db, ep) for ep in circuit.endpoints]
+    return [_endpoint_out(db, ep, circuit) for ep in circuit.endpoints]
 
 
 def _to_circuit_list_out(db: Session, circuit: Circuit) -> CircuitListOut:
@@ -694,6 +709,7 @@ def replace_endpoints(
         db.add(endpoint)
         new_endpoints.append(endpoint)
     db.flush()
+    allocation.materialize_endpoint_vlans(circuit)
 
     if circuit.path_mode == PathMode.EXPLICIT_SR:
         endpoint_ids = [ep.device_id for ep in new_endpoints]

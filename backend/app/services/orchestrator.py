@@ -624,6 +624,9 @@ def execute(db: Session, wo: WorkOrder, actor: str | None = None) -> WorkOrder:
             _clear_circuit_alarms_on_decommission(db, wo, circuit, actor)
         else:
             circuit.status = CircuitStatus.ACTIVE
+            from app.services import allocation
+
+            allocation.materialize_endpoint_vlans(circuit)
             if wo.type == WorkOrderType.PROVISION:
                 circuit.activated_at = datetime.now(timezone.utc)
                 cleared = alarm_service.clear_active_for_circuit(db, circuit)
